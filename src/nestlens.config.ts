@@ -154,9 +154,72 @@ export interface ViewWatcherConfig {
   captureData?: boolean; // default: false - capture template locals/data
 }
 
+/**
+ * Available storage drivers for NestLens
+ * - 'memory': In-memory storage (default, zero config, works everywhere)
+ * - 'sqlite': SQLite storage (requires better-sqlite3)
+ * - 'redis': Redis storage (requires ioredis)
+ */
+export type StorageDriver = 'memory' | 'sqlite' | 'redis';
+
+/**
+ * SQLite storage configuration
+ */
+export interface SqliteStorageConfig {
+  /** Path to the SQLite database file. Default: '.cache/nestlens.db' */
+  filename?: string;
+}
+
+/**
+ * Redis storage configuration
+ */
+export interface RedisStorageConfig {
+  /** Redis host. Default: 'localhost' */
+  host?: string;
+  /** Redis port. Default: 6379 */
+  port?: number;
+  /** Redis password */
+  password?: string;
+  /** Redis database number. Default: 0 */
+  db?: number;
+  /** Key prefix for all NestLens keys. Default: 'nestlens:' */
+  keyPrefix?: string;
+  /** Redis connection URL (overrides host/port/password/db if provided) */
+  url?: string;
+}
+
+/**
+ * In-memory storage configuration
+ */
+export interface MemoryStorageConfig {
+  /** Maximum number of entries to store. Default: 10000 */
+  maxEntries?: number;
+}
+
+/**
+ * Storage configuration for NestLens
+ */
 export interface StorageConfig {
-  type?: 'sqlite'; // default: 'sqlite' (only option for now)
-  filename?: string; // default: '.cache/nestlens.db'
+  /**
+   * Storage driver to use.
+   * Default: 'memory' (zero config, works everywhere including Docker)
+   */
+  driver?: StorageDriver;
+
+  /** SQLite-specific configuration */
+  sqlite?: SqliteStorageConfig;
+
+  /** Redis-specific configuration */
+  redis?: RedisStorageConfig;
+
+  /** In-memory storage configuration */
+  memory?: MemoryStorageConfig;
+
+  // Legacy options (deprecated, for backwards compatibility)
+  /** @deprecated Use driver: 'sqlite' instead */
+  type?: 'sqlite';
+  /** @deprecated Use sqlite.filename instead */
+  filename?: string;
 }
 
 export interface PruningConfig {
@@ -276,8 +339,22 @@ export const DEFAULT_CONFIG: Required<
     maxRequests: 100, // 100 requests per minute
   },
   storage: {
-    type: 'sqlite',
-    filename: '.cache/nestlens.db',
+    driver: 'memory' as StorageDriver,
+    sqlite: {
+      filename: '.cache/nestlens.db',
+    },
+    redis: {
+      host: 'localhost',
+      port: 6379,
+      db: 0,
+      keyPrefix: 'nestlens:',
+    },
+    memory: {
+      maxEntries: 10000,
+    },
+    // Legacy (for backwards compatibility)
+    type: undefined,
+    filename: undefined,
   },
   pruning: {
     enabled: true,

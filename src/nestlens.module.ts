@@ -18,7 +18,8 @@ import { CollectorService } from './core/collector.service';
 import { PruningService } from './core/pruning.service';
 import { TagService } from './core/tag.service';
 import { FamilyHashService } from './core/family-hash.service';
-import { STORAGE, SqliteStorage } from './core/storage';
+import { STORAGE } from './core/storage';
+import { createStorage } from './core/storage/storage.factory';
 import { NestLensApiController, DashboardController, NestLensGuard, TagController } from './api';
 import {
   RequestWatcher,
@@ -58,9 +59,8 @@ class NestLensCoreModule {
         },
         {
           provide: STORAGE,
-          useFactory: () => {
-            const filename = config.storage?.filename || '.cache/nestlens.db';
-            return new SqliteStorage(filename);
+          useFactory: async () => {
+            return createStorage(config.storage ?? {});
           },
         },
         TagService,

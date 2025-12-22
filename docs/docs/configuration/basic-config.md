@@ -188,10 +188,10 @@ import { NestLensModule } from 'nestlens';
         allowedIps: ['127.0.0.1', '192.168.1.*'],
       },
 
-      // Storage
+      // Storage (memory is default, no config needed)
       storage: {
-        type: 'sqlite',
-        filename: '.cache/nestlens.db',
+        driver: 'sqlite',
+        sqlite: { filename: '.cache/nestlens.db' },
       },
 
       // Pruning

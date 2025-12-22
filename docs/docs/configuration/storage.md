@@ -1,158 +1,262 @@
 # Storage Configuration
 
-NestLens uses a storage backend to persist monitoring data collected by watchers. This guide covers storage configuration options and database details.
+NestLens supports multiple storage backends to persist monitoring data. Choose the one that best fits your needs.
+
+## Storage Drivers
+
+| Driver | Use Case | Dependencies |
+|--------|----------|--------------|
+| **Memory** (default) | Development, Docker, Testing | None |
+| **SQLite** | Persistent local storage | `better-sqlite3` |
+| **Redis** | Production, Distributed | `ioredis` |
 
 ## StorageConfig Interface
 
-The storage configuration interface allows you to customize how NestLens stores monitoring data:
-
 ```typescript
 interface StorageConfig {
-  type?: 'sqlite';    // Storage type (only option currently)
-  filename?: string;  // Database filename
+  driver?: 'memory' | 'sqlite' | 'redis';
+  memory?: MemoryStorageConfig;
+  sqlite?: SqliteStorageConfig;
+  redis?: RedisStorageConfig;
 }
 ```
 
+---
+
+## In-Memory Storage (Default)
+
+Zero configuration, works everywhere including Docker containers. Data is lost when the application restarts.
+
+### Configuration
+
+```typescript
+NestLensModule.forRoot({
+  // Uses in-memory storage by default - no config needed
+})
+
+// Or explicitly:
+NestLensModule.forRoot({
+  storage: {
+    driver: 'memory',
+    memory: {
+      maxEntries: 10000, // Default: 10000
+    },
+  },
+})
+```
+
+### MemoryStorageConfig
+
+```typescript
+interface MemoryStorageConfig {
+  maxEntries?: number;  // Maximum entries to store (default: 10000)
+}
+```
+
+### When to Use
+
+- Local development
+- Docker containers without volumes
+- Testing environments
+- Quick prototyping
+- When persistence is not needed
+
+---
+
 ## SQLite Storage
 
-NestLens currently uses SQLite as its storage backend. SQLite provides a lightweight, serverless, and zero-configuration database solution that's perfect for development and monitoring purposes.
+Persistent storage using a local SQLite database file. Ideal for development when you need data to survive restarts.
+
+### Installation
+
+```bash
+npm install better-sqlite3
+```
 
 ### Configuration
 
 ```typescript
 NestLensModule.forRoot({
   storage: {
-    type: 'sqlite',
-    filename: '.cache/nestlens.db',
+    driver: 'sqlite',
+    sqlite: {
+      filename: '.cache/nestlens.db', // Default path
+    },
   },
-});
+})
 ```
 
-### filename Option
+### SqliteStorageConfig
 
-Specifies the database file location.
-
-- **Type**: `string`
-- **Default**: `'.cache/nestlens.db'`
-
-NestLens automatically creates the directory if it doesn't exist.
-
-The filename can be:
-
-1. **Default location**: Stored in `.cache/` directory (recommended)
 ```typescript
+interface SqliteStorageConfig {
+  filename?: string;  // Database file path (default: '.cache/nestlens.db')
+}
+```
+
+### Filename Examples
+
+```typescript
+// Default location (recommended)
+{ filename: '.cache/nestlens.db' }
+
+// Absolute path
+{ filename: '/var/lib/myapp/nestlens.db' }
+
+// Environment-specific
+{ filename: `nestlens-${process.env.NODE_ENV}.db` }
+```
+
+### WAL Mode
+
+SQLite is automatically configured with Write-Ahead Logging (WAL) mode for:
+
+- **Better concurrency** - Readers don't block writers
+- **Improved performance** - Faster write operations
+- **Crash recovery** - Atomic and durable changes
+
+WAL creates additional files alongside your database:
+
+```
+.cache/nestlens.db           # Main database file
+.cache/nestlens.db-wal       # Write-ahead log
+.cache/nestlens.db-shm       # Shared memory file
+```
+
+### When to Use
+
+- Development with persistence needs
+- Single-instance deployments
+- When you need to inspect data after restart
+
+---
+
+## Redis Storage
+
+Distributed storage using Redis. Ideal for production environments with multiple instances.
+
+### Installation
+
+```bash
+npm install ioredis
+```
+
+### Configuration
+
+```typescript
+// Using URL (recommended for production)
 NestLensModule.forRoot({
   storage: {
-    filename: '.cache/nestlens.db', // Default - hidden in .cache folder
+    driver: 'redis',
+    redis: {
+      url: process.env.REDIS_URL,
+    },
   },
-});
-```
+})
 
-2. **Absolute path**: Stored at a specific location
-```typescript
+// Using individual options
 NestLensModule.forRoot({
   storage: {
-    filename: '/var/lib/myapp/nestlens.db',
+    driver: 'redis',
+    redis: {
+      host: 'localhost',
+      port: 6379,
+      password: 'secret',
+      db: 0,
+      keyPrefix: 'nestlens:',
+    },
   },
-});
+})
 ```
 
-3. **Custom directory**: Organized with other data files
+### RedisStorageConfig
+
 ```typescript
-NestLensModule.forRoot({
-  storage: {
-    filename: './data/monitoring/nestlens.db',
-  },
-});
+interface RedisStorageConfig {
+  host?: string;      // Redis host (default: 'localhost')
+  port?: number;      // Redis port (default: 6379)
+  password?: string;  // Redis password
+  db?: number;        // Redis database number (default: 0)
+  keyPrefix?: string; // Key prefix (default: 'nestlens:')
+  url?: string;       // Connection URL (overrides other options)
+}
 ```
 
-4. **Environment-specific**: Different databases per environment
-```typescript
-NestLensModule.forRoot({
-  storage: {
-    filename: `nestlens-${process.env.NODE_ENV}.db`,
-  },
-});
+### Redis Key Structure
+
+NestLens uses the following Redis key patterns:
+
+```
+{prefix}entries:{id}           # Entry data (Hash)
+{prefix}entries:all            # All entry IDs (Sorted Set)
+{prefix}entries:type:{type}    # Entry IDs by type (Sorted Set)
+{prefix}entries:request:{id}   # Entry IDs by request (Set)
+{prefix}tags:{entryId}         # Tags for entry (Set)
+{prefix}tags:index:{tag}       # Entry IDs by tag (Set)
+{prefix}family:{hash}          # Entry IDs by family hash (Set)
 ```
 
-## Database Schema Overview
+### When to Use
 
-NestLens creates three tables to store monitoring data:
+- Production environments
+- Multiple application instances
+- Horizontal scaling
+- When you need shared storage across instances
+
+---
+
+## Database Schema (SQLite)
 
 ### nestlens_entries Table
 
-The main table that stores all monitoring entries:
-
 ```sql
-CREATE TABLE IF NOT EXISTS nestlens_entries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Unique entry identifier
-  type TEXT NOT NULL,                     -- Entry type (request, query, exception, etc.)
-  request_id TEXT,                        -- Request correlation ID
-  payload TEXT NOT NULL,                  -- JSON-encoded entry data
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE nestlens_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  request_id TEXT,
+  payload TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  family_hash TEXT,
+  resolved_at TEXT
 );
 
--- Added via migrations:
--- family_hash TEXT                       -- Hash for grouping similar entries
--- resolved_at TEXT                       -- Resolution timestamp (nullable)
-
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_nestlens_type ON nestlens_entries(type);
-CREATE INDEX IF NOT EXISTS idx_nestlens_request_id ON nestlens_entries(request_id);
-CREATE INDEX IF NOT EXISTS idx_nestlens_created_at ON nestlens_entries(created_at);
-CREATE INDEX IF NOT EXISTS idx_nestlens_family_hash ON nestlens_entries(family_hash);
+-- Indexes
+CREATE INDEX idx_nestlens_type ON nestlens_entries(type);
+CREATE INDEX idx_nestlens_request_id ON nestlens_entries(request_id);
+CREATE INDEX idx_nestlens_created_at ON nestlens_entries(created_at);
+CREATE INDEX idx_nestlens_family_hash ON nestlens_entries(family_hash);
 ```
 
 ### nestlens_tags Table
 
-Tags are stored in a separate table for normalized storage:
-
 ```sql
-CREATE TABLE IF NOT EXISTS nestlens_tags (
+CREATE TABLE nestlens_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_id INTEGER NOT NULL,
   tag TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (entry_id) REFERENCES nestlens_entries(id) ON DELETE CASCADE
 );
-
-CREATE INDEX IF NOT EXISTS idx_nestlens_tags_entry_id ON nestlens_tags(entry_id);
-CREATE INDEX IF NOT EXISTS idx_nestlens_tags_tag ON nestlens_tags(tag);
 ```
 
 ### nestlens_monitored_tags Table
 
-Stores tags that are being monitored/watched:
-
 ```sql
-CREATE TABLE IF NOT EXISTS nestlens_monitored_tags (
+CREATE TABLE nestlens_monitored_tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tag TEXT NOT NULL UNIQUE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-#### Field Descriptions
+---
 
-**nestlens_entries:**
-- **id**: Auto-incrementing primary key
-- **type**: The type of entry (`request`, `query`, `exception`, `log`, `cache`, `event`, etc.)
-- **request_id**: Correlates entries to their originating HTTP request
-- **payload**: JSON-encoded data specific to the entry type
-- **created_at**: Timestamp when the entry was created
-- **family_hash**: Groups entries by similar characteristics (added via migration)
-- **resolved_at**: Timestamp when the entry was marked as resolved (added via migration)
-
-**nestlens_tags:**
-- **entry_id**: Foreign key to nestlens_entries
-- **tag**: The tag string
-- **created_at**: When the tag was added
-
-### Example Payload Structures
+## Payload Examples
 
 Different entry types store different payload structures:
 
-**Request Entry Payload:**
+### Request Entry
+
 ```json
 {
   "method": "GET",
@@ -162,266 +266,139 @@ Different entry types store different payload structures:
   "duration": 45,
   "ip": "127.0.0.1",
   "userAgent": "Mozilla/5.0...",
-  "headers": {"content-type": "application/json"},
-  "query": {"page": "1"},
-  "body": null,
-  "responseBody": {"users": []},
   "controllerAction": "UserController.findAll"
 }
 ```
 
-**Query Entry Payload:**
+### Query Entry
+
 ```json
 {
   "query": "SELECT * FROM users WHERE id = $1",
   "parameters": [123],
   "duration": 12,
   "slow": false,
-  "source": "typeorm",
-  "connection": "default"
+  "source": "typeorm"
 }
 ```
 
-**Exception Entry Payload:**
+### Exception Entry
+
 ```json
 {
   "name": "BadRequestException",
   "message": "Invalid input",
   "stack": "Error: Invalid input\n    at UserController.create...",
-  "code": 400,
-  "context": "HTTP",
-  "request": {
-    "method": "POST",
-    "url": "/api/users"
-  }
+  "code": 400
 }
 ```
 
-## WAL Mode Benefits
+---
 
-NestLens configures SQLite to use Write-Ahead Logging (WAL) mode by default. WAL mode provides several benefits:
+## Best Practices
 
-### 1. Better Concurrency
-
-WAL allows readers and writers to work simultaneously without blocking each other. This means:
-- Your application can query NestLens data while new entries are being written
-- The dashboard can be accessed without impacting your application's performance
-- Multiple readers can access the database concurrently
+### Development
 
 ```typescript
-// WAL mode is automatically enabled - no configuration needed
+// Simple in-memory for quick development
+NestLensModule.forRoot({})
+
+// SQLite for persistent debugging
 NestLensModule.forRoot({
   storage: {
-    type: 'sqlite',
-    filename: '.cache/nestlens.db', // WAL mode enabled automatically
+    driver: 'sqlite',
+    sqlite: { filename: '.cache/nestlens.db' },
   },
-});
+})
 ```
 
-### 2. Improved Performance
-
-Write operations are faster in WAL mode:
-- Writes are appended to a log file instead of modifying the main database
-- Reduces I/O operations and disk seeks
-- Better performance for high-frequency monitoring data
-
-### 3. Crash Recovery
-
-WAL mode provides better crash recovery:
-- Changes are atomic and durable
-- Database corruption is less likely
-- Automatic checkpoint mechanism ensures data integrity
-
-### 4. WAL Files
-
-When using WAL mode, you'll see additional files alongside your database:
-
-```
-.cache/nestlens.db           # Main database file
-.cache/nestlens.db-wal       # Write-ahead log
-.cache/nestlens.db-shm       # Shared memory file
-```
-
-These files are managed automatically by SQLite. Don't delete them while your application is running.
-
-## Storage Best Practices
-
-### 1. Database Location
-
-Choose an appropriate location for your database:
+### Docker
 
 ```typescript
-// Development: Use default .cache directory (recommended)
+// In-memory works without volumes
 NestLensModule.forRoot({
-  storage: {
-    filename: '.cache/nestlens.db',
-  },
-});
+  storage: { driver: 'memory' },
+})
 
-// Production: Use dedicated data directory
+// Or SQLite with volume mount
 NestLensModule.forRoot({
   storage: {
-    filename: '/var/lib/myapp/nestlens.db',
+    driver: 'sqlite',
+    sqlite: { filename: '/app/data/nestlens.db' },
   },
-});
-
-// Docker: Use volume mount
-NestLensModule.forRoot({
-  storage: {
-    filename: '/app/data/nestlens.db', // Map /app/data to a volume
-  },
-});
+})
 ```
 
-### 2. Disk Space Management
-
-Monitor disk space usage, especially in production:
-
-- Enable pruning to automatically remove old entries (see [Pruning Configuration](./pruning.md))
-- Monitor database file size
-- Consider disk space when setting `pruning.maxAge`
+### Production
 
 ```typescript
 NestLensModule.forRoot({
+  enabled: process.env.NESTLENS_ENABLED === 'true',
   storage: {
-    filename: '.cache/nestlens.db',
+    driver: 'redis',
+    redis: { url: process.env.REDIS_URL },
   },
   pruning: {
     enabled: true,
-    maxAge: 24, // Keep only 24 hours of data
-    interval: 60, // Clean up every hour
+    maxAge: 24,
   },
-});
+})
 ```
 
-### 3. Backup Strategy
+### Version Control
 
-For production environments, implement regular backups:
-
-```bash
-# Simple file copy (when application is stopped)
-cp .cache/nestlens.db .cache/nestlens.db.backup
-
-# SQLite backup command (can run while application is running)
-sqlite3 .cache/nestlens.db ".backup .cache/nestlens.db.backup"
-
-# Automated backup script
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-sqlite3 .cache/nestlens.db ".backup /backups/nestlens_${DATE}.db"
-```
-
-### 4. Version Control
-
-Add database files to `.gitignore`:
+Add to `.gitignore`:
 
 ```gitignore
-# NestLens database files (default location)
+# NestLens database files
 .cache/
-
-# Or if using custom location
 nestlens.db
 nestlens.db-wal
 nestlens.db-shm
-nestlens-*.db
 ```
 
-### 5. Performance Considerations
-
-For high-traffic applications:
-
-- Ensure adequate disk I/O performance
-- Use SSD storage for better performance
-- Monitor database file size growth
-- Adjust pruning settings to match your traffic patterns
-
-```typescript
-// High-traffic configuration
-NestLensModule.forRoot({
-  storage: {
-    filename: '/fast-ssd/nestlens.db',
-  },
-  pruning: {
-    enabled: true,
-    maxAge: 12, // Shorter retention for high-volume apps
-    interval: 30, // More frequent cleanup
-  },
-  watchers: {
-    request: {
-      enabled: true,
-      maxBodySize: 1024, // Smaller body capture to reduce storage
-    },
-  },
-});
-```
-
-## Database Maintenance
-
-### Manual Vacuum
-
-Periodically vacuum the database to reclaim space (especially after pruning):
-
-```bash
-sqlite3 .cache/nestlens.db "VACUUM;"
-```
-
-### Check Database Integrity
-
-Verify database integrity:
-
-```bash
-sqlite3 .cache/nestlens.db "PRAGMA integrity_check;"
-```
-
-### View Database Statistics
-
-Check database size and page count:
-
-```bash
-sqlite3 .cache/nestlens.db "PRAGMA page_count; PRAGMA page_size;"
-```
+---
 
 ## Troubleshooting
 
-### Database Locked Errors
+### SQLite: "Database is locked"
 
-If you encounter "database is locked" errors:
-
-1. Ensure WAL mode is enabled (it's automatic)
+1. WAL mode should handle this automatically
 2. Check file permissions
-3. Verify no other processes are holding locks
-4. Increase SQLite busy timeout (handled automatically by NestLens)
+3. Ensure no other processes hold locks
 
-### File Permission Issues
-
-Ensure your application has write permissions:
+### SQLite: File Permission Issues
 
 ```bash
-# Check permissions
-ls -l .cache/nestlens.db
-
-# Fix permissions (adjust as needed)
 chmod 664 .cache/nestlens.db
 chown myapp:myapp .cache/nestlens.db
 ```
 
-### Disk Space Issues
+### Redis: Connection Issues
 
-If running out of disk space:
+```typescript
+// Test connection
+import Redis from 'ioredis';
+const client = new Redis(process.env.REDIS_URL);
+client.ping().then(console.log); // Should print "PONG"
+```
 
-1. Enable or reduce `pruning.maxAge`
-2. Manually prune old data via API
-3. Vacuum the database
-4. Disable verbose watchers temporarily
+### Memory: Data Loss
 
-## Future Storage Options
+This is expected behavior. Use SQLite or Redis if you need persistence.
 
-NestLens currently supports only SQLite, but future versions may include:
+---
 
-- PostgreSQL for distributed deployments
-- MySQL/MariaDB support
-- In-memory storage for testing
-- Custom storage adapters
+## Migration Between Drivers
+
+NestLens doesn't provide automatic migration between storage drivers. When switching:
+
+1. Export important data via the API if needed
+2. Change the storage configuration
+3. Restart the application
+4. Old data will not be available in the new storage
+
+---
 
 ## Next Steps
 

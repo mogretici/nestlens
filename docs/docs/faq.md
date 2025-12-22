@@ -210,18 +210,33 @@ export class CleanupService {
 
 ### Where is data stored?
 
-By default, NestLens uses SQLite and stores data in:
+NestLens supports three storage drivers:
 
-```
-.cache/nestlens.db
-```
+| Driver | Location | Persistence |
+|--------|----------|-------------|
+| **Memory** (default) | RAM | Lost on restart |
+| **SQLite** | `.cache/nestlens.db` | Persistent |
+| **Redis** | Redis server | Persistent |
 
-You can customize the location:
+You can customize the storage:
 
 ```typescript
+// In-memory (default)
+NestLensModule.forRoot({})
+
+// SQLite (requires: npm install better-sqlite3)
 NestLensModule.forRoot({
   storage: {
-    filename: '/var/data/nestlens.db',
+    driver: 'sqlite',
+    sqlite: { filename: '/var/data/nestlens.db' },
+  },
+})
+
+// Redis (requires: npm install ioredis)
+NestLensModule.forRoot({
+  storage: {
+    driver: 'redis',
+    redis: { url: process.env.REDIS_URL },
   },
 })
 ```

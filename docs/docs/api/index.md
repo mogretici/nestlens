@@ -106,11 +106,28 @@ interface RateLimitConfig {
 
 ```typescript
 interface StorageConfig {
-  /** Storage type (default: 'sqlite') */
-  type?: 'sqlite';
+  /** Storage driver (default: 'memory') */
+  driver?: 'memory' | 'sqlite' | 'redis';
 
-  /** SQLite database filename (default: 'nestlens.db') */
-  filename?: string;
+  /** In-memory storage config */
+  memory?: {
+    maxEntries?: number;  // default: 10000
+  };
+
+  /** SQLite storage config (requires better-sqlite3) */
+  sqlite?: {
+    filename?: string;  // default: '.cache/nestlens.db'
+  };
+
+  /** Redis storage config (requires ioredis) */
+  redis?: {
+    host?: string;      // default: 'localhost'
+    port?: number;      // default: 6379
+    password?: string;
+    db?: number;        // default: 0
+    keyPrefix?: string; // default: 'nestlens:'
+    url?: string;       // overrides other options
+  };
 }
 ```
 

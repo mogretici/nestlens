@@ -28,8 +28,13 @@ export {
   GateWatcherConfig,
   BatchWatcherConfig,
   DumpWatcherConfig,
-  // Storage & Pruning
+  // Storage config
   StorageConfig,
+  StorageDriver,
+  SqliteStorageConfig,
+  RedisStorageConfig,
+  MemoryStorageConfig,
+  // Pruning
   PruningConfig,
   // Constants
   NESTLENS_CONFIG,
@@ -42,6 +47,8 @@ export * from './types';
 // Core services (for advanced usage)
 export { CollectorService } from './core/collector.service';
 export { StorageInterface, STORAGE } from './core/storage/storage.interface';
+export { createStorage } from './core/storage/storage.factory';
+export { MemoryStorage } from './core/storage/memory.storage';
 export { TagService } from './core/tag.service';
 
 // Logger (for replacing NestJS default logger)
