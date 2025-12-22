@@ -1,0 +1,204 @@
+/**
+ * Homepage Features Section Styles
+ */
+
+.features {
+  padding: 6rem 0;
+  background: var(--ifm-background-color);
+}
+
+/* Section Header */
+.sectionHeader {
+  text-align: center;
+  margin-bottom: 4rem;
+}
+
+.sectionBadge {
+  display: inline-block;
+  padding: 0.375rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ifm-color-primary);
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 9999px;
+  margin-bottom: 1rem;
+}
+
+[data-theme='dark'] .sectionBadge {
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.sectionTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--ifm-font-color-base);
+}
+
+.sectionSubtitle {
+  font-size: 1.125rem;
+  color: var(--ifm-color-emphasis-600);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* Feature Grid */
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  auto-rows: minmax(200px, auto);
+}
+
+.span1 { grid-column: span 1; }
+.span2 { grid-column: span 2; }
+.span3 { grid-column: span 3; }
+
+@media (max-width: 996px) {
+  .featureGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .span2, .span3 { grid-column: span 2; }
+}
+
+@media (max-width: 576px) {
+  .featureGrid {
+    grid-template-columns: 1fr;
+  }
+  .span2, .span3 { grid-column: span 1; }
+  .sectionTitle {
+    font-size: 2rem;
+  }
+}
+
+/* Feature Card */
+.featureCardLink {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  height: 100%;
+}
+
+.featureCardLink:hover {
+  text-decoration: none;
+}
+
+.featureCard {
+  padding: 2rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 24px;
+  height: 100%;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+
+.featureCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(800px circle at var(--mouse-x, 0) var(--mouse-y, 0), rgba(14, 165, 233, 0.06), transparent 40%);
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+
+.featureCardLink:hover .featureCard,
+.featureCard:hover {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 12px 40px -12px rgba(14, 165, 233, 0.15);
+  transform: translateY(-4px);
+}
+
+.featureCard:hover::before {
+  opacity: 1;
+}
+
+[data-theme='dark'] .featureCard {
+  background: rgba(30, 41, 59, 0.4);
+  border-color: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+[data-theme='dark'] .featureCardLink:hover .featureCard,
+[data-theme='dark'] .featureCard:hover {
+  box-shadow: 0 12px 40px -12px rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+/* Feature Icon */
+.featureIcon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);
+  border-radius: 16px;
+  margin-bottom: 1.5rem;
+  color: var(--ifm-color-primary);
+  transition: transform 0.3s ease;
+}
+
+.featureCardLink:hover .featureIcon {
+  transform: scale(1.1) rotate(-5deg);
+}
+
+.featureIcon svg {
+  width: 28px;
+  height: 28px;
+}
+
+[data-theme='dark'] .featureIcon {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(34, 211, 238, 0.15) 100%);
+}
+
+.featureContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Feature Title */
+.featureTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--ifm-font-color-base);
+  letter-spacing: -0.02em;
+}
+
+/* Feature Description */
+.featureDescription {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 1.5rem;
+  flex: 1;
+}
+
+/* Feature Link */
+.featureLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+  transition: gap 0.2s ease;
+  margin-top: auto;
+}
+
+.featureCardLink:hover .featureLink {
+  gap: 0.625rem;
+}

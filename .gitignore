@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+dashboard/node_modules/
+example/node_modules/
+
+# Build outputs
+dist/
+dashboard/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+.cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docs
+docs/build/
+docs/.docusaurus/
+docs/node_modules/
+docs/api/
+
+# Misc
+*.tgz

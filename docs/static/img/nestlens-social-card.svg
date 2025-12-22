@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0f172a"/>
+
+  <!-- Gradient overlay -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#grad)"/>
+
+  <!-- Decorative circles -->
+  <circle cx="1100" cy="100" r="200" fill="#0ea5e9" opacity="0.1"/>
+  <circle cx="100" cy="530" r="150" fill="#0ea5e9" opacity="0.1"/>
+
+  <!-- Logo -->
+  <g transform="translate(500, 120) scale(2)">
+    <circle cx="50" cy="50" r="45" stroke="#0ea5e9" stroke-width="6"/>
+    <circle cx="50" cy="50" r="20" fill="#0ea5e9"/>
+    <circle cx="50" cy="50" r="8" fill="#1e293b"/>
+    <line x1="50" y1="5" x2="50" y2="20" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50" y1="80" x2="50" y2="95" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="5" y1="50" x2="20" y2="50" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="80" y1="50" x2="95" y2="50" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Title -->
+  <text x="600" y="380" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle">NestLens</text>
+
+  <!-- Tagline -->
+  <text x="600" y="440" font-family="system-ui, -apple-system, sans-serif" font-size="28" fill="#94a3b8" text-anchor="middle">Laravel Telescope-like debugging and monitoring for NestJS</text>
+
+  <!-- Features -->
+  <text x="600" y="520" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#0ea5e9" text-anchor="middle">18 Watchers • Real-time Dashboard • TypeScript Native</text>
+
+  <!-- Bottom line -->
+  <rect x="400" y="580" width="400" height="4" rx="2" fill="#0ea5e9"/>
+</svg>
