@@ -35,9 +35,21 @@ export class ExceptionWatcher implements ExceptionFilter {
   }
 
   catch(exception: Error, host: ArgumentsHost): void {
+    const contextType = host.getType<string>();
+
+    // Only handle HTTP context - GraphQL has its own error handling
+    if (contextType !== 'http') {
+      throw exception;
+    }
+
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<NestLensRequest>();
     const response = ctx.getResponse<Response>();
+
+    // Guard against undefined request or response
+    if (!request || !response) {
+      throw exception;
+    }
 
     // Skip if disabled
     if (!this.config.enabled) {
@@ -68,9 +80,9 @@ export class ExceptionWatcher implements ExceptionFilter {
       code: this.getExceptionCode(exception),
       context: this.getExceptionContext(host),
       request: {
-        method: request.method,
-        url: request.originalUrl || request.url,
-        body: request.body,
+        method: request?.method,
+        url: request?.originalUrl || request?.url,
+        body: request?.body,
       },
     };
 

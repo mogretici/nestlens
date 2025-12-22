@@ -42,6 +42,7 @@ describe('RequestWatcher', () => {
         getRequest: () => mockRequest,
         getResponse: () => mockResponse,
       }),
+      getType: () => 'http',
       getClass: () => ({ name: 'TestController' }),
       getHandler: () => ({ name: 'testMethod' }),
       ...overrides.context,

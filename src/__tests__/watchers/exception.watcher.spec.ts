@@ -513,58 +513,37 @@ describe('ExceptionWatcher', () => {
       );
     });
 
-    it('should detect RPC context', async () => {
+    it('should skip RPC context and re-throw exception', async () => {
       // Arrange
       const request = createMockRequest();
       const host = createMockHost(request, mockResponse, 'rpc');
+      const error = new Error('Test');
 
-      // Act
-      watcher.catch(new Error('Test'), host);
-
-      // Assert
-      expect(mockCollector.collectImmediate).toHaveBeenCalledWith(
-        'exception',
-        expect.objectContaining({
-          context: 'RPC',
-        }),
-        expect.any(String),
-      );
+      // Act & Assert
+      expect(() => watcher.catch(error, host)).toThrow(error);
+      expect(mockCollector.collectImmediate).not.toHaveBeenCalled();
     });
 
-    it('should detect WebSocket context', async () => {
+    it('should skip WebSocket context and re-throw exception', async () => {
       // Arrange
       const request = createMockRequest();
       const host = createMockHost(request, mockResponse, 'ws');
+      const error = new Error('Test');
 
-      // Act
-      watcher.catch(new Error('Test'), host);
-
-      // Assert
-      expect(mockCollector.collectImmediate).toHaveBeenCalledWith(
-        'exception',
-        expect.objectContaining({
-          context: 'WebSocket',
-        }),
-        expect.any(String),
-      );
+      // Act & Assert
+      expect(() => watcher.catch(error, host)).toThrow(error);
+      expect(mockCollector.collectImmediate).not.toHaveBeenCalled();
     });
 
-    it('should use raw type for unknown contexts', async () => {
+    it('should skip GraphQL context and re-throw exception', async () => {
       // Arrange
       const request = createMockRequest();
       const host = createMockHost(request, mockResponse, 'graphql');
+      const error = new Error('Test');
 
-      // Act
-      watcher.catch(new Error('Test'), host);
-
-      // Assert
-      expect(mockCollector.collectImmediate).toHaveBeenCalledWith(
-        'exception',
-        expect.objectContaining({
-          context: 'graphql',
-        }),
-        expect.any(String),
-      );
+      // Act & Assert
+      expect(() => watcher.catch(error, host)).toThrow(error);
+      expect(mockCollector.collectImmediate).not.toHaveBeenCalled();
     });
   });
 

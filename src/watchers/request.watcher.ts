@@ -42,9 +42,20 @@ export class RequestWatcher implements NestInterceptor {
       return next.handle();
     }
 
+    // Only handle HTTP context (skip GraphQL, WebSocket, etc.)
+    const contextType = context.getType<string>();
+    if (contextType !== 'http') {
+      return next.handle();
+    }
+
     const ctx = context.switchToHttp();
     const request = ctx.getRequest<NestLensRequest>();
     const response = ctx.getResponse<Response>();
+
+    // Guard against undefined request or missing path (e.g., in non-HTTP contexts)
+    if (!request?.path) {
+      return next.handle();
+    }
 
     // Skip NestLens own routes (dashboard and API)
     const nestlensPath = this.nestlensConfig.path || DEFAULT_CONFIG.path;
