@@ -1,6 +1,6 @@
 {
   "name": "nestlens",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Laravel Telescope-like debugging and monitoring tool for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
