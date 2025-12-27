@@ -21,9 +21,9 @@
     "test:e2e:headed": "npx playwright test --headed",
     "prepublishOnly": "npm run build",
     "sync-versions": "node -e \"const fs=require('fs');const pkg=require('./package.json');const dash=require('./dashboard/package.json');dash.version=pkg.version;fs.writeFileSync('./dashboard/package.json',JSON.stringify(dash,null,2)+'\\n')\"",
-    "release:patch": "standard-version --release-as patch && npm run sync-versions",
-    "release:minor": "standard-version --release-as minor && npm run sync-versions",
-    "release:major": "standard-version --release-as major && npm run sync-versions",
+    "release:patch": "standard-version --release-as patch",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
     "publish:patch": "npm run release:patch && git push --follow-tags && npm publish",
     "publish:minor": "npm run release:minor && git push --follow-tags && npm publish",
     "publish:major": "npm run release:major && git push --follow-tags && npm publish"
