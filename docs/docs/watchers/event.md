@@ -133,6 +133,8 @@ export class OrderListener {
 
 ## Dashboard View
 
+![Event Detail View](/img/screenshots/event_detail.png)
+
 In the NestLens dashboard, event entries show:
 
 - Timeline of emitted events

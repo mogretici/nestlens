@@ -2,7 +2,290 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Module, Controller, Get, Logger, Post, Put, Patch, Delete, Body, Param, Res, HttpStatus, BadRequestException, NotFoundException, ForbiddenException, UnauthorizedException, Inject } from '@nestjs/common';
 import { Response } from 'express';
-import { NestLensModule, CollectorService, NestLensLogger } from 'nestlens';
+import { NestLensModule, CollectorService, NestLensLogger, GraphQLWatcher } from 'nestlens';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { Resolver, Query, Mutation, Args, Int, Field, ObjectType, InputType, ID, Subscription } from '@nestjs/graphql';
+import { PubSub } from 'graphql-subscriptions';
+
+// ============================================
+// GraphQL Types
+// ============================================
+
+@ObjectType()
+class GqlUser {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  name!: string;
+
+  @Field()
+  email!: string;
+
+  @Field(() => [GqlPost], { nullable: true })
+  posts?: GqlPost[];
+}
+
+@ObjectType()
+class GqlPost {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  title!: string;
+
+  @Field({ nullable: true })
+  content?: string;
+
+  @Field(() => GqlUser, { nullable: true })
+  author?: GqlUser;
+
+  @Field(() => [GqlComment], { nullable: true })
+  comments?: GqlComment[];
+}
+
+@ObjectType()
+class GqlComment {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  text!: string;
+}
+
+@ObjectType()
+class GqlProduct {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  name!: string;
+
+  @Field()
+  price!: number;
+
+  @Field(() => Int)
+  stock!: number;
+}
+
+@ObjectType()
+class GqlOrder {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  total!: number;
+
+  @Field()
+  status!: string;
+
+  @Field(() => [GqlOrderItem], { nullable: true })
+  items?: GqlOrderItem[];
+}
+
+@ObjectType()
+class GqlOrderItem {
+  @Field(() => ID)
+  id!: string;
+
+  @Field(() => Int)
+  quantity!: number;
+
+  @Field(() => GqlProduct, { nullable: true })
+  product?: GqlProduct;
+}
+
+@InputType()
+class CreateUserInput {
+  @Field()
+  name!: string;
+
+  @Field()
+  email!: string;
+}
+
+@InputType()
+class UpdateProductInput {
+  @Field({ nullable: true })
+  name?: string;
+
+  @Field({ nullable: true })
+  price?: number;
+}
+
+// ============================================
+// Mock Data
+// ============================================
+
+const users: GqlUser[] = [
+  { id: '1', name: 'Alice', email: 'alice@example.com' },
+  { id: '2', name: 'Bob', email: 'bob@example.com' },
+  { id: '3', name: 'Charlie', email: 'charlie@example.com' },
+];
+
+const blogPosts: GqlPost[] = [
+  { id: '1', title: 'Hello World', content: 'First post content' },
+  { id: '2', title: 'GraphQL is awesome', content: 'Second post content' },
+  { id: '3', title: 'NestJS rocks', content: 'Third post content' },
+];
+
+const products: GqlProduct[] = [
+  { id: '1', name: 'Widget', price: 29.99, stock: 100 },
+  { id: '2', name: 'Gadget', price: 49.99, stock: 50 },
+  { id: '3', name: 'Doohickey', price: 19.99, stock: 200 },
+];
+
+const orders: GqlOrder[] = [
+  { id: '1', total: 99.99, status: 'pending' },
+  { id: '2', total: 149.99, status: 'shipped' },
+  { id: '3', total: 29.99, status: 'delivered' },
+];
+
+const pubSub = new PubSub();
+
+// ============================================
+// GraphQL Resolver
+// ============================================
+
+@Resolver()
+class AppResolver {
+  private readonly logger = new Logger(AppResolver.name);
+
+  // === Queries ===
+
+  @Query(() => [GqlUser])
+  users(): GqlUser[] {
+    this.logger.log('Fetching all users');
+    // Simulate N+1 by fetching posts for each user
+    return users.map(user => ({
+      ...user,
+      posts: blogPosts.filter((_, i) => i % users.length === parseInt(user.id) - 1),
+    }));
+  }
+
+  @Query(() => GqlUser, { nullable: true })
+  user(@Args('id', { type: () => ID }) id: string): GqlUser | null {
+    this.logger.log(`Fetching user ${id}`);
+    const user = users.find(u => u.id === id);
+    if (!user) return null;
+    return {
+      ...user,
+      posts: blogPosts.filter((_, i) => i % users.length === parseInt(id) - 1),
+    };
+  }
+
+  @Query(() => [GqlProduct])
+  products(
+    @Args('category', { nullable: true }) category?: string,
+    @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+  ): GqlProduct[] {
+    this.logger.log(`Fetching products (category: ${category}, limit: ${limit})`);
+    let result = [...products];
+    if (limit) result = result.slice(0, limit);
+    return result;
+  }
+
+  @Query(() => [GqlOrder])
+  orders(@Args('userId', { type: () => ID, nullable: true }) userId?: string): GqlOrder[] {
+    this.logger.log(`Fetching orders for user ${userId}`);
+    return orders.map(order => ({
+      ...order,
+      items: [
+        { id: '1', quantity: 2, product: products[0] },
+        { id: '2', quantity: 1, product: products[1] },
+      ],
+    }));
+  }
+
+  @Query(() => [GqlPost])
+  search(@Args('term') term: string): GqlPost[] {
+    this.logger.log(`Searching for: ${term}`);
+    return blogPosts.filter(p =>
+      p.title.toLowerCase().includes(term.toLowerCase()) ||
+      p.content?.toLowerCase().includes(term.toLowerCase())
+    );
+  }
+
+  // === Mutations ===
+
+  @Mutation(() => GqlUser)
+  createUser(@Args('input') input: CreateUserInput): GqlUser {
+    this.logger.log(`Creating user: ${input.name}`);
+    const newUser: GqlUser = {
+      id: String(users.length + 1),
+      name: input.name,
+      email: input.email,
+    };
+    users.push(newUser);
+
+    // Publish event for subscription
+    pubSub.publish('userCreated', { userCreated: newUser });
+
+    return newUser;
+  }
+
+  @Mutation(() => GqlProduct)
+  updateProduct(
+    @Args('id', { type: () => ID }) id: string,
+    @Args('input') input: UpdateProductInput,
+  ): GqlProduct {
+    this.logger.log(`Updating product ${id}`);
+    const product = products.find(p => p.id === id);
+    if (!product) throw new Error('Product not found');
+
+    if (input.name) product.name = input.name;
+    if (input.price) product.price = input.price;
+
+    return product;
+  }
+
+  @Mutation(() => Boolean)
+  deleteOrder(@Args('id', { type: () => ID }) id: string): boolean {
+    this.logger.log(`Deleting order ${id}`);
+    const index = orders.findIndex(o => o.id === id);
+    if (index === -1) return false;
+    orders.splice(index, 1);
+    return true;
+  }
+
+  @Mutation(() => GqlOrder)
+  placeOrder(@Args('items', { type: () => [ID] }) items: string[]): GqlOrder {
+    this.logger.log(`Placing order with items: ${items.join(', ')}`);
+    const newOrder: GqlOrder = {
+      id: String(orders.length + 1),
+      total: items.length * 29.99,
+      status: 'pending',
+      items: items.map((itemId, i) => ({
+        id: String(i + 1),
+        quantity: 1,
+        product: products.find(p => p.id === itemId) || products[0],
+      })),
+    };
+    orders.push(newOrder);
+
+    // Publish event for subscription
+    pubSub.publish('orderCreated', { orderCreated: newOrder });
+
+    return newOrder;
+  }
+
+  // === Subscriptions ===
+
+  @Subscription(() => GqlOrder, {
+    resolve: value => value.orderCreated,
+  })
+  orderCreated() {
+    return pubSub.asyncIterableIterator('orderCreated');
+  }
+
+  @Subscription(() => GqlUser, {
+    resolve: value => value.userCreated,
+  })
+  userCreated() {
+    return pubSub.asyncIterableIterator('userCreated');
+  }
+}
 
 @Controller()
 class AppController {
@@ -62,18 +345,6 @@ class AppController {
   throwError(): void {
     this.logger.warn('About to throw an error');
     throw new Error('Test error for NestLens');
-  }
-
-  @Post('graphql')
-  graphql(@Body() body: { query: string; variables?: Record<string, unknown> }): unknown {
-    this.logger.log(`GraphQL query: ${body.query.substring(0, 50)}...`);
-    if (body.query.includes('users')) {
-      return { data: { users: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }] } };
-    }
-    if (body.query.includes('user')) {
-      return { data: { user: { id: 1, name: 'Alice' } } };
-    }
-    return { data: null };
   }
 
   // === Status Code Test Endpoints ===
@@ -595,6 +866,151 @@ class AppController {
     return { success: true };
   }
 
+  // === GRAPHQL TEST ENDPOINTS ===
+  @Post('test/graphql')
+  async testGraphql(@Body() body: { type?: string; hasErrors?: boolean; n1?: boolean }): Promise<{ success: boolean }> {
+    type OperationType = 'query' | 'mutation' | 'subscription';
+    const operations: Array<{
+      operationType: OperationType;
+      operationName: string;
+      query: string;
+      variables?: Record<string, unknown>;
+      hasErrors?: boolean;
+      errors?: Array<{ message: string; path?: string[] }>;
+      potentialN1?: Array<{ field: string; parentType: string; count: number; suggestion: string }>;
+    }> = [
+      // Queries
+      {
+        operationType: 'query',
+        operationName: 'GetUsers',
+        query: 'query GetUsers { users { id name email createdAt } }',
+      },
+      {
+        operationType: 'query',
+        operationName: 'GetUser',
+        query: 'query GetUser($id: ID!) { user(id: $id) { id name email posts { id title } } }',
+        variables: { id: '123' },
+      },
+      {
+        operationType: 'query',
+        operationName: 'GetProducts',
+        query: 'query GetProducts($category: String, $limit: Int) { products(category: $category, limit: $limit) { id name price stock } }',
+        variables: { category: 'electronics', limit: 10 },
+      },
+      {
+        operationType: 'query',
+        operationName: 'GetOrders',
+        query: 'query GetOrders($userId: ID!) { orders(userId: $userId) { id total status items { productId quantity } } }',
+        variables: { userId: '42' },
+      },
+      // Mutations
+      {
+        operationType: 'mutation',
+        operationName: 'CreateUser',
+        query: 'mutation CreateUser($input: CreateUserInput!) { createUser(input: $input) { id name email } }',
+        variables: { input: { name: 'John Doe', email: 'john@example.com' } },
+      },
+      {
+        operationType: 'mutation',
+        operationName: 'UpdateProduct',
+        query: 'mutation UpdateProduct($id: ID!, $input: UpdateProductInput!) { updateProduct(id: $id, input: $input) { id name price } }',
+        variables: { id: '456', input: { price: 29.99 } },
+      },
+      {
+        operationType: 'mutation',
+        operationName: 'DeleteOrder',
+        query: 'mutation DeleteOrder($id: ID!) { deleteOrder(id: $id) }',
+        variables: { id: '789' },
+      },
+      // Subscriptions
+      {
+        operationType: 'subscription',
+        operationName: 'OnOrderCreated',
+        query: 'subscription OnOrderCreated($userId: ID!) { orderCreated(userId: $userId) { id total status } }',
+        variables: { userId: '123' },
+      },
+      {
+        operationType: 'subscription',
+        operationName: 'OnMessageReceived',
+        query: 'subscription OnMessageReceived { messageReceived { id content from timestamp } }',
+      },
+    ];
+
+    // Error operations
+    const errorOperations: typeof operations = [
+      {
+        operationType: 'query',
+        operationName: 'GetUser',
+        query: 'query GetUser($id: ID!) { user(id: $id) { id name } }',
+        variables: { id: '999' },
+        hasErrors: true,
+        errors: [{ message: 'User not found', path: ['user'] }],
+      },
+      {
+        operationType: 'mutation',
+        operationName: 'CreateUser',
+        query: 'mutation CreateUser($input: CreateUserInput!) { createUser(input: $input) { id } }',
+        variables: { input: { email: 'invalid-email' } },
+        hasErrors: true,
+        errors: [
+          { message: 'Invalid email format', path: ['createUser', 'email'] },
+          { message: 'Name is required', path: ['createUser', 'name'] },
+        ],
+      },
+    ];
+
+    // N+1 query examples
+    const n1Operations: typeof operations = [
+      {
+        operationType: 'query',
+        operationName: 'GetUsersWithPosts',
+        query: 'query GetUsersWithPosts { users { id name posts { id title author { id name } } } }',
+        potentialN1: [
+          { field: 'posts', parentType: 'User', count: 25, suggestion: 'Consider using DataLoader for User.posts' },
+          { field: 'author', parentType: 'Post', count: 50, suggestion: 'Consider using DataLoader for Post.author' },
+        ],
+      },
+      {
+        operationType: 'query',
+        operationName: 'GetOrdersWithProducts',
+        query: 'query GetOrdersWithProducts { orders { id items { product { id name price } } } }',
+        potentialN1: [
+          { field: 'product', parentType: 'OrderItem', count: 150, suggestion: 'Consider using DataLoader for OrderItem.product' },
+        ],
+      },
+    ];
+
+    // Select operation based on params
+    let selected: typeof operations[number];
+    if (body.hasErrors) {
+      selected = errorOperations[Math.floor(Math.random() * errorOperations.length)];
+    } else if (body.n1) {
+      selected = n1Operations[Math.floor(Math.random() * n1Operations.length)];
+    } else if (body.type) {
+      const filtered = operations.filter(op => op.operationType === body.type);
+      selected = filtered.length > 0 ? filtered[Math.floor(Math.random() * filtered.length)] : operations[0];
+    } else {
+      selected = operations[Math.floor(Math.random() * operations.length)];
+    }
+
+    await this.collector.collect('graphql', {
+      operationName: selected.operationName,
+      operationType: selected.operationType,
+      query: selected.query,
+      queryHash: `hash_${selected.operationName.toLowerCase()}_${Date.now()}`,
+      variables: selected.variables,
+      duration: Math.floor(Math.random() * 100) + 5,
+      statusCode: selected.hasErrors ? 200 : 200, // GraphQL always returns 200
+      hasErrors: selected.hasErrors || false,
+      errors: selected.errors,
+      potentialN1: selected.potentialN1,
+      resolverCount: Math.floor(Math.random() * 20) + 5,
+      fieldCount: Math.floor(Math.random() * 50) + 10,
+    });
+
+    return { success: true };
+  }
+
   // === DUMP TEST ENDPOINTS ===
   @Post('test/dump')
   async testDump(@Body() body: { status?: string }): Promise<{ success: boolean }> {
@@ -695,7 +1111,7 @@ class AppController {
   async testAll(): Promise<{ success: boolean; generated: Record<string, number> }> {
     const counts = {
       query: 0, cache: 0, event: 0, job: 0, mail: 0, schedule: 0, httpClient: 0,
-      redis: 0, model: 0, notification: 0, view: 0, command: 0, gate: 0, batch: 0, dump: 0
+      redis: 0, model: 0, notification: 0, view: 0, command: 0, gate: 0, batch: 0, dump: 0, graphql: 0
     };
 
     // Generate multiple entries of each type
@@ -775,33 +1191,72 @@ class AppController {
       counts.dump++;
     }
 
+    // GraphQL
+    for (let i = 0; i < 6; i++) {
+      await this.testGraphql({});
+      counts.graphql++;
+    }
+    for (let i = 0; i < 2; i++) {
+      await this.testGraphql({ hasErrors: true });
+      counts.graphql++;
+    }
+    for (let i = 0; i < 2; i++) {
+      await this.testGraphql({ n1: true });
+      counts.graphql++;
+    }
+
     return { success: true, generated: counts };
   }
 }
 
+// NestLens module configuration
+const nestLensModule = NestLensModule.forRoot({
+  enabled: true,
+  path: '/nestlens',
+  storage: {
+    filename: './nestlens.db',
+  },
+  watchers: {
+    request: true,
+    exception: true,
+    log: true,
+    query: true,
+    cache: true,
+    event: true,
+    job: true,
+    schedule: true,
+    mail: true,
+    httpClient: true,
+    graphql: {
+      enabled: true,
+      captureVariables: true,
+      detectN1Queries: true,
+      traceFieldResolvers: true,
+      resolverTracingSampleRate: 1, // 100% for testing
+    },
+  },
+});
+
 @Module({
   imports: [
-    NestLensModule.forRoot({
-      enabled: true,
-      path: '/nestlens',
-      storage: {
-        filename: './nestlens.db',
-      },
-      watchers: {
-        request: true,
-        exception: true,
-        log: true,
-        query: true,
-        cache: true,
-        event: true,
-        job: true,
-        schedule: true,
-        mail: true,
-        httpClient: true,
-      },
+    nestLensModule,
+    // GraphQL Module with Apollo Server
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      imports: [nestLensModule],
+      inject: [GraphQLWatcher],
+      useFactory: (graphqlWatcher: GraphQLWatcher) => ({
+        autoSchemaFile: true,
+        playground: true,
+        plugins: [graphqlWatcher.getPlugin() as any],
+        subscriptions: {
+          'graphql-ws': true,
+        },
+      }),
     }),
   ],
   controllers: [AppController],
+  providers: [AppResolver],
 })
 class AppModule {}
 

@@ -60,6 +60,7 @@ export { REQUEST_ID_HEADER } from './watchers/request.watcher';
 // Watcher classes (for manual setup)
 export { JobWatcher } from './watchers/job.watcher';
 export { ModelWatcher } from './watchers/model.watcher';
+export { GraphQLWatcher, GRAPHQL_WATCHER } from './watchers/graphql';
 
 // Watcher tokens (for dependency injection)
 export { NESTLENS_EVENT_EMITTER } from './watchers/event.watcher';

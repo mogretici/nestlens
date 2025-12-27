@@ -13,7 +13,6 @@ import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  JobStatusBadge,
   DurationCell,
 } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
@@ -24,7 +23,6 @@ export default function JobsPage() {
 
   // Use centralized filter hook - all config comes from entryTypes.ts
   const {
-    addFilter,
     clearAll,
     serverFilters,
     headerFilters,
@@ -42,6 +40,7 @@ export default function JobsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<JobEntry>({ type: 'job', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -54,10 +53,7 @@ export default function JobsPage() {
       header: 'Job',
       minWidth: '200px',
       render: (entry) => (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('names', entry.payload.name); }}
-          className="font-mono"
-        >
+        <ClickableBadge listType="jobs" filterType="names" className="font-mono">
           {entry.payload.name}
         </ClickableBadge>
       ),
@@ -67,7 +63,7 @@ export default function JobsPage() {
       header: 'Queue',
       width: '120px',
       render: (entry) => (
-        <ClickableBadge onClick={(e) => { e.stopPropagation(); addFilter('queues', entry.payload.queue); }}>
+        <ClickableBadge listType="jobs" filterType="queues">
           {entry.payload.queue}
         </ClickableBadge>
       ),
@@ -77,10 +73,9 @@ export default function JobsPage() {
       header: 'Status',
       width: '100px',
       render: (entry) => (
-        <JobStatusBadge
-          status={entry.payload.status}
-          onClick={(e) => { e.stopPropagation(); addFilter('statuses', entry.payload.status); }}
-        />
+        <ClickableBadge listType="jobs" filterType="statuses">
+          {entry.payload.status}
+        </ClickableBadge>
       ),
     },
     {
@@ -114,7 +109,7 @@ export default function JobsPage() {
         </TextCell>
       ),
     },
-  ], [addFilter]);
+  ], []);
 
   // Only show full-page spinner on initial load when no data exists
   // This prevents flicker when filters change
@@ -159,6 +154,7 @@ export default function JobsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/jobs/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No jobs recorded yet"
           emptyIcon={<Briefcase className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

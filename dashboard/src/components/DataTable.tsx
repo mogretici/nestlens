@@ -429,6 +429,9 @@ export function TagsList({ tags, max = 3, onTagClick }: TagsListProps) {
         <button
           key={tag}
           onClick={onTagClick ? (e) => onTagClick(tag, e) : undefined}
+          role={onTagClick ? 'button' : undefined}
+          tabIndex={onTagClick ? 0 : undefined}
+          aria-label={onTagClick ? `Click to filter by ${tag.toUpperCase()}` : undefined}
           className={`
             inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
             ${getBadgeColor(tag)}
@@ -445,54 +448,6 @@ export function TagsList({ tags, max = 3, onTagClick }: TagsListProps) {
         </span>
       )}
     </div>
-  );
-}
-
-// HTTP Method badge with colors
-interface MethodBadgeProps {
-  method: string;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function MethodBadge({ method, onClick }: MethodBadgeProps) {
-  const colorClass = getBadgeColor(method);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {method.toUpperCase()}
-    </button>
-  );
-}
-
-// HTTP Status code badge with colors
-interface StatusCodeBadgeProps {
-  code: number;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function StatusCodeBadge({ code, onClick }: StatusCodeBadgeProps) {
-  const colorClass = getBadgeColor(String(code));
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {code}
-    </button>
   );
 }
 
@@ -519,7 +474,7 @@ export function DurationCell({ ms, slowThreshold = 1000, verySlowThreshold = 500
   if (ms >= 1000) {
     displayValue = `${(ms / 1000).toFixed(2)}s`;
   } else {
-    displayValue = `${ms}ms`;
+    displayValue = `${ms.toFixed(2)}ms`;
   }
 
   return (
@@ -529,14 +484,13 @@ export function DurationCell({ ms, slowThreshold = 1000, verySlowThreshold = 500
   );
 }
 
-// Log level badge with colors
-interface LogLevelBadgeProps {
-  level: string;
+// GraphQL Error badge
+interface GraphQLErrorBadgeProps {
   onClick?: (e: React.MouseEvent) => void;
 }
 
-export function LogLevelBadge({ level, onClick }: LogLevelBadgeProps) {
-  const colorClass = getBadgeColor(level);
+export function GraphQLErrorBadge({ onClick }: GraphQLErrorBadgeProps) {
+  const colorClass = getBadgeColor('ERROR');
 
   return (
     <button
@@ -548,152 +502,34 @@ export function LogLevelBadge({ level, onClick }: LogLevelBadgeProps) {
         transition-transform
       `}
     >
-      {level.toUpperCase()}
+      ERROR
     </button>
   );
 }
 
-// Job status badge with colors
-interface JobStatusBadgeProps {
-  status: string;
+// GraphQL N+1 Warning badge
+interface N1WarningBadgeProps {
+  count: number;
   onClick?: (e: React.MouseEvent) => void;
 }
 
-export function JobStatusBadge({ status, onClick }: JobStatusBadgeProps) {
-  const colorClass = getBadgeColor(status);
+export function N1WarningBadge({ count, onClick }: N1WarningBadgeProps) {
+  if (count === 0) return null;
+
+  const colorClass = getBadgeColor('N+1');
 
   return (
     <button
       onClick={onClick}
+      title={`${count} potential N+1 ${count === 1 ? 'query' : 'queries'} detected`}
       className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
+        inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
         ${colorClass}
         ${onClick ? 'cursor-pointer hover:scale-105' : ''}
         transition-transform
       `}
     >
-      {status.toUpperCase()}
-    </button>
-  );
-}
-
-// Cache operation badge
-interface CacheOperationBadgeProps {
-  operation: string;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function CacheOperationBadge({ operation, onClick }: CacheOperationBadgeProps) {
-  const colorClass = getBadgeColor(operation);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {operation.toUpperCase()}
-    </button>
-  );
-}
-
-// Cache hit/miss badge
-interface CacheHitBadgeProps {
-  hit: boolean;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function CacheHitBadge({ hit, onClick }: CacheHitBadgeProps) {
-  const label = hit ? 'HIT' : 'MISS';
-  const colorClass = getBadgeColor(label);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {label}
-    </button>
-  );
-}
-
-// Mail status badge
-interface MailStatusBadgeProps {
-  status: string;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function MailStatusBadge({ status, onClick }: MailStatusBadgeProps) {
-  const colorClass = getBadgeColor(status);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {status.toUpperCase()}
-    </button>
-  );
-}
-
-// Schedule status badge
-interface ScheduleStatusBadgeProps {
-  status: string;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function ScheduleStatusBadge({ status, onClick }: ScheduleStatusBadgeProps) {
-  const colorClass = getBadgeColor(status);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {status.toUpperCase()}
-    </button>
-  );
-}
-
-// Source badge (for queries - TypeORM, Prisma, etc.)
-interface SourceBadgeProps {
-  source: string;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-export function SourceBadge({ source, onClick }: SourceBadgeProps) {
-  const colorClass = getBadgeColor(source);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
-        ${colorClass}
-        ${onClick ? 'cursor-pointer hover:scale-105' : ''}
-        transition-transform
-      `}
-    >
-      {source.toUpperCase()}
+      N+1
     </button>
   );
 }

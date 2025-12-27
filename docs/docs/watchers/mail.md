@@ -143,6 +143,8 @@ export class EmailService {
 
 ## Dashboard View
 
+![Mail Detail View](/img/screenshots/mail_detail.png)
+
 In the NestLens dashboard, mail entries show:
 
 - Timeline of sent emails

@@ -41,6 +41,7 @@ export default function DumpsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<DumpEntry>({ type: 'dump', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -178,6 +179,7 @@ export default function DumpsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/dumps/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No data dumps recorded yet"
           emptyIcon={<HardDrive className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

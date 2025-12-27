@@ -177,7 +177,7 @@ export default function JobDetailView({ entry }: JobDetailViewProps) {
             <DetailRow
               label="Job Name"
               value={
-                <ClickableBadge listType="jobs" filterType="names" className="font-mono">
+                <ClickableBadge listType="jobs" filterType="names" filterValue={payload.name} className="font-mono">
                   {payload.name}
                 </ClickableBadge>
               }
@@ -185,7 +185,7 @@ export default function JobDetailView({ entry }: JobDetailViewProps) {
             <DetailRow
               label="Queue"
               value={
-                <ClickableBadge listType="jobs" filterType="queues">
+                <ClickableBadge listType="jobs" filterType="queues" filterValue={payload.queue}>
                   {payload.queue}
                 </ClickableBadge>
               }

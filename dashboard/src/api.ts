@@ -93,10 +93,14 @@ export interface CursorFilters {
   hostnames?: string[];
   controllers?: string[];
   ips?: string[];
+  // Events
+  eventNames?: string[];
   // Schedule
   scheduleStatuses?: string[];
+  scheduleNames?: string[];
   // Jobs
   jobStatuses?: string[];
+  jobNames?: string[];
   queues?: string[];
   // Cache
   cacheOperations?: string[];
@@ -128,6 +132,11 @@ export interface CursorFilters {
   dumpStatuses?: string[];
   dumpOperations?: string[];
   dumpFormats?: string[];
+  // GraphQL
+  operationTypes?: string[];
+  operationNames?: string[];
+  hasErrors?: boolean;
+  hasN1?: boolean;
   // Common
   tags?: string[];
   search?: string;
@@ -169,8 +178,11 @@ export async function getEntriesWithCursor(params: {
     if (f.hostnames && f.hostnames.length > 0) searchParams.set('hostnames', f.hostnames.join(','));
     if (f.controllers && f.controllers.length > 0) searchParams.set('controllers', f.controllers.join(','));
     if (f.ips && f.ips.length > 0) searchParams.set('ips', f.ips.join(','));
+    if (f.eventNames && f.eventNames.length > 0) searchParams.set('eventNames', f.eventNames.join(','));
     if (f.scheduleStatuses && f.scheduleStatuses.length > 0) searchParams.set('scheduleStatuses', f.scheduleStatuses.join(','));
+    if (f.scheduleNames && f.scheduleNames.length > 0) searchParams.set('scheduleNames', f.scheduleNames.join(','));
     if (f.jobStatuses && f.jobStatuses.length > 0) searchParams.set('jobStatuses', f.jobStatuses.join(','));
+    if (f.jobNames && f.jobNames.length > 0) searchParams.set('jobNames', f.jobNames.join(','));
     if (f.queues && f.queues.length > 0) searchParams.set('queues', f.queues.join(','));
     if (f.cacheOperations && f.cacheOperations.length > 0) searchParams.set('cacheOperations', f.cacheOperations.join(','));
     if (f.mailStatuses && f.mailStatuses.length > 0) searchParams.set('mailStatuses', f.mailStatuses.join(','));
@@ -200,6 +212,11 @@ export async function getEntriesWithCursor(params: {
     if (f.dumpStatuses && f.dumpStatuses.length > 0) searchParams.set('dumpStatuses', f.dumpStatuses.join(','));
     if (f.dumpOperations && f.dumpOperations.length > 0) searchParams.set('dumpOperations', f.dumpOperations.join(','));
     if (f.dumpFormats && f.dumpFormats.length > 0) searchParams.set('dumpFormats', f.dumpFormats.join(','));
+    // GraphQL filters
+    if (f.operationTypes && f.operationTypes.length > 0) searchParams.set('operationTypes', f.operationTypes.join(','));
+    if (f.operationNames && f.operationNames.length > 0) searchParams.set('operationNames', f.operationNames.join(','));
+    if (f.hasErrors !== undefined) searchParams.set('hasErrors', f.hasErrors.toString());
+    if (f.hasN1 !== undefined) searchParams.set('hasN1', f.hasN1.toString());
     // Common filters
     if (f.tags && f.tags.length > 0) searchParams.set('tags', f.tags.join(','));
     if (f.search) searchParams.set('search', f.search);

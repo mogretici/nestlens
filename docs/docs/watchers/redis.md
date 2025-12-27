@@ -132,6 +132,8 @@ export class CacheService {
 
 ## Dashboard View
 
+![Redis Detail View](/img/screenshots/redis_detail.png)
+
 In the NestLens dashboard, Redis entries show:
 
 - Command execution timeline

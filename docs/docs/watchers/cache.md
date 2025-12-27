@@ -164,6 +164,8 @@ export class ProductService {
 
 ## Dashboard View
 
+![Cache Detail View](/img/screenshots/cache_detail.png)
+
 In the NestLens dashboard, cache entries appear in the Cache tab showing:
 
 - Timeline of cache operations

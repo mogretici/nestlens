@@ -13,11 +13,10 @@ import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  MethodBadge,
-  StatusCodeBadge,
   DurationCell,
   TagsList,
 } from '../components/DataTable';
+import ClickableBadge from '../components/ClickableBadge';
 import { RequestEntry, isRequestEntry } from '../types';
 
 // HTTP methods for tag filtering
@@ -54,6 +53,7 @@ export default function RequestsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<RequestEntry>({ type: 'request', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -66,10 +66,9 @@ export default function RequestsPage() {
       header: 'Method',
       width: '100px',
       render: (entry) => (
-        <MethodBadge
-          method={getDisplayMethod(entry)}
-          onClick={(e) => { e.stopPropagation(); addFilter('methods', getDisplayMethod(entry)); }}
-        />
+        <ClickableBadge listType="requests" filterType="methods">
+          {getDisplayMethod(entry)}
+        </ClickableBadge>
       ),
     },
     {
@@ -88,10 +87,9 @@ export default function RequestsPage() {
       width: '80px',
       align: 'center',
       render: (entry) => (
-        <StatusCodeBadge
-          code={entry.payload.statusCode || 0}
-          onClick={(e) => { e.stopPropagation(); addFilter('statuses', String(entry.payload.statusCode || 0)); }}
-        />
+        <ClickableBadge listType="requests" filterType="statuses">
+          {entry.payload.statusCode || 0}
+        </ClickableBadge>
       ),
     },
     {
@@ -172,6 +170,7 @@ export default function RequestsPage() {
           onRowClick={(entry) => navigate(`/requests/${entry.id}`)}
           emptyMessage="No requests recorded yet"
           emptyIcon={<Globe className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
         />
 
         {/* Load more button */}

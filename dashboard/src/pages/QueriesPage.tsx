@@ -13,10 +13,10 @@ import PageHeader, { ToggleSwitch } from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  SourceBadge,
   DurationCell,
   TagsList,
 } from '../components/DataTable';
+import ClickableBadge from '../components/ClickableBadge';
 import { QueryEntry, isQueryEntry } from '../types';
 
 export default function QueriesPage() {
@@ -49,6 +49,7 @@ export default function QueriesPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<QueryEntry>({ type: 'query', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -61,10 +62,9 @@ export default function QueriesPage() {
       header: 'Source',
       width: '120px',
       render: (entry) => (
-        <SourceBadge
-          source={entry.payload.source || 'unknown'}
-          onClick={(e) => { e.stopPropagation(); addFilter('sources', entry.payload.source || 'unknown'); }}
-        />
+        <ClickableBadge listType="queries" filterType="sources">
+          {entry.payload.source || 'unknown'}
+        </ClickableBadge>
       ),
     },
     {
@@ -176,6 +176,7 @@ export default function QueriesPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/queries/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No queries recorded yet"
           emptyIcon={<Database className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

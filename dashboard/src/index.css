@@ -89,3 +89,36 @@ code {
 .sql-param {
   @apply text-purple-600 dark:text-purple-400;
 }
+
+/* New entry highlight animation - NestLens primary blue */
+.highlight-new {
+  @apply bg-primary-100 dark:bg-primary-900/30 !important;
+  animation: highlight-fade 10s ease-out forwards;
+}
+
+@keyframes highlight-fade {
+  0% {
+    @apply bg-primary-200 dark:bg-primary-800/40;
+  }
+  70% {
+    @apply bg-primary-100 dark:bg-primary-900/30;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Mail HTML Preview - always light background like a paper */
+.mail-preview {
+  color-scheme: light;
+}
+.mail-preview * {
+  color: inherit;
+}
+.mail-preview a {
+  color: #2563eb;
+}
+.mail-preview img {
+  max-width: 100%;
+  height: auto;
+}

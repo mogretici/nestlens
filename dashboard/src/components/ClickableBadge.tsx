@@ -1,6 +1,7 @@
 import { MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ListType, FilterType } from '../config/entryTypes';
+import { getFilterUrlKey, FilterCategory } from '../hooks/useEntryFilters';
 
 // Re-export types for backwards compatibility
 export type { ListType, FilterType };
@@ -102,8 +103,20 @@ interface ClickableBadgeProps {
 }
 
 /**
- * Get badge color based on content
- * Single source of truth for all badge colors in the app
+ * Get badge color class based on content.
+ *
+ * SINGLE SOURCE OF TRUTH for all badge colors in NestLens.
+ * Used by: ClickableBadge, FilterBadge, DataTable badges, EntryTags
+ *
+ * @param text - Badge content to determine color for
+ * @returns Tailwind CSS classes for background and text color
+ *
+ * @example
+ * getBadgeColor('GET')     // → green (HTTP method)
+ * getBadgeColor('200')     // → green (success status)
+ * getBadgeColor('ERROR')   // → red (error state)
+ * getBadgeColor('prisma')  // → indigo (ORM source)
+ * getBadgeColor('N+1')     // → amber (N+1 warning)
  */
 export function getBadgeColor(text: string): string {
   const t = text.toUpperCase();
@@ -121,6 +134,11 @@ export function getBadgeColor(text: string): string {
   // Controller actions (contains # or :: or Controller.method pattern)
   if (text.includes('#') || text.includes('::') || /Controller\./i.test(text)) {
     return 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400';
+  }
+
+  // User related tags (check BEFORE hostname to prevent USER:123 being treated as hostname)
+  if (t.startsWith('USER:')) {
+    return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
   }
 
   // Hostnames (like localhost:3000 or api.example.com)
@@ -190,9 +208,9 @@ export function getBadgeColor(text: string): string {
     return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
   }
 
-  // User related
-  if (t.startsWith('USER:')) {
-    return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
+  // N+1 Warning (GraphQL/Query performance issue)
+  if (t === 'N+1' || t === 'N1') {
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300';
   }
 
   // Query types
@@ -211,13 +229,25 @@ export function getBadgeColor(text: string): string {
     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   }
 
+  // GraphQL operation types (check BEFORE entry types to avoid conflict)
+  // These are the operationType values from GraphQL entries
+  if (t === 'QUERY' || t === 'MUTATION' || t === 'SUBSCRIPTION') {
+    if (t === 'QUERY') {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    }
+    if (t === 'MUTATION') {
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+    }
+    if (t === 'SUBSCRIPTION') {
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    }
+  }
+
   // Entry types
   if (t === 'REQUEST') {
     return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
   }
-  if (t === 'QUERY') {
-    return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-  }
+  // Note: QUERY is handled above as GraphQL operation type (returns blue)
   if (t === 'EXCEPTION') {
     return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
   }
@@ -318,6 +348,7 @@ export default function ClickableBadge({
   ariaLabel,
 }: ClickableBadgeProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleClick = (e: MouseEvent) => {
     e.preventDefault();
@@ -330,8 +361,36 @@ export default function ClickableBadge({
 
     if (listType && clickable) {
       const value = filterValue || String(children);
-      const urlParam = getUrlParam(value, filterType);
-      navigate(`/${listType}?${urlParam}=${encodeURIComponent(value)}`);
+      // Use getFilterUrlKey to properly map category name to URL key
+      // This ensures 'statuses' → 'dumpStatuses' for dumps, 'statuses' → 'statuses' for requests, etc.
+      const urlParam = filterType && filterType !== 'tag'
+        ? getFilterUrlKey(listType, filterType as FilterCategory)
+        : getUrlParam(value, filterType);
+
+      // Check if we're on the same list type page (e.g., /logs or /logs/123)
+      const currentPath = location.pathname;
+      const isOnSameListType = currentPath === `/${listType}` || currentPath.startsWith(`/${listType}/`);
+
+      // If on same list type, merge with existing filters; otherwise start fresh
+      const searchParams = isOnSameListType
+        ? new URLSearchParams(location.search)
+        : new URLSearchParams();
+
+      // Add or update the filter value
+      const existingValues = searchParams.get(urlParam);
+      if (existingValues) {
+        // Check if value already exists in the filter
+        const valuesArray = existingValues.split(',');
+        if (!valuesArray.includes(value)) {
+          // Add to existing values
+          searchParams.set(urlParam, [...valuesArray, value].join(','));
+        }
+        // If value already exists, keep as is (clicking same badge again doesn't duplicate)
+      } else {
+        searchParams.set(urlParam, value);
+      }
+
+      navigate(`/${listType}?${searchParams.toString()}`);
     }
   };
 

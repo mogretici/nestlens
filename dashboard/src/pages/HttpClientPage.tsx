@@ -41,6 +41,7 @@ export default function HttpClientPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<HttpClientEntry>({ type: 'http-client', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -167,6 +168,7 @@ export default function HttpClientPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/http-client/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No outgoing HTTP requests recorded yet"
           emptyIcon={<Globe className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

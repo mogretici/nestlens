@@ -148,7 +148,7 @@ export default function CommandDetailView({ entry }: CommandDetailViewProps) {
             <DetailRow
               label="Command"
               value={
-                <ClickableBadge listType="commands" filterType="commandNames" filterValue={payload.name}>
+                <ClickableBadge listType="commands" filterType="names" filterValue={payload.name}>
                   {payload.name}
                 </ClickableBadge>
               }
@@ -166,7 +166,7 @@ export default function CommandDetailView({ entry }: CommandDetailViewProps) {
             <DetailRow
               label="Status"
               value={
-                <ClickableBadge listType="commands" filterType="commandStatuses" filterValue={payload.status}>
+                <ClickableBadge listType="commands" filterType="statuses" filterValue={payload.status}>
                   {payload.status.toUpperCase()}
                 </ClickableBadge>
               }

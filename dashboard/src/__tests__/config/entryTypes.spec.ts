@@ -40,7 +40,8 @@ describe('ENTRY_TYPES', () => {
       expect(entryTypes).toContain('gate');
       expect(entryTypes).toContain('batch');
       expect(entryTypes).toContain('dump');
-      expect(entryTypes).toHaveLength(18);
+      expect(entryTypes).toContain('graphql');
+      expect(entryTypes).toHaveLength(19);
     });
 
     it('each entry type has required properties', () => {

@@ -129,6 +129,8 @@ NestLensModule.forRoot({
 
 ## Dashboard View
 
+![Exception Detail View](/img/screenshots/exception_detail.png)
+
 In the NestLens dashboard, exception entries appear in the Exceptions tab showing:
 
 - Timeline of all exceptions

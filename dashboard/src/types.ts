@@ -16,7 +16,8 @@ export type EntryType =
   | 'command'
   | 'gate'
   | 'batch'
-  | 'dump';
+  | 'dump'
+  | 'graphql';
 
 /**
  * JSON-serializable value type.
@@ -255,6 +256,69 @@ export interface DumpPayload {
   error?: string;
 }
 
+/**
+ * GraphQL error information
+ */
+export interface GraphQLErrorInfo {
+  message: string;
+  path?: (string | number)[];
+  locations?: Array<{ line: number; column: number }>;
+  extensions?: JsonObject;
+}
+
+/**
+ * Potential N+1 query warning
+ */
+export interface PotentialN1Warning {
+  field: string;
+  parentType: string;
+  count: number;
+  suggestion: string;
+}
+
+/**
+ * Field-level trace information
+ */
+export interface GraphQLFieldTrace {
+  path: string;
+  parentType: string;
+  fieldName: string;
+  returnType: string;
+  startOffset: number;
+  duration: number;
+}
+
+export interface GraphQLPayload {
+  operationName?: string;
+  operationType: 'query' | 'mutation' | 'subscription';
+  query: string;
+  queryHash: string;
+  variables?: JsonObject;
+  duration: number;
+  parsingDuration?: number;
+  validationDuration?: number;
+  executionDuration?: number;
+  statusCode: number;
+  hasErrors: boolean;
+  errors?: GraphQLErrorInfo[];
+  responseData?: JsonValue;
+  resolverCount?: number;
+  fieldCount?: number;
+  depthReached?: number;
+  potentialN1?: PotentialN1Warning[];
+  ip?: string;
+  userAgent?: string;
+  user?: RequestUser;
+  batchIndex?: number;
+  batchSize?: number;
+  batchId?: string;
+  subscriptionId?: string;
+  subscriptionEvent?: 'start' | 'data' | 'error' | 'complete';
+  messageCount?: number;
+  subscriptionDuration?: number;
+  fieldTraces?: GraphQLFieldTrace[];
+}
+
 // Base entry interface
 interface BaseEntry {
   id: number;
@@ -357,6 +421,11 @@ export interface DumpEntry extends BaseEntry {
   payload: DumpPayload;
 }
 
+export interface GraphQLEntry extends BaseEntry {
+  type: 'graphql';
+  payload: GraphQLPayload;
+}
+
 export type Entry =
   | RequestEntry
   | QueryEntry
@@ -375,7 +444,8 @@ export type Entry =
   | CommandEntry
   | GateEntry
   | BatchEntry
-  | DumpEntry;
+  | DumpEntry
+  | GraphQLEntry;
 
 // Type guards
 export function isRequestEntry(entry: Entry): entry is RequestEntry {
@@ -448,6 +518,10 @@ export function isBatchEntry(entry: Entry): entry is BatchEntry {
 
 export function isDumpEntry(entry: Entry): entry is DumpEntry {
   return entry.type === 'dump';
+}
+
+export function isGraphQLEntry(entry: Entry): entry is GraphQLEntry {
+  return entry.type === 'graphql';
 }
 
 export interface Stats {

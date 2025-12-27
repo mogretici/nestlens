@@ -7,6 +7,8 @@ slug: /
 
 NestLens is an elegant debugging and monitoring assistant for NestJS applications, inspired by [Laravel Telescope](https://laravel.com/docs/telescope). It provides deep insights into your application's behavior during development with a beautiful, real-time dashboard.
 
+![NestLens Dashboard](/img/nestlens.gif)
+
 ## What is NestLens?
 
 NestLens captures and visualizes everything happening in your NestJS application:

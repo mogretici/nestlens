@@ -3,7 +3,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { EntryTags, TagList, getTagColor } from '../../components/EntryTags';
+import { EntryTags, TagList } from '../../components/EntryTags';
+import { getBadgeColor as getTagColor } from '../../components/ClickableBadge';
 
 // Mock API
 vi.mock('../../api', () => ({
@@ -71,7 +72,9 @@ describe('getTagColor', () => {
     });
 
     it('returns purple for user tags', () => {
-      expect(getTagColor('USER:123')).toContain('bg-purple');
+      // User tags start with 'USER:' and get purple color
+      const color = getTagColor('USER:123');
+      expect(color).toContain('purple');
     });
 
     it('returns cyan for query types', () => {
@@ -81,15 +84,20 @@ describe('getTagColor', () => {
   });
 
   describe('Case Insensitivity', () => {
-    it('handles lowercase', () => {
+    it('handles lowercase by uppercasing internally', () => {
+      // getBadgeColor uppercases the input for comparison
       expect(getTagColor('get')).toContain('bg-green');
       expect(getTagColor('error')).toContain('bg-red');
     });
   });
 
   describe('Default', () => {
-    it('returns gray for unknown tags', () => {
-      expect(getTagColor('UNKNOWN')).toContain('bg-gray');
+    it('returns hash-based color for unknown tags', () => {
+      // Unknown tags get consistent hash-based colors (not gray)
+      // This ensures visual variety while maintaining consistency
+      const color = getTagColor('UNKNOWN');
+      expect(color).toBeTruthy();
+      expect(color).toContain('bg-');
     });
   });
 });
@@ -144,6 +152,21 @@ describe('TagList', () => {
 
     const tag = screen.getByText('GET');
     expect(tag.className).toContain('cursor-pointer');
+  });
+
+  it('has aria-label when clickable', () => {
+    render(<TagList tags={['GET']} clickable />);
+
+    const tag = screen.getByRole('button', { name: 'Click to filter by GET' });
+    expect(tag).toBeInTheDocument();
+  });
+
+  it('has aria-label when onTagClick is provided', () => {
+    const handleClick = vi.fn();
+    render(<TagList tags={['ERROR']} onTagClick={handleClick} />);
+
+    const tag = screen.getByRole('button', { name: 'Click to filter by ERROR' });
+    expect(tag).toBeInTheDocument();
   });
 });
 

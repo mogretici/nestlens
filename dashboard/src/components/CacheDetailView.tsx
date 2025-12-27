@@ -143,7 +143,7 @@ export default function CacheDetailView({ entry }: CacheDetailViewProps) {
             <DetailRow
               label="Operation"
               value={
-                <ClickableBadge listType="cache" filterType="cacheOperations" filterValue={payload.operation}>
+                <ClickableBadge listType="cache" filterType="operations" filterValue={payload.operation}>
                   {payload.operation.toUpperCase()}
                 </ClickableBadge>
               }
@@ -163,7 +163,7 @@ export default function CacheDetailView({ entry }: CacheDetailViewProps) {
               <DetailRow
                 label="Result"
                 value={
-                  <ClickableBadge listType="cache">
+                  <ClickableBadge listType="cache" filterType="tags" filterValue={payload.hit ? 'hit' : 'miss'}>
                     {payload.hit ? 'HIT' : 'MISS'}
                   </ClickableBadge>
                 }

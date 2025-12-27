@@ -132,7 +132,7 @@ export default function DumpDetailView({ entry }: DumpDetailViewProps) {
             <DetailRow
               label="Operation"
               value={
-                <ClickableBadge listType="dumps" filterType="dumpOperations" filterValue={payload.operation}>
+                <ClickableBadge listType="dumps" filterType="operations" filterValue={payload.operation}>
                   {payload.operation.toUpperCase()}
                 </ClickableBadge>
               }
@@ -140,7 +140,7 @@ export default function DumpDetailView({ entry }: DumpDetailViewProps) {
             <DetailRow
               label="Format"
               value={
-                <ClickableBadge listType="dumps" filterType="dumpFormats" filterValue={payload.format}>
+                <ClickableBadge listType="dumps" filterType="formats" filterValue={payload.format}>
                   {payload.format}
                 </ClickableBadge>
               }
@@ -148,7 +148,7 @@ export default function DumpDetailView({ entry }: DumpDetailViewProps) {
             <DetailRow
               label="Status"
               value={
-                <ClickableBadge listType="dumps" filterType="dumpStatuses" filterValue={payload.status}>
+                <ClickableBadge listType="dumps" filterType="statuses" filterValue={payload.status}>
                   {payload.status.toUpperCase()}
                 </ClickableBadge>
               }

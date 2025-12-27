@@ -372,13 +372,13 @@ describe('getBadgeColor', () => {
       expect(color).toContain('bg-purple-100');
     });
 
-    it('returns slate for USER: with numeric suffix (looks like host:port)', () => {
+    it('returns purple for USER: with numeric suffix (USER: takes precedence over hostname)', () => {
       // Arrange & Act
-      // USER:123 matches hostname:port pattern (:digits at end)
+      // USER: prefix is checked BEFORE hostname pattern, so USER:123 returns purple
       const color = getBadgeColor('USER:123');
 
-      // Assert - hostname pattern takes precedence
-      expect(color).toContain('bg-slate-100');
+      // Assert - USER: pattern takes precedence over hostname:port
+      expect(color).toContain('bg-purple-100');
     });
   });
 
@@ -451,12 +451,13 @@ describe('getBadgeColor', () => {
       expect(color).toContain('bg-blue-100');
     });
 
-    it('returns purple for QUERY', () => {
+    it('returns blue for QUERY (GraphQL operation type)', () => {
       // Arrange & Act
+      // QUERY is now treated as a GraphQL operation type, not entry type
       const color = getBadgeColor('QUERY');
 
       // Assert
-      expect(color).toContain('bg-purple-100');
+      expect(color).toContain('bg-blue-100');
     });
 
     it('returns red for EXCEPTION', () => {

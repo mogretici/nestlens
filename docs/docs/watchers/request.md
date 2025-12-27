@@ -169,6 +169,8 @@ NestLensModule.forRoot({
 
 ## Dashboard View
 
+![Request Detail View](/img/screenshots/request_detail.png)
+
 In the NestLens dashboard, request entries appear in the Requests tab showing:
 
 - Timeline view of all requests

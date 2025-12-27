@@ -141,7 +141,7 @@ export default function BatchDetailView({ entry }: BatchDetailViewProps) {
               <DetailRow
                 label="Operation"
                 value={
-                  <ClickableBadge listType="batches" filterType="batchOperations" filterValue={payload.operation}>
+                  <ClickableBadge listType="batches" filterType="operations" filterValue={payload.operation}>
                     {payload.operation}
                   </ClickableBadge>
                 }
@@ -150,7 +150,7 @@ export default function BatchDetailView({ entry }: BatchDetailViewProps) {
             <DetailRow
               label="Status"
               value={
-                <ClickableBadge listType="batches" filterType="batchStatuses" filterValue={payload.status}>
+                <ClickableBadge listType="batches" filterType="statuses" filterValue={payload.status}>
                   {payload.status.toUpperCase()}
                 </ClickableBadge>
               }

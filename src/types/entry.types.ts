@@ -1,3 +1,5 @@
+import { GraphQLEntry } from './graphql.types';
+
 export type EntryType =
   | 'request'
   | 'query'
@@ -16,7 +18,8 @@ export type EntryType =
   | 'command'
   | 'gate'
   | 'batch'
-  | 'dump';
+  | 'dump'
+  | 'graphql';
 
 export interface BaseEntry {
   id?: number;
@@ -61,6 +64,17 @@ export interface RequestEntry extends BaseEntry {
     user?: RequestUser;
     session?: Record<string, unknown>;
     tags?: string[];
+    /**
+     * Indicates if this request is a GraphQL request.
+     * Detection based on:
+     * - POST method
+     * - Content-Type: application/json or application/graphql
+     * - Body contains 'query' field with GraphQL syntax
+     *
+     * GraphQL requests are excluded from the Requests watcher
+     * and only shown in the GraphQL watcher.
+     */
+    isGraphQL?: boolean;
   };
 }
 
@@ -322,7 +336,8 @@ export type Entry =
   | CommandEntry
   | GateEntry
   | BatchEntry
-  | DumpEntry;
+  | DumpEntry
+  | GraphQLEntry;
 
 export interface EntryFilter {
   type?: EntryType;
@@ -371,10 +386,14 @@ export interface CursorPaginationParams {
     hostnames?: string[];
     controllers?: string[];
     ips?: string[];
+    // Events
+    eventNames?: string[];
     // Schedule
     scheduleStatuses?: string[];
+    scheduleNames?: string[];
     // Jobs
     jobStatuses?: string[];
+    jobNames?: string[];
     queues?: string[];
     // Cache
     cacheOperations?: string[];
@@ -406,6 +425,11 @@ export interface CursorPaginationParams {
     dumpStatuses?: string[];
     dumpOperations?: string[];
     dumpFormats?: string[];
+    // GraphQL
+    operationTypes?: string[]; // 'query' | 'mutation' | 'subscription'
+    operationNames?: string[];
+    hasErrors?: boolean;
+    hasN1?: boolean;
     // Common
     tags?: string[];
     search?: string;

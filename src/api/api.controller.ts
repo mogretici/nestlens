@@ -9,21 +9,40 @@ import {
   Patch,
   Post,
   Query,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { STORAGE, StorageInterface } from '../core/storage/storage.interface';
 import { PruningService } from '../core/pruning.service';
 import { CollectorService } from '../core/collector.service';
-import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '../nestlens.config';
+import {
+  NestLensConfig,
+  NESTLENS_API_PREFIX,
+  NESTLENS_CONFIG,
+} from '../nestlens.config';
 import { EntryType, CursorPaginatedResponse, Entry } from '../types';
 import { NestLensGuard } from './api.guard';
+import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT } from './dto';
+import { NestLensApiExceptionFilter } from './filters/api-exception.filter';
+import { NestLensApiResponseInterceptor } from './interceptors/api-response.interceptor';
+import { NestLensApiException } from './exceptions/nestlens-api.exception';
 
-// Pagination limits to prevent DoS
-const MAX_LIMIT = 1000;
-const DEFAULT_LIMIT = 50;
-
+@ApiTags('NestLens')
 @Controller(`${NESTLENS_API_PREFIX}/api`)
 @UseGuards(NestLensGuard)
+@UseFilters(NestLensApiExceptionFilter)
+@UseInterceptors(NestLensApiResponseInterceptor)
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class NestLensApiController {
   private lastPruneRun: Date | null = null;
   private nextPruneRun: Date | null = null;
@@ -61,6 +80,14 @@ export class NestLensApiController {
   }
 
   @Get('entries')
+  @ApiOperation({ summary: 'Get paginated entries with offset pagination' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filter by entry type' })
+  @ApiQuery({ name: 'requestId', required: false, description: 'Filter by request ID' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Number of entries per page (max 100)' })
+  @ApiQuery({ name: 'offset', required: false, description: 'Offset for pagination' })
+  @ApiQuery({ name: 'from', required: false, description: 'Filter entries from this date (ISO 8601)' })
+  @ApiQuery({ name: 'to', required: false, description: 'Filter entries until this date (ISO 8601)' })
+  @ApiResponse({ status: 200, description: 'Paginated list of entries' })
   async getEntries(
     @Query('type') type?: EntryType,
     @Query('requestId') requestId?: string,
@@ -94,151 +121,22 @@ export class NestLensApiController {
   }
 
   /**
-   * Cursor-based pagination endpoints
-   * NOTE: These must come BEFORE @Get('entries/:id') to avoid route conflicts
+   * Cursor-based pagination with comprehensive filtering
+   * Uses CursorQueryDto to validate and transform all query parameters
+   * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflicts
    */
   @Get('entries/cursor')
+  @ApiOperation({ summary: 'Get entries with cursor-based pagination and filtering' })
+  @ApiResponse({ status: 200, description: 'Cursor-paginated list of entries with filters' })
+  @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getEntriesWithCursor(
-    @Query('type') type?: EntryType,
-    @Query('limit') limit?: string,
-    @Query('beforeSequence') beforeSequence?: string,
-    @Query('afterSequence') afterSequence?: string,
-    // Filter parameters
-    @Query('levels') levels?: string,
-    @Query('contexts') contexts?: string,
-    @Query('queryTypes') queryTypes?: string,
-    @Query('sources') sources?: string,
-    @Query('slow') slow?: string,
-    @Query('names') names?: string,
-    @Query('methods') methods?: string,
-    @Query('paths') paths?: string,
-    @Query('resolved') resolved?: string,
-    @Query('statuses') statuses?: string,
-    @Query('hostnames') hostnames?: string,
-    @Query('controllers') controllers?: string,
-    @Query('ips') ips?: string,
-    @Query('scheduleStatuses') scheduleStatuses?: string,
-    @Query('jobStatuses') jobStatuses?: string,
-    @Query('queues') queues?: string,
-    @Query('cacheOperations') cacheOperations?: string,
-    @Query('mailStatuses') mailStatuses?: string,
-    // New entry type filters
-    @Query('redisStatuses') redisStatuses?: string,
-    @Query('redisCommands') redisCommands?: string,
-    @Query('modelActions') modelActions?: string,
-    @Query('entities') entities?: string,
-    @Query('modelSources') modelSources?: string,
-    @Query('notificationTypes') notificationTypes?: string,
-    @Query('notificationStatuses') notificationStatuses?: string,
-    @Query('viewFormats') viewFormats?: string,
-    @Query('viewStatuses') viewStatuses?: string,
-    @Query('commandStatuses') commandStatuses?: string,
-    @Query('commandNames') commandNames?: string,
-    @Query('gateNames') gateNames?: string,
-    @Query('gateResults') gateResults?: string,
-    @Query('batchStatuses') batchStatuses?: string,
-    @Query('batchOperations') batchOperations?: string,
-    @Query('dumpStatuses') dumpStatuses?: string,
-    @Query('dumpOperations') dumpOperations?: string,
-    @Query('dumpFormats') dumpFormats?: string,
-    @Query('tags') tags?: string,
-    @Query('search') search?: string,
+    @Query() query: CursorQueryDto,
   ): Promise<CursorPaginatedResponse<Entry>> {
-    // Build filters object from query params
-    const filters: {
-      levels?: string[];
-      contexts?: string[];
-      queryTypes?: string[];
-      sources?: string[];
-      slow?: boolean;
-      names?: string[];
-      methods?: string[];
-      paths?: string[];
-      resolved?: boolean;
-      statuses?: (number | 'ERR')[];
-      hostnames?: string[];
-      controllers?: string[];
-      ips?: string[];
-      scheduleStatuses?: string[];
-      jobStatuses?: string[];
-      queues?: string[];
-      cacheOperations?: string[];
-      mailStatuses?: string[];
-      // New entry type filters
-      redisStatuses?: string[];
-      redisCommands?: string[];
-      modelActions?: string[];
-      entities?: string[];
-      modelSources?: string[];
-      notificationTypes?: string[];
-      notificationStatuses?: string[];
-      viewFormats?: string[];
-      viewStatuses?: string[];
-      commandStatuses?: string[];
-      commandNames?: string[];
-      gateNames?: string[];
-      gateResults?: string[];
-      batchStatuses?: string[];
-      batchOperations?: string[];
-      dumpStatuses?: string[];
-      dumpOperations?: string[];
-      dumpFormats?: string[];
-      tags?: string[];
-      search?: string;
-    } = {};
-
-    if (levels) filters.levels = levels.split(',').filter(Boolean);
-    if (contexts) filters.contexts = contexts.split(',').filter(Boolean);
-    if (queryTypes) filters.queryTypes = queryTypes.split(',').filter(Boolean);
-    if (sources) filters.sources = sources.split(',').filter(Boolean);
-    if (slow !== undefined) filters.slow = slow === 'true';
-    if (names) filters.names = names.split(',').filter(Boolean);
-    if (methods) filters.methods = methods.split(',').filter(Boolean);
-    if (paths) filters.paths = paths.split(',').filter(Boolean);
-    if (resolved !== undefined) filters.resolved = resolved === 'true';
-    if (statuses) {
-      filters.statuses = statuses.split(',').filter(Boolean).map(s =>
-        s.toUpperCase() === 'ERR' ? 'ERR' as const : parseInt(s, 10)
-      );
-    }
-    if (hostnames) filters.hostnames = hostnames.split(',').filter(Boolean);
-    if (controllers) filters.controllers = controllers.split(',').filter(Boolean);
-    if (ips) filters.ips = ips.split(',').filter(Boolean);
-    if (scheduleStatuses) filters.scheduleStatuses = scheduleStatuses.split(',').filter(Boolean);
-    if (jobStatuses) filters.jobStatuses = jobStatuses.split(',').filter(Boolean);
-    if (queues) filters.queues = queues.split(',').filter(Boolean);
-    if (cacheOperations) filters.cacheOperations = cacheOperations.split(',').filter(Boolean);
-    if (mailStatuses) filters.mailStatuses = mailStatuses.split(',').filter(Boolean);
-    // New entry type filters
-    if (redisStatuses) filters.redisStatuses = redisStatuses.split(',').filter(Boolean);
-    if (redisCommands) filters.redisCommands = redisCommands.split(',').filter(Boolean);
-    if (modelActions) filters.modelActions = modelActions.split(',').filter(Boolean);
-    if (entities) filters.entities = entities.split(',').filter(Boolean);
-    if (modelSources) filters.modelSources = modelSources.split(',').filter(Boolean);
-    if (notificationTypes) filters.notificationTypes = notificationTypes.split(',').filter(Boolean);
-    if (notificationStatuses) filters.notificationStatuses = notificationStatuses.split(',').filter(Boolean);
-    if (viewFormats) filters.viewFormats = viewFormats.split(',').filter(Boolean);
-    if (viewStatuses) filters.viewStatuses = viewStatuses.split(',').filter(Boolean);
-    if (commandStatuses) filters.commandStatuses = commandStatuses.split(',').filter(Boolean);
-    if (commandNames) filters.commandNames = commandNames.split(',').filter(Boolean);
-    if (gateNames) filters.gateNames = gateNames.split(',').filter(Boolean);
-    if (gateResults) filters.gateResults = gateResults.split(',').filter(Boolean);
-    if (batchStatuses) filters.batchStatuses = batchStatuses.split(',').filter(Boolean);
-    if (batchOperations) filters.batchOperations = batchOperations.split(',').filter(Boolean);
-    if (dumpStatuses) filters.dumpStatuses = dumpStatuses.split(',').filter(Boolean);
-    if (dumpOperations) filters.dumpOperations = dumpOperations.split(',').filter(Boolean);
-    if (dumpFormats) filters.dumpFormats = dumpFormats.split(',').filter(Boolean);
-    if (tags) filters.tags = tags.split(',').filter(Boolean);
-    if (search) filters.search = search;
-
-    // Only include filters if at least one is set
-    const hasFilters = Object.keys(filters).length > 0;
-
-    return this.storage.findWithCursor(type, {
-      limit: this.parseLimit(limit),
-      beforeSequence: beforeSequence ? parseInt(beforeSequence, 10) : undefined,
-      afterSequence: afterSequence ? parseInt(afterSequence, 10) : undefined,
-      filters: hasFilters ? filters : undefined,
+    return this.storage.findWithCursor(query.type, {
+      limit: query.limit ?? DEFAULT_LIMIT,
+      beforeSequence: query.beforeSequence,
+      afterSequence: query.afterSequence,
+      filters: query.toFilters(),
     });
   }
 
@@ -291,11 +189,15 @@ export class NestLensApiController {
   }
 
   @Get('entries/:id')
+  @ApiOperation({ summary: 'Get a single entry by ID' })
+  @ApiParam({ name: 'id', type: 'number', description: 'Entry ID' })
+  @ApiResponse({ status: 200, description: 'Entry with related entries if applicable' })
+  @ApiResponse({ status: 404, description: 'Entry not found' })
   async getEntry(@Param('id', ParseIntPipe) id: number) {
     const entry = await this.storage.findById(id);
 
     if (!entry) {
-      return { data: null, error: 'Entry not found' };
+      throw NestLensApiException.entryNotFound(id);
     }
 
     // If it's a request entry, also get related queries, exceptions, logs
@@ -315,6 +217,8 @@ export class NestLensApiController {
   }
 
   @Get('stats')
+  @ApiOperation({ summary: 'Get entry statistics by type' })
+  @ApiResponse({ status: 200, description: 'Statistics object with counts by entry type' })
   async getStats() {
     const stats = await this.storage.getStats();
     return { data: stats };

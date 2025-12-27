@@ -13,10 +13,9 @@ import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  CacheOperationBadge,
-  CacheHitBadge,
   DurationCell,
 } from '../components/DataTable';
+import ClickableBadge from '../components/ClickableBadge';
 import { CacheEntry, isCacheEntry } from '../types';
 
 export default function CachePage() {
@@ -24,7 +23,6 @@ export default function CachePage() {
 
   // Use centralized filter hook - all config comes from entryTypes.ts
   const {
-    addFilter,
     clearAll,
     serverFilters,
     headerFilters,
@@ -42,6 +40,7 @@ export default function CachePage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<CacheEntry>({ type: 'cache', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -54,10 +53,9 @@ export default function CachePage() {
       header: 'Operation',
       width: '100px',
       render: (entry) => (
-        <CacheOperationBadge
-          operation={entry.payload.operation}
-          onClick={(e) => { e.stopPropagation(); addFilter('operations', entry.payload.operation); }}
-        />
+        <ClickableBadge listType="cache" filterType="operations">
+          {entry.payload.operation}
+        </ClickableBadge>
       ),
     },
     {
@@ -78,10 +76,9 @@ export default function CachePage() {
       width: '80px',
       align: 'center',
       render: (entry) => entry.payload.operation === 'get' ? (
-        <CacheHitBadge
-          hit={entry.payload.hit || false}
-          onClick={(e) => { e.stopPropagation(); addFilter('tags', entry.payload.hit ? 'hit' : 'miss'); }}
-        />
+        <ClickableBadge listType="cache" filterType="tags" filterValue={entry.payload.hit ? 'hit' : 'miss'}>
+          {entry.payload.hit ? 'HIT' : 'MISS'}
+        </ClickableBadge>
       ) : (
         <TextCell secondary>—</TextCell>
       ),
@@ -106,7 +103,7 @@ export default function CachePage() {
         </TextCell>
       ),
     },
-  ], [addFilter]);
+  ], []);
 
   // Only show full-page spinner on initial load when no data exists
   if (loading && entries.length === 0) {
@@ -150,6 +147,7 @@ export default function CachePage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/cache/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No cache operations recorded yet"
           emptyIcon={<HardDrive className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

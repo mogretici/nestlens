@@ -16,3 +16,4 @@ export * from './command.watcher';
 export * from './gate.watcher';
 export * from './batch.watcher';
 export * from './dump.watcher';
+export * from './graphql';

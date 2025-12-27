@@ -78,6 +78,16 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     // Apply filters
     if (filter.type) {
       results = results.filter((e) => e.type === filter.type);
+
+      // Exclude GraphQL requests from regular requests list
+      // GraphQL requests should only appear in the GraphQL watcher
+      // Uses isGraphQL flag set by request.watcher.ts based on robust detection
+      if (filter.type === 'request') {
+        results = results.filter((e) => {
+          const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
+          return !isGraphQL;
+        });
+      }
     }
     if (filter.requestId) {
       results = results.filter((e) => e.requestId === filter.requestId);
@@ -116,6 +126,16 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     // Filter by type
     if (type) {
       results = results.filter((e) => e.type === type);
+
+      // Exclude GraphQL requests from regular requests list
+      // GraphQL requests should only appear in the GraphQL watcher
+      // Uses isGraphQL flag set by request.watcher.ts based on robust detection
+      if (type === 'request') {
+        results = results.filter((e) => {
+          const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
+          return !isGraphQL;
+        });
+      }
     }
 
     // Apply cursor pagination
@@ -173,7 +193,19 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
   async count(type?: EntryType): Promise<number> {
     if (!type) return this.entries.size;
-    return Array.from(this.entries.values()).filter((e) => e.type === type).length;
+
+    let results = Array.from(this.entries.values()).filter((e) => e.type === type);
+
+    // Exclude GraphQL requests from regular requests count
+    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
+    if (type === 'request') {
+      results = results.filter((e) => {
+        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
+        return !isGraphQL;
+      });
+    }
+
+    return results.length;
   }
 
   async clear(): Promise<void> {
@@ -302,7 +334,9 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     }
     const entryTagSet = this.entryTags.get(entryId)!;
 
-    for (const tag of tags) {
+    for (const rawTag of tags) {
+      // Normalize tags to uppercase for consistent storage
+      const tag = rawTag.toUpperCase();
       entryTagSet.add(tag);
 
       if (!this.tagIndex.has(tag)) {
@@ -316,7 +350,9 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     const entryTagSet = this.entryTags.get(entryId);
     if (!entryTagSet) return;
 
-    for (const tag of tags) {
+    for (const rawTag of tags) {
+      // Normalize to uppercase for consistent lookup
+      const tag = rawTag.toUpperCase();
       entryTagSet.delete(tag);
       this.tagIndex.get(tag)?.delete(entryId);
 
@@ -347,11 +383,14 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   async findByTags(tags: string[], logic: 'AND' | 'OR' = 'OR', limit = 50): Promise<Entry[]> {
     if (tags.length === 0) return [];
 
+    // Normalize input tags to uppercase for case-insensitive matching
+    const normalizedTags = tags.map(t => t.toUpperCase());
+
     let matchingIds: Set<number>;
 
     if (logic === 'OR') {
       matchingIds = new Set();
-      for (const tag of tags) {
+      for (const tag of normalizedTags) {
         const ids = this.tagIndex.get(tag);
         if (ids) {
           for (const id of ids) matchingIds.add(id);
@@ -359,7 +398,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       }
     } else {
       // AND logic - entries must have ALL specified tags
-      const tagSets = tags.map((tag) => this.tagIndex.get(tag) || new Set<number>());
+      const tagSets = normalizedTags.map((tag) => this.tagIndex.get(tag) || new Set<number>());
 
       if (tagSets.length === 0 || tagSets.some((set) => set.size === 0)) {
         return [];
@@ -522,6 +561,15 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
     if (type) {
       results = results.filter((e) => e.type === type);
+
+      // Exclude GraphQL requests from regular requests count
+      // Uses isGraphQL flag set by request.watcher.ts based on robust detection
+      if (type === 'request') {
+        results = results.filter((e) => {
+          const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
+          return !isGraphQL;
+        });
+      }
     }
 
     if (filters) {
@@ -604,14 +652,28 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
         if (!filters.ips.includes(payload.ip as string)) return false;
       }
 
+      // Event filters
+      if (filters.eventNames?.length && entry.type === 'event') {
+        const name = payload.name as string;
+        if (!filters.eventNames.some((n) => name?.includes(n))) return false;
+      }
+
       // Schedule filters
       if (filters.scheduleStatuses?.length && entry.type === 'schedule') {
         if (!filters.scheduleStatuses.includes(payload.status as string)) return false;
+      }
+      if (filters.scheduleNames?.length && entry.type === 'schedule') {
+        const name = payload.name as string;
+        if (!filters.scheduleNames.some((n) => name?.includes(n))) return false;
       }
 
       // Job filters
       if (filters.jobStatuses?.length && entry.type === 'job') {
         if (!filters.jobStatuses.includes(payload.status as string)) return false;
+      }
+      if (filters.jobNames?.length && entry.type === 'job') {
+        const name = payload.name as string;
+        if (!filters.jobNames.some((n) => name?.includes(n))) return false;
       }
       if (filters.queues?.length && entry.type === 'job') {
         if (!filters.queues.includes(payload.queue as string)) return false;
@@ -701,10 +763,29 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
         if (!filters.dumpFormats.includes(payload.format as string)) return false;
       }
 
-      // Tag filter
+      // GraphQL filters
+      if (filters.operationTypes?.length && entry.type === 'graphql') {
+        if (!filters.operationTypes.includes(payload.operationType as string)) return false;
+      }
+      if (filters.operationNames?.length && entry.type === 'graphql') {
+        const opName = payload.operationName as string;
+        if (!filters.operationNames.some((n) => opName?.includes(n))) return false;
+      }
+      if (filters.hasErrors !== undefined && entry.type === 'graphql') {
+        if (payload.hasErrors !== filters.hasErrors) return false;
+      }
+      if (filters.hasN1 !== undefined && entry.type === 'graphql') {
+        const n1Array = payload.potentialN1 as unknown[] | undefined;
+        const hasN1 = n1Array && n1Array.length > 0;
+        if (hasN1 !== filters.hasN1) return false;
+      }
+
+      // Tag filter (case-insensitive)
       if (filters.tags?.length) {
         const entryTagSet = this.entryTags.get(entry.id!);
-        if (!entryTagSet || !filters.tags.some((t) => entryTagSet.has(t))) return false;
+        // Normalize filter tags to uppercase for case-insensitive matching
+        const normalizedFilterTags = filters.tags.map(t => t.toUpperCase());
+        if (!entryTagSet || !normalizedFilterTags.some((t) => entryTagSet.has(t))) return false;
       }
 
       // Search filter

@@ -485,9 +485,9 @@ describe('SqliteStorage', () => {
       await storage.addTags(saved.id!, ['tag1', 'tag2']);
       const result = await storage.findById(saved.id!);
 
-      // Assert
-      expect(result?.tags).toContain('tag1');
-      expect(result?.tags).toContain('tag2');
+      // Assert - tags are normalized to uppercase
+      expect(result?.tags).toContain('TAG1');
+      expect(result?.tags).toContain('TAG2');
     });
 
     it('should remove tags from entry', async () => {
@@ -498,14 +498,14 @@ describe('SqliteStorage', () => {
       } as Entry);
       await storage.addTags(saved.id!, ['tag1', 'tag2', 'tag3']);
 
-      // Act
+      // Act - removeTags normalizes input to uppercase
       await storage.removeTags(saved.id!, ['tag2']);
       const result = await storage.findById(saved.id!);
 
-      // Assert
-      expect(result?.tags).toContain('tag1');
-      expect(result?.tags).not.toContain('tag2');
-      expect(result?.tags).toContain('tag3');
+      // Assert - tags are normalized to uppercase
+      expect(result?.tags).toContain('TAG1');
+      expect(result?.tags).not.toContain('TAG2');
+      expect(result?.tags).toContain('TAG3');
     });
 
     it('should get tags for entry', async () => {
@@ -519,9 +519,9 @@ describe('SqliteStorage', () => {
       // Act
       const tags = await storage.getEntryTags(saved.id!);
 
-      // Assert
-      expect(tags).toContain('alpha');
-      expect(tags).toContain('beta');
+      // Assert - tags are normalized to uppercase
+      expect(tags).toContain('ALPHA');
+      expect(tags).toContain('BETA');
     });
 
     it('should get all unique tags with counts', async () => {
@@ -540,13 +540,13 @@ describe('SqliteStorage', () => {
       // Act
       const allTags = await storage.getAllTags();
 
-      // Assert - returns TagWithCount objects
+      // Assert - tags are normalized to uppercase
       const tagNames = allTags.map((t) => t.tag);
-      expect(tagNames).toContain('common');
-      expect(tagNames).toContain('unique1');
-      expect(tagNames).toContain('unique2');
-      // 'common' should have count of 2
-      const commonTag = allTags.find((t) => t.tag === 'common');
+      expect(tagNames).toContain('COMMON');
+      expect(tagNames).toContain('UNIQUE1');
+      expect(tagNames).toContain('UNIQUE2');
+      // 'COMMON' should have count of 2
+      const commonTag = allTags.find((t) => t.tag === 'COMMON');
       expect(commonTag?.count).toBe(2);
     });
 

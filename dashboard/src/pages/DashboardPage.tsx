@@ -14,7 +14,6 @@ import {
   Briefcase,
   Radio,
   HardDrive,
-  CheckCircle,
   ChevronRight,
   ChevronLeft,
   Globe,
@@ -27,37 +26,70 @@ import {
   Package,
   TrendingUp,
   TrendingDown,
+  GitBranch,
+  Trash2,
+  RefreshCw,
 } from 'lucide-react';
-import { getEntriesWithCursor, getStorageStats } from '../api';
-import { Entry, StorageStats } from '../types';
+import { getEntriesWithCursor, getStorageStats, getPruningStatus, runPruning } from '../api';
+import { Entry, StorageStats, PruningStatus } from '../types';
 import { getBadgeColor } from '../components/ClickableBadge';
 import { useStats } from '../contexts/StatsContext';
 
-// All entry type configurations
-const entryTypes = [
-  { key: 'request', name: 'Requests', icon: Activity, color: 'blue', route: '/requests' },
-  { key: 'query', name: 'Queries', icon: Database, color: 'purple', route: '/queries' },
-  { key: 'exception', name: 'Exceptions', icon: AlertTriangle, color: 'red', route: '/exceptions' },
-  { key: 'log', name: 'Logs', icon: FileText, color: 'green', route: '/logs' },
-  { key: 'event', name: 'Events', icon: Radio, color: 'emerald', route: '/events' },
-  { key: 'job', name: 'Jobs', icon: Briefcase, color: 'yellow', route: '/jobs' },
-  { key: 'cache', name: 'Cache', icon: HardDrive, color: 'cyan', route: '/cache' },
-  { key: 'mail', name: 'Mail', icon: Mail, color: 'pink', route: '/mail' },
-  { key: 'schedule', name: 'Schedule', icon: Calendar, color: 'gray', route: '/schedule' },
-  { key: 'http-client', name: 'HTTP Client', icon: Globe, color: 'indigo', route: '/http-client' },
-  { key: 'redis', name: 'Redis', icon: Box, color: 'rose', route: '/redis' },
-  { key: 'model', name: 'Models', icon: Layers, color: 'violet', route: '/models' },
-  { key: 'notification', name: 'Notifications', icon: Bell, color: 'orange', route: '/notifications' },
-  { key: 'view', name: 'Views', icon: Layout, color: 'teal', route: '/views' },
-  { key: 'command', name: 'Commands', icon: Terminal, color: 'slate', route: '/commands' },
-  { key: 'gate', name: 'Gates', icon: Shield, color: 'amber', route: '/gates' },
-  { key: 'batch', name: 'Batches', icon: Package, color: 'lime', route: '/batches' },
-  { key: 'dump', name: 'Dumps', icon: HardDrive, color: 'stone', route: '/dumps' },
-] as const;
+// Entry type configurations with categories
+const entryTypeCategories = [
+  {
+    name: 'Core',
+    types: [
+      { key: 'request', name: 'Requests', icon: Activity, color: 'blue', route: '/requests' },
+      { key: 'query', name: 'Queries', icon: Database, color: 'purple', route: '/queries' },
+      { key: 'graphql', name: 'GraphQL', icon: GitBranch, color: 'fuchsia', route: '/graphql' },
+      { key: 'exception', name: 'Exceptions', icon: AlertTriangle, color: 'red', route: '/exceptions' },
+      { key: 'log', name: 'Logs', icon: FileText, color: 'green', route: '/logs' },
+    ],
+  },
+  {
+    name: 'Background',
+    types: [
+      { key: 'job', name: 'Jobs', icon: Briefcase, color: 'yellow', route: '/jobs' },
+      { key: 'schedule', name: 'Schedule', icon: Calendar, color: 'gray', route: '/schedule' },
+      { key: 'batch', name: 'Batches', icon: Package, color: 'lime', route: '/batches' },
+      { key: 'command', name: 'Commands', icon: Terminal, color: 'slate', route: '/commands' },
+    ],
+  },
+  {
+    name: 'Data',
+    types: [
+      { key: 'cache', name: 'Cache', icon: HardDrive, color: 'cyan', route: '/cache' },
+      { key: 'redis', name: 'Redis', icon: Box, color: 'rose', route: '/redis' },
+      { key: 'model', name: 'Models', icon: Layers, color: 'violet', route: '/models' },
+    ],
+  },
+  {
+    name: 'Communication',
+    types: [
+      { key: 'http-client', name: 'HTTP Client', icon: Globe, color: 'indigo', route: '/http-client' },
+      { key: 'mail', name: 'Mail', icon: Mail, color: 'pink', route: '/mail' },
+      { key: 'notification', name: 'Notifications', icon: Bell, color: 'orange', route: '/notifications' },
+      { key: 'event', name: 'Events', icon: Radio, color: 'emerald', route: '/events' },
+    ],
+  },
+  {
+    name: 'System',
+    types: [
+      { key: 'view', name: 'Views', icon: Layout, color: 'teal', route: '/views' },
+      { key: 'gate', name: 'Gates', icon: Shield, color: 'amber', route: '/gates' },
+      { key: 'dump', name: 'Dumps', icon: HardDrive, color: 'stone', route: '/dumps' },
+    ],
+  },
+];
+
+// Flat list for lookups
+const allEntryTypes = entryTypeCategories.flatMap(cat => cat.types);
 
 const typeIconColors: Record<string, string> = {
   request: 'text-blue-500',
   query: 'text-purple-500',
+  graphql: 'text-fuchsia-500',
   exception: 'text-red-500',
   log: 'text-green-500',
   event: 'text-emerald-500',
@@ -74,6 +106,28 @@ const typeIconColors: Record<string, string> = {
   gate: 'text-amber-500',
   batch: 'text-lime-500',
   dump: 'text-stone-500',
+};
+
+const typeBgColors: Record<string, string> = {
+  request: 'bg-blue-50 dark:bg-blue-900/20',
+  query: 'bg-purple-50 dark:bg-purple-900/20',
+  graphql: 'bg-fuchsia-50 dark:bg-fuchsia-900/20',
+  exception: 'bg-red-50 dark:bg-red-900/20',
+  log: 'bg-green-50 dark:bg-green-900/20',
+  event: 'bg-emerald-50 dark:bg-emerald-900/20',
+  job: 'bg-yellow-50 dark:bg-yellow-900/20',
+  cache: 'bg-cyan-50 dark:bg-cyan-900/20',
+  mail: 'bg-pink-50 dark:bg-pink-900/20',
+  schedule: 'bg-gray-50 dark:bg-gray-700/30',
+  'http-client': 'bg-indigo-50 dark:bg-indigo-900/20',
+  redis: 'bg-rose-50 dark:bg-rose-900/20',
+  model: 'bg-violet-50 dark:bg-violet-900/20',
+  notification: 'bg-orange-50 dark:bg-orange-900/20',
+  view: 'bg-teal-50 dark:bg-teal-900/20',
+  command: 'bg-slate-50 dark:bg-slate-700/30',
+  gate: 'bg-amber-50 dark:bg-amber-900/20',
+  batch: 'bg-lime-50 dark:bg-lime-900/20',
+  dump: 'bg-stone-50 dark:bg-stone-700/30',
 };
 
 function formatBytes(bytes: number): string {
@@ -140,7 +194,7 @@ function getEntrySubtitle(entry: Entry): string | null {
   }
 }
 
-const ACTIVITY_PAGE_SIZE = 8;
+const ACTIVITY_PAGE_SIZE = 5;
 
 // Stat Card Component
 function StatCard({
@@ -167,13 +221,20 @@ function StatCard({
     neutral: 'text-gray-400 dark:text-gray-500',
   };
 
+  const statusBgColors = {
+    good: 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700',
+    warning: 'bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700/50',
+    danger: 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700/50',
+    neutral: 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700',
+  };
+
   const Component = onClick ? 'button' : 'div';
 
   return (
     <Component
       onClick={onClick}
-      className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 ${
-        onClick ? 'cursor-pointer hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-sm transition-all text-left w-full' : ''
+      className={`${statusBgColors[status]} rounded-lg border p-4 ${
+        onClick ? 'cursor-pointer hover:shadow-sm transition-all text-left w-full' : ''
       }`}
     >
       <div className="flex items-start justify-between">
@@ -182,11 +243,11 @@ function StatCard({
             {label}
           </p>
           <div className="flex items-baseline gap-2">
-            <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+            <p className="text-xl font-semibold text-gray-900 dark:text-white">
               {typeof value === 'number' ? value.toLocaleString() : value}
             </p>
             {trend && (
-              <span className={`flex items-center text-xs ${trend === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
+              <span className={`flex items-center ${trend === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
                 {trend === 'up' ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               </span>
             )}
@@ -197,7 +258,7 @@ function StatCard({
             </p>
           )}
         </div>
-        <div className={`p-2.5 rounded-lg bg-gray-100 dark:bg-gray-700/50`}>
+        <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700/50`}>
           <Icon className={`h-5 w-5 ${statusColors[status]}`} />
         </div>
       </div>
@@ -209,6 +270,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { stats, refreshStats } = useStats();
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
+  const [pruningStatus, setPruningStatus] = useState<PruningStatus | null>(null);
+  const [pruningRunning, setPruningRunning] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Refresh stats when Dashboard mounts
@@ -225,21 +288,47 @@ export default function DashboardPage() {
   const [activityOldestSeq, setActivityOldestSeq] = useState<number | null>(null);
   const [pageHistory, setPageHistory] = useState<{ entries: Entry[], oldestSeq: number | null }[]>([]);
 
-  // Fetch storage stats
+  // Fetch storage and pruning stats
   useEffect(() => {
-    const fetchStorageData = async () => {
+    const fetchData = async () => {
       try {
-        const storageRes = await getStorageStats();
+        const [storageRes, pruningRes] = await Promise.all([
+          getStorageStats(),
+          getPruningStatus(),
+        ]);
         setStorageStats(storageRes.data);
+        setPruningStatus(pruningRes.data);
       } catch (error) {
-        console.error('Failed to fetch storage data:', error);
+        console.error('Failed to fetch storage/pruning data:', error);
       }
     };
 
-    fetchStorageData();
-    const interval = setInterval(fetchStorageData, 30000);
+    fetchData();
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Handle prune now button
+  const handlePruneNow = async () => {
+    setPruningRunning(true);
+    try {
+      const result = await runPruning();
+      if (result.success) {
+        // Refresh data after pruning
+        const [storageRes, pruningRes] = await Promise.all([
+          getStorageStats(),
+          getPruningStatus(),
+        ]);
+        setStorageStats(storageRes.data);
+        setPruningStatus(pruningRes.data);
+        refreshStats();
+      }
+    } catch (error) {
+      console.error('Failed to run pruning:', error);
+    } finally {
+      setPruningRunning(false);
+    }
+  };
 
   // Fetch initial activities
   useEffect(() => {
@@ -318,25 +407,25 @@ export default function DashboardPage() {
 
   // Get entry type icon component
   const getTypeIcon = (type: string) => {
-    const config = entryTypes.find(t => t.key === type);
+    const config = allEntryTypes.find(t => t.key === type);
     return config?.icon || Activity;
   };
 
   // Get entry type route
   const getTypeRoute = (type: string) => {
-    const config = entryTypes.find(t => t.key === type);
+    const config = allEntryTypes.find(t => t.key === type);
     return config?.route || '/';
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Key Metrics - Golden Signals */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Traffic"
-          value={totalRequests}
-          subtext="total requests"
-          icon={Activity}
+          label="Entries"
+          value={stats?.total || 0}
+          subtext="total recorded"
+          icon={Database}
           status="neutral"
         />
         <StatCard
@@ -364,48 +453,63 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Entry Types Grid */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
-            Entry Types
-          </h2>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9">
-          {entryTypes.map((type, index) => {
-            const count = stats?.byType[type.key as keyof typeof stats.byType] || 0;
-            const Icon = type.icon;
-            const isLastRow = index >= entryTypes.length - (entryTypes.length % 9 || 9);
-            const isLastInRow = (index + 1) % 9 === 0;
+      {/* Entry Types Grid - Categorized */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {entryTypeCategories.map((category) => (
+          <div
+            key={category.name}
+            className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+          >
+            <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {category.name}
+              </h3>
+            </div>
+            <div className="p-2.5">
+              {category.types.map((type) => {
+                // For exceptions, show unresolved count instead of total
+                const count = type.key === 'exception'
+                  ? (stats?.unresolvedExceptions ?? 0)
+                  : (stats?.byType[type.key as keyof typeof stats.byType] || 0);
+                const Icon = type.icon;
+                const hasData = count > 0;
 
-            return (
-              <Link
-                key={type.key}
-                to={type.route}
-                className={`group relative p-4 flex flex-col items-center text-center transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
-                  !isLastInRow ? 'border-r border-gray-100 dark:border-gray-700/50' : ''
-                } ${!isLastRow ? 'border-b border-gray-100 dark:border-gray-700/50' : ''}`}
-              >
-                <div className={`p-2.5 rounded-lg bg-gray-100 dark:bg-gray-700/50 group-hover:scale-105 transition-transform mb-2`}>
-                  <Icon className={`h-4 w-4 ${typeIconColors[type.key] || 'text-gray-500'}`} />
-                </div>
-                <span className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {count.toLocaleString()}
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {type.name}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
+                return (
+                  <Link
+                    key={type.key}
+                    to={type.route}
+                    className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all ${
+                      hasData
+                        ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        : 'opacity-50 hover:opacity-75'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${typeBgColors[type.key] || 'bg-gray-100 dark:bg-gray-700/50'} group-hover:scale-105 transition-transform`}>
+                      <Icon className={`h-3.5 w-3.5 ${typeIconColors[type.key] || 'text-gray-500'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {type.name}
+                      </span>
+                    </div>
+                    <span className={`text-sm font-semibold tabular-nums ${
+                      hasData ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                    }`}>
+                      {count.toLocaleString()}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Recent Activity */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
                 Recent Activity
@@ -421,14 +525,14 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="divide-y divide-gray-100 dark:divide-gray-700/50 flex-1 relative" style={{ minHeight: '400px' }}>
+          <div className="divide-y divide-gray-100 dark:divide-gray-700/50 flex-1 relative" style={{ minHeight: '340px' }}>
             {activityLoading && activityEntries.length > 0 && (
               <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 z-10 pointer-events-none" />
             )}
             {activityEntries.length === 0 && !activityLoading ? (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No entries recorded yet</p>
+                <Activity className="h-7 w-7 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No entries recorded yet</p>
               </div>
             ) : activityEntries.length === 0 && activityLoading ? (
               <div className="p-8 flex items-center justify-center" role="status" aria-label="Loading...">
@@ -444,7 +548,7 @@ export default function DashboardPage() {
                   <div
                     key={entry.id}
                     onClick={() => navigate(`${getTypeRoute(entry.type)}/${entry.id}`)}
-                    className="px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer flex items-center gap-3 transition-colors"
+                    className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer flex items-center gap-3 transition-colors"
                   >
                     <div className="flex-shrink-0 p-2 rounded-lg bg-gray-100 dark:bg-gray-700/50">
                       <Icon className={`h-4 w-4 ${typeIconColors[entry.type] || 'text-gray-500'}`} />
@@ -476,7 +580,7 @@ export default function DashboardPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
+            <div className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50">
               <button
                 onClick={loadPrevPage}
                 disabled={!canGoPrev || activityLoading}
@@ -509,62 +613,15 @@ export default function DashboardPage() {
         </div>
 
         {/* System Overview */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
               System Overview
             </h2>
           </div>
-          <div className="p-5 space-y-4">
-            {/* Health Status */}
-            <div className={`flex items-center gap-3 p-3 rounded-lg ${
-              unresolvedExceptions === 0 && slowQueries === 0 && isLatencyGood
-                ? 'bg-emerald-50 dark:bg-emerald-900/20'
-                : unresolvedExceptions > 10 || slowQueries > 10 || !isLatencyGood
-                ? 'bg-red-50 dark:bg-red-900/20'
-                : 'bg-amber-50 dark:bg-amber-900/20'
-            }`}>
-              <CheckCircle className={`h-5 w-5 ${
-                unresolvedExceptions === 0 && slowQueries === 0 && isLatencyGood
-                  ? 'text-emerald-500'
-                  : unresolvedExceptions > 10 || slowQueries > 10 || !isLatencyGood
-                  ? 'text-red-500'
-                  : 'text-amber-500'
-              }`} />
-              <div>
-                <p className={`text-sm font-medium ${
-                  unresolvedExceptions === 0 && slowQueries === 0 && isLatencyGood
-                    ? 'text-emerald-700 dark:text-emerald-400'
-                    : unresolvedExceptions > 10 || slowQueries > 10 || !isLatencyGood
-                    ? 'text-red-700 dark:text-red-400'
-                    : 'text-amber-700 dark:text-amber-400'
-                }`}>
-                  {unresolvedExceptions === 0 && slowQueries === 0 && isLatencyGood
-                    ? 'All Systems Operational'
-                    : unresolvedExceptions > 10 || slowQueries > 10 || !isLatencyGood
-                    ? 'Issues Detected'
-                    : 'Minor Issues'}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {unresolvedExceptions === 0 && slowQueries === 0 && isLatencyGood
-                    ? 'No issues requiring attention'
-                    : `${unresolvedExceptions} errors · ${slowQueries} slow queries`}
-                </p>
-              </div>
-            </div>
-
+          <div className="p-4 space-y-4">
             {/* Stats List */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700/50">
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                  <Database className="h-4 w-4" />
-                  <span className="text-sm">Total Entries</span>
-                </div>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {(stats?.total || 0).toLocaleString()}
-                </span>
-              </div>
-
               <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700/50">
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <HardDrive className="h-4 w-4" />
@@ -589,19 +646,55 @@ export default function DashboardPage() {
                 </span>
               </div>
 
+              <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700/50">
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-sm">Retention</span>
+                </div>
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {pruningStatus?.maxAge || 24}h
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700/50">
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                  <Trash2 className="h-4 w-4" />
+                  <span className="text-sm">Last Prune</span>
+                </div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {pruningStatus?.lastRun
+                    ? formatDistanceToNow(parseDate(pruningStatus.lastRun), { addSuffix: true })
+                    : 'Never'}
+                </span>
+              </div>
+
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <Clock className="h-4 w-4" />
-                  <span className="text-sm">Avg Latency</span>
+                  <span className="text-sm">Next Prune</span>
                 </div>
-                <span className={`text-sm font-semibold ${
-                  isLatencyGood
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-amber-600 dark:text-amber-400'
-                }`}>
-                  {avgLatency ? `${Math.round(avgLatency)}ms` : 'N/A'}
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {pruningStatus?.nextRun
+                    ? formatDistanceToNow(parseDate(pruningStatus.nextRun), { addSuffix: true })
+                    : 'N/A'}
                 </span>
               </div>
+            </div>
+
+            {/* Prune Now Button */}
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handlePruneNow}
+                disabled={pruningRunning || !pruningStatus?.enabled}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {pruningRunning ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                <span>{pruningRunning ? 'Pruning...' : 'Prune Now'}</span>
+              </button>
             </div>
 
             {/* Data Range */}

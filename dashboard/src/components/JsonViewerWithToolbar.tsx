@@ -172,3 +172,133 @@ export function ControlledInlineJson({
     </div>
   );
 }
+
+/**
+ * Hook for code viewer toolbar (copy only)
+ */
+export function useCodeToolbar() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast.success('Copied!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy');
+    }
+  }, []);
+
+  const Toolbar = ({ code }: { code: string }) => (
+    <div className="flex items-center space-x-1">
+      <button
+        onClick={() => handleCopy(code)}
+        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+        title="Copy code"
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-green-500" />
+        ) : (
+          <Copy className="h-3.5 w-3.5 text-gray-500" />
+        )}
+      </button>
+    </div>
+  );
+
+  return { Toolbar };
+}
+
+interface CodeViewerProps {
+  code: string;
+  language?: 'graphql' | 'sql' | 'text';
+  maxHeight?: number | string;
+}
+
+/**
+ * Simple GraphQL query prettifier
+ */
+function prettifyGraphQL(query: string): string {
+  let result = '';
+  let indent = 0;
+  let inString = false;
+  const indentStr = '  ';
+
+  // Remove extra whitespace first
+  const cleaned = query.replace(/\s+/g, ' ').trim();
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    const prevChar = cleaned[i - 1];
+
+    // Track string state
+    if (char === '"' && prevChar !== '\\') {
+      inString = !inString;
+      result += char;
+      continue;
+    }
+
+    if (inString) {
+      result += char;
+      continue;
+    }
+
+    if (char === '{') {
+      result += ' {\n';
+      indent++;
+      result += indentStr.repeat(indent);
+    } else if (char === '}') {
+      indent--;
+      result += '\n' + indentStr.repeat(indent) + '}';
+    } else if (char === '(') {
+      result += '(';
+    } else if (char === ')') {
+      result += ')';
+    } else if (char === ' ') {
+      // Skip spaces after newlines (we handle indentation)
+      if (result.endsWith('\n' + indentStr.repeat(indent))) {
+        continue;
+      }
+      // Add space between fields
+      if (!result.endsWith('{ ') && !result.endsWith('\n') && !result.endsWith('(')) {
+        result += '\n' + indentStr.repeat(indent);
+      }
+    } else {
+      result += char;
+    }
+  }
+
+  return result.trim();
+}
+
+/**
+ * Code viewer with line numbers - matches JSON viewer styling
+ */
+export function CodeViewer({ code, language = 'text', maxHeight = 400 }: CodeViewerProps) {
+  // Prettify GraphQL queries
+  const formattedCode = language === 'graphql' ? prettifyGraphQL(code) : code;
+  const lines = formattedCode.split('\n');
+
+  return (
+    <div
+      className="p-3 overflow-auto font-mono text-sm"
+      style={{ maxHeight: typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight }}
+    >
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          className="group flex items-start py-[1px] hover:bg-gray-100 dark:hover:bg-white/5 rounded transition-colors"
+        >
+          {/* Line number */}
+          <span className="w-8 text-right pr-3 text-gray-400 dark:text-gray-600 select-none flex-shrink-0">
+            {i + 1}
+          </span>
+          {/* Code content */}
+          <span className="text-gray-800 dark:text-gray-200 whitespace-pre flex-1">
+            {line || ' '}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -41,6 +41,7 @@ export default function EventsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<EventEntry>({ type: 'event', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -136,6 +137,7 @@ export default function EventsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/events/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No events recorded yet"
           emptyIcon={<Radio className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

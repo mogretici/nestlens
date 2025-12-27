@@ -314,9 +314,10 @@ describe('Filter URL Key Mapping', () => {
       // Jobs
       { entryType: 'jobs', category: 'statuses', expected: 'jobStatuses' },
       { entryType: 'jobs', category: 'queues', expected: 'queues' },
+      { entryType: 'jobs', category: 'names', expected: 'jobNames' },
       // Schedule
       { entryType: 'schedule', category: 'statuses', expected: 'scheduleStatuses' },
-      { entryType: 'schedule', category: 'names', expected: 'names' },
+      { entryType: 'schedule', category: 'names', expected: 'scheduleNames' },
       // Cache
       { entryType: 'cache', category: 'operations', expected: 'cacheOperations' },
       // Mail

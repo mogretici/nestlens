@@ -48,7 +48,7 @@ export default function MailDetailView({ entry }: MailDetailViewProps) {
       content: (
         <div className="p-4">
           <div
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 max-h-[500px] overflow-auto"
+            className="mail-preview bg-white text-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg p-4 max-h-[500px] overflow-auto shadow-sm"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(payload.html) }}
           />
         </div>

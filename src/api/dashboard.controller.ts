@@ -249,6 +249,16 @@ export class DashboardController {
     this.serveIndexHtml(res);
   }
 
+  @Get('graphql')
+  serveGraphQLRoute(@Res() res: Response) {
+    this.serveIndexHtml(res);
+  }
+
+  @Get('graphql/:id')
+  serveGraphQLDetailRoute(@Res() res: Response) {
+    this.serveIndexHtml(res);
+  }
+
   private serveIndexHtml(res: Response): void {
     const indexPath = join(this.dashboardPath, 'index.html');
     if (existsSync(indexPath)) {

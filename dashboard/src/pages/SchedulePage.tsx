@@ -15,7 +15,6 @@ import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  ScheduleStatusBadge,
   DurationCell,
   TagsList,
 } from '../components/DataTable';
@@ -57,6 +56,7 @@ export default function SchedulePage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<ScheduleEntry>({ type: 'schedule', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -76,10 +76,7 @@ export default function SchedulePage() {
       header: 'Task',
       minWidth: '200px',
       render: (entry) => (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('names', entry.payload.name); }}
-          className="font-mono"
-        >
+        <ClickableBadge listType="schedule" filterType="names" className="font-mono">
           {entry.payload.name}
         </ClickableBadge>
       ),
@@ -109,10 +106,9 @@ export default function SchedulePage() {
       header: 'Status',
       width: '100px',
       render: (entry) => (
-        <ScheduleStatusBadge
-          status={entry.payload.status}
-          onClick={(e) => { e.stopPropagation(); addFilter('statuses', entry.payload.status); }}
-        />
+        <ClickableBadge listType="schedule" filterType="statuses">
+          {entry.payload.status}
+        </ClickableBadge>
       ),
     },
     {
@@ -197,6 +193,7 @@ export default function SchedulePage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/schedule/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No scheduled tasks recorded yet"
           emptyIcon={<Clock className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

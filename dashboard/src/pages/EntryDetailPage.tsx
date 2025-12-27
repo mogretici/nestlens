@@ -25,6 +25,7 @@ import {
   isGateEntry,
   isBatchEntry,
   isDumpEntry,
+  isGraphQLEntry,
 } from '../types';
 import RequestDetailView from '../components/RequestDetailView';
 import QueryDetailView from '../components/QueryDetailView';
@@ -44,6 +45,7 @@ import CommandDetailView from '../components/CommandDetailView';
 import GateDetailView from '../components/GateDetailView';
 import BatchDetailView from '../components/BatchDetailView';
 import DumpDetailView from '../components/DumpDetailView';
+import GraphQLDetailView from '../components/GraphQLDetailView';
 import Tabs from '../components/Tabs';
 import { useJsonToolbar, ControlledInlineJson } from '../components/JsonViewerWithToolbar';
 import ClickableBadge from '../components/ClickableBadge';
@@ -173,6 +175,9 @@ export default function EntryDetailPage() {
     }
     if (isDumpEntry(entry)) {
       return <DumpDetailView entry={entry} />;
+    }
+    if (isGraphQLEntry(entry)) {
+      return <GraphQLDetailView entry={entry} />;
     }
     // Generic fallback for future entry types
     const unknownEntry = entry as Entry;
@@ -368,7 +373,7 @@ export default function EntryDetailPage() {
                 </>
               ) : isCommandEntry(entry) ? (
                 <>
-                  <ClickableBadge listType="commands" filterType="commandStatuses" filterValue={entry.payload.status}>
+                  <ClickableBadge listType="commands" filterType="statuses" filterValue={entry.payload.status}>
                     {entry.payload.status.toUpperCase()}
                   </ClickableBadge>
                   <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
@@ -401,6 +406,20 @@ export default function EntryDetailPage() {
                   <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
                     {entry.payload.format}
                   </h1>
+                </>
+              ) : isGraphQLEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="graphql" filterType="operationTypes" filterValue={entry.payload.operationType}>
+                    {entry.payload.operationType.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.operationName || '(anonymous)'}
+                  </h1>
+                  {entry.payload.hasErrors && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                      Error
+                    </span>
+                  )}
                 </>
               ) : (
                 (() => {
@@ -489,6 +508,7 @@ function getEntryRoute(entry: Entry): string {
     gate: 'gates',
     batch: 'batches',
     dump: 'dumps',
+    graphql: 'graphql',
   };
   const route = typeRouteMap[entry.type] || 'entries';
   return `/${route}/${entry.id}`;
@@ -511,6 +531,9 @@ function getEntrySummary(entry: Entry): string {
   }
   if (isHttpClientEntry(entry)) {
     return `${entry.payload.method} ${entry.payload.hostname || entry.payload.url}`;
+  }
+  if (isGraphQLEntry(entry)) {
+    return `${entry.payload.operationType} ${entry.payload.operationName || '(anonymous)'}`;
   }
   return `Entry #${entry.id}`;
 }

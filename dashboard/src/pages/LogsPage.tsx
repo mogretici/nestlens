@@ -13,7 +13,6 @@ import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  LogLevelBadge,
 } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { LogEntry, isLogEntry } from '../types';
@@ -23,7 +22,6 @@ export default function LogsPage() {
 
   // Use centralized filter hook - all config comes from entryTypes.ts
   const {
-    addFilter,
     clearAll,
     serverFilters,
     headerFilters,
@@ -41,6 +39,7 @@ export default function LogsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<LogEntry>({ type: 'log', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -53,10 +52,9 @@ export default function LogsPage() {
       header: 'Level',
       width: '100px',
       render: (entry) => (
-        <LogLevelBadge
-          level={entry.payload.level}
-          onClick={(e) => { e.stopPropagation(); addFilter('levels', entry.payload.level); }}
-        />
+        <ClickableBadge listType="logs" filterType="levels">
+          {entry.payload.level}
+        </ClickableBadge>
       ),
     },
     {
@@ -76,10 +74,7 @@ export default function LogsPage() {
       header: 'Context',
       width: '150px',
       render: (entry) => entry.payload.context ? (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('contexts', entry.payload.context!); }}
-          className="font-mono"
-        >
+        <ClickableBadge listType="logs" filterType="contexts" className="font-mono">
           {entry.payload.context}
         </ClickableBadge>
       ) : (
@@ -97,7 +92,7 @@ export default function LogsPage() {
         </TextCell>
       ),
     },
-  ], [addFilter]);
+  ], []);
 
   // Only show full-page spinner on initial load when no data exists
   if (loading && entries.length === 0) {
@@ -141,6 +136,7 @@ export default function LogsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/logs/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No logs recorded yet"
           emptyIcon={<FileText className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

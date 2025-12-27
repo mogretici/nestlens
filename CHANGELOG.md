@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2024-12-24
+
+### Bug Fixes
+- Handle non-HTTP contexts properly in request watcher
+- Improve exception handling for edge cases
+
+## [0.2.0] - 2024-12-23
+
+### Features
+- Add support for multiple storage drivers
+  - **Memory Storage**: In-memory storage for development
+  - **SQLite Storage**: Persistent storage with automatic pruning
+  - **Redis Storage**: Distributed storage for production
+- Comprehensive test suite for all storage drivers
+
+## [0.1.2] - 2024-12-21
+
+### Bug Fixes
+- Include README and LICENSE files in npm package
+
+## [0.1.1] - 2024-12-20
+
+### Documentation
+- Update README with badge links and improved installation instructions
+
 ## [0.1.0] - 2024-12-20
 
 ### Added

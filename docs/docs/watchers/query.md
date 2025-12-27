@@ -169,6 +169,8 @@ NestLensModule.forRoot({
 
 ## Dashboard View
 
+![Query Detail View](/img/screenshots/query_detail.png)
+
 In the NestLens dashboard, query entries appear in the Queries tab showing:
 
 - Timeline of all database queries

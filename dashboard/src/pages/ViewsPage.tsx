@@ -41,6 +41,7 @@ export default function ViewsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<ViewEntry>({ type: 'view', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -160,6 +161,7 @@ export default function ViewsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/views/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No view renders recorded yet"
           emptyIcon={<Eye className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

@@ -203,7 +203,7 @@ export default function RequestDetailView({ entry, related = [] }: RequestDetail
             <DetailRow
               label="Path"
               value={
-                <ClickableBadge listType="requests" filterType="path" filterValue={payload.path} className="font-mono">
+                <ClickableBadge listType="requests" filterType="paths" filterValue={payload.path} className="font-mono">
                   {payload.path}
                 </ClickableBadge>
               }

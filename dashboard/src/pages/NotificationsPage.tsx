@@ -41,6 +41,7 @@ export default function NotificationsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<NotificationEntry>({ type: 'notification', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -158,6 +159,7 @@ export default function NotificationsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/notifications/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No notifications recorded yet"
           emptyIcon={<Bell className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

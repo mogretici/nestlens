@@ -154,6 +154,8 @@ NestLensModule.forRoot({
 
 ## Dashboard View
 
+![Log Detail View](/img/screenshots/log_detail.png)
+
 In the NestLens dashboard, log entries appear in the Logs tab showing:
 
 - Timeline of all logs

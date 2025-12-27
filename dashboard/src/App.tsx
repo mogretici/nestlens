@@ -23,6 +23,7 @@ const CommandsPage = lazy(() => import('./pages/CommandsPage'));
 const GatesPage = lazy(() => import('./pages/GatesPage'));
 const BatchesPage = lazy(() => import('./pages/BatchesPage'));
 const DumpsPage = lazy(() => import('./pages/DumpsPage'));
+const GraphQLPage = lazy(() => import('./pages/GraphQLPage'));
 const EntryDetailPage = lazy(() => import('./pages/EntryDetailPage'));
 
 function App() {
@@ -181,6 +182,14 @@ function App() {
             </Suspense>
           }
         />
+        <Route
+          path="graphql"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <GraphQLPage />
+            </Suspense>
+          }
+        />
         {/* Type-specific detail routes */}
         <Route
           path="requests/:id"
@@ -320,6 +329,14 @@ function App() {
         />
         <Route
           path="dumps/:id"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <EntryDetailPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="graphql/:id"
           element={
             <Suspense fallback={<PageLoader />}>
               <EntryDetailPage />

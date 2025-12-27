@@ -95,6 +95,9 @@ export class RequestWatcher implements NestInterceptor {
     // Get custom tags
     const tagsPromise = this.captureTags(request);
 
+    // Detect if this is a GraphQL request (robust detection)
+    const isGraphQL = this.isGraphQLRequest(request);
+
     return next.handle().pipe(
       tap({
         next: async (responseBody) => {
@@ -131,6 +134,8 @@ export class RequestWatcher implements NestInterceptor {
             user,
             session,
             tags,
+            // GraphQL detection flag
+            isGraphQL,
           };
 
           this.collector.collect('request', payload, requestId);
@@ -169,6 +174,8 @@ export class RequestWatcher implements NestInterceptor {
             user,
             session,
             tags,
+            // GraphQL detection flag
+            isGraphQL,
           };
 
           this.collector.collect('request', payload, requestId);
@@ -334,5 +341,53 @@ export class RequestWatcher implements NestInterceptor {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Detect if a request is a GraphQL request using content-based detection.
+   *
+   * Best Practice: Detect based on request body structure, not URL path.
+   * This works regardless of which endpoint serves GraphQL (/graphql, /api/gql, etc.)
+   *
+   * GraphQL request characteristics:
+   * 1. POST method (standard for mutations, common for queries)
+   * 2. JSON or GraphQL content-type
+   * 3. Body contains 'query' field with valid GraphQL syntax
+   * 4. Optionally: 'variables' (object) and 'operationName' (string)
+   */
+  private isGraphQLRequest(request: Request): boolean {
+    // GraphQL requests are typically POST
+    if (request.method !== 'POST') {
+      return false;
+    }
+
+    // Check Content-Type
+    const contentType = request.headers['content-type']?.toLowerCase() || '';
+    if (!contentType.includes('application/json') && !contentType.includes('application/graphql')) {
+      return false;
+    }
+
+    // Body must be an object
+    const body = request.body;
+    if (!body || typeof body !== 'object') {
+      return false;
+    }
+
+    const bodyObj = body as Record<string, unknown>;
+
+    // GraphQL requests MUST have a 'query' field that is a string
+    if (!('query' in bodyObj) || typeof bodyObj.query !== 'string') {
+      return false;
+    }
+
+    const query = bodyObj.query.trim();
+    if (!query) {
+      return false;
+    }
+
+    // Validate GraphQL syntax: must start with query/mutation/subscription or anonymous query {
+    const graphqlPattern = /^(query|mutation|subscription)\b|^\s*\{/i;
+
+    return graphqlPattern.test(query);
   }
 }

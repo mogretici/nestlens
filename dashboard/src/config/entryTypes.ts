@@ -165,7 +165,7 @@ export const ENTRY_TYPES = {
     icon: 'Zap',
     filters: {
       names: {
-        urlKey: 'names',
+        urlKey: 'eventNames',
         displayName: 'Event',
         values: [], // Dynamic
       },
@@ -181,6 +181,11 @@ export const ENTRY_TYPES = {
     route: 'jobs',
     icon: 'Briefcase',
     filters: {
+      names: {
+        urlKey: 'jobNames',
+        displayName: 'Job',
+        values: [], // Dynamic - job names
+      },
       statuses: {
         urlKey: 'jobStatuses',
         displayName: 'Status',
@@ -203,15 +208,15 @@ export const ENTRY_TYPES = {
     route: 'schedule',
     icon: 'Clock',
     filters: {
+      names: {
+        urlKey: 'scheduleNames',
+        displayName: 'Task',
+        values: [], // Dynamic - task names
+      },
       statuses: {
         urlKey: 'scheduleStatuses',
         displayName: 'Status',
         values: ['started', 'completed', 'failed', 'skipped', 'running'],
-      },
-      names: {
-        urlKey: 'names',
-        displayName: 'Task',
-        values: [], // Dynamic
       },
     },
   },
@@ -462,6 +467,35 @@ export const ENTRY_TYPES = {
       },
     },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // GRAPHQL
+  // ─────────────────────────────────────────────────────────────────────────
+  graphql: {
+    displayName: 'GraphQL',
+    pluralName: 'GraphQL',
+    route: 'graphql',
+    icon: 'Hexagon',
+    filters: {
+      operationTypes: {
+        urlKey: 'operationTypes',
+        displayName: 'Type',
+        values: ['query', 'mutation', 'subscription'],
+      },
+      operationNames: {
+        urlKey: 'operationNames',
+        displayName: 'Operation',
+        values: [], // Dynamic
+      },
+      statuses: {
+        urlKey: 'statuses',
+        displayName: 'Status',
+        values: [], // Dynamic - any HTTP status
+      },
+      // Note: hasErrors and hasN1 are boolean filters handled via URL params directly,
+      // not through the filter config (similar to slow/resolved in other pages)
+    },
+  },
 } as const;
 
 // ============================================================================
@@ -476,7 +510,7 @@ export type ListType =
   | 'requests' | 'queries' | 'exceptions' | 'logs' | 'events'
   | 'jobs' | 'cache' | 'mail' | 'schedule' | 'http-client'
   | 'redis' | 'models' | 'notifications' | 'views' | 'commands'
-  | 'gates' | 'batches' | 'dumps';
+  | 'gates' | 'batches' | 'dumps' | 'graphql';
 
 /** Generate all possible URL keys from the config */
 type ExtractUrlKeys<T> = T extends { filters: infer F }
@@ -495,9 +529,25 @@ export type FilterCategory =
   | 'methods' | 'statuses' | 'paths' | 'controllers' | 'hostnames' | 'ips'
   | 'types' | 'sources' | 'names' | 'levels' | 'contexts'
   | 'queues' | 'operations' | 'commands' | 'formats'
-  | 'actions' | 'entities' | 'results';
+  | 'actions' | 'entities' | 'results'
+  | 'operationTypes' | 'operationNames';
 
-/** FilterType for ClickableBadge - includes all URL keys AND category names */
+/**
+ * Filter type for ClickableBadge navigation.
+ *
+ * Includes all URL keys, category names, and 'tag' for custom tags.
+ *
+ * IMPORTANT: When using ClickableBadge in detail views, always use CATEGORY NAMES
+ * (e.g., 'statuses', 'operations'), NOT URL keys (e.g., 'dumpStatuses', 'dumpOperations').
+ * The URL key mapping is handled automatically by useEntryFilters based on the listType.
+ *
+ * @example
+ * // CORRECT - uses category name
+ * <ClickableBadge listType="dumps" filterType="statuses" filterValue="completed" />
+ *
+ * // WRONG - uses URL key directly (avoid this!)
+ * <ClickableBadge listType="dumps" filterType="dumpStatuses" filterValue="completed" />
+ */
 export type FilterType = FilterUrlKey | FilterCategory | 'tag';
 
 // ============================================================================
@@ -524,6 +574,7 @@ const ROUTE_TO_TYPE: Record<string, EntryTypeName> = {
   gates: 'gate',
   batches: 'batch',
   dumps: 'dump',
+  graphql: 'graphql',
 };
 
 // ============================================================================

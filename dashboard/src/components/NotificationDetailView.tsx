@@ -126,7 +126,7 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
             <DetailRow
               label="Type"
               value={
-                <ClickableBadge listType="notifications" filterType="notificationTypes" filterValue={payload.type}>
+                <ClickableBadge listType="notifications" filterType="types" filterValue={payload.type}>
                   {payload.type}
                 </ClickableBadge>
               }
@@ -148,7 +148,7 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
             <DetailRow
               label="Status"
               value={
-                <ClickableBadge listType="notifications" filterType="notificationStatuses" filterValue={payload.status}>
+                <ClickableBadge listType="notifications" filterType="statuses" filterValue={payload.status}>
                   {payload.status.toUpperCase()}
                 </ClickableBadge>
               }

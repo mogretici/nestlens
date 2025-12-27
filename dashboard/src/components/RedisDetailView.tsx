@@ -146,7 +146,7 @@ export default function RedisDetailView({ entry }: RedisDetailViewProps) {
             <DetailRow
               label="Command"
               value={
-                <ClickableBadge listType="redis" filterType="redisCommands" filterValue={payload.command}>
+                <ClickableBadge listType="redis" filterType="commands" filterValue={payload.command}>
                   {payload.command}
                 </ClickableBadge>
               }
@@ -164,7 +164,7 @@ export default function RedisDetailView({ entry }: RedisDetailViewProps) {
             <DetailRow
               label="Status"
               value={
-                <ClickableBadge listType="redis" filterType="redisStatuses" filterValue={payload.status}>
+                <ClickableBadge listType="redis" filterType="statuses" filterValue={payload.status}>
                   {payload.status.toUpperCase()}
                 </ClickableBadge>
               }

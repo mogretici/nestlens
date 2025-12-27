@@ -40,6 +40,7 @@ export default function GatesPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<GateEntry>({ type: 'gate', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -168,6 +169,7 @@ export default function GatesPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/gates/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No gate checks recorded yet"
           emptyIcon={<Shield className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

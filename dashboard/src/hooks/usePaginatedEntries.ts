@@ -41,6 +41,7 @@ interface UsePaginatedEntriesResult<T extends Entry> {
   setAutoRefresh: (enabled: boolean) => void;
   autoRefreshEnabled: boolean;
   updateEntry: (entry: Entry) => void;
+  isHighlighted: (id: number) => boolean;
 }
 
 const AUTO_REFRESH_STORAGE_KEY = 'nestlens-auto-refresh';
@@ -92,6 +93,10 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   const isInitialLoadRef = useRef(true);
   // Track previous filtersKey to detect filter changes
   const prevFiltersKeyRef = useRef(filtersKey);
+  // Track highlighted (new) entries with their added timestamps (entry.id -> timestamp)
+  const highlightedEntriesRef = useRef<Map<number, number>>(new Map());
+  const [, forceUpdate] = useState(0); // Force re-render for highlight updates
+  const HIGHLIGHT_DURATION = 10000; // 10 seconds
 
   // Fetch initial data or refetch on filter change
   const fetchInitial = useCallback(async () => {
@@ -146,7 +151,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     }
   }, [type, limit, meta, filtersKey]);
 
-  // Load new entries
+  // Load new entries (manual button click)
   const loadNew = useCallback(async () => {
     if (!newestSequenceRef.current) return;
 
@@ -160,6 +165,12 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       });
 
       if (response.data.length > 0) {
+        // Mark new entries as highlighted
+        const now = Date.now();
+        response.data.forEach((entry) => {
+          highlightedEntriesRef.current.set(entry.id, now);
+        });
+
         setEntries((prev) => [...(response.data as T[]), ...prev]);
         newestSequenceRef.current = response.meta.newestSequence;
         setNewEntriesCount(0);
@@ -235,6 +246,28 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     fetchInitial();
   }, [fetchInitial]);
 
+  // Check if an entry is highlighted (new)
+  const isHighlighted = useCallback((id: number): boolean => {
+    const addedAt = highlightedEntriesRef.current.get(id);
+    if (!addedAt) return false;
+    return Date.now() - addedAt < HIGHLIGHT_DURATION;
+  }, []);
+
+  // Cleanup old highlighted entries
+  const cleanupHighlights = useCallback(() => {
+    const now = Date.now();
+    let hasChanges = false;
+    highlightedEntriesRef.current.forEach((addedAt, id) => {
+      if (now - addedAt >= HIGHLIGHT_DURATION) {
+        highlightedEntriesRef.current.delete(id);
+        hasChanges = true;
+      }
+    });
+    if (hasChanges) {
+      forceUpdate(n => n + 1); // Trigger re-render to update row styles
+    }
+  }, []);
+
   // Auto-load new entries when auto-refresh is enabled
   const autoLoadNew = useCallback(async () => {
     if (!newestSequenceRef.current) return;
@@ -250,6 +283,12 @@ export function usePaginatedEntries<T extends Entry = Entry>(
         });
 
         if (response.data.length > 0) {
+          // Mark new entries as highlighted
+          const now = Date.now();
+          response.data.forEach((entry) => {
+            highlightedEntriesRef.current.set(entry.id, now);
+          });
+
           setEntries((prev) => [...(response.data as T[]), ...prev]);
           newestSequenceRef.current = response.meta.newestSequence;
           // Update meta total
@@ -282,6 +321,12 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     };
   }, [autoRefreshEnabled, autoRefreshInterval, autoLoadNew, checkForNew]);
 
+  // Set up highlight cleanup interval
+  useEffect(() => {
+    const cleanupInterval = setInterval(cleanupHighlights, 1000); // Check every second
+    return () => clearInterval(cleanupInterval);
+  }, [cleanupHighlights]);
+
   return {
     entries,
     loading,
@@ -296,5 +341,6 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     setAutoRefresh,
     autoRefreshEnabled,
     updateEntry,
+    isHighlighted,
   };
 }

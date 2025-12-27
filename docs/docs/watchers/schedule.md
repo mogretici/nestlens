@@ -129,6 +129,8 @@ export class StartupService {
 
 ## Dashboard View
 
+![Schedule Detail View](/img/screenshots/schedule_detail.png)
+
 In the NestLens dashboard, schedule entries show:
 
 - Timeline of scheduled task executions

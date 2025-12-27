@@ -53,6 +53,8 @@ export type FilterCategory =
   | 'commands'
   // Gate categories
   | 'results'
+  // GraphQL categories
+  | 'operationTypes' | 'operationNames'
   // Special category for custom tags
   | 'tags';
 

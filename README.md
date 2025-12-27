@@ -10,7 +10,7 @@
 
 <p align="center">
   Laravel Telescope-inspired debugging and monitoring for NestJS.<br/>
-  Track requests, queries, exceptions, jobs, and 14 more watchers<br/>
+  Track requests, queries, exceptions, jobs, and 15 more watchers<br/>
   with a beautiful real-time dashboard.
 </p>
 
@@ -26,6 +26,10 @@
 <a href="https://nestlens-docs.vercel.app/docs/configuration/basic-config"><img src="https://img.shields.io/badge/Configuration-8b5cf6?style=for-the-badge" alt="Configuration" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/watchers/overview"><img src="https://img.shields.io/badge/Watchers-10b981?style=for-the-badge" alt="Watchers" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/security/access-control"><img src="https://img.shields.io/badge/Security-f59e0b?style=for-the-badge" alt="Security" /></a>
+</p>
+
+<p align="center">
+  <img src="assets/nestlens.gif" alt="NestLens Dashboard Demo" width="800" />
 </p>
 
 ## Why NestLens?
@@ -106,6 +110,7 @@ Visit **http://localhost:3000/nestlens** and start debugging.
 <a href="https://nestlens-docs.vercel.app/docs/watchers/command"><img src="https://img.shields.io/badge/Command-64748b?style=flat-square" alt="Command" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/watchers/view"><img src="https://img.shields.io/badge/View-64748b?style=flat-square" alt="View" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/watchers/dump"><img src="https://img.shields.io/badge/Dump-64748b?style=flat-square" alt="Dump" /></a>
+<a href="https://nestlens-docs.vercel.app/docs/watchers/graphql"><img src="https://img.shields.io/badge/GraphQL-e10098?style=flat-square" alt="GraphQL" /></a>
 </p>
 
 

@@ -13,7 +13,6 @@ import PageHeader, { FilterTabs } from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  MethodBadge,
 } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { ExceptionEntry, isExceptionEntry } from '../types';
@@ -30,7 +29,6 @@ export default function ExceptionsPage() {
 
   // Use centralized filter hook - all config comes from entryTypes.ts
   const {
-    addFilter,
     clearAll,
     serverFilters: baseServerFilters,
     headerFilters,
@@ -55,6 +53,7 @@ export default function ExceptionsPage() {
     setAutoRefresh,
     updateEntry,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<ExceptionEntry>({ type: 'exception', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -107,9 +106,7 @@ export default function ExceptionsPage() {
       render: (entry) => {
         const displayName = getDisplayName(entry);
         return (
-          <ClickableBadge
-            onClick={(e) => { e.stopPropagation(); addFilter('names', displayName); }}
-          >
+          <ClickableBadge listType="exceptions" filterType="names">
             {displayName}
           </ClickableBadge>
         );
@@ -132,10 +129,9 @@ export default function ExceptionsPage() {
       render: (entry) => {
         const requestMethod = entry.payload.request?.method || '-';
         return requestMethod !== '-' ? (
-          <MethodBadge
-            method={requestMethod}
-            onClick={(e) => { e.stopPropagation(); addFilter('methods', requestMethod); }}
-          />
+          <ClickableBadge listType="exceptions" filterType="methods">
+            {requestMethod}
+          </ClickableBadge>
         ) : (
           <TextCell secondary>—</TextCell>
         );
@@ -148,10 +144,7 @@ export default function ExceptionsPage() {
       render: (entry) => {
         const requestPath = entry.payload.request?.url || '-';
         return requestPath !== '-' ? (
-          <ClickableBadge
-            onClick={(e) => { e.stopPropagation(); addFilter('paths', requestPath); }}
-            className="font-mono"
-          >
+          <ClickableBadge listType="exceptions" filterType="paths" className="font-mono">
             {requestPath.length > 40 ? requestPath.substring(0, 40) + '...' : requestPath}
           </ClickableBadge>
         ) : (
@@ -196,7 +189,7 @@ export default function ExceptionsPage() {
         </button>
       ),
     },
-  ], [addFilter, resolvingId, handleToggleResolved]);
+  ], [resolvingId, handleToggleResolved]);
 
   // Only show full-page spinner on initial load when no data exists
   // This prevents flicker when filters change
@@ -250,7 +243,12 @@ export default function ExceptionsPage() {
           onRowClick={(entry) => navigate(`/exceptions/${entry.id}`)}
           emptyMessage="No exceptions recorded yet"
           emptyIcon={<AlertTriangle className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
-          rowClassName={(entry) => entry.resolvedAt ? 'opacity-50' : ''}
+          rowClassName={(entry) => {
+            const classes = [];
+            if (entry.resolvedAt) classes.push('opacity-50');
+            if (isHighlighted(entry.id)) classes.push('highlight-new');
+            return classes.join(' ');
+          }}
         />
 
         {/* Load more button */}

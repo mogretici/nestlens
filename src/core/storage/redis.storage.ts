@@ -59,8 +59,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       // Dynamic import - ioredis is an optional peer dependency
       const { default: RedisClient } = await import('ioredis');
 
+      const commandTimeout = this.config.commandTimeout ?? 5000;
+
       if (this.config.url) {
-        return new RedisClient(this.config.url);
+        return new RedisClient(this.config.url, { commandTimeout });
       }
 
       return new RedisClient({
@@ -68,6 +70,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         port: this.config.port ?? 6379,
         password: this.config.password,
         db: this.config.db ?? 0,
+        commandTimeout,
       });
     } catch (error) {
       throw new Error(
@@ -188,7 +191,17 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     if (ids.length === 0) return [];
 
-    const entries = await this.fetchEntriesByIds(ids);
+    let entries = await this.fetchEntriesByIds(ids);
+
+    // Exclude GraphQL requests from regular requests list
+    // GraphQL requests should only appear in the GraphQL watcher
+    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
+    if (filter.type === 'request') {
+      entries = entries.filter((e) => {
+        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
+        return !isGraphQL;
+      });
+    }
 
     // Apply date filters
     let filtered = entries;
@@ -241,6 +254,16 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     let entries = await this.fetchEntriesByIds(ids);
+
+    // Exclude GraphQL requests from regular requests list
+    // GraphQL requests should only appear in the GraphQL watcher
+    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
+    if (type === 'request') {
+      entries = entries.filter((e) => {
+        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
+        return !isGraphQL;
+      });
+    }
 
     // Apply advanced filters
     if (params.filters) {
@@ -434,7 +457,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const pipeline = client.pipeline();
 
-    for (const tag of tags) {
+    for (const rawTag of tags) {
+      // Normalize tags to uppercase for consistent storage
+      const tag = rawTag.toUpperCase();
       pipeline.sadd(this.key('tags', String(entryId)), tag);
       pipeline.sadd(this.key('tags', 'index', tag), String(entryId));
       pipeline.hincrby(this.key('tags', 'counts'), tag, 1);
@@ -446,7 +471,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   async removeTags(entryId: number, tags: string[]): Promise<void> {
     const client = this.getClient();
 
-    for (const tag of tags) {
+    for (const rawTag of tags) {
+      // Normalize to uppercase for consistent lookup
+      const tag = rawTag.toUpperCase();
       await client.srem(this.key('tags', String(entryId)), tag);
       await client.srem(this.key('tags', 'index', tag), String(entryId));
       await client.hincrby(this.key('tags', 'counts'), tag, -1);
@@ -473,7 +500,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     if (tags.length === 0) return [];
 
     const client = this.getClient();
-    const tagKeys = tags.map((t) => this.key('tags', 'index', t));
+    // Normalize input tags to uppercase for case-insensitive matching
+    const normalizedTags = tags.map(t => t.toUpperCase());
+    const tagKeys = normalizedTags.map((t) => this.key('tags', 'index', t));
 
     let ids: string[];
     if (logic === 'AND') {
@@ -710,6 +739,33 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       if (filters.resolved !== undefined) {
         const isResolved = !!entry.resolvedAt;
         if (isResolved !== filters.resolved) return false;
+      }
+
+      // Event filters
+      if (filters.eventNames?.length && entry.type === 'event') {
+        const name = payload.name as string;
+        if (!filters.eventNames.some((n) => name?.includes(n))) return false;
+      }
+
+      // Schedule filters
+      if (filters.scheduleStatuses?.length && entry.type === 'schedule') {
+        if (!filters.scheduleStatuses.includes(payload.status as string)) return false;
+      }
+      if (filters.scheduleNames?.length && entry.type === 'schedule') {
+        const name = payload.name as string;
+        if (!filters.scheduleNames.some((n) => name?.includes(n))) return false;
+      }
+
+      // Job filters
+      if (filters.jobStatuses?.length && entry.type === 'job') {
+        if (!filters.jobStatuses.includes(payload.status as string)) return false;
+      }
+      if (filters.jobNames?.length && entry.type === 'job') {
+        const name = payload.name as string;
+        if (!filters.jobNames.some((n) => name?.includes(n))) return false;
+      }
+      if (filters.queues?.length && entry.type === 'job') {
+        if (!filters.queues.includes(payload.queue as string)) return false;
       }
 
       // Additional filters can be added as needed

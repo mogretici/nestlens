@@ -155,6 +155,96 @@ export interface ViewWatcherConfig {
 }
 
 /**
+ * GraphQL subscription tracking configuration
+ */
+export interface GraphQLSubscriptionConfig {
+  /** Enable subscription tracking. Default: true */
+  enabled?: boolean;
+  /** Track individual subscription messages. Default: false (lifecycle only) */
+  trackMessages?: boolean;
+  /** Capture message data content. Default: false */
+  captureMessageData?: boolean;
+  /** Maximum messages to track per subscription. Default: 100 */
+  maxTrackedMessages?: number;
+  /** Track connection/disconnection events. Default: true */
+  trackConnectionEvents?: boolean;
+}
+
+/**
+ * GraphQL watcher configuration
+ */
+export interface GraphQLWatcherConfig {
+  enabled?: boolean;
+
+  /**
+   * GraphQL server to use. Default: 'auto' (auto-detect)
+   * - 'apollo': Apollo Server (@apollo/server)
+   * - 'mercurius': Mercurius (Fastify GraphQL)
+   * - 'auto': Auto-detect based on installed packages
+   */
+  server?: 'apollo' | 'mercurius' | 'auto';
+
+  // Query handling
+  /** Maximum query size in bytes before truncation. Default: 8192 (8KB) */
+  maxQuerySize?: number;
+  /** Capture variables passed to operations. Default: true */
+  captureVariables?: boolean;
+  /** Variable names to mask (case-insensitive). Default: ['password', 'token', 'secret', 'apiKey', 'api_key', 'accessToken', 'access_token', 'refreshToken', 'refresh_token', 'authorization'] */
+  sensitiveVariables?: string[];
+  /** Skip introspection queries (__schema, __type). Default: true */
+  ignoreIntrospection?: boolean;
+  /** Operation names to ignore. Example: ['HealthCheck', 'InternalMetrics'] */
+  ignoreOperations?: string[];
+
+  // Tracing (OFF by default for performance)
+  /** Enable field-level resolver tracing. Default: false */
+  traceFieldResolvers?: boolean;
+  /** Only trace resolvers slower than this threshold (ms). Undefined = disabled */
+  traceSlowResolvers?: number;
+  /** Sample rate for resolver tracing (0-1). Default: 0.1 (when enabled) */
+  resolverTracingSampleRate?: number;
+
+  // N+1 Detection
+  /** Enable N+1 query detection. Default: true */
+  detectN1Queries?: boolean;
+  /** Threshold for N+1 warnings (number of calls to same resolver). Default: 10 */
+  n1Threshold?: number;
+
+  // Subscriptions
+  /** Subscription tracking configuration */
+  subscriptions?: GraphQLSubscriptionConfig;
+
+  // Performance
+  /** Sample rate for operation tracking (0-1). Default: 1.0 (track all) */
+  samplingRate?: number;
+
+  // Response capture
+  /** Capture response data. Default: false */
+  captureResponse?: boolean;
+  /** Maximum response size in bytes before truncation. Default: 64KB */
+  maxResponseSize?: number;
+
+  // Custom tagging
+  /** Custom tags function for GraphQL operations */
+  tags?: (ctx: GraphQLOperationContext) => string[] | Promise<string[]>;
+}
+
+/**
+ * GraphQL operation context for custom tags
+ */
+export interface GraphQLOperationContext {
+  operationName?: string;
+  operationType: 'query' | 'mutation' | 'subscription';
+  query: string;
+  variables?: Record<string, unknown>;
+  request?: {
+    ip?: string;
+    userAgent?: string;
+    headers?: Record<string, string>;
+  };
+}
+
+/**
  * Available storage drivers for NestLens
  * - 'memory': In-memory storage (default, zero config, works everywhere)
  * - 'sqlite': SQLite storage (requires better-sqlite3)
@@ -186,6 +276,8 @@ export interface RedisStorageConfig {
   keyPrefix?: string;
   /** Redis connection URL (overrides host/port/password/db if provided) */
   url?: string;
+  /** Command timeout in milliseconds. Default: 5000 */
+  commandTimeout?: number;
 }
 
 /**
@@ -229,6 +321,47 @@ export interface PruningConfig {
 }
 
 /**
+ * Security configuration for data masking and input validation.
+ */
+export interface SecurityConfig {
+  /**
+   * Data masking configuration.
+   */
+  dataMasking?: {
+    /** Additional headers to mask (case-insensitive) */
+    sensitiveHeaders?: string[];
+    /** Additional body/query parameters to mask (case-insensitive) */
+    sensitiveParams?: string[];
+    /** Additional user fields to mask (case-insensitive) */
+    sensitiveUserFields?: string[];
+    /** Replacement string for masked values. Default: '***REDACTED***' */
+    maskReplacement?: string;
+  };
+
+  /**
+   * Stack trace sanitization mode.
+   * - 'none': Show full stack traces
+   * - 'partial': Show simplified traces (default in production)
+   * - 'full': Hide stack traces completely
+   */
+  stackTraceSanitization?: 'none' | 'partial' | 'full';
+
+  /**
+   * Input validation limits.
+   */
+  validation?: {
+    /** Maximum number of items in filter arrays. Default: 100 */
+    maxFilterArrayLength?: number;
+    /** Maximum length of search strings. Default: 500 */
+    maxSearchLength?: number;
+    /** Maximum length of tag names. Default: 100 */
+    maxTagLength?: number;
+    /** Maximum tags per entry. Default: 50 */
+    maxTagsPerEntry?: number;
+  };
+}
+
+/**
  * Rate limiting configuration for API endpoints
  */
 export interface RateLimitConfig {
@@ -268,10 +401,17 @@ export interface NestLensConfig {
   // Rate Limiting
   /**
    * Rate limiting configuration for API endpoints.
-   * Set to false to disable rate limiting.
-   * Default: 100 requests per minute per IP.
+   * Set to false to disable rate limiting (default).
+   * Set to an object to enable: { windowMs: 60000, maxRequests: 100 }
+   * Default: disabled (NestLens is a development/debugging tool)
    */
   rateLimit?: RateLimitConfig | false;
+
+  // Security
+  /**
+   * Security configuration for data masking and input validation.
+   */
+  security?: SecurityConfig;
 
   // Entry Filtering
   /**
@@ -308,11 +448,12 @@ export interface NestLensConfig {
     gate?: boolean | GateWatcherConfig;
     batch?: boolean | BatchWatcherConfig;
     dump?: boolean | DumpWatcherConfig;
+    graphql?: boolean | GraphQLWatcherConfig;
   };
 }
 
 export const DEFAULT_CONFIG: Required<
-  Omit<NestLensConfig, 'allowedIps' | 'canAccess' | 'authorization' | 'filter' | 'filterBatch' | 'rateLimit'>
+  Omit<NestLensConfig, 'allowedIps' | 'canAccess' | 'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security'>
 > & {
   authorization: AuthorizationConfig;
   allowedIps?: string[];
@@ -320,6 +461,7 @@ export const DEFAULT_CONFIG: Required<
   filter?: (entry: Entry) => boolean | Promise<boolean>;
   filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
   rateLimit?: RateLimitConfig | false;
+  security?: SecurityConfig;
 } = {
   enabled: true,
   path: '/nestlens',
@@ -334,10 +476,7 @@ export const DEFAULT_CONFIG: Required<
   canAccess: undefined,
   filter: undefined,
   filterBatch: undefined,
-  rateLimit: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 100, // 100 requests per minute
-  },
+  rateLimit: false, // Rate limiting disabled by default - NestLens is a dev tool
   storage: {
     driver: 'memory' as StorageDriver,
     sqlite: {
@@ -380,6 +519,7 @@ export const DEFAULT_CONFIG: Required<
     gate: false,
     batch: false,
     dump: false,
+    graphql: false, // Disabled by default - requires GraphQL server integration
   },
 };
 

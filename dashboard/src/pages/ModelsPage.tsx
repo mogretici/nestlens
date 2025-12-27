@@ -41,6 +41,7 @@ export default function ModelsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<ModelEntry>({ type: 'model', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -163,6 +164,7 @@ export default function ModelsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/models/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No model events recorded yet"
           emptyIcon={<Box className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

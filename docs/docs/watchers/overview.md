@@ -12,7 +12,7 @@ Watchers are specialized services that hook into different parts of your applica
 
 ## Available Watchers
 
-NestLens provides 18 different watchers to cover various aspects of your application:
+NestLens provides 19 different watchers to cover various aspects of your application:
 
 | Watcher | Type | Default | Description |
 |---------|------|---------|-------------|
@@ -34,6 +34,7 @@ NestLens provides 18 different watchers to cover various aspects of your applica
 | [Gate](./gate) | `gate` | Disabled | Monitors authorization checks |
 | [Batch](./batch) | `batch` | Disabled | Tracks batch/bulk operations |
 | [Dump](./dump) | `dump` | Disabled | Monitors database dumps and imports |
+| [GraphQL](./graphql) | `graphql` | Disabled | Tracks GraphQL operations and subscriptions |
 
 ## Default Enabled vs Disabled Watchers
 
@@ -46,7 +47,7 @@ The following watchers are enabled by default because they provide essential mon
 - **Exception** - Error tracking
 - **Log** - Application logging
 
-### Disabled by Default (14 watchers)
+### Disabled by Default (15 watchers)
 
 Most watchers are disabled by default to avoid overhead and because they require specific integrations or services:
 

@@ -6,6 +6,8 @@ sidebar_position: 3
 
 Now that NestLens is running, let's explore the dashboard.
 
+![NestLens Dashboard](/img/screenshots/quick_start_null.png)
+
 ## Dashboard Overview
 
 The NestLens dashboard is divided into several sections:

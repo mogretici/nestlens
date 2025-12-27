@@ -126,7 +126,7 @@ export default function GateDetailView({ entry }: GateDetailViewProps) {
             <DetailRow
               label="Gate"
               value={
-                <ClickableBadge listType="gates" filterType="gateNames" filterValue={payload.gate}>
+                <ClickableBadge listType="gates" filterType="names" filterValue={payload.gate}>
                   {payload.gate}
                 </ClickableBadge>
               }
@@ -138,7 +138,7 @@ export default function GateDetailView({ entry }: GateDetailViewProps) {
             <DetailRow
               label="Result"
               value={
-                <ClickableBadge listType="gates" filterType="gateResults" filterValue={resultConfig.label}>
+                <ClickableBadge listType="gates" filterType="results" filterValue={resultConfig.label}>
                   {resultConfig.label}
                 </ClickableBadge>
               }

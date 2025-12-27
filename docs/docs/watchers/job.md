@@ -151,6 +151,8 @@ export class EmailProcessor {
 
 ## Dashboard View
 
+![Job Detail View](/img/screenshots/job_detail.png)
+
 In the NestLens dashboard, job entries show:
 
 - Job queue activity timeline

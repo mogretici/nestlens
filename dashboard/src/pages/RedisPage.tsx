@@ -41,6 +41,7 @@ export default function RedisPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<RedisEntry>({ type: 'redis', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -149,6 +150,7 @@ export default function RedisPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/redis/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No Redis commands recorded yet"
           emptyIcon={<Database className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

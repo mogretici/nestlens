@@ -13,10 +13,10 @@ import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
   TextCell,
-  MailStatusBadge,
   DurationCell,
   TagsList,
 } from '../components/DataTable';
+import ClickableBadge from '../components/ClickableBadge';
 import { MailEntry, isMailEntry } from '../types';
 
 // Mail statuses for filtering tags
@@ -45,6 +45,7 @@ export default function MailPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<MailEntry>({ type: 'mail', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -64,10 +65,9 @@ export default function MailPage() {
       header: 'Status',
       width: '80px',
       render: (entry) => (
-        <MailStatusBadge
-          status={entry.payload.status}
-          onClick={(e) => { e.stopPropagation(); addFilter('statuses', entry.payload.status); }}
-        />
+        <ClickableBadge listType="mail" filterType="statuses">
+          {entry.payload.status}
+        </ClickableBadge>
       ),
     },
     {
@@ -172,6 +172,7 @@ export default function MailPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/mail/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No emails recorded yet"
           emptyIcon={<Mail className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

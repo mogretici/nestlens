@@ -41,6 +41,7 @@ export default function BatchesPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<BatchEntry>({ type: 'batch', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -167,6 +168,7 @@ export default function BatchesPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/batches/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No batch operations recorded yet"
           emptyIcon={<Layers className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

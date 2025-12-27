@@ -41,6 +41,7 @@ export default function CommandsPage() {
     autoRefreshEnabled,
     setAutoRefresh,
     meta,
+    isHighlighted,
   } = usePaginatedEntries<CommandEntry>({ type: 'command', limit: 50, filters: serverFilters });
 
   // Type guard filter only (server handles the actual filtering)
@@ -149,6 +150,7 @@ export default function CommandsPage() {
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/commands/${entry.id}`)}
+          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No commands recorded yet"
           emptyIcon={<Terminal className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />

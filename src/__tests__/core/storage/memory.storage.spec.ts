@@ -220,23 +220,23 @@ describe('MemoryStorage', () => {
       await storage.addTags(entryId, ['critical', 'production']);
       const tags = await storage.getEntryTags(entryId);
 
-      // Assert
-      expect(tags).toContain('critical');
-      expect(tags).toContain('production');
+      // Assert - tags are normalized to uppercase
+      expect(tags).toContain('CRITICAL');
+      expect(tags).toContain('PRODUCTION');
     });
 
     it('should remove tags', async () => {
       // Arrange
       await storage.addTags(entryId, ['tag1', 'tag2', 'tag3']);
 
-      // Act
+      // Act - removeTags normalizes input to uppercase
       await storage.removeTags(entryId, ['tag2']);
       const tags = await storage.getEntryTags(entryId);
 
-      // Assert
-      expect(tags).toContain('tag1');
-      expect(tags).toContain('tag3');
-      expect(tags).not.toContain('tag2');
+      // Assert - tags are normalized to uppercase
+      expect(tags).toContain('TAG1');
+      expect(tags).toContain('TAG3');
+      expect(tags).not.toContain('TAG2');
     });
 
     it('should get all tags with counts', async () => {
@@ -248,8 +248,8 @@ describe('MemoryStorage', () => {
       // Act
       const allTags = await storage.getAllTags();
 
-      // Assert
-      const sharedTag = allTags.find((t) => t.tag === 'shared');
+      // Assert - tags are normalized to uppercase
+      const sharedTag = allTags.find((t) => t.tag === 'SHARED');
       expect(sharedTag?.count).toBe(2);
     });
 

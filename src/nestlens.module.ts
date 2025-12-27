@@ -40,6 +40,7 @@ import {
   GateWatcher,
   BatchWatcher,
   DumpWatcher,
+  GraphQLWatcher,
 } from './watchers';
 
 /**
@@ -217,12 +218,23 @@ export class NestLensModule implements NestModule, OnModuleInit {
       providers.push(DumpWatcher);
     }
 
+    // Add GraphQL Watcher
+    if (mergedConfig.watchers?.graphql) {
+      providers.push(GraphQLWatcher);
+    }
+
+    // Build exports list - only export what's actually provided
+    const exports: Provider[] = [NestLensLogger];
+    if (mergedConfig.watchers?.graphql) {
+      exports.push(GraphQLWatcher);
+    }
+
     return {
       module: NestLensModule,
       imports,
       controllers,
       providers,
-      exports: [NestLensLogger],
+      exports,
     };
   }
 

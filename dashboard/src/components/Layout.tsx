@@ -23,12 +23,14 @@ import {
   Globe,
   Box,
   Bell,
-  Eye,
+  Layout as LayoutIcon,
   Terminal,
   Shield,
   Layers,
   Pause,
   Play,
+  GitBranch,
+  Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clearEntries, getRecordingStatus, pauseRecording, resumeRecording, RecordingStatus } from '../api';
@@ -93,55 +95,80 @@ function RecordingToggle() {
   );
 }
 
-// Navigation structure with categories
+// Icon colors matching Dashboard Entry Types
+const iconColors: Record<string, string> = {
+  dashboard: 'text-primary-500',
+  request: 'text-blue-500',
+  query: 'text-purple-500',
+  graphql: 'text-fuchsia-500',
+  exception: 'text-red-500',
+  log: 'text-green-500',
+  job: 'text-yellow-500',
+  schedule: 'text-gray-500',
+  batch: 'text-lime-500',
+  command: 'text-slate-500',
+  cache: 'text-cyan-500',
+  redis: 'text-rose-500',
+  model: 'text-violet-500',
+  'http-client': 'text-indigo-500',
+  mail: 'text-pink-500',
+  notification: 'text-orange-500',
+  event: 'text-emerald-500',
+  view: 'text-teal-500',
+  gate: 'text-amber-500',
+  dump: 'text-stone-500',
+};
+
+// Navigation structure with categories (matches Dashboard)
 const navigationGroups = [
   {
     name: 'Overview',
     items: [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+      { name: 'Dashboard', href: '/', icon: LayoutDashboard, colorKey: 'dashboard' },
     ],
   },
   {
-    name: 'Monitoring',
+    name: 'Core',
     items: [
-      { name: 'Requests', href: '/requests', icon: Activity },
-      { name: 'HTTP Client', href: '/http-client', icon: Globe },
-      { name: 'Queries', href: '/queries', icon: Database },
-    ],
-  },
-  {
-    name: 'Debugging',
-    items: [
-      { name: 'Exceptions', href: '/exceptions', icon: AlertTriangle, badge: 'exceptions' },
-      { name: 'Logs', href: '/logs', icon: FileText },
+      { name: 'Requests', href: '/requests', icon: Activity, colorKey: 'request' },
+      { name: 'Queries', href: '/queries', icon: Database, colorKey: 'query' },
+      { name: 'GraphQL', href: '/graphql', icon: GitBranch, colorKey: 'graphql' },
+      { name: 'Exceptions', href: '/exceptions', icon: AlertTriangle, badge: 'exceptions', colorKey: 'exception' },
+      { name: 'Logs', href: '/logs', icon: FileText, colorKey: 'log' },
     ],
   },
   {
     name: 'Background',
     items: [
-      { name: 'Events', href: '/events', icon: Radio },
-      { name: 'Jobs', href: '/jobs', icon: Briefcase },
-      { name: 'Schedule', href: '/schedule', icon: Clock },
+      { name: 'Jobs', href: '/jobs', icon: Briefcase, colorKey: 'job' },
+      { name: 'Schedule', href: '/schedule', icon: Clock, colorKey: 'schedule' },
+      { name: 'Batches', href: '/batches', icon: Package, colorKey: 'batch' },
+      { name: 'Commands', href: '/commands', icon: Terminal, colorKey: 'command' },
     ],
   },
   {
-    name: 'Storage',
+    name: 'Data',
     items: [
-      { name: 'Cache', href: '/cache', icon: HardDrive },
-      { name: 'Mail', href: '/mail', icon: Mail },
+      { name: 'Cache', href: '/cache', icon: HardDrive, colorKey: 'cache' },
+      { name: 'Redis', href: '/redis', icon: Box, colorKey: 'redis' },
+      { name: 'Models', href: '/models', icon: Layers, colorKey: 'model' },
     ],
   },
   {
-    name: 'Advanced',
+    name: 'Communication',
     items: [
-      { name: 'Redis', href: '/redis', icon: Database },
-      { name: 'Models', href: '/models', icon: Box },
-      { name: 'Notifications', href: '/notifications', icon: Bell },
-      { name: 'Views', href: '/views', icon: Eye },
-      { name: 'Commands', href: '/commands', icon: Terminal },
-      { name: 'Gates', href: '/gates', icon: Shield },
-      { name: 'Batches', href: '/batches', icon: Layers },
-      { name: 'Dumps', href: '/dumps', icon: HardDrive },
+      { name: 'HTTP Client', href: '/http-client', icon: Globe, colorKey: 'http-client' },
+      { name: 'Mail', href: '/mail', icon: Mail, colorKey: 'mail' },
+      { name: 'Notifications', href: '/notifications', icon: Bell, colorKey: 'notification' },
+      { name: 'Events', href: '/events', icon: Radio, colorKey: 'event' },
+    ],
+  },
+  {
+    name: 'System',
+    items: [
+      { name: 'Views', href: '/views', icon: LayoutIcon, colorKey: 'view' },
+      { name: 'Gates', href: '/gates', icon: Shield, colorKey: 'gate' },
+      { name: 'Dumps', href: '/dumps', icon: HardDrive, colorKey: 'dump' },
     ],
   },
 ] as const;
@@ -342,7 +369,7 @@ export default function Layout() {
                             onClick={() => setSidebarOpen(false)}
                           >
                             <div className="flex items-center space-x-3">
-                              <item.icon className={`h-4 w-4 ${isActive ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300'}`} />
+                              <item.icon className={`h-4 w-4 ${iconColors[item.colorKey] || 'text-gray-400'}`} />
                               <span className="text-sm">{item.name}</span>
                             </div>
                             {badgeCount > 0 && (
@@ -405,7 +432,7 @@ export default function Layout() {
                   NestLens
                 </span>
                 <span className="hidden xl:inline text-xs text-gray-400 dark:text-gray-500 ml-1.5">
-                  v0.1.0
+                  v{__APP_VERSION__}
                 </span>
               </div>
             </Link>
@@ -451,11 +478,7 @@ export default function Layout() {
                             }`}
                           >
                             <div className="flex items-center space-x-3">
-                              <item.icon className={`h-[18px] w-[18px] transition-colors ${
-                                isActive
-                                  ? 'text-primary-600 dark:text-primary-400'
-                                  : 'text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'
-                              }`} />
+                              <item.icon className={`h-[18px] w-[18px] ${iconColors[item.colorKey] || 'text-gray-400'}`} />
                               <span className="text-sm">{item.name}</span>
                             </div>
                             {badgeCount > 0 && (

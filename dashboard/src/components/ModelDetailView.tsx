@@ -152,7 +152,7 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
             <DetailRow
               label="Action"
               value={
-                <ClickableBadge listType="models" filterType="modelActions" filterValue={payload.action}>
+                <ClickableBadge listType="models" filterType="actions" filterValue={payload.action}>
                   {payload.action.toUpperCase()}
                 </ClickableBadge>
               }
@@ -169,7 +169,7 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
               <DetailRow
                 label="Source"
                 value={
-                  <ClickableBadge listType="models" filterType="modelSources" filterValue={payload.source}>
+                  <ClickableBadge listType="models" filterType="sources" filterValue={payload.source}>
                     {payload.source}
                   </ClickableBadge>
                 }

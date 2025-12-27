@@ -163,6 +163,8 @@ Data operation filters:
 
 ## Filter UI Components
 
+![Filtering in Action](/img/screenshots/filtering.png)
+
 ### Filter Bar
 
 The filter bar appears below the header and shows:

@@ -135,7 +135,7 @@ export default function ViewDetailView({ entry }: ViewDetailViewProps) {
               <DetailRow
                 label="Format"
                 value={
-                  <ClickableBadge listType="views" filterType="viewFormats" filterValue={payload.format}>
+                  <ClickableBadge listType="views" filterType="formats" filterValue={payload.format}>
                     {payload.format}
                   </ClickableBadge>
                 }
@@ -144,7 +144,7 @@ export default function ViewDetailView({ entry }: ViewDetailViewProps) {
             <DetailRow
               label="Status"
               value={
-                <ClickableBadge listType="views" filterType="viewStatuses" filterValue={payload.status}>
+                <ClickableBadge listType="views" filterType="statuses" filterValue={payload.status}>
                   {payload.status.toUpperCase()}
                 </ClickableBadge>
               }

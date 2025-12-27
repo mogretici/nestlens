@@ -6,6 +6,11 @@ sidebar_position: 1
 
 The NestLens dashboard provides a powerful, real-time interface for monitoring and debugging your NestJS application. Built with a modern, responsive design, it offers comprehensive insights into all aspects of your application's behavior.
 
+<div style={{display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '1rem'}}>
+  <img src="/img/screenshots/lightMode_dashboard.png" alt="NestLens Dashboard - Light Mode" style={{flex: 1, maxWidth: '50%', borderRadius: '8px'}} />
+  <img src="/img/screenshots/darkMode_dashboard.png" alt="NestLens Dashboard - Dark Mode" style={{flex: 1, maxWidth: '50%', borderRadius: '8px'}} />
+</div>
+
 ## Key Features
 
 ### Real-Time Monitoring
