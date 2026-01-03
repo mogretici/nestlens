@@ -1,6 +1,6 @@
 {
   "name": "nestlens",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Laravel Telescope-like debugging and monitoring tool for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -66,12 +66,8 @@
   "peerDependencies": {
     "@nestjs/common": "^9.0.0 || ^10.0.0 || ^11.0.0",
     "@nestjs/core": "^9.0.0 || ^10.0.0 || ^11.0.0",
-    "@nestjs/graphql": "^12.0.0 || ^13.0.0",
     "better-sqlite3": "^11.0.0",
-    "graphql": "^16.0.0",
-    "graphql-ws": "^5.0.0",
     "ioredis": "^5.0.0",
-    "mercurius": "^14.0.0 || ^15.0.0",
     "reflect-metadata": "^0.1.13 || ^0.2.0",
     "rxjs": "^7.0.0"
   },
@@ -81,31 +77,14 @@
     },
     "ioredis": {
       "optional": true
-    },
-    "@nestjs/graphql": {
-      "optional": true
-    },
-    "@apollo/server": {
-      "optional": true
-    },
-    "mercurius": {
-      "optional": true
-    },
-    "graphql": {
-      "optional": true
-    },
-    "graphql-ws": {
-      "optional": true
     }
   },
   "dependencies": {
-    "@nestjs/mapped-types": "^2.1.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "uuid": "^11.0.3"
   },
   "optionalDependencies": {
-    "@apollo/server": "^5.2.0",
     "better-sqlite3": "^11.6.0"
   },
   "devDependencies": {

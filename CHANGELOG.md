@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.3.1](https://github.com/mogretici/nestlens/compare/v0.3.0...v0.3.1) (2026-01-03)
+
+
+### Bug Fixes
+
+* run sync-versions before commit via postbump hook ([811527d](https://github.com/mogretici/nestlens/commit/811527d104ce22ce936b95d4edd18ad7cab6b9a3))
+
 ## [0.3.0](https://github.com/mogretici/nestlens/compare/v0.2.0...v0.3.0) (2025-12-27)
 
 
