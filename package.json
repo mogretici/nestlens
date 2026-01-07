@@ -77,6 +77,21 @@
     },
     "ioredis": {
       "optional": true
+    },
+    "@nestjs/apollo": {
+      "optional": true
+    },
+    "@nestjs/mercurius": {
+      "optional": true
+    },
+    "@apollo/server": {
+      "optional": true
+    },
+    "mercurius": {
+      "optional": true
+    },
+    "@nestjs/graphql": {
+      "optional": true
     }
   },
   "dependencies": {
@@ -94,6 +109,9 @@
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/testing": "^11.0.0",
     "@playwright/test": "^1.57.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^10.0.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
@@ -107,6 +125,7 @@
     "reflect-metadata": "^0.2.2",
     "rimraf": "^6.0.1",
     "rxjs": "^7.8.1",
+    "semantic-release": "^25.0.2",
     "standard-version": "^9.5.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.7.2"

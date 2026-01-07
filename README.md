@@ -113,7 +113,14 @@ Visit **http://localhost:3000/nestlens** and start debugging.
 <a href="https://nestlens-docs.vercel.app/docs/watchers/graphql"><img src="https://img.shields.io/badge/GraphQL-e10098?style=flat-square" alt="GraphQL" /></a>
 </p>
 
+<br/>
 
 <p align="center">
-  <sub>Made by <a href="https://github.com/mogretici">Lütfü Öğretici</a> for the NestJS community ❤️ </sub>
+  <a href="https://lutfuogretici.medium.com/nestlens-laravel-telescope-finally-comes-to-nestjs-93f5a2c1f521">
+    <img src="https://img.shields.io/badge/Read_the_Story_on_Medium-000000?style=for-the-badge&logo=medium" alt="Medium Article" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Made by <a href="https://github.com/mogretici">Lütfü Öğretici</a> for the NestJS community</sub>
 </p>

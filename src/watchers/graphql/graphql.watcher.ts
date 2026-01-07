@@ -42,6 +42,14 @@ export const GRAPHQL_WATCHER = Symbol('GRAPHQL_WATCHER');
  * - Plugin registration
  * - Subscription tracking
  */
+/**
+ * Registration mode for GraphQL plugin
+ * - 'pending': Not yet registered
+ * - 'auto': Registered via @Plugin decorator (Apollo) or onApplicationBootstrap (Mercurius)
+ * - 'manual': Registered manually via getPlugin()
+ */
+export type RegistrationMode = 'pending' | 'auto' | 'manual';
+
 @Injectable()
 export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GraphQLWatcher.name);
@@ -49,6 +57,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
   private adapter?: BaseGraphQLAdapter;
   private subscriptionTracker?: SubscriptionTracker;
   private initialized = false;
+  private registrationMode: RegistrationMode = 'pending';
 
   constructor(
     private readonly collector: CollectorService,
@@ -258,6 +267,42 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Mark the plugin as auto-registered.
+   * Called by NestLensApolloPlugin or MercuriusAutoRegistrar when auto-registration succeeds.
+   */
+  markAutoRegistered(): void {
+    if (this.registrationMode === 'pending') {
+      this.registrationMode = 'auto';
+      this.logger.debug('Plugin marked as auto-registered');
+    }
+  }
+
+  /**
+   * Mark the plugin as manually registered.
+   * Called when getPlugin() is accessed for manual integration.
+   */
+  markManuallyRegistered(): void {
+    if (this.registrationMode === 'pending') {
+      this.registrationMode = 'manual';
+      this.logger.debug('Plugin marked as manually registered');
+    }
+  }
+
+  /**
+   * Check if the plugin was auto-registered
+   */
+  isAutoRegistered(): boolean {
+    return this.registrationMode === 'auto';
+  }
+
+  /**
+   * Get the current registration mode
+   */
+  getRegistrationMode(): RegistrationMode {
+    return this.registrationMode;
+  }
+
+  /**
    * Cleanup resources
    */
   destroy(): void {
@@ -280,6 +325,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
   getStats(): {
     initialized: boolean;
     adapterType?: string;
+    registrationMode: RegistrationMode;
     subscriptions?: {
       totalConnections: number;
       totalSubscriptions: number;
@@ -288,6 +334,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     const stats: ReturnType<GraphQLWatcher['getStats']> = {
       initialized: this.initialized,
       adapterType: this.adapter?.type,
+      registrationMode: this.registrationMode,
     };
 
     if (this.subscriptionTracker) {

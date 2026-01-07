@@ -42,6 +42,11 @@ import {
   DumpWatcher,
   GraphQLWatcher,
 } from './watchers';
+import {
+  NestLensApolloPlugin,
+  MercuriusAutoRegistrar,
+  isPackageAvailable,
+} from './watchers/graphql/adapters';
 
 /**
  * Internal module for core services
@@ -51,25 +56,53 @@ import {
 @Module({})
 class NestLensCoreModule {
   static forRoot(config: NestLensConfig): DynamicModule {
+    const providers: Provider[] = [
+      {
+        provide: NESTLENS_CONFIG,
+        useValue: config,
+      },
+      {
+        provide: STORAGE,
+        useFactory: async () => {
+          return createStorage(config.storage ?? {});
+        },
+      },
+      TagService,
+      FamilyHashService,
+      CollectorService,
+      PruningService,
+    ];
+
+    const exports: (Provider | symbol | typeof TagService | typeof FamilyHashService | typeof CollectorService | typeof PruningService | typeof GraphQLWatcher)[] = [
+      NESTLENS_CONFIG,
+      STORAGE,
+      TagService,
+      FamilyHashService,
+      CollectorService,
+      PruningService,
+    ];
+
+    // Add GraphQL Watcher to core module (global) so it's accessible from other modules
+    // This allows moduleRef.get(GraphQLWatcher) to work in GraphQLModule.forRootAsync
+    if (config.watchers?.graphql) {
+      providers.push(GraphQLWatcher);
+      exports.push(GraphQLWatcher);
+
+      // Add auto-registration providers based on detected GraphQL server
+      // These providers enable zero-config GraphQL monitoring
+      if (isPackageAvailable('@nestjs/apollo') || isPackageAvailable('@apollo/server')) {
+        providers.push(NestLensApolloPlugin);
+      }
+
+      if (isPackageAvailable('mercurius') || isPackageAvailable('@nestjs/mercurius')) {
+        providers.push(MercuriusAutoRegistrar);
+      }
+    }
+
     return {
       module: NestLensCoreModule,
-      providers: [
-        {
-          provide: NESTLENS_CONFIG,
-          useValue: config,
-        },
-        {
-          provide: STORAGE,
-          useFactory: async () => {
-            return createStorage(config.storage ?? {});
-          },
-        },
-        TagService,
-        FamilyHashService,
-        CollectorService,
-        PruningService,
-      ],
-      exports: [NESTLENS_CONFIG, STORAGE, TagService, FamilyHashService, CollectorService, PruningService],
+      providers,
+      exports,
     };
   }
 }
@@ -218,16 +251,12 @@ export class NestLensModule implements NestModule, OnModuleInit {
       providers.push(DumpWatcher);
     }
 
-    // Add GraphQL Watcher
-    if (mergedConfig.watchers?.graphql) {
-      providers.push(GraphQLWatcher);
-    }
+    // NOTE: GraphQL Watcher is provided by NestLensCoreModule (global)
+    // so it's accessible via moduleRef.get(GraphQLWatcher) from any module
 
     // Build exports list - only export what's actually provided
     const exports: Provider[] = [NestLensLogger];
-    if (mergedConfig.watchers?.graphql) {
-      exports.push(GraphQLWatcher);
-    }
+    // GraphQLWatcher is already exported from NestLensCoreModule (global)
 
     return {
       module: NestLensModule,

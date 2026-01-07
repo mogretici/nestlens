@@ -17,7 +17,7 @@ import {
   NESTLENS_CONFIG,
   RequestWatcherConfig,
 } from '../nestlens.config';
-import { NestLensRequest, RequestEntry, RequestUser } from '../types';
+import { NestLensRequest, RequestEntry, RequestUser, GraphQLEntry } from '../types';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
