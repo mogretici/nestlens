@@ -35,7 +35,9 @@ export class DashboardController {
 
     const indexPath = join(this.dashboardPath, 'index.html');
     if (existsSync(indexPath)) {
-      res.sendFile(indexPath);
+      res.sendFile('index.html', {
+        root: this.dashboardPath
+      });
     } else {
       res.status(404).json({ error: 'Dashboard not found' });
     }
@@ -45,7 +47,9 @@ export class DashboardController {
   serveAssets(@Param('filename') filename: string, @Res() res: Response) {
     const assetPath = join(this.dashboardPath, 'assets', filename);
     if (existsSync(assetPath)) {
-      res.sendFile(assetPath);
+      res.sendFile(filename, {
+        root: join(this.dashboardPath, 'assets')
+      });
     } else {
       res.status(404).json({ error: 'Asset not found' });
     }
@@ -56,7 +60,9 @@ export class DashboardController {
   serveStaticFile(@Param('filename') filename: string, @Res() res: Response) {
     const filePath = join(this.dashboardPath, `${filename}.svg`);
     if (existsSync(filePath)) {
-      res.sendFile(filePath);
+      res.sendFile(`${filename}.svg`, {
+        root: this.dashboardPath
+      });
     } else {
       res.status(404).json({ error: 'File not found' });
     }
@@ -262,7 +268,9 @@ export class DashboardController {
   private serveIndexHtml(res: Response): void {
     const indexPath = join(this.dashboardPath, 'index.html');
     if (existsSync(indexPath)) {
-      res.sendFile(indexPath);
+      res.sendFile('index.html', {
+        root: this.dashboardPath
+      });
     } else {
       res.status(404).json({ error: 'Dashboard not found' });
     }
