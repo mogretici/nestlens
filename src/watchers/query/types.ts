@@ -34,14 +34,9 @@ export interface PrismaClient {
   $use?: PrismaUseFn;
 }
 
-export type PrismaOnFn = (
-  event: 'query',
-  callback: (event: PrismaQueryEvent) => void,
-) => void;
+export type PrismaOnFn = (event: 'query', callback: (event: PrismaQueryEvent) => void) => void;
 
-export type PrismaUseFn = (
-  middleware: PrismaMiddleware,
-) => void;
+export type PrismaUseFn = (middleware: PrismaMiddleware) => void;
 
 export type PrismaMiddleware = (
   params: PrismaMiddlewareParams,
@@ -78,10 +73,7 @@ export function isTypeORMDataSource(obj: unknown): obj is TypeORMDataSource {
 export function isPrismaClient(obj: unknown): obj is PrismaClient {
   if (!obj || typeof obj !== 'object') return false;
   const candidate = obj as Record<string, unknown>;
-  return (
-    typeof candidate.$on === 'function' ||
-    typeof candidate.$use === 'function'
-  );
+  return typeof candidate.$on === 'function' || typeof candidate.$use === 'function';
 }
 
 // Module loader types
@@ -107,7 +99,7 @@ export interface PrismaModule {
 export function tryRequire<T>(moduleName: string): T | null {
   try {
     // Using require for synchronous optional dependency loading
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     return require(moduleName) as T;
   } catch {
     return null;

@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+dashboard/dist
+dashboard/node_modules
+*.md

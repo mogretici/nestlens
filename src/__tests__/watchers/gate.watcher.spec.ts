@@ -14,13 +14,15 @@ describe('GateWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createGateService = (overrides: Partial<{
-    check: jest.Mock;
-    allows: jest.Mock;
-    denies: jest.Mock;
-    authorize: jest.Mock;
-    can: jest.Mock;
-  }> = {}) => ({
+  const createGateService = (
+    overrides: Partial<{
+      check: jest.Mock;
+      allows: jest.Mock;
+      denies: jest.Mock;
+      authorize: jest.Mock;
+      can: jest.Mock;
+    }> = {},
+  ) => ({
     check: jest.fn().mockResolvedValue(true),
     allows: jest.fn().mockResolvedValue(true),
     denies: jest.fn().mockResolvedValue(false),
@@ -182,9 +184,9 @@ describe('GateWatcher', () => {
     it('should calculate check duration', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve(true), 50)),
-        ),
+        check: jest
+          .fn()
+          .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(true), 50))),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -279,8 +281,9 @@ describe('GateWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.check('ErrorPolicy', 'action'))
-        .rejects.toThrow('Policy evaluation failed');
+      await expect(service.check('ErrorPolicy', 'action')).rejects.toThrow(
+        'Policy evaluation failed',
+      );
 
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'gate',
@@ -300,8 +303,7 @@ describe('GateWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.check('Policy', 'action'))
-        .rejects.toThrow('Auth error');
+      await expect(service.check('Policy', 'action')).rejects.toThrow('Auth error');
     });
 
     it('should handle non-Error objects', async () => {

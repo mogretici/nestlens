@@ -77,10 +77,7 @@ export interface CursorPaginatedApiResponse<T> extends ApiResponse<T[]> {
 /**
  * Helper to create a success response.
  */
-export function createSuccessResponse<T>(
-  data: T,
-  meta?: Partial<ResponseMeta>,
-): ApiResponse<T> {
+export function createSuccessResponse<T>(data: T, meta?: Partial<ResponseMeta>): ApiResponse<T> {
   return {
     success: true,
     data,

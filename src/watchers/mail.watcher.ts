@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  MailWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,9 +26,7 @@ export class MailWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.mail;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -44,7 +38,7 @@ export class MailWatcher implements OnModuleInit {
     if (!this.mailerService) {
       this.logger.debug(
         'MailWatcher: No mailer service provided. ' +
-        'To enable mail tracking, provide your mailer service with NESTLENS_MAILER_SERVICE token.',
+          'To enable mail tracking, provide your mailer service with NESTLENS_MAILER_SERVICE token.',
       );
       return;
     }
@@ -134,7 +128,6 @@ export class MailWatcher implements OnModuleInit {
     this.logger.log('Mail interceptors installed on custom mailer');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private collectEntry(
     mailOptions: any,
     status: 'sent' | 'failed',

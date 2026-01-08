@@ -9,12 +9,7 @@
  * @see https://docs.nestjs.com/graphql/plugins
  */
 
-import {
-  Injectable,
-  Optional,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Optional, Logger, OnModuleInit } from '@nestjs/common';
 import { GraphQLWatcher } from '../graphql.watcher';
 
 /**
@@ -86,9 +81,7 @@ export class NestLensApolloPlugin implements OnModuleInit {
   } | null = null;
   private initialized = false;
 
-  constructor(
-    @Optional() private readonly graphqlWatcher?: GraphQLWatcher,
-  ) {}
+  constructor(@Optional() private readonly graphqlWatcher?: GraphQLWatcher) {}
 
   /**
    * Initialize the plugin delegation on module init.

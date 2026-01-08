@@ -24,9 +24,7 @@ import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
  * Apollo Server Plugin interface (minimal type for our usage)
  */
 interface ApolloServerPlugin {
-  requestDidStart?: (
-    requestContext: ApolloRequestContext,
-  ) => Promise<ApolloRequestListener | void>;
+  requestDidStart?: (requestContext: ApolloRequestContext) => Promise<ApolloRequestListener | void>;
 }
 
 interface ApolloRequestContext {
@@ -45,13 +43,10 @@ interface ApolloRequestListener {
   parsingDidStart?: () => Promise<void | (() => void)>;
   validationDidStart?: () => Promise<void | (() => void)>;
   didResolveOperation?: (ctx: { operationName?: string }) => Promise<void>;
-  executionDidStart?: () => Promise<
-    | void
-    | {
-        willResolveField?: (params: ApolloFieldResolverParams) => (() => void) | void;
-        executionDidEnd?: () => Promise<void>;
-      }
-  >;
+  executionDidStart?: () => Promise<void | {
+    willResolveField?: (params: ApolloFieldResolverParams) => (() => void) | void;
+    executionDidEnd?: () => Promise<void>;
+  }>;
   willSendResponse?: (ctx: ApolloResponseContext) => Promise<void>;
   didEncounterErrors?: (ctx: { errors: readonly GraphQLError[] }) => Promise<void>;
 }
@@ -140,8 +135,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
         }
 
         // Extract operation info
-        const operationName =
-          request.operationName || extractOperationName(query);
+        const operationName = request.operationName || extractOperationName(query);
         const operationType = extractOperationType(query);
 
         // Check if should ignore
@@ -268,14 +262,12 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
                 ? adapter.nsToMs(validationEndTime - validationStartTime)
                 : undefined;
 
-            const executionDuration =
-              executionStartTime
-                ? adapter.nsToMs(endTime - executionStartTime)
-                : undefined;
+            const executionDuration = executionStartTime
+              ? adapter.nsToMs(endTime - executionStartTime)
+              : undefined;
 
             // Get response errors
-            const responseErrors =
-              ctx.response.body?.singleResult?.errors || errors;
+            const responseErrors = ctx.response.body?.singleResult?.errors || errors;
 
             // Calculate depth
             const depthResult = calculateDepth(query);
@@ -285,16 +277,12 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
 
             // Sanitize variables
             const sanitizedVariables = adapter.config.captureVariables
-              ? sanitizeVariables(
-                  request.variables,
-                  adapter.config.sensitiveVariables,
-                )
+              ? sanitizeVariables(request.variables, adapter.config.sensitiveVariables)
               : undefined;
 
             // Sanitize response
             const responseData =
-              adapter.config.captureResponse &&
-              ctx.response.body?.singleResult?.data
+              adapter.config.captureResponse && ctx.response.body?.singleResult?.data
                 ? sanitizeResponse(
                     ctx.response.body.singleResult.data,
                     adapter.config.sensitiveVariables,
@@ -304,9 +292,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
 
             // Get field traces
             const fieldTraces =
-              fieldTracer && fieldTracer.isActive()
-                ? fieldTracer.getTraces()
-                : undefined;
+              fieldTracer && fieldTracer.isActive() ? fieldTracer.getTraces() : undefined;
 
             // Determine status code
             const statusCode =
@@ -329,9 +315,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
               errors: responseErrors?.map((e) => ({
                 message: e.message,
                 path: e.path as (string | number)[] | undefined,
-                locations: e.locations as
-                  | { line: number; column: number }[]
-                  | undefined,
+                locations: e.locations as { line: number; column: number }[] | undefined,
                 extensions: e.extensions,
               })),
               responseData,

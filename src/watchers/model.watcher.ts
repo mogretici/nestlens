@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  ModelWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -40,7 +36,10 @@ const SENSITIVE_FIELDS = [
 export class ModelWatcher implements OnModuleInit {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
-  private operationTracking = new Map<string, { startTime: number; entity: string; action: string }>();
+  private operationTracking = new Map<
+    string,
+    { startTime: number; entity: string; action: string }
+  >();
 
   constructor(
     private readonly collector: CollectorService,
@@ -52,9 +51,7 @@ export class ModelWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -66,8 +63,8 @@ export class ModelWatcher implements OnModuleInit {
     if (!this.entitySubscriber) {
       this.logger.debug(
         'ModelWatcher: No entity subscriber found. ' +
-        'To enable model tracking for TypeORM, inject an EntitySubscriber with the NESTLENS_MODEL_SUBSCRIBER token. ' +
-        'For Prisma, use the setupPrismaClient() method manually.',
+          'To enable model tracking for TypeORM, inject an EntitySubscriber with the NESTLENS_MODEL_SUBSCRIBER token. ' +
+          'For Prisma, use the setupPrismaClient() method manually.',
       );
       return;
     }
@@ -83,9 +80,7 @@ export class ModelWatcher implements OnModuleInit {
 
     // Track entity loading (find operations)
     if (typeof this.entitySubscriber.afterLoad === 'function') {
-      const originalAfterLoad = this.entitySubscriber.afterLoad.bind(
-        this.entitySubscriber,
-      );
+      const originalAfterLoad = this.entitySubscriber.afterLoad.bind(this.entitySubscriber);
       this.entitySubscriber.afterLoad = (entity: unknown, event: any) => {
         this.handleAfterLoad(entity, event);
         if (originalAfterLoad) {
@@ -96,9 +91,7 @@ export class ModelWatcher implements OnModuleInit {
 
     // Track entity insertion (create operations)
     if (typeof this.entitySubscriber.beforeInsert === 'function') {
-      const originalBeforeInsert = this.entitySubscriber.beforeInsert.bind(
-        this.entitySubscriber,
-      );
+      const originalBeforeInsert = this.entitySubscriber.beforeInsert.bind(this.entitySubscriber);
       this.entitySubscriber.beforeInsert = (event: any) => {
         this.handleBeforeInsert(event);
         if (originalBeforeInsert) {
@@ -108,9 +101,7 @@ export class ModelWatcher implements OnModuleInit {
     }
 
     if (typeof this.entitySubscriber.afterInsert === 'function') {
-      const originalAfterInsert = this.entitySubscriber.afterInsert.bind(
-        this.entitySubscriber,
-      );
+      const originalAfterInsert = this.entitySubscriber.afterInsert.bind(this.entitySubscriber);
       this.entitySubscriber.afterInsert = (event: any) => {
         this.handleAfterInsert(event);
         if (originalAfterInsert) {
@@ -121,9 +112,7 @@ export class ModelWatcher implements OnModuleInit {
 
     // Track entity updates
     if (typeof this.entitySubscriber.beforeUpdate === 'function') {
-      const originalBeforeUpdate = this.entitySubscriber.beforeUpdate.bind(
-        this.entitySubscriber,
-      );
+      const originalBeforeUpdate = this.entitySubscriber.beforeUpdate.bind(this.entitySubscriber);
       this.entitySubscriber.beforeUpdate = (event: any) => {
         this.handleBeforeUpdate(event);
         if (originalBeforeUpdate) {
@@ -133,9 +122,7 @@ export class ModelWatcher implements OnModuleInit {
     }
 
     if (typeof this.entitySubscriber.afterUpdate === 'function') {
-      const originalAfterUpdate = this.entitySubscriber.afterUpdate.bind(
-        this.entitySubscriber,
-      );
+      const originalAfterUpdate = this.entitySubscriber.afterUpdate.bind(this.entitySubscriber);
       this.entitySubscriber.afterUpdate = (event: any) => {
         this.handleAfterUpdate(event);
         if (originalAfterUpdate) {
@@ -146,9 +133,7 @@ export class ModelWatcher implements OnModuleInit {
 
     // Track entity deletion
     if (typeof this.entitySubscriber.beforeRemove === 'function') {
-      const originalBeforeRemove = this.entitySubscriber.beforeRemove.bind(
-        this.entitySubscriber,
-      );
+      const originalBeforeRemove = this.entitySubscriber.beforeRemove.bind(this.entitySubscriber);
       this.entitySubscriber.beforeRemove = (event: any) => {
         this.handleBeforeRemove(event);
         if (originalBeforeRemove) {
@@ -158,9 +143,7 @@ export class ModelWatcher implements OnModuleInit {
     }
 
     if (typeof this.entitySubscriber.afterRemove === 'function') {
-      const originalAfterRemove = this.entitySubscriber.afterRemove.bind(
-        this.entitySubscriber,
-      );
+      const originalAfterRemove = this.entitySubscriber.afterRemove.bind(this.entitySubscriber);
       this.entitySubscriber.afterRemove = (event: any) => {
         this.handleAfterRemove(event);
         if (originalAfterRemove) {
@@ -177,7 +160,7 @@ export class ModelWatcher implements OnModuleInit {
    * Call this manually with your Prisma client instance.
    */
   setupPrismaClient(prismaClient: any): void {
-    if (!prismaClient || !prismaClient.$use) {
+    if (!prismaClient?.$use) {
       this.logger.warn('Invalid Prisma client provided');
       return;
     }
@@ -259,8 +242,8 @@ export class ModelWatcher implements OnModuleInit {
 
   private handleAfterInsert(event: any): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find(
-      (key) => key.startsWith(`insert-${entityName}`),
+    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
+      key.startsWith(`insert-${entityName}`),
     );
 
     if (!trackingKey) return;
@@ -299,8 +282,8 @@ export class ModelWatcher implements OnModuleInit {
 
   private handleAfterUpdate(event: any): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find(
-      (key) => key.startsWith(`update-${entityName}`),
+    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
+      key.startsWith(`update-${entityName}`),
     );
 
     if (!trackingKey) return;
@@ -339,8 +322,8 @@ export class ModelWatcher implements OnModuleInit {
 
   private handleAfterRemove(event: any): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find(
-      (key) => key.startsWith(`remove-${entityName}`),
+    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
+      key.startsWith(`remove-${entityName}`),
     );
 
     if (!trackingKey) return;
@@ -356,13 +339,7 @@ export class ModelWatcher implements OnModuleInit {
       return;
     }
 
-    this.collectEntry(
-      'delete',
-      entityName,
-      'typeorm',
-      duration,
-      1,
-    );
+    this.collectEntry('delete', entityName, 'typeorm', duration, 1);
   }
 
   private collectEntry(

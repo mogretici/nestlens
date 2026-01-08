@@ -11,10 +11,7 @@ import { ResolvedGraphQLConfig, OperationContext } from '../types';
 /**
  * Callback for when an operation is collected
  */
-export type OnOperationCollected = (
-  payload: GraphQLPayload,
-  requestId: string,
-) => void;
+export type OnOperationCollected = (payload: GraphQLPayload, requestId: string) => void;
 
 /**
  * Abstract base class for GraphQL adapters
@@ -69,10 +66,7 @@ export abstract class BaseGraphQLAdapter {
   /**
    * Check if an operation should be ignored
    */
-  protected shouldIgnoreOperation(
-    operationName?: string,
-    query?: string,
-  ): boolean {
+  protected shouldIgnoreOperation(operationName?: string, query?: string): boolean {
     // Check introspection
     if (this.config.ignoreIntrospection && query) {
       const lowerQuery = query.toLowerCase();
@@ -86,10 +80,7 @@ export abstract class BaseGraphQLAdapter {
     }
 
     // Check ignored operations
-    if (
-      operationName &&
-      this.config.ignoreOperations.includes(operationName)
-    ) {
+    if (operationName && this.config.ignoreOperations.includes(operationName)) {
       return true;
     }
 
@@ -99,10 +90,7 @@ export abstract class BaseGraphQLAdapter {
   /**
    * Collect a GraphQL entry
    */
-  protected async collectEntry(
-    payload: GraphQLPayload,
-    requestId: string,
-  ): Promise<void> {
+  protected async collectEntry(payload: GraphQLPayload, requestId: string): Promise<void> {
     // Use the collector to store the entry
     await this.collector.collect('graphql', payload, requestId);
 
@@ -115,10 +103,7 @@ export abstract class BaseGraphQLAdapter {
   /**
    * Collect a GraphQL entry immediately (bypasses buffering)
    */
-  protected async collectEntryImmediate(
-    payload: GraphQLPayload,
-    requestId: string,
-  ): Promise<void> {
+  protected async collectEntryImmediate(payload: GraphQLPayload, requestId: string): Promise<void> {
     // Use immediate collection for important entries
     await this.collector.collectImmediate('graphql', payload, requestId);
 
@@ -207,9 +192,7 @@ export abstract class BaseGraphQLAdapter {
 
     return {
       id: id as string | number,
-      name: (user.name ?? user.username ?? user.displayName) as
-        | string
-        | undefined,
+      name: (user.name ?? user.username ?? user.displayName) as string | undefined,
       email: (user.email ?? user.emailAddress) as string | undefined,
     };
   }

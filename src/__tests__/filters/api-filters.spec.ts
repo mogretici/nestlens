@@ -68,7 +68,9 @@ describe('API Filter Parsing', () => {
       );
 
       expect(result.data).toHaveLength(2);
-      expect(result.data.every((e) => ['error', 'warn'].includes((e.payload as any).level))).toBe(true);
+      expect(result.data.every((e) => ['error', 'warn'].includes((e.payload as any).level))).toBe(
+        true,
+      );
     });
 
     it('parses comma-separated statuses correctly', async () => {
@@ -154,21 +156,47 @@ describe('API Filter Parsing', () => {
   describe('All Filter Parameters Defined', () => {
     // Test that the CursorQueryDto includes all expected filter properties
     const expectedFilters = [
-      'levels', 'contexts', 'queryTypes', 'sources', 'slow',
-      'names', 'methods', 'paths', 'resolved', 'statuses',
-      'hostnames', 'controllers', 'ips',
+      'levels',
+      'contexts',
+      'queryTypes',
+      'sources',
+      'slow',
+      'names',
+      'methods',
+      'paths',
+      'resolved',
+      'statuses',
+      'hostnames',
+      'controllers',
+      'ips',
       'eventNames',
-      'scheduleStatuses', 'scheduleNames', 'jobStatuses', 'jobNames', 'queues',
-      'cacheOperations', 'mailStatuses',
-      'redisStatuses', 'redisCommands',
-      'modelActions', 'entities', 'modelSources',
-      'notificationTypes', 'notificationStatuses',
-      'viewFormats', 'viewStatuses',
-      'commandStatuses', 'commandNames',
-      'gateNames', 'gateResults',
-      'batchStatuses', 'batchOperations',
-      'dumpStatuses', 'dumpOperations', 'dumpFormats',
-      'tags', 'search',
+      'scheduleStatuses',
+      'scheduleNames',
+      'jobStatuses',
+      'jobNames',
+      'queues',
+      'cacheOperations',
+      'mailStatuses',
+      'redisStatuses',
+      'redisCommands',
+      'modelActions',
+      'entities',
+      'modelSources',
+      'notificationTypes',
+      'notificationStatuses',
+      'viewFormats',
+      'viewStatuses',
+      'commandStatuses',
+      'commandNames',
+      'gateNames',
+      'gateResults',
+      'batchStatuses',
+      'batchOperations',
+      'dumpStatuses',
+      'dumpOperations',
+      'dumpFormats',
+      'tags',
+      'search',
     ];
 
     it('has all expected filter parameters in CursorQueryDto', () => {
@@ -177,8 +205,11 @@ describe('API Filter Parsing', () => {
 
       // All filter properties should be definable on the DTO
       for (const filter of expectedFilters) {
-        expect(filter in dto || Object.getOwnPropertyDescriptor(CursorQueryDto.prototype, filter) !== undefined ||
-               Reflect.getMetadataKeys(dto, filter).length >= 0).toBeTruthy();
+        expect(
+          filter in dto ||
+            Object.getOwnPropertyDescriptor(CursorQueryDto.prototype, filter) !== undefined ||
+            Reflect.getMetadataKeys(dto, filter).length >= 0,
+        ).toBeTruthy();
       }
 
       expect(expectedFilters).toHaveLength(41);

@@ -16,10 +16,7 @@ export class ConnectionStore {
   private maxConnections: number;
   private maxSubscriptionsPerConnection: number;
 
-  constructor(
-    maxConnections: number = 1000,
-    maxSubscriptionsPerConnection: number = 100,
-  ) {
+  constructor(maxConnections: number = 1000, maxSubscriptionsPerConnection: number = 100) {
     this.maxConnections = maxConnections;
     this.maxSubscriptionsPerConnection = maxSubscriptionsPerConnection;
   }
@@ -27,11 +24,7 @@ export class ConnectionStore {
   /**
    * Add a new connection
    */
-  addConnection(
-    connectionId: string,
-    ip?: string,
-    userAgent?: string,
-  ): SubscriptionConnection {
+  addConnection(connectionId: string, ip?: string, userAgent?: string): SubscriptionConnection {
     // Evict old connections if at limit
     if (this.connections.size >= this.maxConnections) {
       this.evictOldestConnection();
@@ -84,9 +77,7 @@ export class ConnectionStore {
     }
 
     // Check subscription limit
-    if (
-      connection.activeSubscriptions.size >= this.maxSubscriptionsPerConnection
-    ) {
+    if (connection.activeSubscriptions.size >= this.maxSubscriptionsPerConnection) {
       return undefined;
     }
 
@@ -107,10 +98,7 @@ export class ConnectionStore {
   /**
    * Remove a subscription from a connection
    */
-  removeSubscription(
-    connectionId: string,
-    subscriptionId: string,
-  ): ActiveSubscription | undefined {
+  removeSubscription(connectionId: string, subscriptionId: string): ActiveSubscription | undefined {
     const connection = this.connections.get(connectionId);
     if (!connection) {
       return undefined;
@@ -126,10 +114,7 @@ export class ConnectionStore {
   /**
    * Get a subscription by ID
    */
-  getSubscription(
-    connectionId: string,
-    subscriptionId: string,
-  ): ActiveSubscription | undefined {
+  getSubscription(connectionId: string, subscriptionId: string): ActiveSubscription | undefined {
     const connection = this.connections.get(connectionId);
     return connection?.activeSubscriptions.get(subscriptionId);
   }
@@ -137,10 +122,7 @@ export class ConnectionStore {
   /**
    * Increment message count for a subscription
    */
-  incrementMessageCount(
-    connectionId: string,
-    subscriptionId: string,
-  ): number | undefined {
+  incrementMessageCount(connectionId: string, subscriptionId: string): number | undefined {
     const subscription = this.getSubscription(connectionId, subscriptionId);
     if (subscription) {
       subscription.messageCount++;
@@ -215,10 +197,12 @@ export class ConnectionStore {
   /**
    * Find subscription by request ID
    */
-  findByRequestId(requestId: string): {
-    connection: SubscriptionConnection;
-    subscription: ActiveSubscription;
-  } | undefined {
+  findByRequestId(requestId: string):
+    | {
+        connection: SubscriptionConnection;
+        subscription: ActiveSubscription;
+      }
+    | undefined {
     for (const connection of this.connections.values()) {
       for (const subscription of connection.activeSubscriptions.values()) {
         if (subscription.requestId === requestId) {

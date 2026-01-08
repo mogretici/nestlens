@@ -362,12 +362,7 @@ export class CursorQueryDto {
   /**
    * Keys that are pagination params (not filters)
    */
-  private static readonly PAGINATION_KEYS = [
-    'type',
-    'limit',
-    'beforeSequence',
-    'afterSequence',
-  ];
+  private static readonly PAGINATION_KEYS = ['type', 'limit', 'beforeSequence', 'afterSequence'];
 
   /**
    * Convert DTO to the filters object expected by storage

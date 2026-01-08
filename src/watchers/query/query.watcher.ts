@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CollectorService } from '../../core/collector.service';
-import {
-  NestLensConfig,
-  NESTLENS_CONFIG,
-  QueryWatcherConfig,
-} from '../../nestlens.config';
+import { NestLensConfig, NESTLENS_CONFIG, QueryWatcherConfig } from '../../nestlens.config';
 import { QueryEntry } from '../../types';
 import {
   isModuleAvailable,
@@ -155,20 +151,25 @@ export class QueryWatcher implements OnModuleInit {
   private attachPrismaMiddleware(client: PrismaClient): void {
     if (!client.$use) return;
 
-    client.$use(async (params: PrismaMiddlewareParams, next: (params: PrismaMiddlewareParams) => Promise<unknown>) => {
-      const start = Date.now();
-      const result = await next(params);
-      const duration = Date.now() - start;
+    client.$use(
+      async (
+        params: PrismaMiddlewareParams,
+        next: (params: PrismaMiddlewareParams) => Promise<unknown>,
+      ) => {
+        const start = Date.now();
+        const result = await next(params);
+        const duration = Date.now() - start;
 
-      this.handleQuery({
-        query: `${params.model ?? 'unknown'}.${params.action}`,
-        parameters: params.args ? [params.args] : undefined,
-        duration,
-        source: 'prisma',
-      });
+        this.handleQuery({
+          query: `${params.model ?? 'unknown'}.${params.action}`,
+          parameters: params.args ? [params.args] : undefined,
+          duration,
+          source: 'prisma',
+        });
 
-      return result;
-    });
+        return result;
+      },
+    );
   }
 
   private handleQuery(data: QueryData): void {

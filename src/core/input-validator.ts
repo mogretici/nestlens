@@ -33,13 +33,10 @@ export class InputValidator {
   private readonly maxTagsPerEntry: number;
 
   constructor(config?: InputValidatorConfig) {
-    this.maxFilterArrayLength =
-      config?.maxFilterArrayLength ?? DEFAULTS.MAX_FILTER_ARRAY_LENGTH;
-    this.maxSearchLength =
-      config?.maxSearchLength ?? DEFAULTS.MAX_SEARCH_LENGTH;
+    this.maxFilterArrayLength = config?.maxFilterArrayLength ?? DEFAULTS.MAX_FILTER_ARRAY_LENGTH;
+    this.maxSearchLength = config?.maxSearchLength ?? DEFAULTS.MAX_SEARCH_LENGTH;
     this.maxTagLength = config?.maxTagLength ?? DEFAULTS.MAX_TAG_LENGTH;
-    this.maxTagsPerEntry =
-      config?.maxTagsPerEntry ?? DEFAULTS.MAX_TAGS_PER_ENTRY;
+    this.maxTagsPerEntry = config?.maxTagsPerEntry ?? DEFAULTS.MAX_TAGS_PER_ENTRY;
   }
 
   /**
@@ -99,9 +96,7 @@ export class InputValidator {
     }
 
     if (trimmed.length > this.maxTagLength) {
-      throw new Error(
-        `Tag name cannot exceed ${this.maxTagLength} characters`,
-      );
+      throw new Error(`Tag name cannot exceed ${this.maxTagLength} characters`);
     }
 
     // Allow alphanumeric, hyphens, underscores, and colons
@@ -138,9 +133,7 @@ export class InputValidator {
     }
 
     if (validated.length > this.maxTagsPerEntry) {
-      console.warn(
-        `Tags truncated from ${validated.length} to ${this.maxTagsPerEntry}`,
-      );
+      console.warn(`Tags truncated from ${validated.length} to ${this.maxTagsPerEntry}`);
       return validated.slice(0, this.maxTagsPerEntry);
     }
 

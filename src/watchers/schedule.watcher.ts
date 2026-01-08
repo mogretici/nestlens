@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  ScheduleWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ScheduleEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,9 +26,7 @@ export class ScheduleWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.schedule;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -44,7 +38,7 @@ export class ScheduleWatcher implements OnModuleInit {
     if (!this.schedulerRegistry) {
       this.logger.debug(
         'ScheduleWatcher: No scheduler registry found. ' +
-        'To enable schedule tracking, install and configure @nestjs/schedule.',
+          'To enable schedule tracking, install and configure @nestjs/schedule.',
       );
       return;
     }
@@ -100,13 +94,7 @@ export class ScheduleWatcher implements OnModuleInit {
       this.jobTracking.set(jobKey, startTime);
 
       // Track job started
-      this.collectEntry(
-        name,
-        'started',
-        0,
-        undefined,
-        this.getCronPattern(job),
-      );
+      this.collectEntry(name, 'started', 0, undefined, this.getCronPattern(job));
 
       try {
         await originalFireOnTick();

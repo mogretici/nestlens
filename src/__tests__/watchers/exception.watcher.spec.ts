@@ -18,15 +18,16 @@ describe('ExceptionWatcher', () => {
   let mockResponse: jest.Mocked<Response>;
   let mockConfig: NestLensConfig;
 
-  const createMockRequest = (overrides: Partial<NestLensRequest> = {}): NestLensRequest => ({
-    method: 'POST',
-    url: '/api/users',
-    originalUrl: '/api/users',
-    path: '/api/users',
-    body: { name: 'Test User' },
-    nestlensRequestId: 'req-123',
-    ...overrides,
-  } as NestLensRequest);
+  const createMockRequest = (overrides: Partial<NestLensRequest> = {}): NestLensRequest =>
+    ({
+      method: 'POST',
+      url: '/api/users',
+      originalUrl: '/api/users',
+      path: '/api/users',
+      body: { name: 'Test User' },
+      nestlensRequestId: 'req-123',
+      ...overrides,
+    }) as NestLensRequest;
 
   const createMockResponse = (): jest.Mocked<Response> => {
     const res = {
@@ -40,13 +41,14 @@ describe('ExceptionWatcher', () => {
     request: NestLensRequest,
     response: Response,
     type: string = 'http',
-  ): ArgumentsHost => ({
-    switchToHttp: () => ({
-      getRequest: () => request,
-      getResponse: () => response,
-    }),
-    getType: () => type,
-  } as unknown as ArgumentsHost);
+  ): ArgumentsHost =>
+    ({
+      switchToHttp: () => ({
+        getRequest: () => request,
+        getResponse: () => response,
+      }),
+      getType: () => type,
+    }) as unknown as ArgumentsHost;
 
   const createWatcher = async (config: NestLensConfig): Promise<ExceptionWatcher> => {
     const module: TestingModule = await Test.createTestingModule({
@@ -130,7 +132,9 @@ describe('ExceptionWatcher', () => {
 
     it('should handle object config with enabled property', async () => {
       // Arrange
-      mockConfig.watchers = { exception: { enabled: true, ignoreExceptions: ['NotFoundException'] } };
+      mockConfig.watchers = {
+        exception: { enabled: true, ignoreExceptions: ['NotFoundException'] },
+      };
       watcher = await createWatcher(mockConfig);
       const request = createMockRequest();
       const host = createMockHost(request, mockResponse);
@@ -300,7 +304,10 @@ describe('ExceptionWatcher', () => {
     it('should skip ignored exceptions by name', async () => {
       // Arrange
       mockConfig.watchers = {
-        exception: { enabled: true, ignoreExceptions: ['NotFoundException', 'UnauthorizedException'] }
+        exception: {
+          enabled: true,
+          ignoreExceptions: ['NotFoundException', 'UnauthorizedException'],
+        },
       };
       watcher = await createWatcher(mockConfig);
 
@@ -325,7 +332,7 @@ describe('ExceptionWatcher', () => {
     it('should collect non-ignored exceptions', async () => {
       // Arrange
       mockConfig.watchers = {
-        exception: { enabled: true, ignoreExceptions: ['NotFoundException'] }
+        exception: { enabled: true, ignoreExceptions: ['NotFoundException'] },
       };
       watcher = await createWatcher(mockConfig);
 
@@ -381,7 +388,10 @@ describe('ExceptionWatcher', () => {
 
       // Assert
       expect(mockResponse.status).toHaveBeenCalledWith(400);
-      expect(mockResponse.json).toHaveBeenCalledWith({ message: 'Bad Request', errors: ['Invalid email'] });
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        message: 'Bad Request',
+        errors: ['Invalid email'],
+      });
     });
 
     it('should respond with 500 for non-HttpException', async () => {

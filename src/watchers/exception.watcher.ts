@@ -29,9 +29,7 @@ export class ExceptionWatcher implements ExceptionFilter {
   ) {
     const watcherConfig = nestlensConfig.watchers?.exception;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   catch(exception: Error, host: ArgumentsHost): void {
@@ -94,8 +92,7 @@ export class ExceptionWatcher implements ExceptionFilter {
   }
 
   private throwException(exception: Error, response: Response): void {
-    const status =
-      exception instanceof HttpException ? exception.getStatus() : 500;
+    const status = exception instanceof HttpException ? exception.getStatus() : 500;
 
     const errorResponse =
       exception instanceof HttpException

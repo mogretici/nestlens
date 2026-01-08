@@ -14,12 +14,14 @@ describe('BatchWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createBatchProcessor = (overrides: Partial<{
-    process: jest.Mock;
-    processBatch: jest.Mock;
-    bulk: jest.Mock;
-    bulkProcess: jest.Mock;
-  }> = {}) => ({
+  const createBatchProcessor = (
+    overrides: Partial<{
+      process: jest.Mock;
+      processBatch: jest.Mock;
+      bulk: jest.Mock;
+      bulkProcess: jest.Mock;
+    }> = {},
+  ) => ({
     process: jest.fn().mockResolvedValue({ processed: 10, failed: 0 }),
     processBatch: jest.fn().mockResolvedValue({ processed: 5, failed: 1 }),
     bulk: jest.fn().mockResolvedValue({ successful: 100 }),
@@ -187,9 +189,11 @@ describe('BatchWatcher', () => {
     it('should calculate batch duration', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve({ processed: 3 }), 50)),
-        ),
+        process: jest
+          .fn()
+          .mockImplementation(
+            () => new Promise((resolve) => setTimeout(() => resolve({ processed: 3 }), 50)),
+          ),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -294,8 +298,9 @@ describe('BatchWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(processor.process('failingBatch', [1, 2, 3]))
-        .rejects.toThrow('Batch processing failed');
+      await expect(processor.process('failingBatch', [1, 2, 3])).rejects.toThrow(
+        'Batch processing failed',
+      );
 
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'batch',
@@ -319,8 +324,7 @@ describe('BatchWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(processor.process('errorBatch', [1]))
-        .rejects.toThrow('Critical error');
+      await expect(processor.process('errorBatch', [1])).rejects.toThrow('Critical error');
     });
 
     it('should handle non-Error objects', async () => {

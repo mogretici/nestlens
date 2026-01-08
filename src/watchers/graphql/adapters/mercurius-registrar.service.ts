@@ -10,12 +10,7 @@
  * @see https://mercurius.dev/#/docs/hooks
  */
 
-import {
-  Injectable,
-  OnApplicationBootstrap,
-  Logger,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Logger, Optional } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { GraphQLWatcher } from '../graphql.watcher';
 
@@ -102,8 +97,8 @@ export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
     if (!fastify) {
       this.logger.warn(
         'Could not access Fastify instance. ' +
-        'Mercurius auto-registration requires Fastify adapter. ' +
-        'See: https://github.com/mogretici/nestlens#graphql-manual-setup'
+          'Mercurius auto-registration requires Fastify adapter. ' +
+          'See: https://github.com/mogretici/nestlens#graphql-manual-setup',
       );
       return;
     }
@@ -114,7 +109,7 @@ export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
     } catch (error) {
       this.logger.warn(
         `Fastify ready() failed: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
-        'Skipping Mercurius auto-registration.'
+          'Skipping Mercurius auto-registration.',
       );
       return;
     }
@@ -123,8 +118,8 @@ export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
     if (!fastify.graphql) {
       this.logger.warn(
         'Mercurius GraphQL not found on Fastify instance. ' +
-        'Ensure Mercurius is properly configured. ' +
-        'See: https://github.com/mogretici/nestlens#graphql-manual-setup'
+          'Ensure Mercurius is properly configured. ' +
+          'See: https://github.com/mogretici/nestlens#graphql-manual-setup',
       );
       return;
     }
@@ -159,7 +154,7 @@ export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
         } catch (error) {
           this.logger.warn(
             `Failed to register Mercurius hook '${hookType}': ` +
-            `${error instanceof Error ? error.message : 'Unknown error'}`
+              `${error instanceof Error ? error.message : 'Unknown error'}`,
           );
         }
       }

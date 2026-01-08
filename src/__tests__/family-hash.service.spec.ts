@@ -17,7 +17,8 @@ describe('FamilyHashService', () => {
           payload: {
             name: 'TypeError',
             message: 'Cannot read property "foo" of undefined',
-            stack: 'TypeError: Cannot read property "foo" of undefined\n    at Function.getName (src/services/user.service.ts:42:15)',
+            stack:
+              'TypeError: Cannot read property "foo" of undefined\n    at Function.getName (src/services/user.service.ts:42:15)',
           },
         };
 
@@ -34,7 +35,8 @@ describe('FamilyHashService', () => {
           payload: {
             name: 'TypeError',
             message: 'Cannot read property "bar" of undefined',
-            stack: 'TypeError: Cannot read property "bar" of undefined\n    at Function.getName (src/services/user.service.ts:42:15)',
+            stack:
+              'TypeError: Cannot read property "bar" of undefined\n    at Function.getName (src/services/user.service.ts:42:15)',
           },
         };
 
@@ -44,7 +46,8 @@ describe('FamilyHashService', () => {
           payload: {
             name: 'TypeError',
             message: 'Cannot read property "baz" of undefined',
-            stack: 'TypeError: Cannot read property "baz" of undefined\n    at Function.getName (src/services/user.service.ts:42:15)',
+            stack:
+              'TypeError: Cannot read property "baz" of undefined\n    at Function.getName (src/services/user.service.ts:42:15)',
           },
         };
 

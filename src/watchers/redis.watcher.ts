@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  RedisWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,9 +44,7 @@ export class RedisWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.redis;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -62,7 +56,7 @@ export class RedisWatcher implements OnModuleInit {
     if (!this.redisClient) {
       this.logger.debug(
         'RedisWatcher: No Redis client found. ' +
-        'To enable Redis tracking, inject your Redis client with the NESTLENS_REDIS_CLIENT token.',
+          'To enable Redis tracking, inject your Redis client with the NESTLENS_REDIS_CLIENT token.',
       );
       return;
     }
@@ -106,24 +100,15 @@ export class RedisWatcher implements OnModuleInit {
 
     for (const command of commandsToTrack) {
       // Skip if command doesn't exist or should be ignored
-      if (
-        !this.redisClient[command] ||
-        this.config.ignoreCommands?.includes(command)
-      ) {
+      if (!this.redisClient[command] || this.config.ignoreCommands?.includes(command)) {
         continue;
       }
 
       // Store original method
-      this.originalMethods.set(
-        command,
-        this.redisClient[command].bind(this.redisClient),
-      );
+      this.originalMethods.set(command, this.redisClient[command].bind(this.redisClient));
 
       // Wrap the command
-      this.redisClient[command] = this.wrapCommand(
-        command,
-        this.originalMethods.get(command)!,
-      );
+      this.redisClient[command] = this.wrapCommand(command, this.originalMethods.get(command)!);
     }
 
     this.logger.log('Redis interceptors installed');
@@ -198,9 +183,7 @@ export class RedisWatcher implements OnModuleInit {
     if (!keyPattern) return false;
 
     const lowerKey = keyPattern.toLowerCase();
-    return SENSITIVE_KEY_PATTERNS.some((pattern) =>
-      lowerKey.includes(pattern),
-    );
+    return SENSITIVE_KEY_PATTERNS.some((pattern) => lowerKey.includes(pattern));
   }
 
   /**

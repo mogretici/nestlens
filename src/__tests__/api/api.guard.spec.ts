@@ -41,10 +41,7 @@ describe('NestLensGuard', () => {
     process.env.NODE_ENV = 'test';
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        NestLensGuard,
-        { provide: NESTLENS_CONFIG, useValue: mockConfig },
-      ],
+      providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
     }).compile();
 
     guard = module.get<NestLensGuard>(NestLensGuard);
@@ -117,9 +114,7 @@ describe('NestLensGuard', () => {
       mockConfig.authorization!.allowedEnvironments = ['development', 'test'];
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should use default allowed environments when not specified', async () => {
@@ -129,10 +124,7 @@ describe('NestLensGuard', () => {
 
       // Recreate guard with new config
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: mockConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
       }).compile();
       const newGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -150,10 +142,7 @@ describe('NestLensGuard', () => {
         authorization: { allowedEnvironments: [] },
       };
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: emptyEnvConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: emptyEnvConfig }],
       }).compile();
       const emptyEnvGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -168,15 +157,12 @@ describe('NestLensGuard', () => {
       process.env.NODE_ENV = 'test';
       const noEnvConfig: NestLensConfig = {
         enabled: true,
-        authorization: {},  // No allowedEnvironments specified
+        authorization: {}, // No allowedEnvironments specified
       };
 
       // Recreate guard without explicit environments
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: noEnvConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: noEnvConfig }],
       }).compile();
       const noEnvGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -197,10 +183,7 @@ describe('NestLensGuard', () => {
 
       // Recreate guard
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: mockConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
       }).compile();
       const newGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -396,9 +379,7 @@ describe('NestLensGuard', () => {
       mockConfig.authorization!.canAccess = () => false;
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should support async canAccess function', async () => {
@@ -436,9 +417,7 @@ describe('NestLensGuard', () => {
       };
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should handle async canAccess rejecting', async () => {
@@ -448,9 +427,7 @@ describe('NestLensGuard', () => {
       };
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should use legacy canAccess as fallback', async () => {
@@ -513,9 +490,7 @@ describe('NestLensGuard', () => {
       mockConfig.authorization!.requiredRoles = ['admin'];
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should deny access when user has no roles', async () => {
@@ -528,9 +503,7 @@ describe('NestLensGuard', () => {
       mockConfig.authorization!.requiredRoles = ['admin'];
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should deny access when user.roles is undefined', async () => {
@@ -542,9 +515,7 @@ describe('NestLensGuard', () => {
       mockConfig.authorization!.requiredRoles = ['admin'];
 
       // Act & Assert
-      await expect(guard.canActivate(createMockContext())).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
 
     it('should skip role check when no required roles configured', async () => {
@@ -630,10 +601,7 @@ describe('NestLensGuard', () => {
       mockConfig.rateLimit = { windowMs: 60000, maxRequests: 10 };
 
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: mockConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
       }).compile();
       const rateLimitGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -651,10 +619,7 @@ describe('NestLensGuard', () => {
       mockConfig.rateLimit = { windowMs: 60000, maxRequests: 5 };
 
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: mockConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
       }).compile();
       const rateLimitGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -674,10 +639,7 @@ describe('NestLensGuard', () => {
       mockConfig.rateLimit = { windowMs: 60000, maxRequests: 2 };
 
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: mockConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
       }).compile();
       const rateLimitGuard = module.get<NestLensGuard>(NestLensGuard);
 
@@ -698,10 +660,7 @@ describe('NestLensGuard', () => {
       mockConfig.rateLimit = false;
 
       const module = await Test.createTestingModule({
-        providers: [
-          NestLensGuard,
-          { provide: NESTLENS_CONFIG, useValue: mockConfig },
-        ],
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: mockConfig }],
       }).compile();
       const rateLimitGuard = module.get<NestLensGuard>(NestLensGuard);
 

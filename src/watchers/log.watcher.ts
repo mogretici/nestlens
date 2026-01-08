@@ -1,10 +1,6 @@
 import { ConsoleLogger, Inject, Injectable } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  LogWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { LogWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { LogEntry } from '../types';
 
 const LOG_LEVEL_PRIORITY: Record<string, number> = {
@@ -132,10 +128,8 @@ export class NestLensLogger extends ConsoleLogger {
 
     if (optionalParams.length >= 2) {
       return {
-        stack:
-          typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined,
-        context:
-          typeof optionalParams[1] === 'string' ? optionalParams[1] : undefined,
+        stack: typeof optionalParams[0] === 'string' ? optionalParams[0] : undefined,
+        context: typeof optionalParams[1] === 'string' ? optionalParams[1] : undefined,
       };
     }
 

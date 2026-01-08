@@ -123,7 +123,7 @@ export class TagService {
 
     // Custom tags from payload
     if (payload.tags && Array.isArray(payload.tags)) {
-      tags.push(...payload.tags.map(t => t.toUpperCase()));
+      tags.push(...payload.tags.map((t) => t.toUpperCase()));
     }
   }
 
@@ -166,14 +166,21 @@ export class TagService {
     }
 
     // HTTP exception detection
-    if (payload.name.includes('HttpException') || payload.name.includes('BadRequest') ||
-        payload.name.includes('Unauthorized') || payload.name.includes('Forbidden') ||
-        payload.name.includes('NotFound')) {
+    if (
+      payload.name.includes('HttpException') ||
+      payload.name.includes('BadRequest') ||
+      payload.name.includes('Unauthorized') ||
+      payload.name.includes('Forbidden') ||
+      payload.name.includes('NotFound')
+    ) {
       tags.push('HTTP-ERROR');
     }
 
     // Validation error detection
-    if (payload.name.includes('Validation') || payload.message.toLowerCase().includes('validation')) {
+    if (
+      payload.name.includes('Validation') ||
+      payload.message.toLowerCase().includes('validation')
+    ) {
       tags.push('VALIDATION-ERROR');
     }
   }
@@ -294,8 +301,8 @@ export class TagService {
 
     // Bulk mail (multiple recipients)
     const toCount = Array.isArray(payload.to) ? payload.to.length : 1;
-    const ccCount = Array.isArray(payload.cc) ? payload.cc.length : (payload.cc ? 1 : 0);
-    const bccCount = Array.isArray(payload.bcc) ? payload.bcc.length : (payload.bcc ? 1 : 0);
+    const ccCount = Array.isArray(payload.cc) ? payload.cc.length : payload.cc ? 1 : 0;
+    const bccCount = Array.isArray(payload.bcc) ? payload.bcc.length : payload.bcc ? 1 : 0;
 
     if (toCount + ccCount + bccCount > 1) {
       tags.push('BULK');
@@ -580,7 +587,11 @@ export class TagService {
   /**
    * Find entries by tags
    */
-  async findByTags(tags: string[], logic: 'AND' | 'OR' = 'OR', limit: number = 50): Promise<Entry[]> {
+  async findByTags(
+    tags: string[],
+    logic: 'AND' | 'OR' = 'OR',
+    limit: number = 50,
+  ): Promise<Entry[]> {
     return this.storage.findByTags(tags, logic, limit);
   }
 
@@ -614,9 +625,9 @@ export class TagService {
     const monitoredTags = await this.storage.getMonitoredTags();
     const allTags = await this.storage.getAllTags();
 
-    const tagCountMap = new Map(allTags.map(t => [t.tag, t.count]));
+    const tagCountMap = new Map(allTags.map((t) => [t.tag, t.count]));
 
-    return monitoredTags.map(tag => ({
+    return monitoredTags.map((tag) => ({
       ...tag,
       count: tagCountMap.get(tag.tag) || 0,
     }));

@@ -19,7 +19,8 @@ describe('FamilyHashService', () => {
           payload: {
             name: 'TypeError',
             message: 'Cannot read property "id" of undefined',
-            stack: 'TypeError: Cannot read property "id" of undefined\n    at UserService.getUser (/src/services/user.service.ts:42:15)',
+            stack:
+              'TypeError: Cannot read property "id" of undefined\n    at UserService.getUser (/src/services/user.service.ts:42:15)',
           },
         } as Entry;
 
@@ -652,7 +653,8 @@ describe('FamilyHashService', () => {
   describe('extractStackInfo', () => {
     it('should extract file and line from Node.js stack trace', () => {
       // Arrange
-      const stack = 'Error: Something went wrong\n    at Function.name (/path/to/src/service.ts:42:15)';
+      const stack =
+        'Error: Something went wrong\n    at Function.name (/path/to/src/service.ts:42:15)';
 
       // Act
       const result = service['extractStackInfo'](stack);
@@ -1300,7 +1302,9 @@ describe('FamilyHashService', () => {
   describe('normalizeFilePath', () => {
     it('should normalize file paths', () => {
       // Act
-      const result = service['normalizeFilePath']('/Users/dev/project/src/services/user.service.ts');
+      const result = service['normalizeFilePath'](
+        '/Users/dev/project/src/services/user.service.ts',
+      );
 
       // Assert - implementation extracts from src/
       expect(result).toContain('user.service.ts');

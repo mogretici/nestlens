@@ -16,18 +16,12 @@ export { GraphQLWatcher, GRAPHQL_WATCHER, createGraphQLWatcher } from './graphql
 export * from './types';
 
 // Adapters
-export {
-  BaseGraphQLAdapter,
-  isPackageAvailable,
-} from './adapters/base.adapter';
+export { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter';
 export { ApolloAdapter, createApolloAdapter } from './adapters/apollo.adapter';
 export { MercuriusAdapter, createMercuriusAdapter } from './adapters/mercurius.adapter';
 
 // Subscription support
-export {
-  ConnectionStore,
-  createConnectionStore,
-} from './subscription/connection.store';
+export { ConnectionStore, createConnectionStore } from './subscription/connection.store';
 export {
   SubscriptionTracker,
   createSubscriptionTracker,
@@ -53,17 +47,9 @@ export {
   formatQuery,
 } from './utils/query-parser';
 
-export {
-  sanitizeVariables,
-  sanitizeResponse,
-  createSanitizer,
-} from './utils/variable-sanitizer';
+export { sanitizeVariables, sanitizeResponse, createSanitizer } from './utils/variable-sanitizer';
 
-export {
-  N1Detector,
-  createN1Detector,
-  detectN1FromMap,
-} from './utils/n1-detector';
+export { N1Detector, createN1Detector, detectN1FromMap } from './utils/n1-detector';
 
 export {
   calculateDepth,

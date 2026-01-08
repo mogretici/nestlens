@@ -14,14 +14,16 @@ describe('DumpWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createDumpService = (overrides: Partial<{
-    export: jest.Mock;
-    import: jest.Mock;
-    backup: jest.Mock;
-    restore: jest.Mock;
-    migrate: jest.Mock;
-    dump: jest.Mock;
-  }> = {}) => ({
+  const createDumpService = (
+    overrides: Partial<{
+      export: jest.Mock;
+      import: jest.Mock;
+      backup: jest.Mock;
+      restore: jest.Mock;
+      migrate: jest.Mock;
+      dump: jest.Mock;
+    }> = {},
+  ) => ({
     export: jest.fn().mockResolvedValue({ recordCount: 100, fileSize: 1024 }),
     import: jest.fn().mockResolvedValue({ records: 50 }),
     backup: jest.fn().mockResolvedValue({ size: 2048 }),
@@ -182,9 +184,9 @@ describe('DumpWatcher', () => {
     it('should calculate export duration', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve({}), 50)),
-        ),
+        export: jest
+          .fn()
+          .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -261,8 +263,7 @@ describe('DumpWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.import())
-        .rejects.toThrow('Import failed: invalid format');
+      await expect(service.import()).rejects.toThrow('Import failed: invalid format');
 
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'dump',
@@ -821,8 +822,7 @@ describe('DumpWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.export())
-        .rejects.toThrow('Disk full');
+      await expect(service.export()).rejects.toThrow('Disk full');
 
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'dump',
@@ -842,8 +842,7 @@ describe('DumpWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.backup())
-        .rejects.toThrow('Permission denied');
+      await expect(service.backup()).rejects.toThrow('Permission denied');
     });
 
     it('should handle non-Error objects', async () => {

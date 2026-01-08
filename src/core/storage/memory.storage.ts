@@ -176,7 +176,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       data: hydratedResults,
       meta: {
         hasMore,
-        oldestSequence: hydratedResults.length > 0 ? hydratedResults[hydratedResults.length - 1].id! : null,
+        oldestSequence:
+          hydratedResults.length > 0 ? hydratedResults[hydratedResults.length - 1].id! : null,
         newestSequence: hydratedResults.length > 0 ? hydratedResults[0].id! : null,
         total,
       },
@@ -384,7 +385,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     if (tags.length === 0) return [];
 
     // Normalize input tags to uppercase for case-insensitive matching
-    const normalizedTags = tags.map(t => t.toUpperCase());
+    const normalizedTags = tags.map((t) => t.toUpperCase());
 
     let matchingIds: Set<number>;
 
@@ -507,7 +508,9 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       });
     }
 
-    return result.sort((a, b) => b.count - a.count || b.latestEntry.id! - a.latestEntry.id!).slice(0, limit);
+    return result
+      .sort((a, b) => b.count - a.count || b.latestEntry.id! - a.latestEntry.id!)
+      .slice(0, limit);
   }
 
   // ==================== Lifecycle ====================
@@ -579,7 +582,10 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     return results.length;
   }
 
-  private applyAdvancedFilters(entries: Entry[], filters: CursorPaginationParams['filters']): Entry[] {
+  private applyAdvancedFilters(
+    entries: Entry[],
+    filters: CursorPaginationParams['filters'],
+  ): Entry[] {
     if (!filters) return entries;
 
     return entries.filter((entry) => {
@@ -617,15 +623,19 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
       // Request filters
       if (filters.methods?.length) {
-        const method = (payload.method as string) || (payload.request as { method?: string })?.method;
+        const method =
+          (payload.method as string) || (payload.request as { method?: string })?.method;
         if (!method || !filters.methods.includes(method)) return false;
       }
       if (filters.paths?.length) {
         const path = (payload.path as string) || (payload.request as { url?: string })?.url || '';
-        if (!filters.paths.some((p) => {
-          const pattern = p.replace(/\*/g, '.*');
-          return new RegExp(pattern).test(path);
-        })) return false;
+        if (
+          !filters.paths.some((p) => {
+            const pattern = p.replace(/\*/g, '.*');
+            return new RegExp(pattern).test(path);
+          })
+        )
+          return false;
       }
       if (filters.statuses?.length) {
         const status = payload.statusCode as number | undefined;
@@ -784,7 +794,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       if (filters.tags?.length) {
         const entryTagSet = this.entryTags.get(entry.id!);
         // Normalize filter tags to uppercase for case-insensitive matching
-        const normalizedFilterTags = filters.tags.map(t => t.toUpperCase());
+        const normalizedFilterTags = filters.tags.map((t) => t.toUpperCase());
         if (!entryTagSet || !normalizedFilterTags.some((t) => entryTagSet.has(t))) return false;
       }
 

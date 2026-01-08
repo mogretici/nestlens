@@ -162,7 +162,10 @@ export interface StorageInterface {
   /**
    * Get grouped entries by family hash
    */
-  getGroupedByFamilyHash(type?: EntryType, limit?: number): Promise<{ familyHash: string; count: number; latestEntry: Entry }[]>;
+  getGroupedByFamilyHash(
+    type?: EntryType,
+    limit?: number,
+  ): Promise<{ familyHash: string; count: number; latestEntry: Entry }[]>;
 }
 
 export const STORAGE = Symbol('STORAGE');

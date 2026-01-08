@@ -86,18 +86,9 @@ export class DataMaskerService {
   private readonly isProduction: boolean;
 
   constructor(config?: DataMaskerConfig) {
-    const headers = [
-      ...DEFAULT_SENSITIVE_HEADERS,
-      ...(config?.sensitiveHeaders || []),
-    ];
-    const params = [
-      ...DEFAULT_SENSITIVE_PARAMS,
-      ...(config?.sensitiveParams || []),
-    ];
-    const userFields = [
-      ...DEFAULT_SENSITIVE_USER_FIELDS,
-      ...(config?.sensitiveUserFields || []),
-    ];
+    const headers = [...DEFAULT_SENSITIVE_HEADERS, ...(config?.sensitiveHeaders || [])];
+    const params = [...DEFAULT_SENSITIVE_PARAMS, ...(config?.sensitiveParams || [])];
+    const userFields = [...DEFAULT_SENSITIVE_USER_FIELDS, ...(config?.sensitiveUserFields || [])];
 
     this.sensitiveHeaders = new Set(headers.map((h) => h.toLowerCase()));
     this.sensitiveParams = new Set(params.map((p) => p.toLowerCase()));

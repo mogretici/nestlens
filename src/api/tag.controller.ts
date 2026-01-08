@@ -44,7 +44,10 @@ export class TagController {
     @Query('logic') logic?: 'AND' | 'OR',
     @Query('limit') limit?: string,
   ) {
-    const tags = tagsParam.split(',').map(t => t.trim()).filter(Boolean);
+    const tags = tagsParam
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
     const entries = await this.tagService.findByTags(
       tags,
       logic || 'OR',
@@ -66,10 +69,7 @@ export class TagController {
    * Add tags to an entry
    */
   @Post('entry/:id')
-  async addTagsToEntry(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { tags: string[] },
-  ) {
+  async addTagsToEntry(@Param('id', ParseIntPipe) id: number, @Body() body: { tags: string[] }) {
     await this.tagService.addTags(id, body.tags);
     const tags = await this.tagService.getEntryTags(id);
     return { success: true, data: tags };

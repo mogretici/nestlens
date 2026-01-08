@@ -114,11 +114,7 @@ export class N1Detector {
   /**
    * Generate a helpful suggestion for fixing the N+1 issue
    */
-  private generateSuggestion(
-    parentType: string,
-    fieldName: string,
-    count: number,
-  ): string {
+  private generateSuggestion(parentType: string, fieldName: string, count: number): string {
     // Check if this looks like a relation field
     const isRelation = this.looksLikeRelation(fieldName);
 

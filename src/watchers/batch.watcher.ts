@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  BatchWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,15 +20,14 @@ export const NESTLENS_BATCH_PROCESSOR = Symbol('NESTLENS_BATCH_PROCESSOR');
 export class BatchWatcher implements OnModuleInit {
   private readonly logger = new Logger(BatchWatcher.name);
   private readonly config: BatchWatcherConfig;
-  private originalProcess?: (
-    name: string,
-    items: unknown[],
-    options?: unknown,
-  ) => Promise<unknown>;
-  private readonly batchTracking = new Map<string, {
-    startTime: number;
-    startMemory: number;
-  }>();
+  private originalProcess?: (name: string, items: unknown[], options?: unknown) => Promise<unknown>;
+  private readonly batchTracking = new Map<
+    string,
+    {
+      startTime: number;
+      startMemory: number;
+    }
+  >();
 
   constructor(
     private readonly collector: CollectorService,
@@ -44,9 +39,7 @@ export class BatchWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.batch;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -58,7 +51,7 @@ export class BatchWatcher implements OnModuleInit {
     if (!this.batchProcessor) {
       this.logger.debug(
         'BatchWatcher: No batch processor found. ' +
-        'To enable batch tracking, provide a batch processor service or call trackBatch() manually.',
+          'To enable batch tracking, provide a batch processor service or call trackBatch() manually.',
       );
       return;
     }
@@ -92,18 +85,17 @@ export class BatchWatcher implements OnModuleInit {
     ): Promise<unknown> => {
       const batchId = `${name}-${Date.now()}`;
       const startTime = Date.now();
-      const startMemory = this.config.trackMemory !== false
-        ? process.memoryUsage().heapUsed
-        : 0;
+      const startMemory = this.config.trackMemory !== false ? process.memoryUsage().heapUsed : 0;
 
       this.batchTracking.set(batchId, { startTime, startMemory });
 
       try {
         const result = await originalMethod(name, items, options);
         const duration = Date.now() - startTime;
-        const memoryDelta = this.config.trackMemory !== false
-          ? process.memoryUsage().heapUsed - startMemory
-          : undefined;
+        const memoryDelta =
+          this.config.trackMemory !== false
+            ? process.memoryUsage().heapUsed - startMemory
+            : undefined;
 
         this.batchTracking.delete(batchId);
 
@@ -127,9 +119,10 @@ export class BatchWatcher implements OnModuleInit {
         return result;
       } catch (error) {
         const duration = Date.now() - startTime;
-        const memoryDelta = this.config.trackMemory !== false
-          ? process.memoryUsage().heapUsed - startMemory
-          : undefined;
+        const memoryDelta =
+          this.config.trackMemory !== false
+            ? process.memoryUsage().heapUsed - startMemory
+            : undefined;
 
         this.batchTracking.delete(batchId);
 
@@ -178,9 +171,7 @@ export class BatchWatcher implements OnModuleInit {
     },
   ): void {
     const status: 'completed' | 'partial' | 'failed' =
-      failedItems === 0 ? 'completed' :
-      processedItems > 0 ? 'partial' :
-      'failed';
+      failedItems === 0 ? 'completed' : processedItems > 0 ? 'partial' : 'failed';
 
     this.collectEntry(
       name,
@@ -224,7 +215,10 @@ export class BatchWatcher implements OnModuleInit {
     this.collector.collect('batch', payload);
   }
 
-  private parseResult(result: unknown, totalItems: number): {
+  private parseResult(
+    result: unknown,
+    totalItems: number,
+  ): {
     processed: number;
     failed: number;
     errors: string[];
@@ -237,7 +231,7 @@ export class BatchWatcher implements OnModuleInit {
         const processed = r.processed || r.successful || r.success || totalItems;
         const errorsArray = Array.isArray(r.errors) ? r.errors : [];
         const failed = r.failed || errorsArray.length || 0;
-        const errors = errorsArray.length > 0 ? errorsArray : (r.failures || []);
+        const errors = errorsArray.length > 0 ? errorsArray : r.failures || [];
 
         return {
           processed: typeof processed === 'number' ? processed : totalItems,

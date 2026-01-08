@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  NotificationWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,9 +31,7 @@ export class NotificationWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.notification;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -49,7 +43,7 @@ export class NotificationWatcher implements OnModuleInit {
     if (!this.notificationService) {
       this.logger.debug(
         'NotificationWatcher: No notification service found. ' +
-        'To enable notification tracking, inject your notification service with the NESTLENS_NOTIFICATION_SERVICE token.',
+          'To enable notification tracking, inject your notification service with the NESTLENS_NOTIFICATION_SERVICE token.',
       );
       return;
     }
@@ -78,10 +72,7 @@ export class NotificationWatcher implements OnModuleInit {
       }
 
       // Store original method
-      this.originalMethods.set(
-        name,
-        this.notificationService[name].bind(this.notificationService),
-      );
+      this.originalMethods.set(name, this.notificationService[name].bind(this.notificationService));
 
       // Wrap the method
       this.notificationService[name] = this.wrapNotificationMethod(
@@ -148,10 +139,12 @@ export class NotificationWatcher implements OnModuleInit {
     if (typeof args[0] === 'object' && args[0] !== null) {
       const data = args[0] as Record<string, unknown>;
       return {
-        recipient: (data.to || data.recipient || data.recipients || data.email || 'unknown') as string | string[],
+        recipient: (data.to || data.recipient || data.recipients || data.email || 'unknown') as
+          | string
+          | string[],
         title: (data.subject || data.title) as string | undefined,
         message: this.config.captureMessage
-          ? (data.body || data.message || data.text || data.content) as string | undefined
+          ? ((data.body || data.message || data.text || data.content) as string | undefined)
           : undefined,
         metadata: (data.metadata || data.meta) as Record<string, unknown> | undefined,
       };
@@ -161,9 +154,7 @@ export class NotificationWatcher implements OnModuleInit {
     return {
       recipient: String(args[0]),
       title: args[1] ? String(args[1]) : undefined,
-      message: this.config.captureMessage && args[2]
-        ? String(args[2])
-        : undefined,
+      message: this.config.captureMessage && args[2] ? String(args[2]) : undefined,
       metadata: args[3] as Record<string, unknown> | undefined,
     };
   }

@@ -13,23 +13,24 @@ describe('CollectorService', () => {
   let mockFamilyHashService: jest.Mocked<FamilyHashService>;
   let mockConfig: NestLensConfig;
 
-  const createMockEntry = (overrides: Partial<Entry> = {}): Entry => ({
-    id: 1,
-    type: 'request',
-    requestId: 'req-123',
-    timestamp: new Date().toISOString(),
-    payload: {
-      method: 'GET',
-      url: '/api/test',
-      path: '/api/test',
-      query: {},
-      params: {},
-      headers: {},
-      statusCode: 200,
-      duration: 50,
-    },
-    ...overrides,
-  } as unknown as Entry);
+  const createMockEntry = (overrides: Partial<Entry> = {}): Entry =>
+    ({
+      id: 1,
+      type: 'request',
+      requestId: 'req-123',
+      timestamp: new Date().toISOString(),
+      payload: {
+        method: 'GET',
+        url: '/api/test',
+        path: '/api/test',
+        query: {},
+        params: {},
+        headers: {},
+        statusCode: 200,
+        duration: 50,
+      },
+      ...overrides,
+    }) as unknown as Entry;
 
   beforeEach(async () => {
     // Arrange
@@ -328,8 +329,7 @@ describe('CollectorService', () => {
       mockStorage.save.mockRejectedValue(new Error('Storage error'));
 
       // Act & Assert
-      await expect(service.collectImmediate('request', {} as any))
-        .rejects.toThrow('Storage error');
+      await expect(service.collectImmediate('request', {} as any)).rejects.toThrow('Storage error');
     });
   });
 
@@ -369,9 +369,9 @@ describe('CollectorService', () => {
 
       // Assert
       expect(mockConfig.filterBatch).toHaveBeenCalled();
-      expect(mockStorage.saveBatch).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ type: 'request' })
-      ]));
+      expect(mockStorage.saveBatch).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ type: 'request' })]),
+      );
     });
 
     it('should handle async batch filter', async () => {
@@ -429,10 +429,7 @@ describe('CollectorService', () => {
 
     it('should apply auto-tagging in parallel for saved entries', async () => {
       // Arrange
-      const savedEntries = [
-        createMockEntry({ id: 1 }),
-        createMockEntry({ id: 2 }),
-      ];
+      const savedEntries = [createMockEntry({ id: 1 }), createMockEntry({ id: 2 })];
       service['buffer'] = [createMockEntry(), createMockEntry()];
       mockStorage.saveBatch.mockResolvedValue(savedEntries);
       mockFamilyHashService.generateFamilyHash.mockReturnValue('hash123');
@@ -481,8 +478,7 @@ describe('CollectorService', () => {
       mockStorage.saveBatch.mockRejectedValue(new Error('Persistent failure'));
 
       // Act & Assert
-      await expect(service['saveWithRetry'](entries, 3))
-        .rejects.toThrow('Persistent failure');
+      await expect(service['saveWithRetry'](entries, 3)).rejects.toThrow('Persistent failure');
       expect(mockStorage.saveBatch).toHaveBeenCalledTimes(3);
     });
   });
@@ -610,8 +606,9 @@ describe('CollectorService', () => {
       mockStorage.save.mockResolvedValue(entry);
 
       // Act & Assert - should not throw
-      await expect(serviceWithoutOptionals.collectImmediate('request', {} as any))
-        .resolves.toBeDefined();
+      await expect(
+        serviceWithoutOptionals.collectImmediate('request', {} as any),
+      ).resolves.toBeDefined();
     });
 
     it('should work without FamilyHashService', async () => {
@@ -620,8 +617,9 @@ describe('CollectorService', () => {
       mockStorage.save.mockResolvedValue(entry);
 
       // Act & Assert - should not throw
-      await expect(serviceWithoutOptionals.collectImmediate('request', {} as any))
-        .resolves.toBeDefined();
+      await expect(
+        serviceWithoutOptionals.collectImmediate('request', {} as any),
+      ).resolves.toBeDefined();
       expect(mockStorage.updateFamilyHash).not.toHaveBeenCalled();
     });
   });

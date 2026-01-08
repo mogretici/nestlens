@@ -1,8 +1,5 @@
 import { IsOptional, IsArray, IsString, IsBoolean } from 'class-validator';
-import {
-  TransformCommaSeparatedArray,
-  TransformStringToBoolean,
-} from '../transformers';
+import { TransformCommaSeparatedArray, TransformStringToBoolean } from '../transformers';
 
 export class QueryFiltersDto {
   @IsOptional()

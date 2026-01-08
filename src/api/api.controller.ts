@@ -15,21 +15,11 @@ import {
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiQuery,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { STORAGE, StorageInterface } from '../core/storage/storage.interface';
 import { PruningService } from '../core/pruning.service';
 import { CollectorService } from '../core/collector.service';
-import {
-  NestLensConfig,
-  NESTLENS_API_PREFIX,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '../nestlens.config';
 import { EntryType, CursorPaginatedResponse, Entry } from '../types';
 import { NestLensGuard } from './api.guard';
 import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT } from './dto';
@@ -85,8 +75,16 @@ export class NestLensApiController {
   @ApiQuery({ name: 'requestId', required: false, description: 'Filter by request ID' })
   @ApiQuery({ name: 'limit', required: false, description: 'Number of entries per page (max 100)' })
   @ApiQuery({ name: 'offset', required: false, description: 'Offset for pagination' })
-  @ApiQuery({ name: 'from', required: false, description: 'Filter entries from this date (ISO 8601)' })
-  @ApiQuery({ name: 'to', required: false, description: 'Filter entries until this date (ISO 8601)' })
+  @ApiQuery({
+    name: 'from',
+    required: false,
+    description: 'Filter entries from this date (ISO 8601)',
+  })
+  @ApiQuery({
+    name: 'to',
+    required: false,
+    description: 'Filter entries until this date (ISO 8601)',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of entries' })
   async getEntries(
     @Query('type') type?: EntryType,
@@ -161,14 +159,8 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflict
    */
   @Get('entries/grouped')
-  async getGroupedEntries(
-    @Query('type') type?: EntryType,
-    @Query('limit') limit?: string,
-  ) {
-    const groups = await this.storage.getGroupedByFamilyHash(
-      type,
-      this.parseLimit(limit),
-    );
+  async getGroupedEntries(@Query('type') type?: EntryType, @Query('limit') limit?: string) {
+    const groups = await this.storage.getGroupedByFamilyHash(type, this.parseLimit(limit));
     return { data: groups };
   }
 
@@ -177,14 +169,8 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflict
    */
   @Get('entries/family/:hash')
-  async getEntriesByFamilyHash(
-    @Param('hash') hash: string,
-    @Query('limit') limit?: string,
-  ) {
-    const entries = await this.storage.findByFamilyHash(
-      hash,
-      this.parseLimit(limit),
-    );
+  async getEntriesByFamilyHash(@Param('hash') hash: string, @Query('limit') limit?: string) {
+    const entries = await this.storage.findByFamilyHash(hash, this.parseLimit(limit));
     return { data: entries };
   }
 
@@ -225,10 +211,7 @@ export class NestLensApiController {
   }
 
   @Get('requests')
-  async getRequests(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
+  async getRequests(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.getEntries('request', undefined, limit, offset);
   }
 
@@ -249,9 +232,7 @@ export class NestLensApiController {
 
     // Filter slow queries if requested
     const filtered =
-      slow === 'true'
-        ? entries.filter((e) => e.type === 'query' && e.payload.slow)
-        : entries;
+      slow === 'true' ? entries.filter((e) => e.type === 'query' && e.payload.slow) : entries;
 
     const total = await this.storage.count('query');
 
@@ -266,10 +247,7 @@ export class NestLensApiController {
   }
 
   @Get('exceptions')
-  async getExceptions(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
+  async getExceptions(@Query('limit') limit?: string, @Query('offset') offset?: string) {
     return this.getEntries('exception', undefined, limit, offset);
   }
 

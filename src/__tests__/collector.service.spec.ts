@@ -110,10 +110,13 @@ describe('CollectorService', () => {
 
       // Add 100 entries to trigger flush
       for (let i = 0; i < 100; i++) {
-        await service.collect('request', createMockRequestPayload({
-          path: `/api/test/${i}`,
-          url: `/api/test/${i}`,
-        }));
+        await service.collect(
+          'request',
+          createMockRequestPayload({
+            path: `/api/test/${i}`,
+            url: `/api/test/${i}`,
+          }),
+        );
       }
 
       expect(mockStorage.saveBatch).toHaveBeenCalled();
@@ -147,9 +150,9 @@ describe('CollectorService', () => {
     it('should throw error if save fails', async () => {
       mockStorage.save.mockRejectedValue(new Error('Save failed'));
 
-      await expect(
-        service.collectImmediate('request', createMockRequestPayload()),
-      ).rejects.toThrow('Save failed');
+      await expect(service.collectImmediate('request', createMockRequestPayload())).rejects.toThrow(
+        'Save failed',
+      );
     });
   });
 
@@ -158,14 +161,20 @@ describe('CollectorService', () => {
       const savedEntries = [createMockEntry({ id: 1 }), createMockEntry({ id: 2 })];
       mockStorage.saveBatch.mockResolvedValue(savedEntries);
 
-      await service.collect('request', createMockRequestPayload({ path: '/api/test1', url: '/api/test1' }));
-      await service.collect('request', createMockRequestPayload({
-        method: 'POST',
-        path: '/api/test2',
-        url: '/api/test2',
-        statusCode: 201,
-        duration: 150,
-      }));
+      await service.collect(
+        'request',
+        createMockRequestPayload({ path: '/api/test1', url: '/api/test1' }),
+      );
+      await service.collect(
+        'request',
+        createMockRequestPayload({
+          method: 'POST',
+          path: '/api/test2',
+          url: '/api/test2',
+          statusCode: 201,
+          duration: 150,
+        }),
+      );
 
       await service.flush();
 

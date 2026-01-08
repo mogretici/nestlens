@@ -130,10 +130,7 @@ describe('RedisStorage', () => {
       await storage.save(entry);
 
       // Assert
-      expect(mockClient.sadd).toHaveBeenCalledWith(
-        expect.stringContaining('request:req-123'),
-        '1',
-      );
+      expect(mockClient.sadd).toHaveBeenCalledWith(expect.stringContaining('request:req-123'), '1');
 
       await storage.close();
     });
@@ -141,10 +138,7 @@ describe('RedisStorage', () => {
     it('should assign incrementing IDs', async () => {
       // Arrange
       const { storage, mockClient } = await createTestStorage();
-      mockClient.incr
-        .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(3);
+      mockClient.incr.mockResolvedValueOnce(1).mockResolvedValueOnce(2).mockResolvedValueOnce(3);
 
       // Act
       const saved1 = await storage.save(createEntry('request'));
@@ -260,9 +254,7 @@ describe('RedisStorage', () => {
     it('should find an entry by ID', async () => {
       // Arrange
       const { storage, mockClient } = await createTestStorage();
-      mockClient.hgetall.mockResolvedValue(
-        createMockEntryHash(1, 'request', { method: 'GET' }),
-      );
+      mockClient.hgetall.mockResolvedValue(createMockEntryHash(1, 'request', { method: 'GET' }));
       mockClient.smembers.mockResolvedValue([]);
 
       // Act
@@ -302,9 +294,7 @@ describe('RedisStorage', () => {
 
       // Assert
       expect(count).toBe(10);
-      expect(mockClient.zcard).toHaveBeenCalledWith(
-        expect.stringContaining('entries:all'),
-      );
+      expect(mockClient.zcard).toHaveBeenCalledWith(expect.stringContaining('entries:all'));
 
       await storage.close();
     });
@@ -319,9 +309,7 @@ describe('RedisStorage', () => {
 
       // Assert
       expect(count).toBe(5);
-      expect(mockClient.zcard).toHaveBeenCalledWith(
-        expect.stringContaining('type:request'),
-      );
+      expect(mockClient.zcard).toHaveBeenCalledWith(expect.stringContaining('type:request'));
 
       await storage.close();
     });
@@ -584,10 +572,7 @@ describe('RedisStorage', () => {
         'familyHash',
         'abc123',
       );
-      expect(mockClient.sadd).toHaveBeenCalledWith(
-        expect.stringContaining('family:abc123'),
-        '1',
-      );
+      expect(mockClient.sadd).toHaveBeenCalledWith(expect.stringContaining('family:abc123'), '1');
 
       await storage.close();
     });

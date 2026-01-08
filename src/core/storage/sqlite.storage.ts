@@ -132,8 +132,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
   private migrateDatabase(): void {
     // Check and add family_hash column
-    const columns = this.db.prepare("PRAGMA table_info(nestlens_entries)").all() as { name: string }[];
-    const columnNames = columns.map(c => c.name);
+    const columns = this.db.prepare('PRAGMA table_info(nestlens_entries)').all() as {
+      name: string;
+    }[];
+    const columnNames = columns.map((c) => c.name);
 
     if (!columnNames.includes('family_hash')) {
       this.db.exec('ALTER TABLE nestlens_entries ADD COLUMN family_hash TEXT');
@@ -144,7 +146,9 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     }
 
     // Create index for family_hash if column exists
-    this.db.exec('CREATE INDEX IF NOT EXISTS idx_nestlens_family_hash ON nestlens_entries(family_hash)');
+    this.db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_nestlens_family_hash ON nestlens_entries(family_hash)',
+    );
   }
 
   async initialize(): Promise<void> {
@@ -157,11 +161,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       VALUES (?, ?, ?)
     `);
 
-    const result = stmt.run(
-      entry.type,
-      entry.requestId || null,
-      JSON.stringify(entry.payload),
-    );
+    const result = stmt.run(entry.type, entry.requestId || null, JSON.stringify(entry.payload));
 
     return {
       ...entry,
@@ -180,11 +180,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     const insertMany = this.db.transaction((items: Entry[]) => {
       for (const entry of items) {
-        const result = stmt.run(
-          entry.type,
-          entry.requestId || null,
-          JSON.stringify(entry.payload),
-        );
+        const result = stmt.run(entry.type, entry.requestId || null, JSON.stringify(entry.payload));
         savedEntries.push({
           ...entry,
           id: Number(result.lastInsertRowid),
@@ -209,7 +205,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       // GraphQL requests should only appear in the GraphQL watcher
       // Uses isGraphQL flag set by request.watcher.ts based on robust detection
       if (filter.type === 'request') {
-        sql += " AND (json_extract(payload, '$.isGraphQL') IS NULL OR json_extract(payload, '$.isGraphQL') = 0)";
+        sql +=
+          " AND (json_extract(payload, '$.isGraphQL') IS NULL OR json_extract(payload, '$.isGraphQL') = 0)";
       }
     }
 
@@ -273,7 +270,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   private hydrateEntriesWithTags(entries: Entry[]): Entry[] {
     if (entries.length === 0) return entries;
 
-    const entryIds = entries.map(e => e.id).filter((id): id is number => id !== undefined);
+    const entryIds = entries.map((e) => e.id).filter((id): id is number => id !== undefined);
     if (entryIds.length === 0) return entries;
 
     // Fetch all tags for these entries in one query
@@ -293,16 +290,14 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     }
 
     // Assign tags to entries
-    return entries.map(entry => ({
+    return entries.map((entry) => ({
       ...entry,
       tags: entry.id ? tagsByEntryId.get(entry.id) || [] : [],
     }));
   }
 
   async findById(id: number): Promise<Entry | null> {
-    const stmt = this.db.prepare(
-      'SELECT * FROM nestlens_entries WHERE id = ?',
-    );
+    const stmt = this.db.prepare('SELECT * FROM nestlens_entries WHERE id = ?');
     const row = stmt.get(id) as EntryRow | undefined;
 
     if (!row) return null;
@@ -323,7 +318,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       // Exclude GraphQL requests from regular requests count
       // Uses isGraphQL flag set by request.watcher.ts based on robust detection
       if (type === 'request') {
-        sql += " AND (json_extract(payload, '$.isGraphQL') IS NULL OR json_extract(payload, '$.isGraphQL') = 0)";
+        sql +=
+          " AND (json_extract(payload, '$.isGraphQL') IS NULL OR json_extract(payload, '$.isGraphQL') = 0)";
       }
     }
 
@@ -389,17 +385,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   }
 
   async prune(before: Date): Promise<number> {
-    const stmt = this.db.prepare(
-      'DELETE FROM nestlens_entries WHERE created_at < ?',
-    );
+    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE created_at < ?');
     const result = stmt.run(before.toISOString());
     return result.changes;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
-    const stmt = this.db.prepare(
-      'DELETE FROM nestlens_entries WHERE type = ? AND created_at < ?',
-    );
+    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE type = ? AND created_at < ?');
     const result = stmt.run(type, before.toISOString());
     return result.changes;
   }
@@ -408,9 +400,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
    * Build SQL filter conditions from CursorPaginationParams filters
    * This centralizes all filter logic to avoid duplication
    */
-  private buildFilterConditions(
-    filters: CursorPaginationParams['filters'],
-  ): { conditions: string[]; params: unknown[] } {
+  private buildFilterConditions(filters: CursorPaginationParams['filters']): {
+    conditions: string[];
+    params: unknown[];
+  } {
     const conditions: string[] = [];
     const params: unknown[] = [];
 
@@ -434,9 +427,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Queries: queryTypes filter (SELECT, INSERT, UPDATE, DELETE)
     if (filters.queryTypes && filters.queryTypes.length > 0) {
-      const queryConditions = filters.queryTypes.map(() => `json_extract(e.payload, '$.query') LIKE ?`).join(' OR ');
+      const queryConditions = filters.queryTypes
+        .map(() => `json_extract(e.payload, '$.query') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${queryConditions})`);
-      params.push(...filters.queryTypes.map(qt => `${qt}%`));
+      params.push(...filters.queryTypes.map((qt) => `${qt}%`));
     }
 
     // Queries: sources filter (typeorm, prisma, etc)
@@ -454,24 +449,34 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Exceptions: names filter
     if (filters.names && filters.names.length > 0) {
-      const nameConditions = filters.names.map(() => `json_extract(e.payload, '$.name') LIKE ?`).join(' OR ');
+      const nameConditions = filters.names
+        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.names.map(n => `%${n}%`));
+      params.push(...filters.names.map((n) => `%${n}%`));
     }
 
     // Requests & Exceptions: methods filter
     if (filters.methods && filters.methods.length > 0) {
       const placeholders = filters.methods.map(() => '?').join(', ');
-      conditions.push(`(json_extract(e.payload, '$.method') IN (${placeholders}) OR json_extract(e.payload, '$.request.method') IN (${placeholders}))`);
+      conditions.push(
+        `(json_extract(e.payload, '$.method') IN (${placeholders}) OR json_extract(e.payload, '$.request.method') IN (${placeholders}))`,
+      );
       params.push(...filters.methods, ...filters.methods);
     }
 
     // Requests & Exceptions: paths filter (supports LIKE)
     if (filters.paths && filters.paths.length > 0) {
-      const requestConditions = filters.paths.map(() => `json_extract(e.payload, '$.path') LIKE ?`).join(' OR ');
-      const exceptionConditions = filters.paths.map(() => `json_extract(e.payload, '$.request.url') LIKE ?`).join(' OR ');
+      const requestConditions = filters.paths
+        .map(() => `json_extract(e.payload, '$.path') LIKE ?`)
+        .join(' OR ');
+      const exceptionConditions = filters.paths
+        .map(() => `json_extract(e.payload, '$.request.url') LIKE ?`)
+        .join(' OR ');
       conditions.push(`((${requestConditions}) OR (${exceptionConditions}))`);
-      const pathParams = filters.paths.map(p => p.includes('*') ? p.replace(/\*/g, '%') : `%${p}%`);
+      const pathParams = filters.paths.map((p) =>
+        p.includes('*') ? p.replace(/\*/g, '%') : `%${p}%`,
+      );
       params.push(...pathParams, ...pathParams);
     }
 
@@ -506,11 +511,14 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // For requests: search in headers.host or headers.Host
     // For http-client: search in payload.hostname
     if (filters.hostnames && filters.hostnames.length > 0) {
-      const hostnameConditions = filters.hostnames.map(() =>
-        `(json_extract(e.payload, '$.headers.host') LIKE ? OR json_extract(e.payload, '$.headers.Host') LIKE ? OR json_extract(e.payload, '$.hostname') LIKE ?)`
-      ).join(' OR ');
+      const hostnameConditions = filters.hostnames
+        .map(
+          () =>
+            `(json_extract(e.payload, '$.headers.host') LIKE ? OR json_extract(e.payload, '$.headers.Host') LIKE ? OR json_extract(e.payload, '$.hostname') LIKE ?)`,
+        )
+        .join(' OR ');
       conditions.push(`(${hostnameConditions})`);
-      filters.hostnames.forEach(h => {
+      filters.hostnames.forEach((h) => {
         params.push(`%${h}%`, `%${h}%`, `%${h}%`);
       });
     }
@@ -531,9 +539,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Events: eventNames filter
     if (filters.eventNames && filters.eventNames.length > 0) {
-      const nameConditions = filters.eventNames.map(() => `json_extract(e.payload, '$.name') LIKE ?`).join(' OR ');
+      const nameConditions = filters.eventNames
+        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.eventNames.map(n => `%${n}%`));
+      params.push(...filters.eventNames.map((n) => `%${n}%`));
     }
 
     // Schedule: scheduleStatuses filter (started, completed, failed)
@@ -545,9 +555,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Schedule: scheduleNames filter
     if (filters.scheduleNames && filters.scheduleNames.length > 0) {
-      const nameConditions = filters.scheduleNames.map(() => `json_extract(e.payload, '$.name') LIKE ?`).join(' OR ');
+      const nameConditions = filters.scheduleNames
+        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.scheduleNames.map(n => `%${n}%`));
+      params.push(...filters.scheduleNames.map((n) => `%${n}%`));
     }
 
     // Jobs: jobStatuses filter (waiting, active, completed, failed, delayed)
@@ -559,9 +571,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Jobs: jobNames filter
     if (filters.jobNames && filters.jobNames.length > 0) {
-      const nameConditions = filters.jobNames.map(() => `json_extract(e.payload, '$.name') LIKE ?`).join(' OR ');
+      const nameConditions = filters.jobNames
+        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.jobNames.map(n => `%${n}%`));
+      params.push(...filters.jobNames.map((n) => `%${n}%`));
     }
 
     // Jobs: queues filter
@@ -657,16 +671,20 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Command: commandNames filter
     if (filters.commandNames && filters.commandNames.length > 0) {
-      const nameConditions = filters.commandNames.map(() => `json_extract(e.payload, '$.name') LIKE ?`).join(' OR ');
+      const nameConditions = filters.commandNames
+        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.commandNames.map(n => `%${n}%`));
+      params.push(...filters.commandNames.map((n) => `%${n}%`));
     }
 
     // Gate: gateNames filter
     if (filters.gateNames && filters.gateNames.length > 0) {
-      const nameConditions = filters.gateNames.map(() => `json_extract(e.payload, '$.gate') LIKE ?`).join(' OR ');
+      const nameConditions = filters.gateNames
+        .map(() => `json_extract(e.payload, '$.gate') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.gateNames.map(n => `%${n}%`));
+      params.push(...filters.gateNames.map((n) => `%${n}%`));
     }
 
     // Gate: gateResults filter (allowed, denied mapped from boolean)
@@ -727,9 +745,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // GraphQL: operationNames filter
     if (filters.operationNames && filters.operationNames.length > 0) {
-      const nameConditions = filters.operationNames.map(() => `json_extract(e.payload, '$.operationName') LIKE ?`).join(' OR ');
+      const nameConditions = filters.operationNames
+        .map(() => `json_extract(e.payload, '$.operationName') LIKE ?`)
+        .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.operationNames.map(n => `%${n}%`));
+      params.push(...filters.operationNames.map((n) => `%${n}%`));
     }
 
     // GraphQL: hasErrors filter
@@ -743,14 +763,16 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       if (filters.hasN1) {
         conditions.push(`json_array_length(json_extract(e.payload, '$.potentialN1')) > 0`);
       } else {
-        conditions.push(`(json_extract(e.payload, '$.potentialN1') IS NULL OR json_array_length(json_extract(e.payload, '$.potentialN1')) = 0)`);
+        conditions.push(
+          `(json_extract(e.payload, '$.potentialN1') IS NULL OR json_array_length(json_extract(e.payload, '$.potentialN1')) = 0)`,
+        );
       }
     }
 
     // Tags filter (OR logic, case-insensitive) - handled separately since it requires JOIN
     if (filters.tags && filters.tags.length > 0) {
       // Normalize filter tags to uppercase for case-insensitive matching
-      const normalizedTags = filters.tags.map(t => t.toUpperCase());
+      const normalizedTags = filters.tags.map((t) => t.toUpperCase());
       const placeholders = normalizedTags.map(() => '?').join(', ');
       conditions.push(`t.tag IN (${placeholders})`);
       params.push(...normalizedTags);
@@ -788,7 +810,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       // GraphQL requests should only appear in the GraphQL watcher
       // Uses isGraphQL flag set by request.watcher.ts based on robust detection
       if (type === 'request') {
-        sql += " AND (json_extract(e.payload, '$.isGraphQL') IS NULL OR json_extract(e.payload, '$.isGraphQL') = 0)";
+        sql +=
+          " AND (json_extract(e.payload, '$.isGraphQL') IS NULL OR json_extract(e.payload, '$.isGraphQL') = 0)";
       }
     }
 
@@ -850,10 +873,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     type: EntryType | undefined,
     filters: CursorPaginationParams['filters'],
   ): Promise<number> {
-    if (!filters || Object.keys(filters).every(k => {
-      const val = filters[k as keyof typeof filters];
-      return val === undefined || (Array.isArray(val) && val.length === 0);
-    })) {
+    if (
+      !filters ||
+      Object.keys(filters).every((k) => {
+        const val = filters[k as keyof typeof filters];
+        return val === undefined || (Array.isArray(val) && val.length === 0);
+      })
+    ) {
       return this.count(type);
     }
 
@@ -871,7 +897,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       // Exclude GraphQL requests from regular requests count
       // Uses isGraphQL flag set by request.watcher.ts based on robust detection
       if (type === 'request') {
-        sql += " AND (json_extract(e.payload, '$.isGraphQL') IS NULL OR json_extract(e.payload, '$.isGraphQL') = 0)";
+        sql +=
+          " AND (json_extract(e.payload, '$.isGraphQL') IS NULL OR json_extract(e.payload, '$.isGraphQL') = 0)";
       }
     }
 
@@ -916,9 +943,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   }
 
   async getStorageStats(): Promise<StorageStats> {
-    const totalStmt = this.db.prepare(
-      'SELECT COUNT(*) as count FROM nestlens_entries',
-    );
+    const totalStmt = this.db.prepare('SELECT COUNT(*) as count FROM nestlens_entries');
     const total = (totalStmt.get() as CountRow).count;
 
     const byTypeStmt = this.db.prepare(`
@@ -1014,7 +1039,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       ORDER BY tag
     `);
     const rows = stmt.all(entryId) as { tag: string }[];
-    return rows.map(r => r.tag);
+    return rows.map((r) => r.tag);
   }
 
   async getAllTags(): Promise<TagWithCount[]> {
@@ -1028,13 +1053,17 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     return rows;
   }
 
-  async findByTags(tags: string[], logic: 'AND' | 'OR' = 'OR', limit: number = 50): Promise<Entry[]> {
+  async findByTags(
+    tags: string[],
+    logic: 'AND' | 'OR' = 'OR',
+    limit: number = 50,
+  ): Promise<Entry[]> {
     if (tags.length === 0) {
       return [];
     }
 
     // Normalize input tags to uppercase for case-insensitive matching
-    const normalizedTags = tags.map(t => t.toUpperCase());
+    const normalizedTags = tags.map((t) => t.toUpperCase());
 
     let sql: string;
     const params: unknown[] = [];
@@ -1069,7 +1098,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...params) as EntryRow[];
-    return rows.map(row => this.rowToEntry(row));
+    return rows.map((row) => this.rowToEntry(row));
   }
 
   // ==================== Monitored Tags ====================
@@ -1105,7 +1134,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       SELECT * FROM nestlens_monitored_tags ORDER BY tag
     `);
     const rows = stmt.all() as MonitoredTagRow[];
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       tag: row.tag,
       createdAt: row.created_at,
@@ -1151,12 +1180,12 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       LIMIT ?
     `);
     const rows = stmt.all(familyHash, limit) as EntryRow[];
-    return rows.map(row => this.rowToEntry(row));
+    return rows.map((row) => this.rowToEntry(row));
   }
 
   async getGroupedByFamilyHash(
     type?: EntryType,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<{ familyHash: string; count: number; latestEntry: Entry }[]> {
     let sql = `
       SELECT family_hash, COUNT(*) as count, MAX(id) as latest_id
@@ -1185,7 +1214,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     }
 
     // Fetch all entries in a single query to avoid N+1
-    const ids = rows.map(row => row.latest_id);
+    const ids = rows.map((row) => row.latest_id);
     const placeholders = ids.map(() => '?').join(', ');
     const entriesStmt = this.db.prepare(`
       SELECT * FROM nestlens_entries WHERE id IN (${placeholders})

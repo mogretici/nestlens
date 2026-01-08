@@ -20,9 +20,7 @@ export class PruningService implements OnModuleInit, OnModuleDestroy {
     if (pruningConfig?.enabled !== false) {
       const intervalMinutes = pruningConfig?.interval || 60;
       this.startPruning(intervalMinutes);
-      this.logger.log(
-        `Pruning service started (interval: ${intervalMinutes} minutes)`,
-      );
+      this.logger.log(`Pruning service started (interval: ${intervalMinutes} minutes)`);
     }
   }
 
@@ -31,10 +29,7 @@ export class PruningService implements OnModuleInit, OnModuleDestroy {
     this.prune();
 
     // Then run on interval
-    this.intervalId = setInterval(
-      () => this.prune(),
-      intervalMinutes * 60 * 1000,
-    );
+    this.intervalId = setInterval(() => this.prune(), intervalMinutes * 60 * 1000);
   }
 
   private async prune(): Promise<void> {

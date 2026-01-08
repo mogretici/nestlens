@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  CommandWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,9 +33,7 @@ export class CommandWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.command;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -51,7 +45,7 @@ export class CommandWatcher implements OnModuleInit {
     if (!this.commandBus) {
       this.logger.debug(
         'CommandWatcher: No command bus found. ' +
-        'To enable command tracking, install and configure @nestjs/cqrs and provide CommandBus.',
+          'To enable command tracking, install and configure @nestjs/cqrs and provide CommandBus.',
       );
       return;
     }
@@ -79,14 +73,7 @@ export class CommandWatcher implements OnModuleInit {
       this.commandTracking.set(commandId, startTime);
 
       // Track command started
-      this.collectEntry(
-        commandName,
-        'executing',
-        0,
-        command,
-        undefined,
-        undefined,
-      );
+      this.collectEntry(commandName, 'executing', 0, command, undefined, undefined);
 
       try {
         const result = await this.originalExecute!(command);
@@ -94,14 +81,7 @@ export class CommandWatcher implements OnModuleInit {
         this.commandTracking.delete(commandId);
 
         // Track command completed
-        this.collectEntry(
-          commandName,
-          'completed',
-          duration,
-          command,
-          result,
-          undefined,
-        );
+        this.collectEntry(commandName, 'completed', duration, command, result, undefined);
 
         return result;
       } catch (error) {

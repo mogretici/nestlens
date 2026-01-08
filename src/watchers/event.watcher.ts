@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  EventWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,9 +24,7 @@ export class EventWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.event;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -42,7 +36,7 @@ export class EventWatcher implements OnModuleInit {
     if (!this.eventEmitter) {
       this.logger.debug(
         'EventWatcher: No event emitter found. ' +
-        'To enable event tracking, install and configure @nestjs/event-emitter.',
+          'To enable event tracking, install and configure @nestjs/event-emitter.',
       );
       return;
     }

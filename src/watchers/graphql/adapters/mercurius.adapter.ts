@@ -76,16 +76,8 @@ interface MercuriusResolutionEvent {
  * Mercurius hooks interface
  */
 interface MercuriusHooks {
-  preParsing?: (
-    schema: unknown,
-    source: string,
-    context: MercuriusContext,
-  ) => Promise<void>;
-  preValidation?: (
-    schema: unknown,
-    document: unknown,
-    context: MercuriusContext,
-  ) => Promise<void>;
+  preParsing?: (schema: unknown, source: string, context: MercuriusContext) => Promise<void>;
+  preValidation?: (schema: unknown, document: unknown, context: MercuriusContext) => Promise<void>;
   preExecution?: (
     schema: unknown,
     document: unknown,
@@ -100,10 +92,7 @@ interface MercuriusHooks {
     context: MercuriusContext,
     service: unknown,
   ) => Promise<void>;
-  onResolution?: (
-    execution: MercuriusExecutionContext,
-    context: MercuriusContext,
-  ) => Promise<void>;
+  onResolution?: (execution: MercuriusExecutionContext, context: MercuriusContext) => Promise<void>;
   preSubscriptionParsing?: (
     schema: unknown,
     source: string,
@@ -118,10 +107,7 @@ interface MercuriusHooks {
     execution: MercuriusExecutionContext,
     context: MercuriusContext,
   ) => Promise<void>;
-  onSubscriptionEnd?: (
-    context: MercuriusContext,
-    id: string,
-  ) => Promise<void>;
+  onSubscriptionEnd?: (context: MercuriusContext, id: string) => Promise<void>;
 }
 
 /**
@@ -167,11 +153,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
     const adapter = this;
 
     return {
-      async preParsing(
-        _schema: unknown,
-        source: string,
-        context: MercuriusContext,
-      ) {
+      async preParsing(_schema: unknown, source: string, context: MercuriusContext) {
         // Check sampling
         if (!adapter.shouldSample()) {
           return;
@@ -218,14 +200,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         (context as Record<symbol, unknown>)[TRACKING_KEY] = tracking;
       },
 
-      async preValidation(
-        _schema: unknown,
-        _document: unknown,
-        context: MercuriusContext,
-      ) {
-        const tracking = (context as Record<symbol, unknown>)[
-          TRACKING_KEY
-        ] as RequestTrackingData | undefined;
+      async preValidation(_schema: unknown, _document: unknown, context: MercuriusContext) {
+        const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+          | RequestTrackingData
+          | undefined;
 
         if (tracking) {
           tracking.parsingEndTime = process.hrtime.bigint();
@@ -233,14 +211,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         }
       },
 
-      async preExecution(
-        _schema: unknown,
-        _document: unknown,
-        context: MercuriusContext,
-      ) {
-        const tracking = (context as Record<symbol, unknown>)[
-          TRACKING_KEY
-        ] as RequestTrackingData | undefined;
+      async preExecution(_schema: unknown, _document: unknown, context: MercuriusContext) {
+        const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+          | RequestTrackingData
+          | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
@@ -250,13 +224,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         return undefined;
       },
 
-      async onResolution(
-        execution: MercuriusExecutionContext,
-        context: MercuriusContext,
-      ) {
-        const tracking = (context as Record<symbol, unknown>)[
-          TRACKING_KEY
-        ] as RequestTrackingData | undefined;
+      async onResolution(execution: MercuriusExecutionContext, context: MercuriusContext) {
+        const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+          | RequestTrackingData
+          | undefined;
 
         if (!tracking) {
           return;
@@ -273,9 +244,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
         const validationDuration =
           tracking.validationStartTime && tracking.validationEndTime
-            ? adapter.nsToMs(
-                tracking.validationEndTime - tracking.validationStartTime,
-              )
+            ? adapter.nsToMs(tracking.validationEndTime - tracking.validationStartTime)
             : undefined;
 
         const executionDuration = tracking.executionStartTime
@@ -292,29 +261,20 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         const depthResult = calculateDepth(tracking.query);
 
         // N+1 detection
-        const n1Warnings = tracking.n1Detector
-          ? tracking.n1Detector.detect().warnings
-          : [];
+        const n1Warnings = tracking.n1Detector ? tracking.n1Detector.detect().warnings : [];
 
         // Sanitize variables
         const sanitizedVariables = adapter.config.captureVariables
-          ? sanitizeVariables(
-              execution.variables,
-              adapter.config.sensitiveVariables,
-            )
+          ? sanitizeVariables(execution.variables, adapter.config.sensitiveVariables)
           : undefined;
 
         // Truncate query
-        const truncatedQuery = truncateQuery(
-          tracking.query,
-          adapter.config.maxQuerySize,
-        );
+        const truncatedQuery = truncateQuery(tracking.query, adapter.config.maxQuerySize);
 
         // Get field traces
-        const fieldTraces =
-          tracking.fieldTracer && tracking.fieldTracer.isActive()
-            ? tracking.fieldTracer.getTraces()
-            : undefined;
+        const fieldTraces = tracking.fieldTracer?.isActive()
+          ? tracking.fieldTracer.getTraces()
+          : undefined;
 
         // Determine status code and errors
         const errors = tracking.errors as Array<{
@@ -385,11 +345,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
       },
 
       // Subscription hooks
-      async preSubscriptionParsing(
-        _schema: unknown,
-        source: string,
-        context: MercuriusContext,
-      ) {
+      async preSubscriptionParsing(_schema: unknown, source: string, context: MercuriusContext) {
         if (!adapter.config.subscriptions.enabled) {
           return;
         }
@@ -415,9 +371,9 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         _document: unknown,
         context: MercuriusContext,
       ) {
-        const tracking = (context as Record<symbol, unknown>)[
-          TRACKING_KEY
-        ] as RequestTrackingData | undefined;
+        const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+          | RequestTrackingData
+          | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
@@ -434,9 +390,9 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           return;
         }
 
-        const tracking = (context as Record<symbol, unknown>)[
-          TRACKING_KEY
-        ] as RequestTrackingData | undefined;
+        const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+          | RequestTrackingData
+          | undefined;
 
         if (!tracking) {
           return;
@@ -447,9 +403,9 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
       },
 
       async onSubscriptionEnd(context: MercuriusContext, id: string) {
-        const tracking = (context as Record<symbol, unknown>)[
-          TRACKING_KEY
-        ] as RequestTrackingData | undefined;
+        const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+          | RequestTrackingData
+          | undefined;
 
         if (!tracking) {
           return;
@@ -485,9 +441,9 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
    * Register resolver tracking hook (called externally if needed)
    */
   trackResolver(event: MercuriusResolutionEvent, context: MercuriusContext): void {
-    const tracking = (context as Record<symbol, unknown>)[
-      TRACKING_KEY
-    ] as RequestTrackingData | undefined;
+    const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
+      | RequestTrackingData
+      | undefined;
 
     if (!tracking) {
       return;
@@ -504,7 +460,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
     }
 
     // Field tracing
-    if (tracking.fieldTracer && tracking.fieldTracer.isActive()) {
+    if (tracking.fieldTracer?.isActive()) {
       const path = this.buildFieldPath(event.info.path);
       const traceId = tracking.fieldTracer.startField(
         path,
@@ -528,10 +484,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
   /**
    * Build field path from path info
    */
-  private buildFieldPath(path: {
-    key: string | number;
-    prev?: { key: string | number };
-  }): string {
+  private buildFieldPath(path: { key: string | number; prev?: { key: string | number } }): string {
     const parts: (string | number)[] = [];
     let current: { key: string | number; prev?: unknown } | undefined = path;
 

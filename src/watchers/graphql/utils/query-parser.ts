@@ -61,18 +61,14 @@ export function truncateQuery(query: string, maxSize: number): string {
  */
 export function extractOperationName(query: string): string | undefined {
   // Match: query OperationName, mutation OperationName, subscription OperationName
-  const match = query.match(
-    /(?:query|mutation|subscription)\s+([a-zA-Z_][a-zA-Z0-9_]*)/,
-  );
+  const match = query.match(/(?:query|mutation|subscription)\s+([a-zA-Z_][a-zA-Z0-9_]*)/);
   return match?.[1];
 }
 
 /**
  * Extract operation type from a GraphQL query
  */
-export function extractOperationType(
-  query: string,
-): 'query' | 'mutation' | 'subscription' {
+export function extractOperationType(query: string): 'query' | 'mutation' | 'subscription' {
   const trimmed = query.trim();
 
   if (trimmed.startsWith('mutation')) {

@@ -180,8 +180,8 @@ describe('PruningService', () => {
       await Promise.resolve();
 
       // Assert - should log startup message but not "Pruned 0"
-      const calls = logSpy.mock.calls.map(c => c[0] as string);
-      expect(calls.some(c => c.includes('Pruned 0'))).toBe(false);
+      const calls = logSpy.mock.calls.map((c) => c[0] as string);
+      expect(calls.some((c) => c.includes('Pruned 0'))).toBe(false);
     });
 
     it('should handle prune errors gracefully', async () => {

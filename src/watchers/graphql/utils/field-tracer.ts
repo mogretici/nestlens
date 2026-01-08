@@ -275,8 +275,7 @@ export function buildWaterfall(
       path: trace.path,
       startMs: nsToMs(trace.startOffset),
       durationMs: nsToMs(trace.duration),
-      percentOfTotal:
-        totalDurationMs > 0 ? (nsToMs(trace.duration) / totalDurationMs) * 100 : 0,
+      percentOfTotal: totalDurationMs > 0 ? (nsToMs(trace.duration) / totalDurationMs) * 100 : 0,
       depth,
     };
   });

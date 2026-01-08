@@ -21,7 +21,11 @@ describe('ScheduleWatcher', () => {
     fireOnTick: jest.fn().mockResolvedValue(undefined),
   });
 
-  const createSchedulerRegistry = (cronJobs: Map<string, any> = new Map(), intervals: string[] = [], timeouts: string[] = []) => ({
+  const createSchedulerRegistry = (
+    cronJobs: Map<string, any> = new Map(),
+    intervals: string[] = [],
+    timeouts: string[] = [],
+  ) => ({
     getCronJobs: jest.fn().mockReturnValue(cronJobs),
     getIntervals: jest.fn().mockReturnValue(intervals),
     getTimeouts: jest.fn().mockReturnValue(timeouts),
@@ -290,9 +294,9 @@ describe('ScheduleWatcher', () => {
     it('should track job duration correctly', async () => {
       // Arrange
       const mockJob = createMockCronJob('timedJob');
-      mockJob.fireOnTick = jest.fn().mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 50)),
-      );
+      mockJob.fireOnTick = jest
+        .fn()
+        .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
       const cronJobs = new Map();
       cronJobs.set('timedJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);

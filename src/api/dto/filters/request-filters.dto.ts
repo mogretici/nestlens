@@ -1,8 +1,5 @@
 import { IsOptional, IsArray, IsString } from 'class-validator';
-import {
-  TransformCommaSeparatedArray,
-  TransformCommaSeparatedNumbersOrErr,
-} from '../transformers';
+import { TransformCommaSeparatedArray, TransformCommaSeparatedNumbersOrErr } from '../transformers';
 
 export class RequestFiltersDto {
   @IsOptional()

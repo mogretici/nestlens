@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  ViewWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,9 +31,7 @@ export class ViewWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.view;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -49,7 +43,7 @@ export class ViewWatcher implements OnModuleInit {
     if (!this.viewEngine) {
       this.logger.debug(
         'ViewWatcher: No view engine found. ' +
-        'To enable view tracking, inject your view engine with the NESTLENS_VIEW_ENGINE token.',
+          'To enable view tracking, inject your view engine with the NESTLENS_VIEW_ENGINE token.',
       );
       return;
     }
@@ -67,9 +61,7 @@ export class ViewWatcher implements OnModuleInit {
       this.viewEngine.render = this.wrapRenderMethod(boundRender);
       this.logger.log('View interceptors installed');
     } else {
-      this.logger.warn(
-        'ViewWatcher: View engine does not have a render method',
-      );
+      this.logger.warn('ViewWatcher: View engine does not have a render method');
     }
   }
 
@@ -135,9 +127,10 @@ export class ViewWatcher implements OnModuleInit {
 
     // Handle positional API: render(template, locals)
     const template = String(args[0]);
-    const locals = typeof args[1] === 'object' && args[1] !== null
-      ? args[1] as Record<string, unknown>
-      : undefined;
+    const locals =
+      typeof args[1] === 'object' && args[1] !== null
+        ? (args[1] as Record<string, unknown>)
+        : undefined;
 
     return {
       template,

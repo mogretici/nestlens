@@ -24,9 +24,7 @@ let idCounter = 0;
 const getNextId = () => `test-${++idCounter}-${Date.now()}`;
 
 // ==================== REQUEST ====================
-export function createRequestEntry(
-  overrides: Partial<RequestEntry['payload']> = {},
-): RequestEntry {
+export function createRequestEntry(overrides: Partial<RequestEntry['payload']> = {}): RequestEntry {
   return {
     type: 'request',
     requestId: getNextId(),
@@ -46,9 +44,7 @@ export function createRequestEntry(
 }
 
 // ==================== QUERY ====================
-export function createQueryEntry(
-  overrides: Partial<QueryEntry['payload']> = {},
-): QueryEntry {
+export function createQueryEntry(overrides: Partial<QueryEntry['payload']> = {}): QueryEntry {
   return {
     type: 'query',
     requestId: getNextId(),
@@ -80,9 +76,7 @@ export function createExceptionEntry(
 }
 
 // ==================== LOG ====================
-export function createLogEntry(
-  overrides: Partial<LogEntry['payload']> = {},
-): LogEntry {
+export function createLogEntry(overrides: Partial<LogEntry['payload']> = {}): LogEntry {
   return {
     type: 'log',
     requestId: getNextId(),
@@ -96,9 +90,7 @@ export function createLogEntry(
 }
 
 // ==================== CACHE ====================
-export function createCacheEntry(
-  overrides: Partial<CacheEntry['payload']> = {},
-): CacheEntry {
+export function createCacheEntry(overrides: Partial<CacheEntry['payload']> = {}): CacheEntry {
   return {
     type: 'cache',
     requestId: getNextId(),
@@ -113,9 +105,7 @@ export function createCacheEntry(
 }
 
 // ==================== EVENT ====================
-export function createEventEntry(
-  overrides: Partial<EventEntry['payload']> = {},
-): EventEntry {
+export function createEventEntry(overrides: Partial<EventEntry['payload']> = {}): EventEntry {
   return {
     type: 'event',
     requestId: getNextId(),
@@ -130,9 +120,7 @@ export function createEventEntry(
 }
 
 // ==================== JOB ====================
-export function createJobEntry(
-  overrides: Partial<JobEntry['payload']> = {},
-): JobEntry {
+export function createJobEntry(overrides: Partial<JobEntry['payload']> = {}): JobEntry {
   return {
     type: 'job',
     requestId: getNextId(),
@@ -166,9 +154,7 @@ export function createScheduleEntry(
 }
 
 // ==================== MAIL ====================
-export function createMailEntry(
-  overrides: Partial<MailEntry['payload']> = {},
-): MailEntry {
+export function createMailEntry(overrides: Partial<MailEntry['payload']> = {}): MailEntry {
   return {
     type: 'mail',
     requestId: getNextId(),
@@ -201,9 +187,7 @@ export function createHttpClientEntry(
 }
 
 // ==================== REDIS ====================
-export function createRedisEntry(
-  overrides: Partial<RedisEntry['payload']> = {},
-): RedisEntry {
+export function createRedisEntry(overrides: Partial<RedisEntry['payload']> = {}): RedisEntry {
   return {
     type: 'redis',
     requestId: getNextId(),
@@ -218,9 +202,7 @@ export function createRedisEntry(
 }
 
 // ==================== MODEL ====================
-export function createModelEntry(
-  overrides: Partial<ModelEntry['payload']> = {},
-): ModelEntry {
+export function createModelEntry(overrides: Partial<ModelEntry['payload']> = {}): ModelEntry {
   return {
     type: 'model',
     requestId: getNextId(),
@@ -254,9 +236,7 @@ export function createNotificationEntry(
 }
 
 // ==================== VIEW ====================
-export function createViewEntry(
-  overrides: Partial<ViewEntry['payload']> = {},
-): ViewEntry {
+export function createViewEntry(overrides: Partial<ViewEntry['payload']> = {}): ViewEntry {
   return {
     type: 'view',
     requestId: getNextId(),
@@ -271,9 +251,7 @@ export function createViewEntry(
 }
 
 // ==================== COMMAND ====================
-export function createCommandEntry(
-  overrides: Partial<CommandEntry['payload']> = {},
-): CommandEntry {
+export function createCommandEntry(overrides: Partial<CommandEntry['payload']> = {}): CommandEntry {
   return {
     type: 'command',
     requestId: getNextId(),
@@ -288,9 +266,7 @@ export function createCommandEntry(
 }
 
 // ==================== GATE ====================
-export function createGateEntry(
-  overrides: Partial<GateEntry['payload']> = {},
-): GateEntry {
+export function createGateEntry(overrides: Partial<GateEntry['payload']> = {}): GateEntry {
   return {
     type: 'gate',
     requestId: getNextId(),
@@ -305,9 +281,7 @@ export function createGateEntry(
 }
 
 // ==================== BATCH ====================
-export function createBatchEntry(
-  overrides: Partial<BatchEntry['payload']> = {},
-): BatchEntry {
+export function createBatchEntry(overrides: Partial<BatchEntry['payload']> = {}): BatchEntry {
   return {
     type: 'batch',
     requestId: getNextId(),
@@ -325,9 +299,7 @@ export function createBatchEntry(
 }
 
 // ==================== DUMP ====================
-export function createDumpEntry(
-  overrides: Partial<DumpEntry['payload']> = {},
-): DumpEntry {
+export function createDumpEntry(overrides: Partial<DumpEntry['payload']> = {}): DumpEntry {
   return {
     type: 'dump',
     requestId: getNextId(),

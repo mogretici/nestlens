@@ -8,7 +8,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '@nestjs/common';
 import { CollectorService } from '../../../core/collector.service';
 import { GraphQLPayload, ActiveSubscription } from '../../../types';
-import { ResolvedGraphQLConfig, ResolvedSubscriptionConfig, SubscriptionTransportMode } from '../types';
+import {
+  ResolvedGraphQLConfig,
+  ResolvedSubscriptionConfig,
+  SubscriptionTransportMode,
+} from '../types';
 import { hashQuery, truncateQuery, extractOperationName } from '../utils/query-parser';
 import { sanitizeVariables, sanitizeResponse } from '../utils/variable-sanitizer';
 import { ConnectionStore, createConnectionStore } from './connection.store';
@@ -26,8 +30,8 @@ export interface SubscriptionMetrics {
   byProtocol: {
     'graphql-ws': number;
     'subscriptions-transport-ws': number;
-    'mercurius': number;
-    'unknown': number;
+    mercurius: number;
+    unknown: number;
   };
   byTransportMode: {
     gateway: number;
@@ -82,8 +86,8 @@ export class SubscriptionTracker {
     byProtocol: {
       'graphql-ws': 0,
       'subscriptions-transport-ws': 0,
-      'mercurius': 0,
-      'unknown': 0,
+      mercurius: 0,
+      unknown: 0,
     },
     byTransportMode: {
       gateway: 0,
@@ -91,10 +95,7 @@ export class SubscriptionTracker {
     },
   };
 
-  constructor(
-    collector: CollectorService,
-    config: ResolvedGraphQLConfig,
-  ) {
+  constructor(collector: CollectorService, config: ResolvedGraphQLConfig) {
     this.collector = collector;
     this.graphqlConfig = config;
     this.config = config.subscriptions;
@@ -235,10 +236,7 @@ export class SubscriptionTracker {
       query: truncateQuery(event.query || '', this.graphqlConfig.maxQuerySize),
       queryHash: hashQuery(event.query || ''),
       variables: this.graphqlConfig.captureVariables
-        ? sanitizeVariables(
-            event.variables,
-            this.graphqlConfig.sensitiveVariables,
-          )
+        ? sanitizeVariables(event.variables, this.graphqlConfig.sensitiveVariables)
         : undefined,
       duration: 0,
       statusCode: 200,
@@ -257,9 +255,7 @@ export class SubscriptionTracker {
   /**
    * Handle subscription data message
    */
-  async handleData(
-    event: SubscriptionLifecycleEvent,
-  ): Promise<void> {
+  async handleData(event: SubscriptionLifecycleEvent): Promise<void> {
     if (!this.config.enabled || !this.config.trackMessages) {
       return;
     }
@@ -282,10 +278,7 @@ export class SubscriptionTracker {
     });
 
     // Increment message count
-    this.connectionStore.incrementMessageCount(
-      event.connectionId,
-      event.subscriptionId,
-    );
+    this.connectionStore.incrementMessageCount(event.connectionId, event.subscriptionId);
 
     // Check message limit
     if (subscription.messageCount > this.config.maxTrackedMessages) {
@@ -391,17 +384,10 @@ export class SubscriptionTracker {
     };
 
     // Use immediate collection for errors
-    await this.collector.collectImmediate(
-      'graphql',
-      payload,
-      subscription.requestId,
-    );
+    await this.collector.collectImmediate('graphql', payload, subscription.requestId);
 
     // Remove subscription
-    this.connectionStore.removeSubscription(
-      event.connectionId,
-      event.subscriptionId,
-    );
+    this.connectionStore.removeSubscription(event.connectionId, event.subscriptionId);
 
     // Clear message buffer
     const bufferKey = `${event.connectionId}:${event.subscriptionId}`;

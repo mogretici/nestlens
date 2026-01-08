@@ -192,7 +192,7 @@ export class CollectorService implements OnModuleDestroy {
           throw error;
         }
         this.logger.warn(`Save attempt ${attempt} failed, retrying...`);
-        await new Promise(r => setTimeout(r, 100 * attempt));
+        await new Promise((r) => setTimeout(r, 100 * attempt));
       }
     }
     // This should never be reached, but TypeScript needs it
@@ -226,7 +226,7 @@ export class CollectorService implements OnModuleDestroy {
       const savedEntries = await this.saveWithRetry(entries);
 
       // Optimized: Apply auto-tagging in parallel instead of sequentially
-      await Promise.all(savedEntries.map(entry => this.applyAutoTagging(entry)));
+      await Promise.all(savedEntries.map((entry) => this.applyAutoTagging(entry)));
     } catch (error) {
       this.logger.error(`Failed to flush entries: ${error}`);
       // Put entries back in buffer

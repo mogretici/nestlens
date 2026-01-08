@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  GateWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { GateWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { GateEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,9 +37,7 @@ export class GateWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.gate;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -55,7 +49,7 @@ export class GateWatcher implements OnModuleInit {
     if (!this.gateService) {
       this.logger.debug(
         'GateWatcher: No gate service found. ' +
-        'To enable gate tracking, provide a gate/authorization service.',
+          'To enable gate tracking, provide a gate/authorization service.',
       );
       return;
     }
@@ -96,15 +90,7 @@ export class GateWatcher implements OnModuleInit {
         const duration = Date.now() - startTime;
 
         // Track authorization check
-        this.collectEntry(
-          gate,
-          action || 'check',
-          subject,
-          allowed,
-          user,
-          undefined,
-          duration,
-        );
+        this.collectEntry(gate, action || 'check', subject, allowed, user, undefined, duration);
 
         return allowed;
       } catch (error) {
@@ -166,9 +152,8 @@ export class GateWatcher implements OnModuleInit {
       userId,
       reason,
       duration,
-      context: this.config.captureContext !== false
-        ? this.captureContext(subject, user)
-        : undefined,
+      context:
+        this.config.captureContext !== false ? this.captureContext(subject, user) : undefined,
     };
 
     this.collector.collect('gate', payload);
@@ -185,10 +170,7 @@ export class GateWatcher implements OnModuleInit {
 
     // Check both gate name and action against ignore list
     return ignoreList.some(
-      (ignored) =>
-        ignored === gate ||
-        ignored === action ||
-        ignored === `${gate}:${action}`,
+      (ignored) => ignored === gate || ignored === action || ignored === `${gate}:${action}`,
     );
   }
 
@@ -231,10 +213,7 @@ export class GateWatcher implements OnModuleInit {
     }
   }
 
-  private captureContext(
-    subject: unknown,
-    user: unknown,
-  ): Record<string, unknown> | undefined {
+  private captureContext(subject: unknown, user: unknown): Record<string, unknown> | undefined {
     try {
       const context: Record<string, unknown> = {};
 

@@ -49,7 +49,9 @@ describe('Storage Filters', () => {
         });
 
         expect(result.data).toHaveLength(2);
-        expect(result.data.every((e) => ['error', 'warn'].includes((e.payload as any).level))).toBe(true);
+        expect(result.data.every((e) => ['error', 'warn'].includes((e.payload as any).level))).toBe(
+          true,
+        );
       });
 
       it('excludes non-matching entries', async () => {

@@ -9,11 +9,7 @@ export class NestLensApiException extends HttpException {
   public readonly errorCode: ErrorCode;
   public readonly details?: Record<string, unknown>;
 
-  constructor(
-    code: ErrorCode,
-    message?: string,
-    details?: Record<string, unknown>,
-  ) {
+  constructor(code: ErrorCode, message?: string, details?: Record<string, unknown>) {
     const errorMessage = message || ERROR_MESSAGES[code];
     const httpStatus = ERROR_HTTP_STATUS[code];
 
@@ -34,31 +30,24 @@ export class NestLensApiException extends HttpException {
    * Create a NOT_FOUND exception for entries.
    */
   static entryNotFound(id: number): NestLensApiException {
-    return new NestLensApiException(
-      ErrorCode.ENTRY_NOT_FOUND,
-      `Entry with ID ${id} not found`,
-      { entryId: id },
-    );
+    return new NestLensApiException(ErrorCode.ENTRY_NOT_FOUND, `Entry with ID ${id} not found`, {
+      entryId: id,
+    });
   }
 
   /**
    * Create a NOT_FOUND exception for tags.
    */
   static tagNotFound(name: string): NestLensApiException {
-    return new NestLensApiException(
-      ErrorCode.TAG_NOT_FOUND,
-      `Tag '${name}' not found`,
-      { tagName: name },
-    );
+    return new NestLensApiException(ErrorCode.TAG_NOT_FOUND, `Tag '${name}' not found`, {
+      tagName: name,
+    });
   }
 
   /**
    * Create a validation error exception.
    */
-  static validationError(
-    message: string,
-    details?: Record<string, unknown>,
-  ): NestLensApiException {
+  static validationError(message: string, details?: Record<string, unknown>): NestLensApiException {
     return new NestLensApiException(ErrorCode.VALIDATION_ERROR, message, details);
   }
 
@@ -66,9 +55,6 @@ export class NestLensApiException extends HttpException {
    * Create a storage error exception.
    */
   static storageError(message?: string): NestLensApiException {
-    return new NestLensApiException(
-      ErrorCode.STORAGE_ERROR,
-      message || 'A storage error occurred',
-    );
+    return new NestLensApiException(ErrorCode.STORAGE_ERROR, message || 'A storage error occurred');
   }
 }

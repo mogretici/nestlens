@@ -14,15 +14,17 @@ describe('ModelWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createEntitySubscriber = (overrides: Partial<{
-    afterLoad: jest.Mock;
-    beforeInsert: jest.Mock;
-    afterInsert: jest.Mock;
-    beforeUpdate: jest.Mock;
-    afterUpdate: jest.Mock;
-    beforeRemove: jest.Mock;
-    afterRemove: jest.Mock;
-  }> = {}) => ({
+  const createEntitySubscriber = (
+    overrides: Partial<{
+      afterLoad: jest.Mock;
+      beforeInsert: jest.Mock;
+      afterInsert: jest.Mock;
+      beforeUpdate: jest.Mock;
+      afterUpdate: jest.Mock;
+      beforeRemove: jest.Mock;
+      afterRemove: jest.Mock;
+    }> = {},
+  ) => ({
     afterLoad: jest.fn(),
     beforeInsert: jest.fn(),
     afterInsert: jest.fn(),
@@ -312,7 +314,10 @@ describe('ModelWatcher', () => {
 
       // Act
       subscriber.beforeUpdate({ metadata: { name: 'Article' } });
-      subscriber.afterUpdate({ metadata: { name: 'Article' }, entity: { id: 1, title: 'Updated' } });
+      subscriber.afterUpdate({
+        metadata: { name: 'Article' },
+        entity: { id: 1, title: 'Updated' },
+      });
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -386,7 +391,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -413,7 +420,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -439,7 +448,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -464,7 +475,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -489,7 +502,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -514,7 +529,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -533,7 +550,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -553,7 +572,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -689,7 +710,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -725,7 +748,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -749,12 +774,18 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
       const next = jest.fn().mockResolvedValue([]);
-      const largeWhere = { ids: Array(1000).fill(0).map((_, i) => i) };
+      const largeWhere = {
+        ids: Array(1000)
+          .fill(0)
+          .map((_, i) => i),
+      };
       const params = { model: 'User', action: 'findMany', args: { where: largeWhere } };
 
       // Act
@@ -777,7 +808,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -810,7 +843,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -834,7 +869,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 
@@ -858,7 +895,9 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => { middleware = fn; }),
+        $use: jest.fn((fn) => {
+          middleware = fn;
+        }),
       };
       watcher.setupPrismaClient(prismaClient);
 

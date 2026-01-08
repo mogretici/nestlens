@@ -106,7 +106,8 @@ describe('DashboardController', () => {
 
         // Assert
         expect(mockResponse.sendFile).toHaveBeenCalledWith(
-          expect.stringContaining('index.html')
+          'index.html',
+          expect.objectContaining({ root: expect.stringContaining('dashboard') }),
         );
       });
 
@@ -136,7 +137,8 @@ describe('DashboardController', () => {
 
       // Assert
       expect(mockResponse.sendFile).toHaveBeenCalledWith(
-        expect.stringContaining(join('assets', filename))
+        filename,
+        expect.objectContaining({ root: expect.stringContaining('assets') }),
       );
     });
 
@@ -163,7 +165,8 @@ describe('DashboardController', () => {
 
       // Assert
       expect(mockResponse.sendFile).toHaveBeenCalledWith(
-        expect.stringContaining('styles.css')
+        filename,
+        expect.objectContaining({ root: expect.stringContaining('assets') }),
       );
     });
 
@@ -177,7 +180,8 @@ describe('DashboardController', () => {
 
       // Assert
       expect(mockResponse.sendFile).toHaveBeenCalledWith(
-        expect.stringContaining('font.woff2')
+        filename,
+        expect.objectContaining({ root: expect.stringContaining('assets') }),
       );
     });
   });
@@ -193,7 +197,8 @@ describe('DashboardController', () => {
 
       // Assert
       expect(mockResponse.sendFile).toHaveBeenCalledWith(
-        expect.stringContaining('favicon.svg')
+        `${filename}.svg`,
+        expect.objectContaining({ root: expect.stringContaining('dashboard') }),
       );
     });
 
@@ -220,7 +225,8 @@ describe('DashboardController', () => {
 
       // Assert
       expect(mockResponse.sendFile).toHaveBeenCalledWith(
-        expect.stringContaining('logo.svg')
+        `${filename}.svg`,
+        expect.objectContaining({ root: expect.stringContaining('dashboard') }),
       );
     });
   });
@@ -236,7 +242,8 @@ describe('DashboardController', () => {
 
       // Assert
       expect(mockResponse.sendFile).toHaveBeenCalledWith(
-        expect.stringContaining('index.html')
+        'index.html',
+        expect.objectContaining({ root: expect.stringContaining('dashboard') }),
       );
     });
 
@@ -568,10 +575,12 @@ describe('DashboardController', () => {
       controller.serveRequestsRoute(mockResponse as Response);
 
       // Assert
-      const sendFileCall = (mockResponse.sendFile as jest.Mock).mock.calls[0][0];
-      expect(sendFileCall).toContain('index.html');
-      expect(sendFileCall).toContain('dashboard');
-      expect(sendFileCall).toContain('public');
+      const sendFileMock = mockResponse.sendFile as jest.Mock;
+      const firstArg = sendFileMock.mock.calls[0][0];
+      const secondArg = sendFileMock.mock.calls[0][1];
+      expect(firstArg).toBe('index.html');
+      expect(secondArg.root).toContain('dashboard');
+      expect(secondArg.root).toContain('public');
     });
   });
 

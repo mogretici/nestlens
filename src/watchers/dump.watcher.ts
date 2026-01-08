@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  DumpWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,9 +32,7 @@ export class DumpWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.dump;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -50,7 +44,7 @@ export class DumpWatcher implements OnModuleInit {
     if (!this.dumpService) {
       this.logger.debug(
         'DumpWatcher: No dump service found. ' +
-        'To enable dump tracking, provide a dump/export/import service or call trackDump() manually.',
+          'To enable dump tracking, provide a dump/export/import service or call trackDump() manually.',
       );
       return;
     }
@@ -80,9 +74,7 @@ export class DumpWatcher implements OnModuleInit {
     const originalMethod = this.dumpService[methodName].bind(this.dumpService);
     const operation = this.getOperationType(methodName);
 
-    this.dumpService[methodName] = async (
-      options?: unknown,
-    ): Promise<unknown> => {
+    this.dumpService[methodName] = async (options?: unknown): Promise<unknown> => {
       const dumpId = `${methodName}-${Date.now()}`;
       const startTime = Date.now();
 
@@ -207,7 +199,9 @@ export class DumpWatcher implements OnModuleInit {
     this.collector.collect('dump', payload);
   }
 
-  private getOperationType(methodName: string): 'export' | 'import' | 'backup' | 'restore' | 'migrate' {
+  private getOperationType(
+    methodName: string,
+  ): 'export' | 'import' | 'backup' | 'restore' | 'migrate' {
     switch (methodName.toLowerCase()) {
       case 'export':
       case 'dump':
@@ -225,7 +219,10 @@ export class DumpWatcher implements OnModuleInit {
     }
   }
 
-  private parseResult(result: unknown, options?: unknown): {
+  private parseResult(
+    result: unknown,
+    options?: unknown,
+  ): {
     format: 'sql' | 'json' | 'csv' | 'binary';
     source?: string;
     destination?: string;
@@ -275,12 +272,10 @@ export class DumpWatcher implements OnModuleInit {
     }
   }
 
-  private extractFormat(
-    obj: unknown,
-    fallback?: unknown,
-  ): 'sql' | 'json' | 'csv' | 'binary' {
-    const format = this.extractString(obj, ['format', 'type']) ||
-                   this.extractString(fallback, ['format', 'type']);
+  private extractFormat(obj: unknown, fallback?: unknown): 'sql' | 'json' | 'csv' | 'binary' {
+    const format =
+      this.extractString(obj, ['format', 'type']) ||
+      this.extractString(fallback, ['format', 'type']);
 
     if (format) {
       const lower = format.toLowerCase();

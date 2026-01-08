@@ -21,10 +21,7 @@ describe('TagService', () => {
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        TagService,
-        { provide: STORAGE, useValue: mockStorage },
-      ],
+      providers: [TagService, { provide: STORAGE, useValue: mockStorage }],
     }).compile();
 
     service = module.get<TagService>(TagService);
@@ -50,7 +47,10 @@ describe('TagService', () => {
         // Assert
         expect(tags).toContain('ERROR');
         expect(tags).toContain('5XX');
-        expect(mockStorage.addTags).toHaveBeenCalledWith(1, expect.arrayContaining(['ERROR', '5XX']));
+        expect(mockStorage.addTags).toHaveBeenCalledWith(
+          1,
+          expect.arrayContaining(['ERROR', '5XX']),
+        );
       });
 
       it('should add CLIENT-ERROR and 4XX tags for 400+ status', async () => {
@@ -314,7 +314,7 @@ describe('TagService', () => {
         // Assert
         // ERROR tag is added for all exceptions, but 'ERROR' as exception name should not be duplicated
         expect(tags).toContain('ERROR'); // This is the standard exception tag
-        expect(tags.filter(t => t === 'ERROR')).toHaveLength(1); // Should only appear once
+        expect(tags.filter((t) => t === 'ERROR')).toHaveLength(1); // Should only appear once
       });
 
       it('should add HTTP-ERROR tag for HTTP exceptions', async () => {
@@ -620,7 +620,11 @@ describe('TagService', () => {
         const entry = {
           id: 1,
           type: 'mail' as const,
-          payload: { to: ['user1@example.com', 'user2@example.com'], subject: 'Test', status: 'sent' },
+          payload: {
+            to: ['user1@example.com', 'user2@example.com'],
+            subject: 'Test',
+            status: 'sent',
+          },
         } as Entry;
 
         // Act
@@ -635,7 +639,12 @@ describe('TagService', () => {
         const entry = {
           id: 1,
           type: 'mail' as const,
-          payload: { to: 'user@example.com', subject: 'Test', status: 'sent', html: '<p>Hello</p>' },
+          payload: {
+            to: 'user@example.com',
+            subject: 'Test',
+            status: 'sent',
+            html: '<p>Hello</p>',
+          },
         } as Entry;
 
         // Act
@@ -667,7 +676,12 @@ describe('TagService', () => {
         const entry = {
           id: 1,
           type: 'http-client' as const,
-          payload: { method: 'GET', url: 'https://api.example.com', hostname: 'api.example.com', statusCode: 200 },
+          payload: {
+            method: 'GET',
+            url: 'https://api.example.com',
+            hostname: 'api.example.com',
+            statusCode: 200,
+          },
         } as Entry;
 
         // Act
@@ -1137,7 +1151,11 @@ describe('TagService', () => {
     describe('addMonitoredTag', () => {
       it('should call storage.addMonitoredTag', async () => {
         // Arrange
-        const monitoredTag: MonitoredTag = { id: 1, tag: 'CRITICAL', createdAt: new Date().toISOString() };
+        const monitoredTag: MonitoredTag = {
+          id: 1,
+          tag: 'CRITICAL',
+          createdAt: new Date().toISOString(),
+        };
         mockStorage.addMonitoredTag.mockResolvedValue(monitoredTag);
 
         // Act
@@ -1203,9 +1221,7 @@ describe('TagService', () => {
 
       it('should return 0 count for tags not found in allTags', async () => {
         // Arrange
-        const monitoredTags: MonitoredTag[] = [
-          { id: 1, tag: 'NEWTYPE', createdAt: '2024-01-01' },
-        ];
+        const monitoredTags: MonitoredTag[] = [{ id: 1, tag: 'NEWTYPE', createdAt: '2024-01-01' }];
         mockStorage.getMonitoredTags.mockResolvedValue(monitoredTags);
         mockStorage.getAllTags.mockResolvedValue([]);
 
@@ -1213,9 +1229,7 @@ describe('TagService', () => {
         const result = await service.getMonitoredTagsWithCounts();
 
         // Assert
-        expect(result).toEqual([
-          { id: 1, tag: 'NEWTYPE', createdAt: '2024-01-01', count: 0 },
-        ]);
+        expect(result).toEqual([{ id: 1, tag: 'NEWTYPE', createdAt: '2024-01-01', count: 0 }]);
       });
     });
   });

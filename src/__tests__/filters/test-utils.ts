@@ -11,10 +11,7 @@ export function createTestStorage(): SqliteStorage {
 /**
  * Seeds the storage with test entries
  */
-export async function seedStorage(
-  storage: SqliteStorage,
-  entries: Entry[],
-): Promise<Entry[]> {
+export async function seedStorage(storage: SqliteStorage, entries: Entry[]): Promise<Entry[]> {
   const savedEntries: Entry[] = [];
   for (const entry of entries) {
     const saved = await storage.save(entry);

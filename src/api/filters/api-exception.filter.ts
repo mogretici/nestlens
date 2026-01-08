@@ -85,9 +85,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
       apiError = {
         code: ErrorCode.INTERNAL_ERROR,
-        message: this.isDevelopment
-          ? exception.message
-          : ERROR_MESSAGES[ErrorCode.INTERNAL_ERROR],
+        message: this.isDevelopment ? exception.message : ERROR_MESSAGES[ErrorCode.INTERNAL_ERROR],
       };
 
       if (this.isDevelopment && exception.stack) {
@@ -95,10 +93,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
       }
 
       // Log unexpected errors
-      this.logger.error(
-        `Unexpected error: ${exception.message}`,
-        exception.stack,
-      );
+      this.logger.error(`Unexpected error: ${exception.message}`, exception.stack);
     } else {
       // Handle unknown exception types
       status = HttpStatus.INTERNAL_SERVER_ERROR;

@@ -128,9 +128,7 @@ describe('NestLensApiController', () => {
 
       const result = await controller.getEntries('query' as EntryType);
 
-      expect(mockStorage.find).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'query' }),
-      );
+      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'query' }));
       expect(result.data).toEqual(entries);
     });
 
@@ -141,21 +139,14 @@ describe('NestLensApiController', () => {
 
       await controller.getEntries(undefined, requestId);
 
-      expect(mockStorage.find).toHaveBeenCalledWith(
-        expect.objectContaining({ requestId }),
-      );
+      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ requestId }));
     });
 
     it('should handle custom pagination', async () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(100);
 
-      const result = await controller.getEntries(
-        undefined,
-        undefined,
-        '25',
-        '50',
-      );
+      const result = await controller.getEntries(undefined, undefined, '25', '50');
 
       expect(mockStorage.find).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 25, offset: 50 }),
@@ -169,14 +160,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(0);
 
-      await controller.getEntries(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        from,
-        to,
-      );
+      await controller.getEntries(undefined, undefined, undefined, undefined, from, to);
 
       expect(mockStorage.find).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -222,9 +206,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ limit: '25', beforeSequence: '100' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ limit: '25', beforeSequence: '100' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith(undefined, {
         limit: 25,
@@ -245,9 +227,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ limit: '25', afterSequence: '50' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ limit: '25', afterSequence: '50' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith(undefined, {
         limit: 25,
@@ -293,9 +273,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ type: 'query', slow: 'true' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ type: 'query', slow: 'true' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith('query', {
         limit: 50,
@@ -318,9 +296,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ type: 'exception', resolved: 'false' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ type: 'exception', resolved: 'false' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith('exception', {
         limit: 50,
@@ -368,9 +344,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ type: 'request', methods: 'GET,POST' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ type: 'request', methods: 'GET,POST' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith('request', {
         limit: 50,
@@ -393,9 +367,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ type: 'request', levels: '' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ type: 'request', levels: '' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith('request', {
         limit: 50,
@@ -416,9 +388,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ search: 'test search' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ search: 'test search' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith(undefined, {
         limit: 50,
@@ -441,9 +411,7 @@ describe('NestLensApiController', () => {
         },
       });
 
-      await controller.getEntriesWithCursor(
-        createQuery({ tags: 'important,debug' }),
-      );
+      await controller.getEntriesWithCursor(createQuery({ tags: 'important,debug' }));
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith(undefined, {
         limit: 50,
@@ -622,17 +590,12 @@ describe('NestLensApiController', () => {
 
   describe('getGroupedEntries', () => {
     it('should return entries grouped by family hash', async () => {
-      const groups = [
-        { familyHash: 'abc', count: 5, latestEntry: createMockEntry() },
-      ];
+      const groups = [{ familyHash: 'abc', count: 5, latestEntry: createMockEntry() }];
       mockStorage.getGroupedByFamilyHash.mockResolvedValue(groups);
 
       const result = await controller.getGroupedEntries();
 
-      expect(mockStorage.getGroupedByFamilyHash).toHaveBeenCalledWith(
-        undefined,
-        50,
-      );
+      expect(mockStorage.getGroupedByFamilyHash).toHaveBeenCalledWith(undefined, 50);
       expect(result).toEqual({ data: groups });
     });
 
@@ -641,10 +604,7 @@ describe('NestLensApiController', () => {
 
       await controller.getGroupedEntries('exception' as EntryType, '25');
 
-      expect(mockStorage.getGroupedByFamilyHash).toHaveBeenCalledWith(
-        'exception',
-        25,
-      );
+      expect(mockStorage.getGroupedByFamilyHash).toHaveBeenCalledWith('exception', 25);
     });
   });
 
@@ -760,9 +720,7 @@ describe('NestLensApiController', () => {
 
       await controller.getRequests();
 
-      expect(mockStorage.find).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'request' }),
-      );
+      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'request' }));
     });
   });
 
@@ -855,9 +813,7 @@ describe('NestLensApiController', () => {
 
       await controller.getExceptions();
 
-      expect(mockStorage.find).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'exception' }),
-      );
+      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'exception' }));
     });
   });
 
@@ -940,9 +896,7 @@ describe('NestLensApiController', () => {
 
       await controller.runPruning();
 
-      expect(controller['lastPruneRun']!.getTime()).toBeGreaterThanOrEqual(
-        beforeRun,
-      );
+      expect(controller['lastPruneRun']!.getTime()).toBeGreaterThanOrEqual(beforeRun);
       expect(controller['nextPruneRun']!.getTime()).toBeGreaterThan(
         controller['lastPruneRun']!.getTime(),
       );
@@ -1080,9 +1034,7 @@ describe('NestLensApiController', () => {
 
         await controller.getEntries(undefined, undefined, 'invalid', undefined);
 
-        expect(mockStorage.find).toHaveBeenCalledWith(
-          expect.objectContaining({ limit: 50 }),
-        );
+        expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
       });
     });
 
@@ -1093,9 +1045,7 @@ describe('NestLensApiController', () => {
 
         await controller.getEntries(undefined, undefined, '9999', undefined);
 
-        expect(mockStorage.find).toHaveBeenCalledWith(
-          expect.objectContaining({ limit: 1000 }),
-        );
+        expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 1000 }));
       });
     });
   });

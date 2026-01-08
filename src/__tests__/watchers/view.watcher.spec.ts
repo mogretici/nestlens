@@ -14,9 +14,11 @@ describe('ViewWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createViewEngine = (overrides: Partial<{
-    render: jest.Mock;
-  }> = {}) => ({
+  const createViewEngine = (
+    overrides: Partial<{
+      render: jest.Mock;
+    }> = {},
+  ) => ({
     render: jest.fn().mockResolvedValue('<html>Rendered</html>'),
     ...overrides,
   });
@@ -181,9 +183,11 @@ describe('ViewWatcher', () => {
     it('should calculate render duration', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve('<html>'), 50)),
-        ),
+        render: jest
+          .fn()
+          .mockImplementation(
+            () => new Promise((resolve) => setTimeout(() => resolve('<html>'), 50)),
+          ),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();

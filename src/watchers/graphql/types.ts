@@ -144,8 +144,7 @@ export function resolveGraphQLConfig(
       maxTrackedMessages:
         subscriptions.maxTrackedMessages ?? GRAPHQL_DEFAULTS.subscriptions.maxTrackedMessages,
       trackConnectionEvents:
-        subscriptions.trackConnectionEvents ??
-        GRAPHQL_DEFAULTS.subscriptions.trackConnectionEvents,
+        subscriptions.trackConnectionEvents ?? GRAPHQL_DEFAULTS.subscriptions.trackConnectionEvents,
       transportMode:
         (subscriptions as { transportMode?: SubscriptionTransportMode }).transportMode ??
         GRAPHQL_DEFAULTS.subscriptions.transportMode,

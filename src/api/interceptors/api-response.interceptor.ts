@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiResponse, ResponseMeta } from '../dto/api-response.dto';
@@ -25,13 +20,8 @@ interface ControllerResponse<T> {
  * Handles both direct data returns and structured responses from controllers.
  */
 @Injectable()
-export class NestLensApiResponseInterceptor<T>
-  implements NestInterceptor<T, ApiResponse<T>>
-{
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<ApiResponse<T>> {
+export class NestLensApiResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
     const request = context.switchToHttp().getRequest();
     const startTime = Date.now();
 
@@ -94,19 +84,14 @@ export class NestLensApiResponseInterceptor<T>
     if (!response || typeof response !== 'object') return false;
     const resp = response as Record<string, unknown>;
     return (
-      'success' in resp &&
-      typeof resp.success === 'boolean' &&
-      'data' in resp &&
-      'error' in resp
+      'success' in resp && typeof resp.success === 'boolean' && 'data' in resp && 'error' in resp
     );
   }
 
   /**
    * Check if response is a structured controller response.
    */
-  private isControllerResponse(
-    response: unknown,
-  ): response is ControllerResponse<T> {
+  private isControllerResponse(response: unknown): response is ControllerResponse<T> {
     if (!response || typeof response !== 'object') return false;
     const resp = response as Record<string, unknown>;
     return 'data' in resp || 'meta' in resp;

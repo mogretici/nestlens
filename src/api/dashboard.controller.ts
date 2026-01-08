@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Inject,
-  Param,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Inject, Param, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -36,7 +28,7 @@ export class DashboardController {
     const indexPath = join(this.dashboardPath, 'index.html');
     if (existsSync(indexPath)) {
       res.sendFile('index.html', {
-        root: this.dashboardPath
+        root: this.dashboardPath,
       });
     } else {
       res.status(404).json({ error: 'Dashboard not found' });
@@ -48,7 +40,7 @@ export class DashboardController {
     const assetPath = join(this.dashboardPath, 'assets', filename);
     if (existsSync(assetPath)) {
       res.sendFile(filename, {
-        root: join(this.dashboardPath, 'assets')
+        root: join(this.dashboardPath, 'assets'),
       });
     } else {
       res.status(404).json({ error: 'Asset not found' });
@@ -61,7 +53,7 @@ export class DashboardController {
     const filePath = join(this.dashboardPath, `${filename}.svg`);
     if (existsSync(filePath)) {
       res.sendFile(`${filename}.svg`, {
-        root: this.dashboardPath
+        root: this.dashboardPath,
       });
     } else {
       res.status(404).json({ error: 'File not found' });
@@ -269,7 +261,7 @@ export class DashboardController {
     const indexPath = join(this.dashboardPath, 'index.html');
     if (existsSync(indexPath)) {
       res.sendFile('index.html', {
-        root: this.dashboardPath
+        root: this.dashboardPath,
       });
     } else {
       res.status(404).json({ error: 'Dashboard not found' });

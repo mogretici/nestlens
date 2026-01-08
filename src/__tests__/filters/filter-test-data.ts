@@ -398,8 +398,6 @@ export const TEST_CASES_BY_TYPE = FILTER_TEST_CASES.reduce(
 /**
  * Get test case by filter key
  */
-export function getTestCaseByFilterKey(
-  filterKey: string,
-): FilterTestCase | undefined {
+export function getTestCaseByFilterKey(filterKey: string): FilterTestCase | undefined {
   return FILTER_TEST_CASES.find((tc) => tc.filterKey === filterKey);
 }

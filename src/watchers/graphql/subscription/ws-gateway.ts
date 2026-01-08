@@ -74,11 +74,7 @@ export function createGraphQLWsHandlers(tracker: SubscriptionTracker) {
      * Handle connection (called when WebSocket connects)
      */
     onConnect: (connectionInfo: WsConnectionInfo) => {
-      tracker.handleConnection(
-        connectionInfo.id,
-        connectionInfo.ip,
-        connectionInfo.userAgent,
-      );
+      tracker.handleConnection(connectionInfo.id, connectionInfo.ip, connectionInfo.userAgent);
       return true; // Allow connection
     },
 
@@ -114,11 +110,7 @@ export function createGraphQLWsHandlers(tracker: SubscriptionTracker) {
     /**
      * Handle next (data) message
      */
-    onNext: async (
-      connectionInfo: WsConnectionInfo,
-      subscriptionId: string,
-      data: unknown,
-    ) => {
+    onNext: async (connectionInfo: WsConnectionInfo, subscriptionId: string, data: unknown) => {
       await tracker.handleData({
         connectionId: connectionInfo.id,
         subscriptionId,
@@ -130,11 +122,7 @@ export function createGraphQLWsHandlers(tracker: SubscriptionTracker) {
     /**
      * Handle error message
      */
-    onError: async (
-      connectionInfo: WsConnectionInfo,
-      subscriptionId: string,
-      error: Error,
-    ) => {
+    onError: async (connectionInfo: WsConnectionInfo, subscriptionId: string, error: Error) => {
       await tracker.handleError({
         connectionId: connectionInfo.id,
         subscriptionId,
@@ -146,10 +134,7 @@ export function createGraphQLWsHandlers(tracker: SubscriptionTracker) {
     /**
      * Handle complete message
      */
-    onComplete: async (
-      connectionInfo: WsConnectionInfo,
-      subscriptionId: string,
-    ) => {
+    onComplete: async (connectionInfo: WsConnectionInfo, subscriptionId: string) => {
       await tracker.handleComplete({
         connectionId: connectionInfo.id,
         subscriptionId,
@@ -191,11 +176,7 @@ export function createWsMessageInterceptor(tracker: SubscriptionTracker) {
       switch (type) {
         case GraphQLWsMessageType.ConnectionInit:
         case LegacyWsMessageType.GQL_CONNECTION_INIT:
-          tracker.handleConnection(
-            connectionId,
-            connectionInfo?.ip,
-            connectionInfo?.userAgent,
-          );
+          tracker.handleConnection(connectionId, connectionInfo?.ip, connectionInfo?.userAgent);
           break;
 
         case GraphQLWsMessageType.Subscribe:
@@ -227,10 +208,7 @@ export function createWsMessageInterceptor(tracker: SubscriptionTracker) {
     /**
      * Intercept outgoing WebSocket message
      */
-    interceptOutgoing: async (
-      connectionId: string,
-      message: GraphQLWsMessage,
-    ) => {
+    interceptOutgoing: async (connectionId: string, message: GraphQLWsMessage) => {
       const type = message.type;
 
       switch (type) {
@@ -292,20 +270,12 @@ function detectProtocol(
   messageType: string,
 ): 'graphql-ws' | 'subscriptions-transport-ws' | undefined {
   // graphql-ws uses simple message types
-  if (
-    Object.values(GraphQLWsMessageType).includes(
-      messageType as GraphQLWsMessageType,
-    )
-  ) {
+  if (Object.values(GraphQLWsMessageType).includes(messageType as GraphQLWsMessageType)) {
     return 'graphql-ws';
   }
 
   // subscriptions-transport-ws uses GQL_ prefixed types
-  if (
-    Object.values(LegacyWsMessageType).includes(
-      messageType as LegacyWsMessageType,
-    )
-  ) {
+  if (Object.values(LegacyWsMessageType).includes(messageType as LegacyWsMessageType)) {
     return 'subscriptions-transport-ws';
   }
 
@@ -317,19 +287,13 @@ function detectProtocol(
  *
  * This is a utility for wrapping existing WebSocket servers.
  */
-export function wrapWebSocketServer(
-  tracker: SubscriptionTracker,
-  wsServer: unknown,
-): void {
+export function wrapWebSocketServer(tracker: SubscriptionTracker, wsServer: unknown): void {
   // This is a placeholder for actual WebSocket server wrapping
   // The implementation would depend on the specific WebSocket library being used
-
   // For graphql-ws:
   // const server = useServer({ ... }, wsServer);
-
   // For subscriptions-transport-ws:
   // SubscriptionServer.create({ ... }, wsServer);
-
   // In practice, users would integrate the handlers directly
   // with their WebSocket server setup
 }
@@ -337,10 +301,7 @@ export function wrapWebSocketServer(
 /**
  * Extract connection info from WebSocket request
  */
-export function extractConnectionInfo(
-  request: unknown,
-  connectionId: string,
-): WsConnectionInfo {
+export function extractConnectionInfo(request: unknown, connectionId: string): WsConnectionInfo {
   const req = request as Record<string, unknown> | undefined;
 
   let ip: string | undefined;

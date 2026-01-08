@@ -9,12 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
-import {
-  AuthUser,
-  AuthorizationConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 
 /**
  * Extended Request type with NestLens auth user
@@ -59,9 +54,12 @@ export class NestLensGuard implements CanActivate {
     private readonly config: NestLensConfig,
   ) {
     // Periodic cleanup of expired rate limit entries
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupExpiredEntries();
-    }, 5 * 60 * 1000);
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanupExpiredEntries();
+      },
+      5 * 60 * 1000,
+    );
 
     // Prevent interval from keeping the process alive
     if (this.cleanupInterval.unref) {
@@ -216,9 +214,7 @@ export class NestLensGuard implements CanActivate {
   private getClientIp(request: Request): string {
     const forwardedFor = request.headers['x-forwarded-for'];
     if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor)
-        ? forwardedFor[0]
-        : forwardedFor.split(',')[0];
+      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
       return ips.trim();
     }
     return request.ip || request.socket?.remoteAddress || '';
@@ -235,17 +231,12 @@ export class NestLensGuard implements CanActivate {
     return allowedIps.some((pattern) => {
       // Support wildcard patterns like '192.168.1.*'
       if (pattern.includes('*')) {
-        return (
-          this.matchWildcard(normalizedIp, pattern) ||
-          this.matchWildcard(clientIp, pattern)
-        );
+        return this.matchWildcard(normalizedIp, pattern) || this.matchWildcard(clientIp, pattern);
       }
       // Support localhost variations
       if (pattern === 'localhost' || pattern === '127.0.0.1') {
         return (
-          normalizedIp === '127.0.0.1' ||
-          clientIp === '::1' ||
-          clientIp === '::ffff:127.0.0.1'
+          normalizedIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1'
         );
       }
       return normalizedIp === pattern || clientIp === pattern;

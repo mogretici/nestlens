@@ -87,7 +87,8 @@ async function createRedisStorage(config: StorageConfig): Promise<StorageInterfa
     await storage.initialize();
 
     const redisConfig = config.redis ?? {};
-    const connectionInfo = redisConfig.url ?? `${redisConfig.host ?? 'localhost'}:${redisConfig.port ?? 6379}`;
+    const connectionInfo =
+      redisConfig.url ?? `${redisConfig.host ?? 'localhost'}:${redisConfig.port ?? 6379}`;
     logger.log(`Using Redis storage: ${connectionInfo}`);
     return storage;
   } catch (error) {

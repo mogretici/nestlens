@@ -9,14 +9,8 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../../nestlens.config';
-import {
-  ResolvedGraphQLConfig,
-  resolveGraphQLConfig,
-} from './types';
-import {
-  BaseGraphQLAdapter,
-  isPackageAvailable,
-} from './adapters/base.adapter';
+import { ResolvedGraphQLConfig, resolveGraphQLConfig } from './types';
+import { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter';
 import { ApolloAdapter, createApolloAdapter } from './adapters/apollo.adapter';
 import { MercuriusAdapter, createMercuriusAdapter } from './adapters/mercurius.adapter';
 import {
@@ -100,9 +94,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     // Detect server if auto
-    const serverType = this.config.server === 'auto'
-      ? this.detectServer()
-      : this.config.server;
+    const serverType = this.config.server === 'auto' ? this.detectServer() : this.config.server;
 
     if (serverType === 'none' || !serverType) {
       this.logger.warn(
@@ -124,10 +116,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
 
     // Create subscription tracker
     if (this.config.subscriptions.enabled) {
-      this.subscriptionTracker = createSubscriptionTracker(
-        this.collector,
-        this.config,
-      );
+      this.subscriptionTracker = createSubscriptionTracker(this.collector, this.config);
     }
 
     this.initialized = true;
@@ -208,9 +197,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     // Detect server if auto
-    const serverType = this.config.server === 'auto'
-      ? this.detectServer()
-      : this.config.server;
+    const serverType = this.config.server === 'auto' ? this.detectServer() : this.config.server;
 
     if (serverType === 'none' || !serverType) {
       return;
@@ -228,10 +215,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
 
     // Create subscription tracker
     if (this.config.subscriptions.enabled) {
-      this.subscriptionTracker = createSubscriptionTracker(
-        this.collector,
-        this.config,
-      );
+      this.subscriptionTracker = createSubscriptionTracker(this.collector, this.config);
     }
 
     this.initialized = true;

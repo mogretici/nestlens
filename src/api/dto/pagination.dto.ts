@@ -1,9 +1,5 @@
 import { IsOptional, IsNumber, IsIn } from 'class-validator';
-import {
-  TransformLimit,
-  TransformOffset,
-  TransformSequence,
-} from './transformers';
+import { TransformLimit, TransformOffset, TransformSequence } from './transformers';
 import { EntryType } from '../../types';
 
 const ENTRY_TYPES: EntryType[] = [

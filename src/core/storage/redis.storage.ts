@@ -109,13 +109,20 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     // Store entry as hash
     await client.hset(
       this.key('entries', String(id)),
-      'id', String(id),
-      'type', entry.type,
-      'requestId', entry.requestId ?? '',
-      'payload', JSON.stringify(entry.payload),
-      'createdAt', createdAt,
-      'familyHash', entry.familyHash ?? '',
-      'resolvedAt', entry.resolvedAt ?? '',
+      'id',
+      String(id),
+      'type',
+      entry.type,
+      'requestId',
+      entry.requestId ?? '',
+      'payload',
+      JSON.stringify(entry.payload),
+      'createdAt',
+      createdAt,
+      'familyHash',
+      entry.familyHash ?? '',
+      'resolvedAt',
+      entry.resolvedAt ?? '',
     );
 
     // Add to sorted sets for indexing
@@ -151,13 +158,20 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       pipeline.hset(
         this.key('entries', String(id)),
-        'id', String(id),
-        'type', entry.type,
-        'requestId', entry.requestId ?? '',
-        'payload', JSON.stringify(entry.payload),
-        'createdAt', createdAt,
-        'familyHash', entry.familyHash ?? '',
-        'resolvedAt', entry.resolvedAt ?? '',
+        'id',
+        String(id),
+        'type',
+        entry.type,
+        'requestId',
+        entry.requestId ?? '',
+        'payload',
+        JSON.stringify(entry.payload),
+        'createdAt',
+        createdAt,
+        'familyHash',
+        entry.familyHash ?? '',
+        'resolvedAt',
+        entry.resolvedAt ?? '',
       );
 
       pipeline.zadd(this.key('entries', 'all'), timestamp + i, String(id));
@@ -233,14 +247,18 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         indexKey,
         `(${params.beforeSequence}`,
         '-inf',
-        'LIMIT', '0', String(limit + 1),
+        'LIMIT',
+        '0',
+        String(limit + 1),
       );
     } else if (params.afterSequence !== undefined) {
       ids = await client.zrangebyscore(
         indexKey,
         `(${params.afterSequence}`,
         '+inf',
-        'LIMIT', '0', String(limit + 1),
+        'LIMIT',
+        '0',
+        String(limit + 1),
       );
     } else {
       ids = await client.zrevrange(indexKey, 0, limit);
@@ -277,7 +295,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       data: hydratedEntries,
       meta: {
         hasMore,
-        oldestSequence: hydratedEntries.length > 0 ? hydratedEntries[hydratedEntries.length - 1].id! : null,
+        oldestSequence:
+          hydratedEntries.length > 0 ? hydratedEntries[hydratedEntries.length - 1].id! : null,
         newestSequence: hydratedEntries.length > 0 ? hydratedEntries[0].id! : null,
         total,
       },
@@ -288,7 +307,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const hash = await client.hgetall(this.key('entries', String(id)));
 
-    if (!hash || !hash.id) return null;
+    if (!hash?.id) return null;
 
     const entry = this.hashToEntry(hash);
     if (!entry) return null;
@@ -341,9 +360,24 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     // Get counts by type
     const types: EntryType[] = [
-      'request', 'query', 'exception', 'log', 'cache', 'event', 'job',
-      'schedule', 'mail', 'http-client', 'redis', 'model', 'notification',
-      'view', 'command', 'gate', 'batch', 'dump',
+      'request',
+      'query',
+      'exception',
+      'log',
+      'cache',
+      'event',
+      'job',
+      'schedule',
+      'mail',
+      'http-client',
+      'redis',
+      'model',
+      'notification',
+      'view',
+      'command',
+      'gate',
+      'batch',
+      'dump',
     ];
 
     const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
@@ -374,9 +408,24 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
 
     const types: EntryType[] = [
-      'request', 'query', 'exception', 'log', 'cache', 'event', 'job',
-      'schedule', 'mail', 'http-client', 'redis', 'model', 'notification',
-      'view', 'command', 'gate', 'batch', 'dump',
+      'request',
+      'query',
+      'exception',
+      'log',
+      'cache',
+      'event',
+      'job',
+      'schedule',
+      'mail',
+      'http-client',
+      'redis',
+      'model',
+      'notification',
+      'view',
+      'command',
+      'gate',
+      'batch',
+      'dump',
     ];
 
     const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
@@ -436,11 +485,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const maxScore = before.getTime();
 
-    const ids = await client.zrangebyscore(
-      this.key('entries', 'type', type),
-      '-inf',
-      maxScore,
-    );
+    const ids = await client.zrangebyscore(this.key('entries', 'type', type), '-inf', maxScore);
 
     if (ids.length === 0) return 0;
 
@@ -501,7 +546,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     const client = this.getClient();
     // Normalize input tags to uppercase for case-insensitive matching
-    const normalizedTags = tags.map(t => t.toUpperCase());
+    const normalizedTags = tags.map((t) => t.toUpperCase());
     const tagKeys = normalizedTags.map((t) => this.key('tags', 'index', t));
 
     let ids: string[];
@@ -558,11 +603,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async resolveEntry(id: number): Promise<void> {
     const client = this.getClient();
-    await client.hset(
-      this.key('entries', String(id)),
-      'resolvedAt',
-      new Date().toISOString(),
-    );
+    await client.hset(this.key('entries', String(id)), 'resolvedAt', new Date().toISOString());
   }
 
   async unresolveEntry(id: number): Promise<void> {
@@ -695,7 +736,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     // Get entry to find its type
     const hash = await client.hgetall(this.key('entries', String(id)));
-    if (!hash || !hash.type) return;
+    if (!hash?.type) return;
 
     // Remove from indexes
     await client.del(this.key('entries', String(id)));

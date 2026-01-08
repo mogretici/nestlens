@@ -134,7 +134,7 @@ describe('NestLensModule', () => {
 
           // Assert
           const hasInterceptor = dynamicModule.providers!.some(
-            (p: any) => p.provide === APP_INTERCEPTOR
+            (p: any) => p.provide === APP_INTERCEPTOR,
           );
           expect(hasInterceptor).toBe(true);
         });
@@ -151,7 +151,7 @@ describe('NestLensModule', () => {
 
           // Assert
           const hasInterceptor = dynamicModule.providers!.some(
-            (p: any) => p.provide === APP_INTERCEPTOR
+            (p: any) => p.provide === APP_INTERCEPTOR,
           );
           expect(hasInterceptor).toBe(false);
         });
@@ -166,9 +166,7 @@ describe('NestLensModule', () => {
           const dynamicModule = NestLensModule.forRoot(config);
 
           // Assert
-          const hasFilter = dynamicModule.providers!.some(
-            (p: any) => p.provide === APP_FILTER
-          );
+          const hasFilter = dynamicModule.providers!.some((p: any) => p.provide === APP_FILTER);
           expect(hasFilter).toBe(true);
         });
 
@@ -183,9 +181,7 @@ describe('NestLensModule', () => {
           const dynamicModule = NestLensModule.forRoot(config);
 
           // Assert
-          const hasFilter = dynamicModule.providers!.some(
-            (p: any) => p.provide === APP_FILTER
-          );
+          const hasFilter = dynamicModule.providers!.some((p: any) => p.provide === APP_FILTER);
           expect(hasFilter).toBe(false);
         });
       });
@@ -615,7 +611,7 @@ describe('NestLensModule', () => {
 
         // Assert
         const hasInterceptor = dynamicModule.providers!.some(
-          (p: any) => p.provide === APP_INTERCEPTOR
+          (p: any) => p.provide === APP_INTERCEPTOR,
         );
         expect(hasInterceptor).toBe(false);
       });
@@ -634,9 +630,7 @@ describe('NestLensModule', () => {
 
         // Assert
         // Should still have exception watcher (default true)
-        const hasFilter = dynamicModule.providers!.some(
-          (p: any) => p.provide === APP_FILTER
-        );
+        const hasFilter = dynamicModule.providers!.some((p: any) => p.provide === APP_FILTER);
         expect(hasFilter).toBe(true);
       });
     });
@@ -697,7 +691,7 @@ describe('NestLensModule', () => {
       await expect(
         Test.createTestingModule({
           imports: [NestLensModule.forRoot()],
-        }).compile()
+        }).compile(),
       ).resolves.toBeDefined();
     });
 
@@ -716,7 +710,7 @@ describe('NestLensModule', () => {
       await expect(
         Test.createTestingModule({
           imports: [NestLensModule.forRoot(config)],
-        }).compile()
+        }).compile(),
       ).resolves.toBeDefined();
     });
 

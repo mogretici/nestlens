@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  CacheWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -13,7 +9,6 @@ type Cache = any;
 // Try to import CACHE_MANAGER, but make it optional
 let CACHE_MANAGER: string | symbol = 'CACHE_MANAGER';
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const cacheManager = require('@nestjs/cache-manager');
   CACHE_MANAGER = cacheManager.CACHE_MANAGER;
 } catch {
@@ -41,9 +36,7 @@ export class CacheWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.cache;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -55,7 +48,7 @@ export class CacheWatcher implements OnModuleInit {
     if (!this.cacheManager) {
       this.logger.debug(
         'CacheWatcher: No cache manager found. ' +
-        'To enable cache tracking, install and configure @nestjs/cache-manager.',
+          'To enable cache tracking, install and configure @nestjs/cache-manager.',
       );
       return;
     }
@@ -94,11 +87,7 @@ export class CacheWatcher implements OnModuleInit {
 
     // Wrap set method
     if (this.originalMethods.set) {
-      this.cacheManager.set = async (
-        key: string,
-        value: unknown,
-        ttl?: number,
-      ): Promise<void> => {
+      this.cacheManager.set = async (key: string, value: unknown, ttl?: number): Promise<void> => {
         const startTime = Date.now();
 
         try {

@@ -178,7 +178,11 @@ describe('Badge Filter End-to-End Tests', () => {
       );
 
       expect(result.data).toHaveLength(3);
-      expect(result.data.every((e) => (e.payload as any).statusCode >= 200 && (e.payload as any).statusCode < 300)).toBe(true);
+      expect(
+        result.data.every(
+          (e) => (e.payload as any).statusCode >= 200 && (e.payload as any).statusCode < 300,
+        ),
+      ).toBe(true);
     });
 
     it('filters by ERROR tag with lowercase', async () => {
@@ -392,7 +396,11 @@ describe('Badge Filter End-to-End Tests', () => {
     beforeEach(async () => {
       const entries = await seedStorage(storage, [
         createQueryEntry({ query: 'SELECT * FROM users', slow: false, source: 'typeorm' }),
-        createQueryEntry({ query: 'INSERT INTO orders VALUES (...)', slow: false, source: 'prisma' }),
+        createQueryEntry({
+          query: 'INSERT INTO orders VALUES (...)',
+          slow: false,
+          source: 'prisma',
+        }),
         createQueryEntry({ query: 'SELECT * FROM products', slow: true, source: 'typeorm' }),
       ]);
 
@@ -408,7 +416,9 @@ describe('Badge Filter End-to-End Tests', () => {
       );
 
       expect(result.data).toHaveLength(2);
-      expect(result.data.every((e) => (e.payload as any).query.toLowerCase().startsWith('select'))).toBe(true);
+      expect(
+        result.data.every((e) => (e.payload as any).query.toLowerCase().startsWith('select')),
+      ).toBe(true);
     });
 
     it('filters by SLOW tag with lowercase', async () => {

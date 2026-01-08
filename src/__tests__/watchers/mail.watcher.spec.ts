@@ -14,9 +14,11 @@ describe('MailWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createMailerService = (overrides: Partial<{
-    sendMail: jest.Mock;
-  }> = {}) => ({
+  const createMailerService = (
+    overrides: Partial<{
+      sendMail: jest.Mock;
+    }> = {},
+  ) => ({
     sendMail: jest.fn().mockResolvedValue({ messageId: 'test-123' }),
     ...overrides,
   });
@@ -166,9 +168,9 @@ describe('MailWatcher', () => {
     it('should collect duration for mail send', async () => {
       // Arrange
       const mailer = createMailerService({
-        sendMail: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve({}), 50)),
-        ),
+        sendMail: jest
+          .fn()
+          .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
       watcher = await createWatcher(mockConfig, mailer);
       watcher.onModuleInit();
@@ -218,10 +220,12 @@ describe('MailWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(mailer.sendMail({
-        to: 'test@example.com',
-        subject: 'Test',
-      })).rejects.toThrow('SMTP connection failed');
+      await expect(
+        mailer.sendMail({
+          to: 'test@example.com',
+          subject: 'Test',
+        }),
+      ).rejects.toThrow('SMTP connection failed');
 
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'mail',
@@ -241,8 +245,9 @@ describe('MailWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(mailer.sendMail({ to: 'test@example.com', subject: 'Test' }))
-        .rejects.toThrow('Network error');
+      await expect(mailer.sendMail({ to: 'test@example.com', subject: 'Test' })).rejects.toThrow(
+        'Network error',
+      );
     });
 
     it('should handle non-Error objects', async () => {

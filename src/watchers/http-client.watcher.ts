@@ -1,10 +1,6 @@
 import { Inject, Injectable, OnModuleInit, Optional, Logger } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  HttpClientWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,9 +25,7 @@ export class HttpClientWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.httpClient;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
     this.maxBodySize = this.config.maxBodySize || 64 * 1024; // 64KB default
   }
 
@@ -44,7 +38,7 @@ export class HttpClientWatcher implements OnModuleInit {
     if (!this.axiosInstance) {
       this.logger.debug(
         'HttpClientWatcher: No axios instance provided. ' +
-        'To enable HTTP client tracking, provide your axios/HttpService instance with NESTLENS_HTTP_CLIENT token.',
+          'To enable HTTP client tracking, provide your axios/HttpService instance with NESTLENS_HTTP_CLIENT token.',
       );
       return;
     }
@@ -94,13 +88,7 @@ export class HttpClientWatcher implements OnModuleInit {
         const headers = error.response?.headers;
         const data = error.response?.data;
 
-        this.collectEntry(
-          config,
-          status,
-          headers,
-          data,
-          error.message,
-        );
+        this.collectEntry(config, status, headers, data, error.message);
 
         return Promise.reject(error);
       },
@@ -110,13 +98,15 @@ export class HttpClientWatcher implements OnModuleInit {
   }
 
   private collectEntry(
-    config: {
-      metadata?: { nestlensStartTime?: number };
-      method?: string;
-      url?: string;
-      headers?: Record<string, unknown>;
-      data?: unknown;
-    } | undefined,
+    config:
+      | {
+          metadata?: { nestlensStartTime?: number };
+          method?: string;
+          url?: string;
+          headers?: Record<string, unknown>;
+          data?: unknown;
+        }
+      | undefined,
     statusCode?: number,
     responseHeaders?: Record<string, unknown>,
     responseData?: unknown,
@@ -215,9 +205,7 @@ export class HttpClientWatcher implements OnModuleInit {
     'token',
   ];
 
-  private captureHeaders(
-    headers?: Record<string, unknown>,
-  ): Record<string, string> | undefined {
+  private captureHeaders(headers?: Record<string, unknown>): Record<string, string> | undefined {
     if (!headers) return undefined;
 
     const sensitiveHeaders = [
@@ -290,10 +278,7 @@ export class HttpClientWatcher implements OnModuleInit {
     return masked;
   }
 
-  private captureBody(
-    body: unknown,
-    sensitiveParams: string[],
-  ): unknown {
+  private captureBody(body: unknown, sensitiveParams: string[]): unknown {
     if (body === undefined || body === null) return undefined;
 
     try {

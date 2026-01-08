@@ -67,10 +67,7 @@ export class FamilyHashService {
     // Normalize the SQL query
     const normalizedQuery = this.normalizeQuery(payload.query);
 
-    const hashInput = [
-      normalizedQuery,
-      payload.source || '',
-    ].join('|');
+    const hashInput = [normalizedQuery, payload.source || ''].join('|');
 
     return this.hash(hashInput);
   }
@@ -89,11 +86,7 @@ export class FamilyHashService {
 
     const normalizedMessage = this.normalizeErrorMessage(payload.message);
 
-    const hashInput = [
-      payload.level,
-      payload.context || '',
-      normalizedMessage,
-    ].join('|');
+    const hashInput = [payload.level, payload.context || '', normalizedMessage].join('|');
 
     return this.hash(hashInput);
   }
@@ -106,10 +99,7 @@ export class FamilyHashService {
     const payload = entry.payload;
 
     // Normalize parameters by removing specific values
-    const hashInput = [
-      payload.name,
-      payload.handler || '',
-    ].join('|');
+    const hashInput = [payload.name, payload.handler || ''].join('|');
 
     return this.hash(hashInput);
   }
@@ -124,11 +114,7 @@ export class FamilyHashService {
     // Hash by gate + action + subject type (without specific IDs)
     const normalizedSubject = payload.subject ? this.normalizeSubject(payload.subject) : '';
 
-    const hashInput = [
-      payload.gate,
-      payload.action,
-      normalizedSubject,
-    ].join('|');
+    const hashInput = [payload.gate, payload.action, normalizedSubject].join('|');
 
     return this.hash(hashInput);
   }
@@ -140,10 +126,7 @@ export class FamilyHashService {
     if (entry.type !== 'batch') return undefined;
     const payload = entry.payload;
 
-    const hashInput = [
-      payload.name,
-      payload.operation,
-    ].join('|');
+    const hashInput = [payload.name, payload.operation].join('|');
 
     return this.hash(hashInput);
   }
@@ -157,10 +140,7 @@ export class FamilyHashService {
     // Match common stack trace patterns
     // Node.js: at Function.name (/path/to/file.js:10:15)
     // or: at /path/to/file.js:10:15
-    const patterns = [
-      /at\s+(?:[^\s]+\s+)?\(?([^:]+):(\d+):\d+\)?/,
-      /^\s+at\s+([^:]+):(\d+):\d+$/m,
-    ];
+    const patterns = [/at\s+(?:[^\s]+\s+)?\(?([^:]+):(\d+):\d+\)?/, /^\s+at\s+([^:]+):(\d+):\d+$/m];
 
     for (const pattern of patterns) {
       const match = stack.match(pattern);
@@ -195,68 +175,70 @@ export class FamilyHashService {
    * Normalize SQL query by removing specific values
    */
   private normalizeQuery(query: string): string {
-    return query
-      // Remove extra whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-      // Replace string literals with placeholder
-      .replace(/'[^']*'/g, '?')
-      .replace(/"[^"]*"/g, '?')
-      // Replace numeric literals with placeholder
-      .replace(/\b\d+\b/g, '?')
-      // Replace parameter placeholders ($1, $2, :param, @param)
-      .replace(/\$\d+/g, '?')
-      .replace(/:\w+/g, '?')
-      .replace(/@\w+/g, '?')
-      // Lowercase for consistency
-      .toLowerCase();
+    return (
+      query
+        // Remove extra whitespace
+        .replace(/\s+/g, ' ')
+        .trim()
+        // Replace string literals with placeholder
+        .replace(/'[^']*'/g, '?')
+        .replace(/"[^"]*"/g, '?')
+        // Replace numeric literals with placeholder
+        .replace(/\b\d+\b/g, '?')
+        // Replace parameter placeholders ($1, $2, :param, @param)
+        .replace(/\$\d+/g, '?')
+        .replace(/:\w+/g, '?')
+        .replace(/@\w+/g, '?')
+        // Lowercase for consistency
+        .toLowerCase()
+    );
   }
 
   /**
    * Normalize error message by removing specific values
    */
   private normalizeErrorMessage(message: string): string {
-    return message
-      // Remove UUIDs
-      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[UUID]')
-      // Remove numbers
-      .replace(/\b\d+\b/g, '[N]')
-      // Remove email addresses
-      .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
-      // Remove URLs
-      .replace(/https?:\/\/[^\s]+/g, '[URL]')
-      // Remove file paths
-      .replace(/[\/\\][\w\-\.\/\\]+\.\w+/g, '[PATH]')
-      // Remove quoted strings
-      .replace(/'[^']*'/g, '[STR]')
-      .replace(/"[^"]*"/g, '[STR]')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim();
+    return (
+      message
+        // Remove UUIDs
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[UUID]')
+        // Remove numbers
+        .replace(/\b\d+\b/g, '[N]')
+        // Remove email addresses
+        .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+        // Remove URLs
+        .replace(/https?:\/\/[^\s]+/g, '[URL]')
+        // Remove file paths
+        .replace(/[\/\\][\w\-\.\/\\]+\.\w+/g, '[PATH]')
+        // Remove quoted strings
+        .replace(/'[^']*'/g, '[STR]')
+        .replace(/"[^"]*"/g, '[STR]')
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
   }
 
   /**
    * Normalize subject by removing IDs and specific values
    */
   private normalizeSubject(subject: string): string {
-    return subject
-      // Remove UUIDs
-      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[ID]')
-      // Remove numeric IDs
-      .replace(/\b\d+\b/g, '[ID]')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim();
+    return (
+      subject
+        // Remove UUIDs
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[ID]')
+        // Remove numeric IDs
+        .replace(/\b\d+\b/g, '[ID]')
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
   }
 
   /**
    * Create SHA256 hash of input, truncated to 16 characters
    */
   private hash(input: string): string {
-    return crypto
-      .createHash('sha256')
-      .update(input)
-      .digest('hex')
-      .substring(0, 16);
+    return crypto.createHash('sha256').update(input).digest('hex').substring(0, 16);
   }
 }

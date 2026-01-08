@@ -105,12 +105,32 @@ describe('SqliteStorage', () => {
         {
           type: 'request',
           requestId: 'req-1',
-          payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+          payload: {
+            method: 'GET',
+            url: '/api/1',
+            path: '/api/1',
+            query: {},
+            params: {},
+            headers: {},
+            statusCode: 200,
+            duration: 50,
+            memory: 1024,
+          },
         } as Entry,
         {
           type: 'request',
           requestId: 'req-2',
-          payload: { method: 'POST', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 201, duration: 100, memory: 2048 },
+          payload: {
+            method: 'POST',
+            url: '/api/2',
+            path: '/api/2',
+            query: {},
+            params: {},
+            headers: {},
+            statusCode: 201,
+            duration: 100,
+            memory: 2048,
+          },
         } as Entry,
       ];
 
@@ -145,7 +165,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'query',
@@ -165,12 +195,32 @@ describe('SqliteStorage', () => {
       await storage.save({
         type: 'request',
         requestId: 'req-123',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'request',
         requestId: 'req-456',
-        payload: { method: 'POST', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'POST',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -186,7 +236,17 @@ describe('SqliteStorage', () => {
       for (let i = 0; i < 5; i++) {
         await storage.save({
           type: 'request',
-          payload: { method: 'GET', url: `/api/${i}`, path: `/api/${i}`, query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+          payload: {
+            method: 'GET',
+            url: `/api/${i}`,
+            path: `/api/${i}`,
+            query: {},
+            params: {},
+            headers: {},
+            statusCode: 200,
+            duration: 50,
+            memory: 1024,
+          },
         } as Entry);
       }
 
@@ -202,7 +262,17 @@ describe('SqliteStorage', () => {
       for (let i = 0; i < 5; i++) {
         await storage.save({
           type: 'request',
-          payload: { method: 'GET', url: `/api/${i}`, path: `/api/${i}`, query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+          payload: {
+            method: 'GET',
+            url: `/api/${i}`,
+            path: `/api/${i}`,
+            query: {},
+            params: {},
+            headers: {},
+            statusCode: 200,
+            duration: 50,
+            memory: 1024,
+          },
         } as Entry);
       }
 
@@ -217,7 +287,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/old', path: '/old', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/old',
+          path: '/old',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act - use wide date range to ensure entry is included
@@ -239,7 +319,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const saved = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -266,8 +356,24 @@ describe('SqliteStorage', () => {
   describe('count', () => {
     it('should count all entries', async () => {
       // Arrange
-      await storage.save({ type: 'request', payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 } } as Entry);
-      await storage.save({ type: 'query', payload: { query: 'SELECT 1', duration: 5, slow: false } } as Entry);
+      await storage.save({
+        type: 'request',
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
+      } as Entry);
+      await storage.save({
+        type: 'query',
+        payload: { query: 'SELECT 1', duration: 5, slow: false },
+      } as Entry);
 
       // Act
       const result = await storage.count();
@@ -278,9 +384,38 @@ describe('SqliteStorage', () => {
 
     it('should count entries by type', async () => {
       // Arrange
-      await storage.save({ type: 'request', payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 } } as Entry);
-      await storage.save({ type: 'request', payload: { method: 'POST', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 201, duration: 100, memory: 2048 } } as Entry);
-      await storage.save({ type: 'query', payload: { query: 'SELECT 1', duration: 5, slow: false } } as Entry);
+      await storage.save({
+        type: 'request',
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
+      } as Entry);
+      await storage.save({
+        type: 'request',
+        payload: {
+          method: 'POST',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 201,
+          duration: 100,
+          memory: 2048,
+        },
+      } as Entry);
+      await storage.save({
+        type: 'query',
+        payload: { query: 'SELECT 1', duration: 5, slow: false },
+      } as Entry);
 
       // Act
       const result = await storage.count('request');
@@ -310,11 +445,31 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 100, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 100,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'request',
-        payload: { method: 'POST', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 200, memory: 2048 },
+        payload: {
+          method: 'POST',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 200,
+          memory: 2048,
+        },
       } as Entry);
       await storage.save({
         type: 'query',
@@ -348,7 +503,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -365,7 +530,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act - use a date from yesterday to ensure entry is definitely after it
@@ -388,7 +563,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'query',
@@ -415,8 +600,24 @@ describe('SqliteStorage', () => {
   describe('clear', () => {
     it('should clear all entries', async () => {
       // Arrange
-      await storage.save({ type: 'request', payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 } } as Entry);
-      await storage.save({ type: 'query', payload: { query: 'SELECT 1', duration: 5, slow: false } } as Entry);
+      await storage.save({
+        type: 'request',
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
+      } as Entry);
+      await storage.save({
+        type: 'query',
+        payload: { query: 'SELECT 1', duration: 5, slow: false },
+      } as Entry);
 
       // Act
       await storage.clear();
@@ -478,7 +679,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const saved = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -494,7 +705,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const saved = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(saved.id!, ['tag1', 'tag2', 'tag3']);
 
@@ -512,7 +733,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const saved = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(saved.id!, ['alpha', 'beta']);
 
@@ -528,11 +759,31 @@ describe('SqliteStorage', () => {
       // Arrange
       const entry1 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/1',
+          path: '/api/1',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       const entry2 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/2',
+          path: '/api/2',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(entry1.id!, ['common', 'unique1']);
       await storage.addTags(entry2.id!, ['common', 'unique2']);
@@ -554,11 +805,31 @@ describe('SqliteStorage', () => {
       // Arrange
       const entry1 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/1',
+          path: '/api/1',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       const entry2 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/2',
+          path: '/api/2',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(entry1.id!, ['important']);
       await storage.addTags(entry2.id!, ['normal']);
@@ -582,7 +853,17 @@ describe('SqliteStorage', () => {
       for (let i = 0; i < 10; i++) {
         await storage.save({
           type: 'request',
-          payload: { method: 'GET', url: `/api/${i}`, path: `/api/${i}`, query: {}, params: {}, headers: {}, statusCode: 200, duration: 50 + i, memory: 1024 },
+          payload: {
+            method: 'GET',
+            url: `/api/${i}`,
+            path: `/api/${i}`,
+            query: {},
+            params: {},
+            headers: {},
+            statusCode: 200,
+            duration: 50 + i,
+            memory: 1024,
+          },
         } as Entry);
       }
 
@@ -600,7 +881,17 @@ describe('SqliteStorage', () => {
       for (let i = 0; i < 10; i++) {
         await storage.save({
           type: 'request',
-          payload: { method: 'GET', url: `/api/${i}`, path: `/api/${i}`, query: {}, params: {}, headers: {}, statusCode: 200, duration: 50 + i, memory: 1024 },
+          payload: {
+            method: 'GET',
+            url: `/api/${i}`,
+            path: `/api/${i}`,
+            query: {},
+            params: {},
+            headers: {},
+            statusCode: 200,
+            duration: 50 + i,
+            memory: 1024,
+          },
         } as Entry);
       }
 
@@ -634,11 +925,31 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/1',
+          path: '/api/1',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       const second = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/2',
+          path: '/api/2',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -652,7 +963,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       const query = await storage.save({
         type: 'query',
@@ -676,7 +997,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const entry = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -690,15 +1021,45 @@ describe('SqliteStorage', () => {
       // Arrange
       const first = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/1',
+          path: '/api/1',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/2',
+          path: '/api/2',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/3', path: '/api/3', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/3',
+          path: '/api/3',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
 
       // Act
@@ -712,7 +1073,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const first = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'query',
@@ -720,7 +1091,17 @@ describe('SqliteStorage', () => {
       } as Entry);
       await storage.save({
         type: 'request',
-        payload: { method: 'POST', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 201, duration: 100, memory: 2048 },
+        payload: {
+          method: 'POST',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 201,
+          duration: 100,
+          memory: 2048,
+        },
       } as Entry);
 
       // Act
@@ -751,7 +1132,17 @@ describe('SqliteStorage', () => {
       // Arrange
       await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.save({
         type: 'query',
@@ -795,8 +1186,8 @@ describe('SqliteStorage', () => {
 
       // Assert
       expect(result).toHaveLength(2);
-      expect(result.map(t => t.tag)).toContain('alpha');
-      expect(result.map(t => t.tag)).toContain('beta');
+      expect(result.map((t) => t.tag)).toContain('alpha');
+      expect(result.map((t) => t.tag)).toContain('beta');
     });
 
     it('should remove monitored tag', async () => {
@@ -926,9 +1317,9 @@ describe('SqliteStorage', () => {
 
       // Assert
       expect(result).toHaveLength(2);
-      const hashA = result.find(r => r.familyHash === 'hash-a');
+      const hashA = result.find((r) => r.familyHash === 'hash-a');
       expect(hashA?.count).toBe(2);
-      const hashB = result.find(r => r.familyHash === 'hash-b');
+      const hashB = result.find((r) => r.familyHash === 'hash-b');
       expect(hashB?.count).toBe(1);
     });
 
@@ -963,7 +1354,17 @@ describe('SqliteStorage', () => {
       // Arrange
       const entry = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api', path: '/api', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api',
+          path: '/api',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(entry.id!, ['tag1']);
 
@@ -978,11 +1379,31 @@ describe('SqliteStorage', () => {
       // Arrange
       const entry1 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/1',
+          path: '/api/1',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       const entry2 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/2',
+          path: '/api/2',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(entry1.id!, ['red', 'blue', 'green']);
       await storage.addTags(entry2.id!, ['red', 'blue']);
@@ -999,11 +1420,31 @@ describe('SqliteStorage', () => {
       // Arrange
       const entry1 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/1', path: '/api/1', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/1',
+          path: '/api/1',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       const entry2 = await storage.save({
         type: 'request',
-        payload: { method: 'GET', url: '/api/2', path: '/api/2', query: {}, params: {}, headers: {}, statusCode: 200, duration: 50, memory: 1024 },
+        payload: {
+          method: 'GET',
+          url: '/api/2',
+          path: '/api/2',
+          query: {},
+          params: {},
+          headers: {},
+          statusCode: 200,
+          duration: 50,
+          memory: 1024,
+        },
       } as Entry);
       await storage.addTags(entry1.id!, ['alpha']);
       await storage.addTags(entry2.id!, ['beta']);

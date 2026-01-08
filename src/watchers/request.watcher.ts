@@ -1,10 +1,4 @@
-import {
-  CallHandler,
-  ExecutionContext,
-  Inject,
-  Injectable,
-  NestInterceptor,
-} from '@nestjs/common';
+import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -32,9 +26,7 @@ export class RequestWatcher implements NestInterceptor {
   ) {
     const watcherConfig = nestlensConfig.watchers?.request;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -122,9 +114,7 @@ export class RequestWatcher implements NestInterceptor {
             userAgent: request.headers['user-agent'],
             statusCode: response.statusCode,
             responseBody:
-              this.config.captureResponse !== false
-                ? this.captureBody(responseBody)
-                : undefined,
+              this.config.captureResponse !== false ? this.captureBody(responseBody) : undefined,
             responseHeaders,
             duration,
             memory,
@@ -184,16 +174,8 @@ export class RequestWatcher implements NestInterceptor {
     );
   }
 
-  private captureHeaders(
-    headers: Request['headers'],
-  ): Record<string, string> {
-    const sensitiveHeaders = [
-      'authorization',
-      'cookie',
-      'set-cookie',
-      'x-api-key',
-      'x-auth-token',
-    ];
+  private captureHeaders(headers: Request['headers']): Record<string, string> {
+    const sensitiveHeaders = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token'];
 
     const result: Record<string, string> = {};
 
@@ -229,9 +211,7 @@ export class RequestWatcher implements NestInterceptor {
   private getClientIp(request: Request): string | undefined {
     const forwardedFor = request.headers['x-forwarded-for'];
     if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor)
-        ? forwardedFor[0]
-        : forwardedFor.split(',')[0];
+      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
       return ips.trim();
     }
     return request.ip || request.socket?.remoteAddress;
@@ -252,9 +232,8 @@ export class RequestWatcher implements NestInterceptor {
       const handlerName = handler?.name;
 
       return {
-        controllerAction: controllerName && handlerName
-          ? `${controllerName}.${handlerName}`
-          : undefined,
+        controllerAction:
+          controllerName && handlerName ? `${controllerName}.${handlerName}` : undefined,
         handler: handlerName,
       };
     } catch {

@@ -1,10 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
-import {
-  JobWatcherConfig,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { JobWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { JobEntry } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,9 +22,7 @@ export class JobWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.job;
     this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false };
+      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
   onModuleInit() {
@@ -123,11 +117,7 @@ export class JobWatcher implements OnModuleInit {
     }
   }
 
-  private handleJobCompleted(
-    queueName: string,
-    job: BullQueue,
-    result: unknown,
-  ): void {
+  private handleJobCompleted(queueName: string, job: BullQueue, result: unknown): void {
     try {
       const jobId = job.id || String(job);
       const startTime = this.jobTracking.get(jobId);
@@ -150,11 +140,7 @@ export class JobWatcher implements OnModuleInit {
     }
   }
 
-  private handleJobFailed(
-    queueName: string,
-    job: BullQueue,
-    error: Error,
-  ): void {
+  private handleJobFailed(queueName: string, job: BullQueue, error: Error): void {
     try {
       const jobId = job.id || String(job);
       const startTime = this.jobTracking.get(jobId);

@@ -7,21 +7,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
-import { NotificationWatcher, NESTLENS_NOTIFICATION_SERVICE } from '../../watchers/notification.watcher';
+import {
+  NotificationWatcher,
+  NESTLENS_NOTIFICATION_SERVICE,
+} from '../../watchers/notification.watcher';
 
 describe('NotificationWatcher', () => {
   let watcher: NotificationWatcher;
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createNotificationService = (overrides: Partial<{
-    sendEmail: jest.Mock;
-    sendSms: jest.Mock;
-    sendPush: jest.Mock;
-    sendSocket: jest.Mock;
-    sendWebhook: jest.Mock;
-    send: jest.Mock;
-  }> = {}) => ({
+  const createNotificationService = (
+    overrides: Partial<{
+      sendEmail: jest.Mock;
+      sendSms: jest.Mock;
+      sendPush: jest.Mock;
+      sendSocket: jest.Mock;
+      sendWebhook: jest.Mock;
+      send: jest.Mock;
+    }> = {},
+  ) => ({
     sendEmail: jest.fn().mockResolvedValue({ messageId: 'email-123' }),
     sendSms: jest.fn().mockResolvedValue({ messageId: 'sms-123' }),
     sendPush: jest.fn().mockResolvedValue({ messageId: 'push-123' }),
@@ -198,9 +203,9 @@ describe('NotificationWatcher', () => {
     it('should calculate notification duration', async () => {
       // Arrange
       const service = createNotificationService({
-        sendEmail: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve({}), 50)),
-        ),
+        sendEmail: jest
+          .fn()
+          .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -393,8 +398,9 @@ describe('NotificationWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.sendEmail({ to: 'test@example.com', subject: 'Test' }))
-        .rejects.toThrow('SMTP connection failed');
+      await expect(service.sendEmail({ to: 'test@example.com', subject: 'Test' })).rejects.toThrow(
+        'SMTP connection failed',
+      );
 
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'notification',
@@ -414,8 +420,9 @@ describe('NotificationWatcher', () => {
       watcher.onModuleInit();
 
       // Act & Assert
-      await expect(service.sendSms({ to: '+1234567890', body: 'Test' }))
-        .rejects.toThrow('SMS gateway error');
+      await expect(service.sendSms({ to: '+1234567890', body: 'Test' })).rejects.toThrow(
+        'SMS gateway error',
+      );
     });
 
     it('should handle non-Error objects', async () => {

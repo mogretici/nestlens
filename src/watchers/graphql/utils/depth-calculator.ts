@@ -157,11 +157,7 @@ export function calculateDepthFromAST(
     let maxDepth = 0;
     let deepestPath: string[] = [];
 
-    function traverse(
-      selectionSet: unknown,
-      depth: number,
-      path: string[],
-    ): void {
+    function traverse(selectionSet: unknown, depth: number, path: string[]): void {
       if (!selectionSet || typeof selectionSet !== 'object') return;
 
       const ss = selectionSet as {
@@ -187,27 +183,17 @@ export function calculateDepthFromAST(
             }
             traverse(selection.selectionSet, newDepth, newPath);
           }
-        } else if (
-          selection.kind === 'InlineFragment' ||
-          selection.kind === 'FragmentSpread'
-        ) {
+        } else if (selection.kind === 'InlineFragment' || selection.kind === 'FragmentSpread') {
           // Handle fragments - count as same depth level
           if ((selection as { selectionSet?: unknown }).selectionSet) {
-            traverse(
-              (selection as { selectionSet?: unknown }).selectionSet,
-              depth,
-              path,
-            );
+            traverse((selection as { selectionSet?: unknown }).selectionSet, depth, path);
           }
         }
       }
     }
 
     for (const definition of doc.definitions) {
-      if (
-        definition.kind === 'OperationDefinition' ||
-        definition.kind === 'FragmentDefinition'
-      ) {
+      if (definition.kind === 'OperationDefinition' || definition.kind === 'FragmentDefinition') {
         traverse(definition.selectionSet, 0, []);
       }
     }

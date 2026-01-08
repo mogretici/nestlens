@@ -663,9 +663,7 @@ describe('JobWatcher', () => {
       await new Promise(process.nextTick);
 
       // Assert - error should be caught and logged
-      expect(debugSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to track delayed job'),
-      );
+      expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to track delayed job'));
     });
 
     it('should handle null job in delayed handler', async () => {

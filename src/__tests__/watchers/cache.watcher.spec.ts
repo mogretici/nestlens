@@ -16,12 +16,14 @@ describe('CacheWatcher', () => {
 
   const CACHE_MANAGER = 'CACHE_MANAGER';
 
-  const createCacheManager = (overrides: Partial<{
-    get: jest.Mock;
-    set: jest.Mock;
-    del: jest.Mock;
-    reset: jest.Mock;
-  }> = {}) => ({
+  const createCacheManager = (
+    overrides: Partial<{
+      get: jest.Mock;
+      set: jest.Mock;
+      del: jest.Mock;
+      reset: jest.Mock;
+    }> = {},
+  ) => ({
     get: jest.fn().mockResolvedValue(undefined),
     set: jest.fn().mockResolvedValue(undefined),
     del: jest.fn().mockResolvedValue(undefined),
@@ -207,9 +209,11 @@ describe('CacheWatcher', () => {
     it('should collect duration for get operation', async () => {
       // Arrange
       const cacheManager = createCacheManager({
-        get: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve('value'), 10)),
-        ),
+        get: jest
+          .fn()
+          .mockImplementation(
+            () => new Promise((resolve) => setTimeout(() => resolve('value'), 10)),
+          ),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();

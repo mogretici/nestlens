@@ -1019,9 +1019,7 @@ describe('HttpClientWatcher', () => {
         'http-client',
         expect.objectContaining({
           requestBody: expect.objectContaining({
-            users: expect.arrayContaining([
-              expect.objectContaining({ password: '********' }),
-            ]),
+            users: expect.arrayContaining([expect.objectContaining({ password: '********' })]),
           }),
         }),
       );

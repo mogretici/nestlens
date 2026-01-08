@@ -28,9 +28,7 @@ export function TransformCommaSeparatedNumbersOrErr() {
   return Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null || value === '') return undefined;
     const parts = String(value).split(',').filter(Boolean);
-    return parts.map((s) =>
-      s.toUpperCase() === 'ERR' ? ('ERR' as const) : parseInt(s, 10),
-    );
+    return parts.map((s) => (s.toUpperCase() === 'ERR' ? ('ERR' as const) : parseInt(s, 10)));
   });
 }
 
@@ -47,11 +45,7 @@ export function TransformStringToBoolean() {
 /**
  * Transforms string to bounded integer with default
  */
-export function TransformToInt(options?: {
-  min?: number;
-  max?: number;
-  default?: number;
-}) {
+export function TransformToInt(options?: { min?: number; max?: number; default?: number }) {
   return Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null || value === '') {
       return options?.default;

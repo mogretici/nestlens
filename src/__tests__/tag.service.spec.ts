@@ -1,7 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TagService } from '../core/tag.service';
 import { STORAGE, StorageInterface } from '../core/storage/storage.interface';
-import { Entry, RequestEntry, QueryEntry, ExceptionEntry, LogEntry, JobEntry, CacheEntry, MailEntry } from '../types';
+import {
+  Entry,
+  RequestEntry,
+  QueryEntry,
+  ExceptionEntry,
+  LogEntry,
+  JobEntry,
+  CacheEntry,
+  MailEntry,
+} from '../types';
 
 describe('TagService', () => {
   let service: TagService;
@@ -40,10 +49,7 @@ describe('TagService', () => {
     } as jest.Mocked<StorageInterface>;
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        TagService,
-        { provide: STORAGE, useValue: mockStorage },
-      ],
+      providers: [TagService, { provide: STORAGE, useValue: mockStorage }],
     }).compile();
 
     service = module.get<TagService>(TagService);
@@ -72,7 +78,10 @@ describe('TagService', () => {
 
         expect(tags).toContain('SUCCESS');
         expect(tags).toContain('GET');
-        expect(mockStorage.addTags).toHaveBeenCalledWith(1, expect.arrayContaining(['SUCCESS', 'GET']));
+        expect(mockStorage.addTags).toHaveBeenCalledWith(
+          1,
+          expect.arrayContaining(['SUCCESS', 'GET']),
+        );
       });
 
       it('should add 5XX and ERROR tags for 5xx status codes', async () => {
@@ -288,7 +297,7 @@ describe('TagService', () => {
 
         // Should have ERROR tag (from exception) but not duplicate it as exception name
         expect(tags).toContain('ERROR');
-        expect(tags.filter(t => t === 'ERROR')).toHaveLength(1);
+        expect(tags.filter((t) => t === 'ERROR')).toHaveLength(1);
       });
 
       it('should add HTTP-ERROR tag for HTTP exceptions', async () => {
@@ -561,9 +570,7 @@ describe('TagService', () => {
       mockStorage.getMonitoredTags.mockResolvedValue([
         { id: 1, tag: 'ERROR', createdAt: new Date().toISOString() },
       ]);
-      mockStorage.getAllTags.mockResolvedValue([
-        { tag: 'ERROR', count: 50 },
-      ]);
+      mockStorage.getAllTags.mockResolvedValue([{ tag: 'ERROR', count: 50 }]);
 
       const result = await service.getMonitoredTagsWithCounts();
 

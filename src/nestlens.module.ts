@@ -9,11 +9,7 @@ import {
   Provider,
 } from '@nestjs/common';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
-import {
-  DEFAULT_CONFIG,
-  NestLensConfig,
-  NESTLENS_CONFIG,
-} from './nestlens.config';
+import { DEFAULT_CONFIG, NestLensConfig, NESTLENS_CONFIG } from './nestlens.config';
 import { CollectorService } from './core/collector.service';
 import { PruningService } from './core/pruning.service';
 import { TagService } from './core/tag.service';
@@ -73,7 +69,15 @@ class NestLensCoreModule {
       PruningService,
     ];
 
-    const exports: (Provider | symbol | typeof TagService | typeof FamilyHashService | typeof CollectorService | typeof PruningService | typeof GraphQLWatcher)[] = [
+    const exports: (
+      | Provider
+      | symbol
+      | typeof TagService
+      | typeof FamilyHashService
+      | typeof CollectorService
+      | typeof PruningService
+      | typeof GraphQLWatcher
+    )[] = [
       NESTLENS_CONFIG,
       STORAGE,
       TagService,
@@ -121,7 +125,6 @@ class NestLensQueryModule {
     };
   }
 }
-
 
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {

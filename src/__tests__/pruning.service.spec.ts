@@ -81,7 +81,7 @@ describe('PruningService', () => {
       service.onModuleInit();
 
       // Wait for immediate prune call
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockStorage.prune).toHaveBeenCalled();
     });
@@ -96,7 +96,7 @@ describe('PruningService', () => {
       service.onModuleInit();
 
       // Wait for the prune to be called
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockStorage.prune).toHaveBeenCalled();
       const callArg = mockStorage.prune.mock.calls[0][0];
@@ -116,7 +116,7 @@ describe('PruningService', () => {
 
       service.onModuleInit();
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockStorage.prune).toHaveBeenCalled();
       const callArg = mockStorage.prune.mock.calls[0][0];
@@ -134,7 +134,7 @@ describe('PruningService', () => {
       // Should not throw
       service.onModuleInit();
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockStorage.prune).toHaveBeenCalled();
     });
@@ -153,7 +153,7 @@ describe('PruningService', () => {
       mockStorage.prune.mockClear();
 
       // Wait to ensure no more calls happen
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(mockStorage.prune).not.toHaveBeenCalled();
     });

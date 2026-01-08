@@ -453,7 +453,16 @@ export interface NestLensConfig {
 }
 
 export const DEFAULT_CONFIG: Required<
-  Omit<NestLensConfig, 'allowedIps' | 'canAccess' | 'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security'>
+  Omit<
+    NestLensConfig,
+    | 'allowedIps'
+    | 'canAccess'
+    | 'authorization'
+    | 'filter'
+    | 'filterBatch'
+    | 'rateLimit'
+    | 'security'
+  >
 > & {
   authorization: AuthorizationConfig;
   allowedIps?: string[];

@@ -474,8 +474,12 @@ describe('QueryWatcher', () => {
         isInitialized: true,
         options: { name: 'default' },
         driver: {
-          get afterQuery() { return originalAfterQuery; },
-          set afterQuery(fn: Function) { capturedAfterQuery = fn; },
+          get afterQuery() {
+            return originalAfterQuery;
+          },
+          set afterQuery(fn: Function) {
+            capturedAfterQuery = fn;
+          },
         },
       };
 

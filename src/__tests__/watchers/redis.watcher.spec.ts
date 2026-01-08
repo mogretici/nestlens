@@ -14,33 +14,35 @@ describe('RedisWatcher', () => {
   let mockCollector: jest.Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
-  const createRedisClient = (overrides: Partial<{
-    get: jest.Mock;
-    set: jest.Mock;
-    del: jest.Mock;
-    exists: jest.Mock;
-    expire: jest.Mock;
-    ttl: jest.Mock;
-    incr: jest.Mock;
-    decr: jest.Mock;
-    lpush: jest.Mock;
-    rpush: jest.Mock;
-    lpop: jest.Mock;
-    rpop: jest.Mock;
-    lrange: jest.Mock;
-    hget: jest.Mock;
-    hset: jest.Mock;
-    hdel: jest.Mock;
-    hgetall: jest.Mock;
-    sadd: jest.Mock;
-    srem: jest.Mock;
-    smembers: jest.Mock;
-    zadd: jest.Mock;
-    zrem: jest.Mock;
-    zrange: jest.Mock;
-    mget: jest.Mock;
-    mset: jest.Mock;
-  }> = {}) => ({
+  const createRedisClient = (
+    overrides: Partial<{
+      get: jest.Mock;
+      set: jest.Mock;
+      del: jest.Mock;
+      exists: jest.Mock;
+      expire: jest.Mock;
+      ttl: jest.Mock;
+      incr: jest.Mock;
+      decr: jest.Mock;
+      lpush: jest.Mock;
+      rpush: jest.Mock;
+      lpop: jest.Mock;
+      rpop: jest.Mock;
+      lrange: jest.Mock;
+      hget: jest.Mock;
+      hset: jest.Mock;
+      hdel: jest.Mock;
+      hgetall: jest.Mock;
+      sadd: jest.Mock;
+      srem: jest.Mock;
+      smembers: jest.Mock;
+      zadd: jest.Mock;
+      zrem: jest.Mock;
+      zrange: jest.Mock;
+      mget: jest.Mock;
+      mset: jest.Mock;
+    }> = {},
+  ) => ({
     get: jest.fn().mockResolvedValue('value'),
     set: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(1),
@@ -237,9 +239,11 @@ describe('RedisWatcher', () => {
     it('should calculate command duration', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve('value'), 50)),
-        ),
+        get: jest
+          .fn()
+          .mockImplementation(
+            () => new Promise((resolve) => setTimeout(() => resolve('value'), 50)),
+          ),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();

@@ -137,7 +137,11 @@ describe('RequestWatcher', () => {
       // Arrange
       const mockSetHeader = jest.fn();
       const context = createMockContext({
-        response: { setHeader: mockSetHeader, statusCode: 200, getHeaders: jest.fn().mockReturnValue({}) },
+        response: {
+          setHeader: mockSetHeader,
+          statusCode: 200,
+          getHeaders: jest.fn().mockReturnValue({}),
+        },
       });
       const handler = createMockHandler();
 
@@ -388,7 +392,7 @@ describe('RequestWatcher', () => {
         request: {
           headers: {
             'content-type': 'application/json',
-            'accept': 'application/json',
+            accept: 'application/json',
           },
         },
       });
@@ -402,7 +406,7 @@ describe('RequestWatcher', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             'content-type': 'application/json',
-            'accept': 'application/json',
+            accept: 'application/json',
           }),
         }),
         expect.any(String),
@@ -414,8 +418,8 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         request: {
           headers: {
-            'authorization': 'Bearer secret-token',
-            'cookie': 'session=abc123',
+            authorization: 'Bearer secret-token',
+            cookie: 'session=abc123',
             'x-api-key': 'api-key-value',
             'content-type': 'application/json',
           },
@@ -430,8 +434,8 @@ describe('RequestWatcher', () => {
         'request',
         expect.objectContaining({
           headers: expect.objectContaining({
-            'authorization': '***',
-            'cookie': '***',
+            authorization: '***',
+            cookie: '***',
             'x-api-key': '***',
             'content-type': 'application/json',
           }),
@@ -445,7 +449,7 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         request: {
           headers: {
-            'accept': ['text/html', 'application/json'],
+            accept: ['text/html', 'application/json'],
           },
         },
       });
@@ -458,7 +462,7 @@ describe('RequestWatcher', () => {
         'request',
         expect.objectContaining({
           headers: expect.objectContaining({
-            'accept': 'text/html, application/json',
+            accept: 'text/html, application/json',
           }),
         }),
         expect.any(String),
@@ -536,7 +540,11 @@ describe('RequestWatcher', () => {
     it('should capture success status code', async () => {
       // Arrange
       const context = createMockContext({
-        response: { statusCode: 200, setHeader: jest.fn(), getHeaders: jest.fn().mockReturnValue({}) },
+        response: {
+          statusCode: 200,
+          setHeader: jest.fn(),
+          getHeaders: jest.fn().mockReturnValue({}),
+        },
       });
 
       // Act
@@ -555,7 +563,11 @@ describe('RequestWatcher', () => {
     it('should capture created status code', async () => {
       // Arrange
       const context = createMockContext({
-        response: { statusCode: 201, setHeader: jest.fn(), getHeaders: jest.fn().mockReturnValue({}) },
+        response: {
+          statusCode: 201,
+          setHeader: jest.fn(),
+          getHeaders: jest.fn().mockReturnValue({}),
+        },
       });
 
       // Act
@@ -810,7 +822,9 @@ describe('RequestWatcher', () => {
       // Arrange
       const context = createMockContext({
         context: {
-          getClass: () => { throw new Error('No controller'); },
+          getClass: () => {
+            throw new Error('No controller');
+          },
           getHandler: () => ({ name: 'test' }),
         },
       });
@@ -1156,7 +1170,9 @@ describe('RequestWatcher', () => {
         response: {
           statusCode: 200,
           setHeader: jest.fn(),
-          getHeaders: jest.fn().mockImplementation(() => { throw new Error('Header error'); }),
+          getHeaders: jest.fn().mockImplementation(() => {
+            throw new Error('Header error');
+          }),
         },
       });
 
@@ -1226,7 +1242,7 @@ describe('RequestWatcher', () => {
 
       // Act & Assert - should complete without throwing
       await expect(
-        watcherWithTags.intercept(context, createMockHandler()).toPromise()
+        watcherWithTags.intercept(context, createMockHandler()).toPromise(),
       ).resolves.toBeDefined();
       expect(tagsFn).toHaveBeenCalled();
     });
@@ -1255,7 +1271,7 @@ describe('RequestWatcher', () => {
 
       // Act & Assert - should complete without throwing
       await expect(
-        watcherWithTags.intercept(context, createMockHandler()).toPromise()
+        watcherWithTags.intercept(context, createMockHandler()).toPromise(),
       ).resolves.toBeDefined();
       expect(tagsFn).toHaveBeenCalled();
     });
