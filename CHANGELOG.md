@@ -1,3 +1,10 @@
+## [0.3.5](https://github.com/mogretici/nestlens/compare/v0.3.4...v0.3.5) (2026-01-08)
+
+
+### Bug Fixes
+
+* update dashboard views and payload types for enhanced data handling ([6d1225e](https://github.com/mogretici/nestlens/commit/6d1225e30d27c9a35a7cc388d688d1924c634e2a))
+
 ## [0.3.4](https://github.com/mogretici/nestlens/compare/v0.3.3...v0.3.4) (2026-01-08)
 
 
