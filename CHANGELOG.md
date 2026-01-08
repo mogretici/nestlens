@@ -1,3 +1,10 @@
+## [0.3.4](https://github.com/mogretici/nestlens/compare/v0.3.3...v0.3.4) (2026-01-08)
+
+
+### Bug Fixes
+
+* add `tsc-alias` to build pipeline and update dependencies ([5f84677](https://github.com/mogretici/nestlens/commit/5f84677646f4e9a83660a74014f53a4db679d5b7))
+
 ## [0.3.3](https://github.com/mogretici/nestlens/compare/v0.3.2...v0.3.3) (2026-01-08)
 
 
