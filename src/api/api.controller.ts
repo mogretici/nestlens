@@ -16,23 +16,29 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
-import { STORAGE, StorageInterface } from '../core/storage/storage.interface';
-import { PruningService } from '../core/pruning.service';
-import { CollectorService } from '../core/collector.service';
-import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '../nestlens.config';
-import { EntryType, CursorPaginatedResponse, Entry } from '../types';
+import { STORAGE, StorageInterface } from '@/core';
+import { PruningService } from '@/core';
+import { CollectorService } from '@/core';
+import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '@/nestlens.config';
+import { EntryType, CursorPaginatedResponse, Entry } from '@/types';
 import { NestLensGuard } from './api.guard';
 import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT } from './dto';
-import { NestLensApiExceptionFilter } from './filters/api-exception.filter';
-import { NestLensApiResponseInterceptor } from './interceptors/api-response.interceptor';
-import { NestLensApiException } from './exceptions/nestlens-api.exception';
+import { NestLensApiExceptionFilter } from '@/api/filters';
+import { NestLensApiResponseInterceptor } from '@/api/interceptors';
+import { NestLensApiException } from '@/api/exceptions';
 
 @ApiTags('NestLens')
 @Controller(`${NESTLENS_API_PREFIX}/api`)
 @UseGuards(NestLensGuard)
 @UseFilters(NestLensApiExceptionFilter)
 @UseInterceptors(NestLensApiResponseInterceptor)
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    transformOptions: { enableImplicitConversion: true },
+  }),
+)
 export class NestLensApiController {
   private lastPruneRun: Date | null = null;
   private nextPruneRun: Date | null = null;
@@ -65,7 +71,7 @@ export class NestLensApiController {
     private readonly collectorService: CollectorService,
   ) {
     // Calculate next prune run
-    const intervalMinutes = this.config.pruning?.interval || 60;
+    const intervalMinutes = this.config.pruning?.interval ?? 60;
     this.nextPruneRun = new Date(Date.now() + intervalMinutes * 60 * 1000);
   }
 
@@ -303,10 +309,10 @@ export class NestLensApiController {
     return {
       data: {
         enabled: config?.enabled !== false,
-        maxAge: config?.maxAge || 24,
-        interval: config?.interval || 60,
-        lastRun: this.lastPruneRun?.toISOString() || null,
-        nextRun: this.nextPruneRun?.toISOString() || null,
+        maxAge: config?.maxAge ?? 24,
+        interval: config?.interval ?? 60,
+        lastRun: this.lastPruneRun?.toISOString() ?? null,
+        nextRun: this.nextPruneRun?.toISOString() ?? null,
         totalEntries: storageStats.total,
         oldestEntry: storageStats.oldestEntry,
         newestEntry: storageStats.newestEntry,
@@ -317,13 +323,13 @@ export class NestLensApiController {
 
   @Post('pruning/run')
   async runPruning() {
-    const maxAgeHours = this.config.pruning?.maxAge || 24;
+    const maxAgeHours = this.config.pruning?.maxAge ?? 24;
     const before = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
 
     const deleted = await this.storage.prune(before);
     this.lastPruneRun = new Date();
 
-    const intervalMinutes = this.config.pruning?.interval || 60;
+    const intervalMinutes = this.config.pruning?.interval ?? 60;
     this.nextPruneRun = new Date(Date.now() + intervalMinutes * 60 * 1000);
 
     return {

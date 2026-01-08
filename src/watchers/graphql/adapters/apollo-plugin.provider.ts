@@ -10,7 +10,7 @@
  */
 
 import { Injectable, Optional, Logger, OnModuleInit } from '@nestjs/common';
-import { GraphQLWatcher } from '../graphql.watcher';
+import { GraphQLWatcher } from '@/watchers';
 
 /**
  * Type for the @Plugin decorator factory from @nestjs/apollo.
@@ -34,14 +34,24 @@ function getPluginDecorator(): PluginDecoratorFactory | undefined {
 
   pluginImportAttempted = true;
 
-  try {
-    // Dynamic require to check if @nestjs/apollo is installed
-    // This is the standard pattern for optional peer dependencies
-    const nestApollo = require('@nestjs/apollo') as { Plugin?: PluginDecoratorFactory };
-    PluginDecorator = nestApollo.Plugin;
-  } catch {
-    // @nestjs/apollo not installed - auto-registration won't work
-    // Users will need to manually integrate the plugin
+  // Try to resolve @nestjs/apollo from multiple locations
+  // This handles npm link scenarios where the library runs from a different directory
+  const resolutionPaths = [
+    undefined, // Normal resolution (library's node_modules)
+    process.cwd(), // Consuming application's directory
+  ];
+
+  for (const basePath of resolutionPaths) {
+    try {
+      const resolvedPath = basePath
+        ? require.resolve('@nestjs/apollo', { paths: [basePath] })
+        : require.resolve('@nestjs/apollo');
+      const nestApollo = require(resolvedPath) as { Plugin?: PluginDecoratorFactory };
+      PluginDecorator = nestApollo.Plugin;
+      if (PluginDecorator) break;
+    } catch {
+      // Continue to next resolution path
+    }
   }
 
   return PluginDecorator;
@@ -89,23 +99,18 @@ export class NestLensApolloPlugin implements OnModuleInit {
    */
   onModuleInit(): void {
     if (!this.graphqlWatcher) {
-      this.logger.debug('GraphQLWatcher not available - skipping auto-registration');
       return;
     }
 
     const adapter = this.graphqlWatcher.getAdapter();
-    if (!adapter) {
-      this.logger.debug('GraphQL adapter not initialized - skipping auto-registration');
-      return;
-    }
-
-    if (adapter.type !== 'apollo') {
-      this.logger.debug(`Adapter type is ${adapter.type}, not apollo - skipping`);
+    if (adapter?.type !== 'apollo') {
       return;
     }
 
     // Get the actual plugin from the adapter
-    this.plugin = adapter.getPlugin() as typeof this.plugin;
+    this.plugin = adapter.getPlugin() as {
+      requestDidStart?: (requestContext: unknown) => Promise<unknown>;
+    };
     this.initialized = true;
 
     // Mark as auto-registered

@@ -1,4 +1,4 @@
-import { IsOptional, IsNumber, IsIn, IsArray, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsIn, IsArray, IsString, IsBoolean } from 'class-validator';
 import {
   TransformLimit,
   TransformSequence,
@@ -6,7 +6,7 @@ import {
   TransformCommaSeparatedNumbersOrErr,
   TransformStringToBoolean,
 } from './transformers';
-import { EntryType } from '../../types';
+import { EntryType } from '@/types';
 
 const ENTRY_TYPES: EntryType[] = [
   'request',
@@ -43,17 +43,14 @@ export class CursorQueryDto {
 
   @IsOptional()
   @TransformLimit()
-  @IsNumber()
   limit?: number;
 
   @IsOptional()
   @TransformSequence()
-  @IsNumber()
   beforeSequence?: number;
 
   @IsOptional()
   @TransformSequence()
-  @IsNumber()
   afterSequence?: number;
 
   // ==================== Log Filters ====================

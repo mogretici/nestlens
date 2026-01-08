@@ -7,9 +7,9 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { ErrorCode, ERROR_MESSAGES } from '../constants/error-codes';
-import { ApiResponse, ApiError } from '../dto/api-response.dto';
-import { NestLensApiException } from '../exceptions/nestlens-api.exception';
+import { ErrorCode, ERROR_MESSAGES } from '@/api/constants';
+import { ApiResponse, ApiError } from '@/api/dto';
+import { NestLensApiException } from '@/api/exceptions';
 
 /**
  * Global exception filter for NestLens API.
@@ -20,12 +20,33 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('NestLensApi');
   private readonly isDevelopment = process.env.NODE_ENV !== 'production';
 
+  /**
+   * Check if an exception is HttpException-like using duck typing.
+   * This handles cases where the exception comes from a different
+   * @nestjs/common instance (e.g., when using npm link).
+   */
+  private isHttpExceptionLike(exception: unknown): exception is {
+    getStatus: () => number;
+    getResponse: () => unknown;
+    message: string;
+    stack?: string;
+  } {
+    return (
+      exception !== null &&
+      typeof exception === 'object' &&
+      'getStatus' in exception &&
+      'getResponse' in exception &&
+      typeof (exception as { getStatus: unknown }).getStatus === 'function' &&
+      typeof (exception as { getResponse: unknown }).getResponse === 'function'
+    );
+  }
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest();
 
-    const startTime = request._startTime || Date.now();
+    const startTime = request._startTime ?? Date.now();
     const duration = Date.now() - startTime;
 
     let status: number;
@@ -49,8 +70,8 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
       if (this.isDevelopment && exception.stack) {
         apiError.stack = exception.stack;
       }
-    } else if (exception instanceof HttpException) {
-      // Handle standard NestJS HTTP exceptions
+    } else if (exception instanceof HttpException || this.isHttpExceptionLike(exception)) {
+      // Handle standard NestJS HTTP exceptions (including from different module instances)
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 

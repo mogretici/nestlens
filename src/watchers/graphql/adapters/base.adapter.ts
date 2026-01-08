@@ -4,9 +4,9 @@
  * Abstract interface that all GraphQL server adapters must implement.
  */
 
-import { CollectorService } from '../../../core/collector.service';
-import { GraphQLPayload } from '../../../types';
-import { ResolvedGraphQLConfig, OperationContext } from '../types';
+import { CollectorService } from '@/core';
+import { GraphQLPayload } from '@/types';
+import { ResolvedGraphQLConfig } from '../types';
 
 /**
  * Callback for when an operation is collected
@@ -80,11 +80,7 @@ export abstract class BaseGraphQLAdapter {
     }
 
     // Check ignored operations
-    if (operationName && this.config.ignoreOperations.includes(operationName)) {
-      return true;
-    }
-
-    return false;
+    return !!(operationName && this.config.ignoreOperations.includes(operationName));
   }
 
   /**
@@ -211,13 +207,24 @@ export abstract class BaseGraphQLAdapter {
 export type AdapterFactory = () => BaseGraphQLAdapter;
 
 /**
- * Check if a package is available
+ * Check if a package is available.
+ *
+ * This function handles npm link scenarios where the library runs from a
+ * symlinked directory. It first tries normal resolution, then falls back
+ * to resolving from the consuming application's directory (process.cwd()).
  */
 export function isPackageAvailable(packageName: string): boolean {
   try {
     require.resolve(packageName);
     return true;
   } catch {
-    return false;
+    // Normal resolution failed - try from consuming application's directory
+    // This handles npm link scenarios where nestlens runs from a different location
+    try {
+      require.resolve(packageName, { paths: [process.cwd()] });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
