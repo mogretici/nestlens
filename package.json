@@ -10,8 +10,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rimraf dist && tsc && npm run build:dashboard",
-    "build:lib": "tsc",
+    "build": "rimraf dist && tsc && tsc-alias && npm run build:dashboard",
+    "build:lib": "tsc && tsc-alias",
     "build:dashboard": "cd dashboard && npm run build && mkdir -p ../dist/dashboard/public && cp -r dist/* ../dist/dashboard/public/",
     "dev": "tsc --watch",
     "lint": "eslint \"src/**/*.ts\"",
@@ -136,6 +136,7 @@
     "semantic-release": "^25.0.2",
     "standard-version": "^9.5.0",
     "ts-jest": "^29.4.6",
+    "tsc-alias": "^1.8.16",
     "typescript": "^5.7.2"
   },
   "engines": {
