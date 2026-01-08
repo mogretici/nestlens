@@ -7,5 +7,6 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #206 | 9:41 PM | 🔵 | Model Watcher Architecture for ORM Operation Tracking | ~673 |
+| #209 | 9:44 PM | ✅ | Added Stack Trace Field to QueryPayload Type Definition | ~354 |
+| #208 | 9:43 PM | 🔵 | Dashboard Type Definitions Confirm Batch Metadata Fields in GraphQLPayload | ~434 |
 </claude-mem-context>

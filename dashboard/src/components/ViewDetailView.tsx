@@ -159,6 +159,18 @@ export default function ViewDetailView({ entry }: ViewDetailViewProps) {
                 value={payload.cacheHit ? 'Yes' : 'No'}
               />
             )}
+            {payload.dataSize !== undefined && (
+              <DetailRow
+                label="Data Size"
+                value={`${payload.dataSize} bytes`}
+              />
+            )}
+            {payload.outputSize !== undefined && (
+              <DetailRow
+                label="Output Size"
+                value={`${payload.outputSize} bytes`}
+              />
+            )}
           </dl>
         </div>
       </div>

@@ -7,5 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #206 | 9:41 PM | 🔵 | Model Watcher Architecture for ORM Operation Tracking | ~673 |
+| #216 | 9:47 PM | 🔴 | Fixed Model Entry Record Count Field Name Mismatch | ~353 |
 </claude-mem-context>

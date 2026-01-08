@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Box, Clock, Database, FileText } from 'lucide-react';
+import { Box, Clock, Database, FileText, XCircle } from 'lucide-react';
 import { ModelEntry, JsonValue } from '../types';
 import { parseDate } from '../utils/date';
 import DetailRow from './DetailRow';
@@ -16,7 +16,7 @@ interface ModelDetailViewProps {
 export default function ModelDetailView({ entry }: ModelDetailViewProps) {
   const { payload, createdAt } = entry;
   const dataToolbar = useJsonToolbar();
-  const changesToolbar = useJsonToolbar();
+  const whereToolbar = useJsonToolbar();
   const [activeTab, setActiveTab] = useState('data');
 
   // Build tabs
@@ -37,15 +37,15 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
     });
   }
 
-  if (payload.changes !== undefined) {
+  if (payload.where !== undefined) {
     tabs.push({
-      id: 'changes',
-      label: 'Changes',
+      id: 'where',
+      label: 'Where',
       content: (
         <ControlledInlineJson
-          data={payload.changes as JsonValue}
-          toolbarState={changesToolbar.state}
-          searchBar={changesToolbar.SearchBar}
+          data={payload.where as JsonValue}
+          toolbarState={whereToolbar.state}
+          searchBar={whereToolbar.SearchBar}
           maxHeight={400}
         />
       ),
@@ -57,8 +57,8 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
     if (activeTab === 'data' && payload.data !== undefined) {
       return <dataToolbar.Toolbar data={payload.data as JsonValue} />;
     }
-    if (activeTab === 'changes' && payload.changes !== undefined) {
-      return <changesToolbar.Toolbar data={payload.changes as JsonValue} />;
+    if (activeTab === 'where' && payload.where !== undefined) {
+      return <whereToolbar.Toolbar data={payload.where as JsonValue} />;
     }
     return undefined;
   };
@@ -87,7 +87,7 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
         </div>
 
         {/* Stats Row */}
-        <div className={`grid ${payload.records !== undefined ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-3'} divide-x divide-gray-200 dark:divide-gray-700`}>
+        <div className={`grid ${payload.recordCount !== undefined ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-3'} divide-x divide-gray-200 dark:divide-gray-700`}>
           <div className="p-4">
             <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 mb-1">
               <FileText className="h-4 w-4" />
@@ -115,14 +115,14 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
               {payload.duration}<span className="text-sm font-normal text-gray-500 dark:text-gray-400">ms</span>
             </p>
           </div>
-          {payload.records !== undefined && (
+          {payload.recordCount !== undefined && (
             <div className="p-4">
               <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 mb-1">
                 <Database className="h-4 w-4" />
                 <span className="text-xs uppercase tracking-wider">Records</span>
               </div>
               <p className="text-lg font-bold text-gray-900 dark:text-white">
-                {payload.records}
+                {payload.recordCount}
               </p>
             </div>
           )}
@@ -179,17 +179,36 @@ export default function ModelDetailView({ entry }: ModelDetailViewProps) {
               label="Duration"
               value={`${payload.duration}ms`}
             />
-            {payload.records !== undefined && (
+            {payload.recordCount !== undefined && (
               <DetailRow
                 label="Records"
-                value={String(payload.records)}
+                value={String(payload.recordCount)}
               />
             )}
           </dl>
         </div>
       </div>
 
-      {/* Data & Changes Tabs */}
+      {/* Error Card (if failed) */}
+      {payload.error && (
+        <div className="card border-red-200 dark:border-red-800">
+          <div className="px-4 py-3 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+            <div className="flex items-center space-x-2">
+              <XCircle className="h-5 w-5 text-red-500" />
+              <h2 className="text-lg font-semibold text-red-700 dark:text-red-400">
+                Error
+              </h2>
+            </div>
+          </div>
+          <div className="p-4 bg-red-50/50 dark:bg-red-900/10">
+            <pre className="text-sm text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap overflow-x-auto">
+              {payload.error}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* Data & Where Tabs */}
       {tabs.length > 0 && (
         <Tabs
           tabs={tabs}

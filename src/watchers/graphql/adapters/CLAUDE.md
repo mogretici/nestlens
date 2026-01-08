@@ -7,5 +7,23 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #185 | 9:19 PM | ✅ | Removed Extra Debug Logging from Apollo Adapter Collection Method | ~368 |
+| #184 | " | ✅ | Removed Temporary Debug Logging from Apollo Adapter | ~402 |
+| #183 | " | 🔵 | Apollo Adapter Added Debug Logging for GraphQL Request Processing | ~450 |
+| #182 | 9:18 PM | ✅ | Removed Redundant Debug Logging from Apollo Plugin Provider | ~359 |
+| #177 | 9:14 PM | 🔴 | Fixed Introspection Detection to Exclude __typename Meta-Field from Filtering | ~460 |
+| #146 | 8:55 PM | ✅ | Enhanced Apollo Adapter Logging to Use logger.log for Better Visibility | ~376 |
+| #145 | " | ✅ | Added Debug Logging to Apollo Adapter for Request Tracking Diagnostics | ~446 |
+| #144 | 8:54 PM | ✅ | Added Debug Logging to Apollo Plugin Request Handler | ~360 |
+| #142 | 8:53 PM | ✅ | Added Debug Logging to Apollo Adapter Entry Collection | ~343 |
+| #141 | " | 🔵 | Apollo Adapter HTTP Context Extraction and Entry Collection | ~432 |
+| #140 | 8:52 PM | ✅ | Added Debug Logging to Apollo Adapter for Troubleshooting | ~346 |
+| #139 | 8:51 PM | ✅ | Added Debug Logging to NestLens Apollo Plugin Request Handler | ~342 |
+| #136 | 8:49 PM | 🔵 | NestLens Apollo Plugin Auto-Registration via @Plugin Decorator | ~536 |
+| #133 | 8:48 PM | 🔵 | Apollo Adapter Implements Comprehensive GraphQL Request Tracking via Plugin Lifecycle Hooks | ~724 |
+| #132 | " | 🔵 | Base GraphQL Adapter Implements Sampling, Filtering, and Collection Logic | ~589 |
+| #128 | 8:40 PM | 🔵 | NestLens Apollo Plugin Uses Dynamic Decorator Pattern for Optional Dependency | ~523 |
+| #125 | 8:39 PM | 🔵 | NestLens BaseGraphQLAdapter Implements Request Metadata Extraction and Sampling Logic | ~489 |
+| #121 | 8:25 PM | 🔵 | nestlens Tracks GraphQL Requests via Apollo Server Plugin API | ~492 |
 | #16 | 1:12 AM | ⚖️ | GraphQL watcher zero-config auto-registration implementation plan created | ~613 |
 </claude-mem-context>

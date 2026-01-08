@@ -242,6 +242,18 @@ export default function RequestDetailView({ entry, related = [] }: RequestDetail
                 ) : '-'
               }
             />
+            {payload.userAgent && (
+              <DetailRow
+                label="User Agent"
+                value={<span className="text-sm text-gray-600 dark:text-gray-400">{payload.userAgent}</span>}
+              />
+            )}
+            {payload.handler && payload.handler !== payload.controllerAction && (
+              <DetailRow
+                label="Handler"
+                value={<code className="font-mono text-sm">{payload.handler}</code>}
+              />
+            )}
             <DetailRow
               label="Memory Usage"
               value={

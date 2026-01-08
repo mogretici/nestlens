@@ -7,5 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #206 | 9:41 PM | 🔵 | Model Watcher Architecture for ORM Operation Tracking | ~673 |
+| #138 | 8:49 PM | 🔵 | CollectorService Implements Buffered Entry Collection with Filtering and Auto-Tagging | ~662 |
 </claude-mem-context>

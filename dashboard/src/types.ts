@@ -76,6 +76,7 @@ export interface QueryPayload {
   slow: boolean;
   source?: string;
   connection?: string;
+  stack?: string;
 }
 
 export interface ExceptionPayload {
@@ -179,19 +180,20 @@ export interface ModelPayload {
   entity: string;
   source?: string;
   duration: number;
-  records?: number;
+  recordCount?: number;
   data?: JsonValue;
-  changes?: JsonValue;
+  where?: JsonValue;
+  error?: string;
 }
 
 export interface NotificationPayload {
   type: string;
-  recipient: string;
+  recipient: string | string[];
   title?: string;
+  message?: string;
+  metadata?: JsonValue;
   status: 'sent' | 'failed';
   duration: number;
-  channels?: string[];
-  data?: JsonValue;
   error?: string;
 }
 

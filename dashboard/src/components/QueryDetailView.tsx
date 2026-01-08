@@ -82,6 +82,22 @@ export default function QueryDetailView({ entry }: QueryDetailViewProps) {
         duration={payload.duration}
         slow={payload.slow}
       />
+
+      {/* Stack Trace (where the query was called from) */}
+      {payload.stack && (
+        <div className="card">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Call Stack
+            </h2>
+          </div>
+          <div className="p-4 bg-gray-900 dark:bg-gray-950 overflow-x-auto">
+            <pre className="text-sm text-gray-300 font-mono whitespace-pre-wrap">
+              {payload.stack}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

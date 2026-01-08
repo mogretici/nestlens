@@ -70,9 +70,13 @@ export abstract class BaseGraphQLAdapter {
     // Check introspection
     if (this.config.ignoreIntrospection && query) {
       const lowerQuery = query.toLowerCase();
+      // Check for introspection fields: __schema and __type (but NOT __typename)
+      // __type is followed by ( or whitespace when used as introspection field
+      // __typename is a meta-field that Apollo Client adds for caching - should NOT be ignored
       if (
         lowerQuery.includes('__schema') ||
-        lowerQuery.includes('__type') ||
+        /\b__type\s*\(/.test(lowerQuery) ||
+        /\b__type\s*\{/.test(lowerQuery) ||
         lowerQuery.includes('introspectionquery')
       ) {
         return true;

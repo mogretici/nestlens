@@ -7,6 +7,9 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
+| #137 | 8:49 PM | 🔵 | GraphQL Watcher Tracks Plugin Registration Mode and Initialization State | ~540 |
+| #127 | 8:39 PM | 🔵 | NestLens GraphQL Watcher Configuration and Adapter Architecture | ~692 |
+| #120 | 8:25 PM | 🔵 | NestLens GraphQL Watcher Architecture and Auto-Detection Mechanism | ~441 |
 | #23 | 1:29 AM | 🟣 | Added registration mode tracking to GraphQL watcher for auto vs manual plugin detection | ~409 |
 | #16 | 1:12 AM | ⚖️ | GraphQL watcher zero-config auto-registration implementation plan created | ~613 |
 </claude-mem-context>

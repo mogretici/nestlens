@@ -103,8 +103,8 @@ export default function ModelsPage() {
       header: 'Records',
       width: '80px',
       align: 'center',
-      render: (entry) => entry.payload.records !== undefined ? (
-        <TextCell>{entry.payload.records}</TextCell>
+      render: (entry) => entry.payload.recordCount !== undefined ? (
+        <TextCell>{entry.payload.recordCount}</TextCell>
       ) : (
         <TextCell secondary>-</TextCell>
       ),

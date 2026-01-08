@@ -22,13 +22,13 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
   const StatusIcon = statusConfig.icon;
 
   // Build tabs
-  const tabs = payload.data !== undefined ? [
+  const tabs = payload.metadata !== undefined ? [
     {
-      id: 'data',
-      label: 'Data',
+      id: 'metadata',
+      label: 'Metadata',
       content: (
         <ControlledInlineJson
-          data={payload.data as JsonValue}
+          data={payload.metadata as JsonValue}
           toolbarState={dataToolbar.state}
           searchBar={dataToolbar.SearchBar}
           maxHeight={400}
@@ -36,6 +36,9 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
       ),
     },
   ] : [];
+
+  // Format recipients for display
+  const recipients = Array.isArray(payload.recipient) ? payload.recipient : [payload.recipient];
 
   return (
     <div className="space-y-6">
@@ -56,7 +59,7 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
                 </p>
               </div>
             </div>
-            <CopyButton text={payload.recipient} label="Copy recipient" />
+            <CopyButton text={recipients.join(', ')} label="Copy recipient" />
           </div>
         </div>
 
@@ -89,17 +92,15 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
               {payload.duration}<span className="text-sm font-normal text-gray-500 dark:text-gray-400">ms</span>
             </p>
           </div>
-          {payload.channels && payload.channels.length > 0 && (
-            <div className="p-4">
-              <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 mb-1">
-                <Send className="h-4 w-4" />
-                <span className="text-xs uppercase tracking-wider">Channels</span>
-              </div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white">
-                {payload.channels.length}
-              </p>
+          <div className="p-4">
+            <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 mb-1">
+              <Send className="h-4 w-4" />
+              <span className="text-xs uppercase tracking-wider">Recipients</span>
             </div>
-          )}
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {recipients.length}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -132,17 +133,31 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
               }
             />
             <DetailRow
-              label="Recipient"
+              label={recipients.length > 1 ? 'Recipients' : 'Recipient'}
               value={
-                <code className="text-sm font-mono text-gray-900 dark:text-white">
-                  {payload.recipient}
-                </code>
+                <div className="flex flex-wrap gap-2">
+                  {recipients.map((r, idx) => (
+                    <code key={idx} className="text-sm font-mono text-gray-900 dark:text-white">
+                      {r}
+                    </code>
+                  ))}
+                </div>
               }
             />
             {payload.title && (
               <DetailRow
                 label="Title"
                 value={payload.title}
+              />
+            )}
+            {payload.message && (
+              <DetailRow
+                label="Message"
+                value={
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {payload.message}
+                  </span>
+                }
               />
             )}
             <DetailRow
@@ -153,20 +168,6 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
                 </ClickableBadge>
               }
             />
-            {payload.channels && payload.channels.length > 0 && (
-              <DetailRow
-                label="Channels"
-                value={
-                  <div className="flex flex-wrap gap-2">
-                    {payload.channels.map((channel, idx) => (
-                      <ClickableBadge key={idx} clickable={false}>
-                        {channel}
-                      </ClickableBadge>
-                    ))}
-                  </div>
-                }
-              />
-            )}
             <DetailRow
               label="Duration"
               value={`${payload.duration}ms`}
@@ -194,13 +195,13 @@ export default function NotificationDetailView({ entry }: NotificationDetailView
         </div>
       )}
 
-      {/* Data Tab */}
+      {/* Metadata Tab */}
       {tabs.length > 0 && (
         <Tabs
           tabs={tabs}
-          defaultTab="data"
+          defaultTab="metadata"
           hashKey="notification"
-          headerRight={<dataToolbar.Toolbar data={payload.data as JsonValue} />}
+          headerRight={<dataToolbar.Toolbar data={payload.metadata as JsonValue} />}
         />
       )}
     </div>

@@ -492,6 +492,11 @@ export const ENTRY_TYPES = {
         displayName: 'Status',
         values: [], // Dynamic - any HTTP status
       },
+      ips: {
+        urlKey: 'ips',
+        displayName: 'IP',
+        values: [], // Dynamic
+      },
       // Note: hasErrors and hasN1 are boolean filters handled via URL params directly,
       // not through the filter config (similar to slow/resolved in other pages)
     },

@@ -10,7 +10,7 @@ import Tabs from './Tabs';
 import UserCard from './UserCard';
 import { useJsonToolbar, ControlledInlineJson } from './JsonViewerWithToolbar';
 import { useGraphQLToolbar, InlineGraphQLViewer } from './GraphQLViewer';
-import { AlertTriangle, Clock, Layers, Zap } from 'lucide-react';
+import { AlertTriangle, Clock, Layers, Zap, Send, ServerIcon } from 'lucide-react';
 
 interface GraphQLDetailViewProps {
   entry: GraphQLEntry;
@@ -266,21 +266,36 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
     </div>
   );
 
-  const tabs = [
+  // Client-side tabs (what the client sent)
+  const clientTabs = [
     { id: 'query', label: 'Query', content: queryContent },
     { id: 'variables', label: 'Variables', content: variablesContent },
+  ];
+
+  // Server-side tabs (what the server returned/processed)
+  const serverTabs = [
     { id: 'response', label: 'Response', content: responseContent },
     { id: 'errors', label: `Errors${payload.errors?.length ? ` (${payload.errors.length})` : ''}`, content: errorsContent },
     { id: 'resolvers', label: 'Resolvers', content: resolversContent },
   ];
 
-  // Toolbar for active tab
-  const getToolbar = () => {
+  const [activeServerTab, setActiveServerTab] = useState('response');
+
+  // Toolbar for active client tab
+  const getClientToolbar = () => {
     switch (activeTab) {
       case 'query':
         return <queryToolbar.Toolbar code={payload.query} />;
       case 'variables':
         return <variablesToolbar.Toolbar data={(payload.variables || {}) as JsonValue} />;
+      default:
+        return null;
+    }
+  };
+
+  // Toolbar for active server tab
+  const getServerToolbar = () => {
+    switch (activeServerTab) {
       case 'response':
         return <responseToolbar.Toolbar data={(payload.responseData || {}) as JsonValue} />;
       default:
@@ -382,7 +397,23 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
             {payload.ip && (
               <DetailRow
                 label="IP Address"
-                value={<code className="font-mono text-sm">{payload.ip}</code>}
+                value={
+                  <ClickableBadge listType="graphql" filterType="ips" filterValue={payload.ip} className="font-mono">
+                    {payload.ip}
+                  </ClickableBadge>
+                }
+              />
+            )}
+            {payload.userAgent && (
+              <DetailRow
+                label="User Agent"
+                value={<span className="text-sm text-gray-600 dark:text-gray-400">{payload.userAgent}</span>}
+              />
+            )}
+            {payload.fieldCount !== undefined && (
+              <DetailRow
+                label="Field Count"
+                value={payload.fieldCount}
               />
             )}
             {tags.length > 0 && (
@@ -411,6 +442,33 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
               execution={payload.executionDuration}
               total={payload.duration}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Batch Info */}
+      {payload.batchId && (
+        <div className="card">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Layers className="h-5 w-5 text-gray-400" />
+              Batch Request
+            </h2>
+          </div>
+          <div className="p-4">
+            <dl className="divide-y-0">
+              <DetailRow label="Batch ID" value={<code className="font-mono text-sm">{payload.batchId}</code>} />
+              {payload.batchSize !== undefined && (
+                <DetailRow
+                  label="Position"
+                  value={
+                    <span>
+                      {(payload.batchIndex ?? 0) + 1} of {payload.batchSize}
+                    </span>
+                  }
+                />
+              )}
+            </dl>
           </div>
         </div>
       )}
@@ -447,13 +505,33 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
       {/* N+1 Warnings */}
       <N1WarningsSection warnings={payload.potentialN1} />
 
-      {/* Tabs: Query, Variables, Response, Errors, Resolvers */}
-      <Tabs
-        tabs={tabs}
-        defaultTab="query"
-        headerRight={getToolbar()}
-        onTabChange={setActiveTab}
-      />
+      {/* Client Request Section */}
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <Send className="h-5 w-5 text-blue-500" />
+          Client Request
+        </h2>
+        <Tabs
+          tabs={clientTabs}
+          defaultTab="query"
+          headerRight={getClientToolbar()}
+          onTabChange={setActiveTab}
+        />
+      </div>
+
+      {/* Server Response Section */}
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <ServerIcon className="h-5 w-5 text-green-500" />
+          Server Response
+        </h2>
+        <Tabs
+          tabs={serverTabs}
+          defaultTab="response"
+          headerRight={getServerToolbar()}
+          onTabChange={setActiveServerTab}
+        />
+      </div>
     </div>
   );
 }

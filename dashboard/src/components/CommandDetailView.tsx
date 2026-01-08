@@ -17,6 +17,7 @@ export default function CommandDetailView({ entry }: CommandDetailViewProps) {
   const { payload, createdAt } = entry;
   const payloadToolbar = useJsonToolbar();
   const resultToolbar = useJsonToolbar();
+  const metadataToolbar = useJsonToolbar();
   const [activeTab, setActiveTab] = useState('payload');
 
   const statusConfig = payload.status === 'completed'
@@ -59,6 +60,21 @@ export default function CommandDetailView({ entry }: CommandDetailViewProps) {
     });
   }
 
+  if (payload.metadata !== undefined) {
+    tabs.push({
+      id: 'metadata',
+      label: 'Metadata',
+      content: (
+        <ControlledInlineJson
+          data={payload.metadata as JsonValue}
+          toolbarState={metadataToolbar.state}
+          searchBar={metadataToolbar.SearchBar}
+          maxHeight={400}
+        />
+      ),
+    });
+  }
+
   // Get toolbar for current tab
   const getCurrentToolbar = () => {
     if (activeTab === 'payload' && payload.payload !== undefined) {
@@ -66,6 +82,9 @@ export default function CommandDetailView({ entry }: CommandDetailViewProps) {
     }
     if (activeTab === 'result' && payload.result !== undefined) {
       return <resultToolbar.Toolbar data={payload.result as JsonValue} />;
+    }
+    if (activeTab === 'metadata' && payload.metadata !== undefined) {
+      return <metadataToolbar.Toolbar data={payload.metadata as JsonValue} />;
     }
     return undefined;
   };
