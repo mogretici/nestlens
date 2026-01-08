@@ -1,3 +1,11 @@
+## [0.3.2](https://github.com/mogretici/nestlens/compare/v0.3.1...v0.3.2) (2026-01-08)
+
+
+### Bug Fixes
+
+* implement Mercurius auto-registration for GraphQL watcher ([6ef5092](https://github.com/mogretici/nestlens/commit/6ef50926109ae9edc1095db7d4aa0d914aa881ea))
+* specify root option in sendFile to support pnpm package structure ([#2](https://github.com/mogretici/nestlens/issues/2)) ([ce92fdd](https://github.com/mogretici/nestlens/commit/ce92fddcf050930c2bf087a0a2bb8693ddde4a93))
+
 # Changelog
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
