@@ -266,6 +266,7 @@ In the NestLens dashboard, GraphQL entries appear in the GraphQL tab showing:
 - Filter by error status
 - Filter by N+1 warnings
 - Filter by query hash
+- Filter by IP address
 - Search by query content
 
 ## Sensitive Data Handling
