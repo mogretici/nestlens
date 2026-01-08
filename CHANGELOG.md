@@ -1,3 +1,10 @@
+## [0.3.3](https://github.com/mogretici/nestlens/compare/v0.3.2...v0.3.3) (2026-01-08)
+
+
+### Bug Fixes
+
+* enhance validation, exception handling, and package resolution ([0736a34](https://github.com/mogretici/nestlens/commit/0736a34a7f492ae844011d20f3f386193c26c563))
+
 ## [0.3.2](https://github.com/mogretici/nestlens/compare/v0.3.1...v0.3.2) (2026-01-08)
 
 
