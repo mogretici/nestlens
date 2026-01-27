@@ -1,3 +1,11 @@
+# [0.4.0](https://github.com/mogretici/nestlens/compare/v0.3.5...v0.4.0) (2026-01-27)
+
+
+### Features
+
+* add BullMQ integration with setup methods and event handling ([42d155b](https://github.com/mogretici/nestlens/commit/42d155b221e2dd6bdda808c7561585f1ee616c98))
+* add BullMQ integration with setup methods and event handling ([#4](https://github.com/mogretici/nestlens/issues/4)) ([67dc547](https://github.com/mogretici/nestlens/commit/67dc54787c6b05718a3451e728c434196825a04f))
+
 ## [0.3.5](https://github.com/mogretici/nestlens/compare/v0.3.4...v0.3.5) (2026-01-08)
 
 
