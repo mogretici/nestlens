@@ -609,6 +609,441 @@ describe('JobWatcher', () => {
   });
 
   // ============================================================================
+  // BullMQ Simple Setup (setupBullMQQueue)
+  // ============================================================================
+
+  describe('BullMQ Simple Setup', () => {
+    it('should handle invalid queue gracefully', async () => {
+      // Act & Assert - should not throw
+      await expect(watcher.setupBullMQQueue(null as any)).resolves.not.toThrow();
+      await expect(watcher.setupBullMQQueue({})).resolves.not.toThrow();
+    });
+
+    it('should handle missing bullmq module gracefully', async () => {
+      // Arrange - queue with valid structure but bullmq not installed
+      const mockClient = { options: { host: 'localhost', port: 6379 } };
+      const mockBullMQQueue = {
+        name: 'test-queue',
+        getJob: jest.fn(),
+        client: Promise.resolve(mockClient),
+      };
+      const errorSpy = jest.spyOn((watcher as any).logger, 'error');
+
+      // Act - should catch the require error
+      await watcher.setupBullMQQueue(mockBullMQQueue);
+
+      // Assert - error should be logged (bullmq not installed in test env)
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to setup BullMQ queue'),
+      );
+    });
+
+    it('should close managed QueueEvents', async () => {
+      // Arrange
+      const mockQueueEvents = { close: jest.fn().mockResolvedValue(undefined) };
+      (watcher as any).managedQueueEvents.push(mockQueueEvents);
+
+      // Act
+      await watcher.closeQueueEvents();
+
+      // Assert
+      expect(mockQueueEvents.close).toHaveBeenCalled();
+      expect((watcher as any).managedQueueEvents.length).toBe(0);
+    });
+
+    it('should handle close errors gracefully', async () => {
+      // Arrange
+      const mockQueueEvents = { close: jest.fn().mockRejectedValue(new Error('Close error')) };
+      (watcher as any).managedQueueEvents.push(mockQueueEvents);
+
+      // Act & Assert - should not throw
+      await expect(watcher.closeQueueEvents()).resolves.not.toThrow();
+      expect((watcher as any).managedQueueEvents.length).toBe(0);
+    });
+  });
+
+  // ============================================================================
+  // BullMQ Queue Setup (setupQueueWithEvents)
+  // ============================================================================
+
+  describe('BullMQ Queue Setup', () => {
+    let mockBullMQQueue: {
+      name: string;
+      getJob: jest.Mock;
+    };
+    let mockQueueEvents: {
+      on: jest.Mock;
+    };
+    let bullMQEventHandlers: Record<string, Function>;
+
+    beforeEach(() => {
+      bullMQEventHandlers = {};
+
+      mockBullMQQueue = {
+        name: 'bullmq-test-queue',
+        getJob: jest.fn(),
+      };
+
+      mockQueueEvents = {
+        on: jest.fn((event, handler) => {
+          bullMQEventHandlers[event] = handler;
+        }),
+      };
+    });
+
+    it('should setup event listeners on QueueEvents', () => {
+      // Act
+      watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+
+      // Assert
+      expect(mockQueueEvents.on).toHaveBeenCalledWith('waiting', expect.any(Function));
+      expect(mockQueueEvents.on).toHaveBeenCalledWith('active', expect.any(Function));
+      expect(mockQueueEvents.on).toHaveBeenCalledWith('completed', expect.any(Function));
+      expect(mockQueueEvents.on).toHaveBeenCalledWith('failed', expect.any(Function));
+      expect(mockQueueEvents.on).toHaveBeenCalledWith('delayed', expect.any(Function));
+    });
+
+    it('should use custom queue name when provided', () => {
+      // Arrange & Act
+      watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents, 'custom-bullmq-queue');
+
+      // Assert
+      expect(mockQueueEvents.on).toHaveBeenCalled();
+    });
+
+    it('should handle invalid queue gracefully', () => {
+      // Act & Assert - should not throw
+      expect(() => watcher.setupQueueWithEvents({}, mockQueueEvents)).not.toThrow();
+    });
+
+    it('should handle invalid queueEvents gracefully', () => {
+      // Act & Assert - should not throw
+      expect(() => watcher.setupQueueWithEvents(mockBullMQQueue, {})).not.toThrow();
+    });
+
+    it('should handle null queue gracefully', () => {
+      // Act & Assert
+      expect(() => watcher.setupQueueWithEvents(null as any, mockQueueEvents)).not.toThrow();
+    });
+
+    it('should handle null queueEvents gracefully', () => {
+      // Act & Assert
+      expect(() => watcher.setupQueueWithEvents(mockBullMQQueue, null as any)).not.toThrow();
+    });
+
+    describe('BullMQ Waiting Event', () => {
+      beforeEach(() => {
+        watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+      });
+
+      it('should collect waiting job from BullMQ event', async () => {
+        // Arrange
+        const mockJob = {
+          name: 'bullmq-job',
+          data: { task: 'process' },
+          attemptsMade: 0,
+        };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+
+        // Act
+        await bullMQEventHandlers['waiting']?.({ jobId: 'bmq-1' });
+
+        // Assert
+        expect(mockBullMQQueue.getJob).toHaveBeenCalledWith('bmq-1');
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            name: 'bullmq-job',
+            queue: 'bullmq-test-queue',
+            data: { task: 'process' },
+            status: 'waiting',
+            attempts: 0,
+          }),
+        );
+      });
+
+      it('should handle job not found', async () => {
+        // Arrange
+        mockBullMQQueue.getJob.mockResolvedValue(null);
+
+        // Act
+        await bullMQEventHandlers['waiting']?.({ jobId: 'nonexistent' });
+
+        // Assert
+        expect(mockCollector.collect).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('BullMQ Active Event', () => {
+      beforeEach(() => {
+        watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+      });
+
+      it('should collect active job from BullMQ event', async () => {
+        // Arrange
+        const mockJob = {
+          name: 'bullmq-active-job',
+          data: { userId: 42 },
+          attemptsMade: 1,
+        };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+
+        // Act
+        await bullMQEventHandlers['active']?.({ jobId: 'bmq-2' });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            name: 'bullmq-active-job',
+            status: 'active',
+            attempts: 1,
+          }),
+        );
+      });
+
+      it('should track job start time', async () => {
+        // Arrange
+        const mockJob = { id: 'bmq-track', name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+
+        // Act
+        await bullMQEventHandlers['active']?.({ jobId: 'bmq-track' });
+
+        // Assert - tracking uses job.id from the fetched job
+        expect((watcher as any).jobTracking.has('bmq-track')).toBe(true);
+      });
+    });
+
+    describe('BullMQ Completed Event', () => {
+      beforeEach(() => {
+        watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+      });
+
+      it('should collect completed job with parsed result', async () => {
+        // Arrange
+        const mockJob = {
+          id: 'bmq-3',
+          name: 'bullmq-completed',
+          data: { input: 'data' },
+          attemptsMade: 0,
+        };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+        // Set up tracking to calculate duration
+        (watcher as any).jobTracking.set('bmq-3', Date.now() - 500);
+
+        // Act
+        await bullMQEventHandlers['completed']?.({
+          jobId: 'bmq-3',
+          returnvalue: JSON.stringify({ success: true }),
+        });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            name: 'bullmq-completed',
+            status: 'completed',
+            result: { success: true },
+            duration: expect.any(Number),
+          }),
+        );
+      });
+
+      it('should handle non-JSON returnvalue', async () => {
+        // Arrange
+        const mockJob = { name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+
+        // Act
+        await bullMQEventHandlers['completed']?.({
+          jobId: 'bmq-4',
+          returnvalue: 'plain string result',
+        });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            result: 'plain string result',
+          }),
+        );
+      });
+
+      it('should use tracked start time for duration calculation', async () => {
+        // Arrange
+        const mockJob = { id: 'bmq-5', name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+        (watcher as any).jobTracking.set('bmq-5', Date.now() - 200);
+
+        // Act
+        await bullMQEventHandlers['completed']?.({ jobId: 'bmq-5', returnvalue: '' });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            duration: expect.any(Number),
+          }),
+        );
+      });
+
+      it('should remove job from tracking after completion', async () => {
+        // Arrange
+        const mockJob = { id: 'bmq-6', name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+        (watcher as any).jobTracking.set('bmq-6', Date.now());
+
+        // Act
+        await bullMQEventHandlers['completed']?.({ jobId: 'bmq-6', returnvalue: '' });
+
+        // Assert
+        expect((watcher as any).jobTracking.has('bmq-6')).toBe(false);
+      });
+    });
+
+    describe('BullMQ Failed Event', () => {
+      beforeEach(() => {
+        watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+      });
+
+      it('should collect failed job with error reason', async () => {
+        // Arrange
+        const mockJob = {
+          id: 'bmq-7',
+          name: 'bullmq-failed',
+          data: { dangerous: true },
+          attemptsMade: 3,
+        };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+        // Set up tracking to calculate duration
+        (watcher as any).jobTracking.set('bmq-7', Date.now() - 100);
+
+        // Act
+        await bullMQEventHandlers['failed']?.({
+          jobId: 'bmq-7',
+          failedReason: 'Connection timeout',
+        });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            name: 'bullmq-failed',
+            status: 'failed',
+            attempts: 3,
+            error: 'Connection timeout',
+            duration: expect.any(Number),
+          }),
+        );
+      });
+
+      it('should handle empty failedReason', async () => {
+        // Arrange
+        const mockJob = { id: 'bmq-8', name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+
+        // Act
+        await bullMQEventHandlers['failed']?.({ jobId: 'bmq-8', failedReason: '' });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            error: 'Unknown error',
+          }),
+        );
+      });
+
+      it('should remove job from tracking after failure', async () => {
+        // Arrange
+        const mockJob = { id: 'bmq-9', name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+        (watcher as any).jobTracking.set('bmq-9', Date.now());
+
+        // Act
+        await bullMQEventHandlers['failed']?.({ jobId: 'bmq-9', failedReason: 'Error' });
+
+        // Assert
+        expect((watcher as any).jobTracking.has('bmq-9')).toBe(false);
+      });
+    });
+
+    describe('BullMQ Delayed Event', () => {
+      beforeEach(() => {
+        watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+      });
+
+      it('should collect delayed job', async () => {
+        // Arrange
+        const mockJob = {
+          name: 'scheduled-bullmq-task',
+          data: { scheduleId: 'sch-1' },
+          attemptsMade: 0,
+        };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+
+        // Act
+        await bullMQEventHandlers['delayed']?.({ jobId: 'bmq-10', delay: 60000 });
+
+        // Assert
+        expect(mockCollector.collect).toHaveBeenCalledWith(
+          'job',
+          expect.objectContaining({
+            name: 'scheduled-bullmq-task',
+            status: 'delayed',
+          }),
+        );
+      });
+
+      it('should handle job not found', async () => {
+        // Arrange
+        mockBullMQQueue.getJob.mockResolvedValue(null);
+
+        // Act
+        await bullMQEventHandlers['delayed']?.({ jobId: 'nonexistent', delay: 1000 });
+
+        // Assert
+        expect(mockCollector.collect).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('BullMQ Error Handling', () => {
+      beforeEach(() => {
+        watcher.setupQueueWithEvents(mockBullMQQueue, mockQueueEvents);
+      });
+
+      it('should handle getJob errors gracefully', async () => {
+        // Arrange
+        mockBullMQQueue.getJob.mockRejectedValue(new Error('Redis error'));
+        const debugSpy = jest.spyOn((watcher as any).logger, 'debug');
+
+        // Act - call the handler
+        await bullMQEventHandlers['active']?.({ jobId: 'err-1' });
+
+        // Assert - error should be caught and logged
+        expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to track'));
+      });
+
+      it('should handle collector errors gracefully', async () => {
+        // Arrange
+        const mockJob = { id: 'err-2', name: 'test', data: {} };
+        mockBullMQQueue.getJob.mockResolvedValue(mockJob);
+        mockCollector.collect.mockImplementationOnce(() => {
+          throw new Error('Collector error');
+        });
+        const debugSpy = jest.spyOn((watcher as any).logger, 'debug');
+
+        // Act - call the handler, should not throw
+        await bullMQEventHandlers['completed']?.({ jobId: 'err-2', returnvalue: '' });
+
+        // Assert - error should be caught and logged
+        expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to track'));
+      });
+    });
+  });
+
+  // ============================================================================
   // Error Handling
   // ============================================================================
 

@@ -48,14 +48,14 @@ export class AppModule {}
 
 ### 3. Register Your Queues
 
-Inject and register your Bull/BullMQ queues with NestLens:
+#### For Bull (Classic)
 
 ```typescript
 // app.module.ts or queue.module.ts
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { JobWatcher, NESTLENS_BULL_QUEUES } from 'nestlens';
+import { JobWatcher } from 'nestlens';
 
 @Injectable()
 export class QueueRegistration implements OnModuleInit {
@@ -66,16 +66,77 @@ export class QueueRegistration implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Register queues with NestLens
+    // Register Bull queues with NestLens
     this.jobWatcher.setupQueue(this.emailQueue, 'email');
     this.jobWatcher.setupQueue(this.notificationQueue, 'notifications');
   }
 }
 ```
 
-## Alternative: Provider Token
+#### For BullMQ
 
-Use the `NESTLENS_BULL_QUEUES` token to provide queues:
+```typescript
+// app.module.ts or queue.module.ts
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { JobWatcher } from 'nestlens';
+
+@Injectable()
+export class QueueRegistration implements OnModuleInit, OnModuleDestroy {
+  constructor(
+    @InjectQueue('email') private emailQueue: Queue,
+    @InjectQueue('notifications') private notificationQueue: Queue,
+    private jobWatcher: JobWatcher,
+  ) {}
+
+  async onModuleInit() {
+    // Register BullMQ queues with NestLens (auto-creates QueueEvents)
+    await this.jobWatcher.setupBullMQQueue(this.emailQueue, 'email');
+    await this.jobWatcher.setupBullMQQueue(this.notificationQueue, 'notifications');
+  }
+
+  async onModuleDestroy() {
+    // Clean up QueueEvents connections
+    await this.jobWatcher.closeQueueEvents();
+  }
+}
+```
+
+**Advanced: Manual QueueEvents management**
+
+If you need more control over the QueueEvents lifecycle, use `setupQueueWithEvents`:
+
+```typescript
+import { Queue, QueueEvents } from 'bullmq';
+
+@Injectable()
+export class QueueRegistration implements OnModuleInit, OnModuleDestroy {
+  private queueEvents: QueueEvents;
+
+  constructor(
+    @InjectQueue('email') private emailQueue: Queue,
+    private jobWatcher: JobWatcher,
+  ) {}
+
+  async onModuleInit() {
+    // Create QueueEvents manually with custom options
+    const connection = (await this.emailQueue.client).options;
+    this.queueEvents = new QueueEvents('email', { connection });
+
+    // Register with NestLens
+    this.jobWatcher.setupQueueWithEvents(this.emailQueue, this.queueEvents, 'email');
+  }
+
+  async onModuleDestroy() {
+    await this.queueEvents?.close();
+  }
+}
+```
+
+## Alternative: Provider Token (Bull Classic Only)
+
+Use the `NESTLENS_BULL_QUEUES` token to provide Bull (classic) queues:
 
 ```typescript
 import { NESTLENS_BULL_QUEUES } from 'nestlens';
@@ -101,6 +162,25 @@ import { getQueueToken } from '@nestjs/bull';
 })
 export class AppModule {}
 ```
+
+## API Reference
+
+### JobWatcher Methods
+
+| Method | Description |
+|--------|-------------|
+| `setupQueue(queue, queueName?)` | Register a Bull (classic) queue for tracking |
+| `setupBullMQQueue(queue, queueName?)` | Register a BullMQ queue (auto-creates QueueEvents) |
+| `setupQueueWithEvents(queue, queueEvents, queueName?)` | Register a BullMQ queue with manual QueueEvents |
+| `closeQueueEvents()` | Close all QueueEvents created by `setupBullMQQueue` |
+
+### Key Differences
+
+| Feature | Bull Classic | BullMQ |
+|---------|-------------|--------|
+| Setup method | `setupQueue()` | `setupBullMQQueue()` |
+| Event source | Queue instance | QueueEvents (auto-created) |
+| Cleanup | None required | Call `closeQueueEvents()` in `onModuleDestroy` |
 
 ## Tracked Events
 
@@ -473,6 +553,12 @@ Organize jobs with naming conventions:
      @InjectQueue('email') private emailQueue: Queue,
      private jobWatcher: JobWatcher,
    ) {}
+   ```
+
+4. **For BullMQ - Use setupBullMQQueue**:
+   ```typescript
+   // Simplest approach - auto-creates QueueEvents
+   await this.jobWatcher.setupBullMQQueue(this.emailQueue, 'email');
    ```
 
 ### Incomplete Job Data
