@@ -8,7 +8,7 @@ import {
   OnModuleInit,
   Provider,
 } from '@nestjs/common';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core';
 import { DEFAULT_CONFIG, NestLensConfig, NESTLENS_CONFIG } from './nestlens.config';
 import { CollectorService } from './core/collector.service';
 import { PruningService } from './core/pruning.service';
@@ -120,6 +120,7 @@ class NestLensQueryModule {
   static forRoot(): DynamicModule {
     return {
       module: NestLensQueryModule,
+      imports: [DiscoveryModule],
       providers: [QueryWatcher],
       exports: [QueryWatcher],
     };

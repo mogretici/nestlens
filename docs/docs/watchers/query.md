@@ -63,7 +63,19 @@ interface QueryEntry {
 
 ### TypeORM Integration
 
-The Query Watcher automatically hooks into TypeORM when the module is initialized:
+The Query Watcher automatically hooks into TypeORM when the module is initialized.
+
+**How it works.** On `OnApplicationBootstrap`, the watcher walks the NestJS DI container via `DiscoveryService`, finds every `DataSource` instance, and attaches itself through TypeORM's official extension points:
+
+- A subscriber implementing `EntitySubscriberInterface.afterQuery` captures the success path with the exact `executionTime` reported by the QueryRunner.
+- A wrapper around `DataSource.logger` (composing the user-supplied logger when present) catches `logQueryError` and `logQuerySlow`, so error paths are recorded even on drivers whose error handling skips the broadcast.
+- A `Symbol.for('nestlens:typeorm-query-watcher-attached')` marker prevents double-attachment when the same DataSource is registered under multiple DI tokens (a common occurrence with `@nestjs/typeorm`).
+
+Multiple DataSources are supported transparently — each one is detected and tracked independently, with the entry's `connection` field set to the DataSource's `name` (or `'default'` if unnamed).
+
+**Driver caveat.** TypeORM 0.3.x's `better-sqlite3` driver raises prepare-statement failures (e.g. "no such table") outside its `try` block, so neither the broadcast nor `logQueryError` fires for that specific class of error. Runtime errors and every successful query are captured normally; the gap is upstream in TypeORM's better-sqlite3 driver and only affects that driver.
+
+**Usage:**
 
 ```typescript
 // Your entities and repositories work as normal
