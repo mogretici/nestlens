@@ -1,3 +1,10 @@
+## [0.4.1](https://github.com/mogretici/nestlens/compare/v0.4.0...v0.4.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **query:** wire TypeORM watcher through EntitySubscriber + Logger ([#6](https://github.com/mogretici/nestlens/issues/6)) ([36cc78d](https://github.com/mogretici/nestlens/commit/36cc78d69e894600725c1173e19027e2e55774c2)), closes [#5](https://github.com/mogretici/nestlens/issues/5)
+
 # [0.4.0](https://github.com/mogretici/nestlens/compare/v0.3.5...v0.4.0) (2026-01-27)
 
 
