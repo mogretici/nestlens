@@ -1,34 +1,77 @@
 /**
- * Type definitions for optional ORM dependencies
- * These interfaces define the minimum contract we need from each ORM
- * without requiring the actual packages to be installed
+ * Type definitions for optional ORM dependencies.
+ * These interfaces describe the minimum contract we need from each ORM
+ * without requiring the actual packages to be installed.
  */
 
-// TypeORM types
-export interface TypeORMDataSource {
-  isInitialized: boolean;
-  options: TypeORMDataSourceOptions;
-  driver: TypeORMDriver;
-  initialize(): Promise<this>;
+// ---------------------------------------------------------------------------
+// TypeORM types (compatible with TypeORM 0.3.x public API)
+// ---------------------------------------------------------------------------
+
+/**
+ * Subset of TypeORM DataSource that the watcher needs to interact with.
+ * The watcher attaches an EntitySubscriber for the success path and wraps
+ * the logger for the error path; nothing else is touched.
+ */
+export interface TypeORMDataSourceLike {
+  isInitialized?: boolean;
+  options?: { name?: string; type?: string };
+  subscribers?: unknown[];
+  logger?: TypeORMLoggerLike;
 }
 
-export interface TypeORMDataSourceOptions {
-  name?: string;
-  type: string;
+/**
+ * Event payload TypeORM passes to EntitySubscriberInterface.afterQuery.
+ * Source: typeorm/src/subscriber/event/QueryEvent.ts
+ */
+export interface TypeORMQueryEvent {
+  query: string;
+  parameters?: unknown[];
+  executionTime?: number;
+  success?: boolean;
+  error?: unknown;
+  rawResults?: unknown;
+  connection?: { name?: string };
+  queryRunner?: unknown;
 }
 
-export interface TypeORMDriver {
-  afterQuery?: TypeORMAfterQueryFn;
+/**
+ * Subset of TypeORM Logger interface used by the watcher.
+ * Source: typeorm/src/logger/Logger.ts
+ */
+export interface TypeORMLoggerLike {
+  logQuery?(query: string, parameters?: unknown[], queryRunner?: unknown): void;
+  logQuerySlow?(time: number, query: string, parameters?: unknown[], queryRunner?: unknown): void;
+  logQueryError?(
+    error: string | Error,
+    query: string,
+    parameters?: unknown[],
+    queryRunner?: unknown,
+  ): void;
+  logSchemaBuild?(message: string, queryRunner?: unknown): void;
+  logMigration?(message: string, queryRunner?: unknown): void;
+  log?(level: 'log' | 'info' | 'warn', message: unknown, queryRunner?: unknown): void;
 }
 
-export type TypeORMAfterQueryFn = (
-  query: string,
-  parameters: unknown[] | undefined,
-  result: unknown,
-  time: number,
-) => void;
+/**
+ * Structural check for a TypeORM DataSource instance discovered via NestJS DI.
+ * We don't `instanceof DataSource` because typeorm is an optional peer dep
+ * and may not be loadable at type-check time.
+ */
+export function isLikelyTypeORMDataSource(obj: unknown): obj is TypeORMDataSourceLike {
+  if (!obj || typeof obj !== 'object') return false;
+  const candidate = obj as Record<string, unknown>;
+  // DataSource carries `subscribers: Array` and `options: { type }` at minimum.
+  // Checking constructor name avoids matching unrelated objects with similar shape.
+  const ctorName = (candidate.constructor as { name?: string } | undefined)?.name;
+  if (ctorName !== 'DataSource' && ctorName !== 'Connection') return false;
+  return Array.isArray(candidate.subscribers) && typeof candidate.options === 'object';
+}
 
-// Prisma types
+// ---------------------------------------------------------------------------
+// Prisma types (unchanged)
+// ---------------------------------------------------------------------------
+
 export interface PrismaClient {
   $on?: PrismaOnFn;
   $use?: PrismaUseFn;
@@ -58,48 +101,22 @@ export interface PrismaMiddlewareParams {
   runInTransaction: boolean;
 }
 
-// Type guards
-export function isTypeORMDataSource(obj: unknown): obj is TypeORMDataSource {
-  if (!obj || typeof obj !== 'object') return false;
-  const candidate = obj as Record<string, unknown>;
-  return (
-    'isInitialized' in candidate &&
-    'options' in candidate &&
-    'driver' in candidate &&
-    typeof candidate.isInitialized === 'boolean'
-  );
-}
-
 export function isPrismaClient(obj: unknown): obj is PrismaClient {
   if (!obj || typeof obj !== 'object') return false;
   const candidate = obj as Record<string, unknown>;
   return typeof candidate.$on === 'function' || typeof candidate.$use === 'function';
 }
 
-// Module loader types
-export interface TypeORMModule {
-  DataSource: new (options: TypeORMDataSourceOptions) => TypeORMDataSource;
-}
-
-export interface NestJSTypeORMModule {
-  getDataSourceToken: (name?: string) => string | symbol;
-}
-
-export interface PrismaModule {
-  PrismaClient: new () => PrismaClient;
-}
+// ---------------------------------------------------------------------------
+// Module loader helpers
+// ---------------------------------------------------------------------------
 
 /**
- * Safe synchronous module loader for optional peer dependencies.
- * Uses require() instead of dynamic import() because:
- * 1. Synchronous loading is needed for initialization
- * 2. Optional dependencies may not exist at runtime
- * 3. This is the standard pattern for optional peer deps in Node.js
+ * Synchronous optional-peer-dependency loader. Returns null if the module
+ * cannot be resolved.
  */
 export function tryRequire<T>(moduleName: string): T | null {
   try {
-    // Using require for synchronous optional dependency loading
-
     return require(moduleName) as T;
   } catch {
     return null;

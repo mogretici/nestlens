@@ -1,200 +1,90 @@
 /**
- * QueryWatcher Tests
+ * QueryWatcher unit tests.
  *
- * Tests for the query watcher that monitors TypeORM and Prisma queries.
- * Follows AAA (Arrange-Act-Assert) pattern.
+ * Covers configuration handling, query payload formatting, slow detection,
+ * ignore-pattern filtering, and the auxiliary classes (subscriber + logger)
+ * that bridge TypeORM's public API into the watcher.
+ *
+ * Real TypeORM end-to-end coverage lives in
+ * `src/__tests__/watchers/query/typeorm-integration.spec.ts`.
  */
 import { Test, TestingModule } from '@nestjs/testing';
+import { DiscoveryModule, DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 import { QueryWatcher } from '../../watchers/query/query.watcher';
-
-// Mock the types module
-jest.mock('../../watchers/query/types', () => ({
-  isModuleAvailable: jest.fn(),
-  tryRequire: jest.fn(),
-  isTypeORMDataSource: jest.fn(),
-  isPrismaClient: jest.fn(),
-}));
-
-import * as queryTypes from '../../watchers/query/types';
+import { NestLensQuerySubscriber } from '../../watchers/query/typeorm-subscriber';
+import { NestLensTypeOrmLogger } from '../../watchers/query/typeorm-logger';
 
 describe('QueryWatcher', () => {
-  let watcher: QueryWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
-  let mockConfig: NestLensConfig;
-  const mockedTypes = queryTypes as jest.Mocked<typeof queryTypes>;
+  let collector: jest.Mocked<CollectorService>;
 
-  const createWatcher = async (config: NestLensConfig): Promise<QueryWatcher> => {
-    const module: TestingModule = await Test.createTestingModule({
+  const buildWatcher = async (config: NestLensConfig): Promise<QueryWatcher> => {
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      imports: [DiscoveryModule],
       providers: [
         QueryWatcher,
-        { provide: CollectorService, useValue: mockCollector },
+        { provide: CollectorService, useValue: collector },
         { provide: NESTLENS_CONFIG, useValue: config },
       ],
     }).compile();
 
-    return module.get<QueryWatcher>(QueryWatcher);
+    return moduleRef.get(QueryWatcher);
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-
-    mockCollector = {
+    collector = {
       collect: jest.fn(),
       collectImmediate: jest.fn(),
     } as unknown as jest.Mocked<CollectorService>;
-
-    mockConfig = {
-      enabled: true,
-      watchers: {
-        query: { enabled: true, slowThreshold: 100 },
-      },
-    };
-
-    // Default mock implementations
-    mockedTypes.isModuleAvailable.mockReturnValue(false);
-    mockedTypes.tryRequire.mockReturnValue(null);
-    mockedTypes.isTypeORMDataSource.mockReturnValue(false);
-    mockedTypes.isPrismaClient.mockReturnValue(false);
   });
 
-  // ============================================================================
-  // Config Handling
-  // ============================================================================
-
-  describe('Config Handling', () => {
-    it('should be enabled when query watcher config is true', async () => {
-      // Arrange
-      mockConfig.watchers = { query: true };
-      watcher = await createWatcher(mockConfig);
-
-      // Act & Assert
-      // Access private config through prototype for testing
+  describe('Config handling', () => {
+    it('treats `query: true` as enabled with default slowThreshold', async () => {
+      const watcher = await buildWatcher({ watchers: { query: true } });
       expect((watcher as any).config.enabled).toBe(true);
-    });
-
-    it('should be disabled when query watcher config is false', async () => {
-      // Arrange
-      mockConfig.watchers = { query: false };
-      watcher = await createWatcher(mockConfig);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert - should not try to initialize adapters
-      expect(mockedTypes.isModuleAvailable).not.toHaveBeenCalled();
-    });
-
-    it('should use default slowThreshold of 100 when not specified', async () => {
-      // Arrange
-      mockConfig.watchers = { query: true };
-      watcher = await createWatcher(mockConfig);
-
-      // Assert
       expect((watcher as any).config.slowThreshold).toBe(100);
     });
 
-    it('should use custom slowThreshold from config', async () => {
-      // Arrange
-      mockConfig.watchers = { query: { enabled: true, slowThreshold: 500 } };
-      watcher = await createWatcher(mockConfig);
+    it('treats `query: false` as disabled', async () => {
+      const watcher = await buildWatcher({ watchers: { query: false } });
+      watcher.onApplicationBootstrap();
+      expect((watcher as any).config.enabled).toBe(false);
+    });
 
-      // Assert
+    it('honours custom slowThreshold from object form', async () => {
+      const watcher = await buildWatcher({
+        watchers: { query: { enabled: true, slowThreshold: 500 } },
+      });
       expect((watcher as any).config.slowThreshold).toBe(500);
     });
 
-    it('should be enabled by default when watchers config is undefined', async () => {
-      // Arrange
-      mockConfig.watchers = undefined;
-      watcher = await createWatcher(mockConfig);
-
-      // Assert
+    it('defaults to enabled when watchers config is undefined', async () => {
+      const watcher = await buildWatcher({});
       expect((watcher as any).config.enabled).toBe(true);
     });
   });
 
-  // ============================================================================
-  // Module Initialization
-  // ============================================================================
+  describe('handleQuery', () => {
+    let watcher: QueryWatcher;
 
-  describe('Module Initialization', () => {
     beforeEach(async () => {
-      watcher = await createWatcher(mockConfig);
+      watcher = await buildWatcher({
+        watchers: { query: { enabled: true, slowThreshold: 100 } },
+      });
     });
 
-    it('should check for TypeORM module availability', async () => {
-      // Arrange
-      mockedTypes.isModuleAvailable.mockReturnValue(false);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert
-      expect(mockedTypes.isModuleAvailable).toHaveBeenCalledWith('typeorm');
-    });
-
-    it('should check for Prisma module availability', async () => {
-      // Arrange
-      mockedTypes.isModuleAvailable.mockReturnValue(false);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert
-      expect(mockedTypes.isModuleAvailable).toHaveBeenCalledWith('@prisma/client');
-    });
-
-    it('should not initialize when disabled', async () => {
-      // Arrange
-      mockConfig.watchers = { query: false };
-      watcher = await createWatcher(mockConfig);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert
-      expect(mockedTypes.isModuleAvailable).not.toHaveBeenCalled();
-    });
-
-    it('should try to require TypeORM when available', async () => {
-      // Arrange
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === 'typeorm');
-      mockedTypes.tryRequire.mockReturnValue(null);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert
-      expect(mockedTypes.tryRequire).toHaveBeenCalledWith('typeorm');
-    });
-  });
-
-  // ============================================================================
-  // Query Handling (via handleQuery)
-  // ============================================================================
-
-  describe('Query Handling', () => {
-    beforeEach(async () => {
-      watcher = await createWatcher(mockConfig);
-    });
-
-    it('should collect query with all fields', async () => {
-      // Arrange
-      const queryData = {
+    it('forwards a fully-populated payload to the collector', () => {
+      (watcher as any).handleQuery({
         query: 'SELECT * FROM users WHERE id = ?',
         parameters: [1],
         duration: 50,
         source: 'typeorm',
         connection: 'default',
         requestId: 'req-123',
-      };
+      });
 
-      // Act
-      (watcher as any).handleQuery(queryData);
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
+      expect(collector.collect).toHaveBeenCalledWith(
         'query',
         {
           query: 'SELECT * FROM users WHERE id = ?',
@@ -208,552 +98,212 @@ describe('QueryWatcher', () => {
       );
     });
 
-    it('should mark queries as slow when exceeding threshold', async () => {
-      // Arrange
-      const queryData = {
-        query: 'SELECT * FROM large_table',
-        duration: 150, // Above 100ms threshold
-        source: 'typeorm',
-      };
-
-      // Act
-      (watcher as any).handleQuery(queryData);
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          slow: true,
-        }),
-        undefined,
-      );
-    });
-
-    it('should not mark queries as slow when below threshold', async () => {
-      // Arrange
-      const queryData = {
-        query: 'SELECT * FROM users',
-        duration: 50, // Below 100ms threshold
-        source: 'typeorm',
-      };
-
-      // Act
-      (watcher as any).handleQuery(queryData);
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          slow: false,
-        }),
-        undefined,
-      );
-    });
-
-    it('should use custom slowThreshold', async () => {
-      // Arrange
-      mockConfig.watchers = { query: { enabled: true, slowThreshold: 200 } };
-      watcher = await createWatcher(mockConfig);
-
-      const queryData = {
-        query: 'SELECT * FROM users',
-        duration: 150, // Below 200ms custom threshold
-        source: 'prisma',
-      };
-
-      // Act
-      (watcher as any).handleQuery(queryData);
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          slow: false,
-        }),
-        undefined,
-      );
-    });
-
-    it('should handle queries without parameters', async () => {
-      // Arrange
-      const queryData = {
-        query: 'SELECT COUNT(*) FROM users',
-        duration: 10,
-        source: 'typeorm',
-      };
-
-      // Act
-      (watcher as any).handleQuery(queryData);
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          parameters: undefined,
-        }),
-        undefined,
-      );
-    });
-
-    it('should handle queries without connection name', async () => {
-      // Arrange
-      const queryData = {
-        query: 'SELECT * FROM posts',
-        duration: 20,
-        source: 'prisma',
-      };
-
-      // Act
-      (watcher as any).handleQuery(queryData);
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          connection: undefined,
-        }),
-        undefined,
-      );
-    });
-  });
-
-  // ============================================================================
-  // Ignore Patterns
-  // ============================================================================
-
-  describe('Ignore Patterns', () => {
-    it('should skip queries matching ignore patterns', async () => {
-      // Arrange
-      mockConfig.watchers = {
-        query: {
-          enabled: true,
-          ignorePatterns: [/^PRAGMA/, /^SELECT 1/],
-        },
-      };
-      watcher = await createWatcher(mockConfig);
-
-      // Act
+    it('marks queries above slowThreshold as slow', () => {
       (watcher as any).handleQuery({
-        query: 'PRAGMA table_info(users)',
-        duration: 5,
+        query: 'SELECT * FROM big',
+        duration: 250,
         source: 'typeorm',
       });
-
-      // Assert
-      expect(mockCollector.collect).not.toHaveBeenCalled();
+      expect(collector.collect).toHaveBeenCalledWith(
+        'query',
+        expect.objectContaining({ slow: true }),
+        undefined,
+      );
     });
 
-    it('should skip queries matching any ignore pattern', async () => {
-      // Arrange
-      mockConfig.watchers = {
-        query: {
-          enabled: true,
-          ignorePatterns: [/^PRAGMA/, /^SELECT 1/, /health_check/],
-        },
-      };
-      watcher = await createWatcher(mockConfig);
-
-      // Act
+    it('marks queries at or below slowThreshold as not slow', () => {
       (watcher as any).handleQuery({
-        query: 'SELECT 1 AS result',
+        query: 'SELECT 1',
+        duration: 100,
+        source: 'typeorm',
+      });
+      expect(collector.collect).toHaveBeenCalledWith(
+        'query',
+        expect.objectContaining({ slow: false }),
+        undefined,
+      );
+    });
+
+    it('respects custom slowThreshold', async () => {
+      const w = await buildWatcher({
+        watchers: { query: { enabled: true, slowThreshold: 200 } },
+      });
+      (w as any).handleQuery({
+        query: 'SELECT * FROM x',
+        duration: 150,
+        source: 'prisma',
+      });
+      expect(collector.collect).toHaveBeenCalledWith(
+        'query',
+        expect.objectContaining({ slow: false }),
+        undefined,
+      );
+    });
+
+    it('skips queries matching any ignore pattern', async () => {
+      const w = await buildWatcher({
+        watchers: {
+          query: { enabled: true, ignorePatterns: [/^PRAGMA/, /information_schema/] },
+        },
+      });
+      (w as any).handleQuery({
+        query: 'PRAGMA table_info(users)',
         duration: 1,
         source: 'typeorm',
       });
-
-      // Assert
-      expect(mockCollector.collect).not.toHaveBeenCalled();
+      (w as any).handleQuery({
+        query: 'SELECT * FROM information_schema.tables',
+        duration: 5,
+        source: 'typeorm',
+      });
+      expect(collector.collect).not.toHaveBeenCalled();
     });
 
-    it('should collect queries not matching ignore patterns', async () => {
-      // Arrange
-      mockConfig.watchers = {
-        query: {
-          enabled: true,
-          ignorePatterns: [/^PRAGMA/],
-        },
-      };
-      watcher = await createWatcher(mockConfig);
-
-      // Act
+    it('normalises whitespace and trims the query', () => {
       (watcher as any).handleQuery({
-        query: 'SELECT * FROM users',
+        query: '   SELECT *\n   FROM   users   WHERE id = 1   ',
         duration: 10,
         source: 'typeorm',
       });
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalled();
+      expect(collector.collect).toHaveBeenCalledWith(
+        'query',
+        expect.objectContaining({ query: 'SELECT * FROM users WHERE id = 1' }),
+        undefined,
+      );
     });
   });
 
-  // ============================================================================
-  // Query Formatting
-  // ============================================================================
+  describe('TypeORM DataSource discovery', () => {
+    it('discovers DataSource instances exposed via DiscoveryService and dedupes by reference', async () => {
+      const fakeDataSource = {
+        constructor: { name: 'DataSource' },
+        options: { name: 'primary', type: 'better-sqlite3' },
+        subscribers: [],
+        logger: undefined,
+      };
+      // Build a wrapper that resembles NestJS's InstanceWrapper minimally.
+      const wrappers = [{ instance: fakeDataSource }, { instance: fakeDataSource }];
 
-  describe('Query Formatting', () => {
-    beforeEach(async () => {
-      watcher = await createWatcher(mockConfig);
+      const watcher = await buildWatcher({
+        watchers: { query: { enabled: true, slowThreshold: 100 } },
+      });
+      (watcher as any).discoveryService = {
+        getProviders: () => wrappers,
+      } as unknown as DiscoveryService;
+
+      const found = (watcher as any).discoverTypeORMDataSources();
+      expect(found).toHaveLength(1);
+      expect(found[0]).toBe(fakeDataSource);
     });
 
-    it('should normalize whitespace in queries', async () => {
-      // Arrange
-      const queryData = {
-        query: 'SELECT   *   FROM    users   WHERE   id = 1',
-        duration: 10,
+    it('attaches subscriber + wraps logger and refuses to attach twice', async () => {
+      const fakeDataSource: Record<string, unknown> = {
+        constructor: { name: 'DataSource' },
+        options: { name: 'default', type: 'better-sqlite3' },
+        subscribers: [],
+        logger: undefined,
+      };
+
+      const watcher = await buildWatcher({
+        watchers: { query: { enabled: true, slowThreshold: 100 } },
+      });
+
+      const first = (watcher as any).attachToDataSource(fakeDataSource);
+      const second = (watcher as any).attachToDataSource(fakeDataSource);
+
+      expect(first).toBe(true);
+      expect(second).toBe(false);
+      const subs = fakeDataSource.subscribers as unknown[];
+      expect(subs).toHaveLength(1);
+      expect(subs[0]).toBeInstanceOf(NestLensQuerySubscriber);
+      expect(fakeDataSource.logger).toBeInstanceOf(NestLensTypeOrmLogger);
+    });
+  });
+
+  describe('NestLensQuerySubscriber', () => {
+    it('translates an afterQuery event into a QueryData payload', () => {
+      const handler = jest.fn();
+      const sub = new NestLensQuerySubscriber(handler, 'main');
+      sub.afterQuery({
+        query: 'SELECT 1',
+        parameters: [],
+        executionTime: 12,
+        success: true,
+      });
+      expect(handler).toHaveBeenCalledWith({
+        query: 'SELECT 1',
+        parameters: [],
+        duration: 12,
         source: 'typeorm',
-      };
-
-      // Act
-      const formatted = (watcher as any).formatQuery(queryData.query);
-
-      // Assert
-      expect(formatted).toBe('SELECT * FROM users WHERE id = 1');
+        connection: 'main',
+        success: true,
+        error: undefined,
+      });
     });
 
-    it('should trim leading and trailing whitespace', async () => {
-      // Arrange
-      const query = '   SELECT * FROM users   ';
-
-      // Act
-      const formatted = (watcher as any).formatQuery(query);
-
-      // Assert
-      expect(formatted).toBe('SELECT * FROM users');
-    });
-
-    it('should handle newlines in queries', async () => {
-      // Arrange
-      const query = `SELECT *
-        FROM users
-        WHERE id = 1`;
-
-      // Act
-      const formatted = (watcher as any).formatQuery(query);
-
-      // Assert
-      expect(formatted).toBe('SELECT * FROM users WHERE id = 1');
+    it('ignores events without a query string', () => {
+      const handler = jest.fn();
+      const sub = new NestLensQuerySubscriber(handler, 'main');
+      sub.afterQuery({} as never);
+      expect(handler).not.toHaveBeenCalled();
     });
   });
 
-  // ============================================================================
-  // TypeORM Integration
-  // ============================================================================
+  describe('NestLensTypeOrmLogger', () => {
+    it('records logQueryError as a failed query and delegates to the wrapped logger', () => {
+      const handler = jest.fn();
+      const delegate = { logQueryError: jest.fn() };
+      const logger = new NestLensTypeOrmLogger(handler, 'default', delegate);
 
-  describe('TypeORM Integration', () => {
-    it('should attach logger to initialized DataSource', async () => {
-      // Arrange
-      const mockDataSource = {
-        isInitialized: true,
-        options: { name: 'test-connection' },
-        driver: {
-          afterQuery: jest.fn(),
-        },
-      };
+      const error = new Error('boom');
+      logger.logQueryError(error, 'SELECT * FROM missing', [1]);
 
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === 'typeorm');
-      mockedTypes.tryRequire.mockReturnValue({
-        getDataSources: () => [mockDataSource],
-      });
-      mockedTypes.isTypeORMDataSource.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert
-      expect(mockDataSource.driver.afterQuery).not.toBe(undefined);
-    });
-
-    it('should intercept afterQuery and collect queries', async () => {
-      // Arrange
-      let capturedAfterQuery: Function | undefined;
-      const originalAfterQuery = jest.fn();
-
-      const mockDataSource = {
-        isInitialized: true,
-        options: { name: 'default' },
-        driver: {
-          get afterQuery() {
-            return originalAfterQuery;
-          },
-          set afterQuery(fn: Function) {
-            capturedAfterQuery = fn;
-          },
-        },
-      };
-
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === 'typeorm');
-      mockedTypes.tryRequire.mockReturnValue({
-        getDataSources: () => [mockDataSource],
-      });
-      mockedTypes.isTypeORMDataSource.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-      await watcher.onModuleInit();
-
-      // Act - simulate TypeORM calling afterQuery
-      capturedAfterQuery?.call(
-        mockDataSource.driver,
-        'SELECT * FROM users',
-        [1, 2],
-        { rows: [] },
-        25,
-      );
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          query: 'SELECT * FROM users',
-          parameters: [1, 2],
-          duration: 25,
-          source: 'typeorm',
-          connection: 'default',
-        }),
-        undefined,
-      );
-    });
-
-    it('should handle uninitialized DataSource', async () => {
-      // Arrange
-      let initializeHook: (() => Promise<any>) | undefined;
-      const mockDataSource = {
-        isInitialized: false,
-        options: { name: 'default' },
-        driver: { afterQuery: null },
-        initialize: jest.fn().mockImplementation(async () => {
-          mockDataSource.isInitialized = true;
-          return mockDataSource;
-        }),
-      };
-
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === 'typeorm');
-      mockedTypes.tryRequire.mockReturnValue({
-        getDataSources: () => [mockDataSource],
-      });
-      mockedTypes.isTypeORMDataSource.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-      await watcher.onModuleInit();
-
-      // Capture the wrapped initialize function
-      initializeHook = mockDataSource.initialize;
-
-      // Act - call the wrapped initialize
-      await initializeHook?.();
-
-      // Assert - original initialize was called
-      expect(mockDataSource.isInitialized).toBe(true);
-    });
-  });
-
-  // ============================================================================
-  // Prisma Integration
-  // ============================================================================
-
-  describe('Prisma Integration', () => {
-    it('should attach middleware to global Prisma client', async () => {
-      // Arrange
-      const mockPrismaClient = {
-        $use: jest.fn(),
-      };
-
-      (global as any).prisma = mockPrismaClient;
-
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === '@prisma/client');
-      mockedTypes.isPrismaClient.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert
-      expect(mockPrismaClient.$use).toHaveBeenCalled();
-
-      // Cleanup
-      delete (global as any).prisma;
-    });
-
-    it('should collect Prisma queries through middleware', async () => {
-      // Arrange
-      let capturedMiddleware: Function | undefined;
-      const mockPrismaClient = {
-        $use: jest.fn((middleware) => {
-          capturedMiddleware = middleware;
-        }),
-      };
-
-      (global as any).prisma = mockPrismaClient;
-
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === '@prisma/client');
-      mockedTypes.isPrismaClient.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-      await watcher.onModuleInit();
-
-      const mockNext = jest.fn().mockResolvedValue({ id: 1, name: 'Test' });
-
-      // Act - simulate Prisma middleware call
-      const startTime = Date.now();
-      await capturedMiddleware?.(
-        { model: 'User', action: 'findMany', args: { where: { active: true } } },
-        mockNext,
-      );
-
-      // Assert
-      expect(mockNext).toHaveBeenCalled();
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          query: 'User.findMany',
-          parameters: [{ where: { active: true } }],
-          source: 'prisma',
-        }),
-        undefined,
-      );
-
-      // Cleanup
-      delete (global as any).prisma;
-    });
-
-    it('should skip Prisma if client has no $use method', async () => {
-      // Arrange
-      const mockPrismaClient = {};
-      (global as any).prisma = mockPrismaClient;
-
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === '@prisma/client');
-      mockedTypes.isPrismaClient.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-
-      // Act
-      await watcher.onModuleInit();
-
-      // Assert - should not throw
-      expect(mockCollector.collect).not.toHaveBeenCalled();
-
-      // Cleanup
-      delete (global as any).prisma;
-    });
-
-    it('should handle missing model in Prisma params', async () => {
-      // Arrange
-      let capturedMiddleware: Function | undefined;
-      const mockPrismaClient = {
-        $use: jest.fn((middleware) => {
-          capturedMiddleware = middleware;
-        }),
-      };
-
-      (global as any).prisma = mockPrismaClient;
-
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === '@prisma/client');
-      mockedTypes.isPrismaClient.mockReturnValue(true);
-
-      watcher = await createWatcher(mockConfig);
-      await watcher.onModuleInit();
-
-      const mockNext = jest.fn().mockResolvedValue([]);
-
-      // Act
-      await capturedMiddleware?.(
-        { model: undefined, action: '$queryRaw', args: undefined },
-        mockNext,
-      );
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          query: 'unknown.$queryRaw',
-          parameters: undefined,
-        }),
-        undefined,
-      );
-
-      // Cleanup
-      delete (global as any).prisma;
-    });
-  });
-
-  // ============================================================================
-  // Error Handling
-  // ============================================================================
-
-  describe('Error Handling', () => {
-    it('should gracefully handle TypeORM initialization errors', async () => {
-      // Arrange
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === 'typeorm');
-      mockedTypes.tryRequire.mockImplementation(() => {
-        throw new Error('TypeORM not found');
-      });
-
-      watcher = await createWatcher(mockConfig);
-
-      // Act & Assert - should not throw
-      await expect(watcher.onModuleInit()).resolves.not.toThrow();
-    });
-
-    it('should gracefully handle Prisma initialization errors', async () => {
-      // Arrange
-      mockedTypes.isModuleAvailable.mockImplementation((mod) => mod === '@prisma/client');
-      mockedTypes.isPrismaClient.mockImplementation(() => {
-        throw new Error('Prisma error');
-      });
-
-      watcher = await createWatcher(mockConfig);
-
-      // Act & Assert - should not throw
-      await expect(watcher.onModuleInit()).resolves.not.toThrow();
-    });
-  });
-
-  // ============================================================================
-  // Source Types
-  // ============================================================================
-
-  describe('Source Types', () => {
-    beforeEach(async () => {
-      watcher = await createWatcher(mockConfig);
-    });
-
-    it('should identify TypeORM queries', async () => {
-      // Arrange & Act
-      (watcher as any).handleQuery({
-        query: 'SELECT * FROM users',
-        duration: 10,
+      expect(handler).toHaveBeenCalledWith({
+        query: 'SELECT * FROM missing',
+        parameters: [1],
+        duration: 0,
         source: 'typeorm',
         connection: 'default',
+        success: false,
+        error,
       });
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          source: 'typeorm',
-        }),
+      expect(delegate.logQueryError).toHaveBeenCalledWith(
+        error,
+        'SELECT * FROM missing',
+        [1],
         undefined,
       );
     });
 
-    it('should identify Prisma queries', async () => {
-      // Arrange & Act
-      (watcher as any).handleQuery({
-        query: 'User.findMany',
-        duration: 15,
-        source: 'prisma',
-      });
-
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'query',
-        expect.objectContaining({
-          source: 'prisma',
-        }),
-        undefined,
+    it('records logQuerySlow with the reported execution time', () => {
+      const handler = jest.fn();
+      const logger = new NestLensTypeOrmLogger(handler, 'default');
+      logger.logQuerySlow(450, 'SELECT * FROM big', []);
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({ duration: 450, success: true }),
       );
+    });
+
+    it('forwards delegate-only methods without invoking the handler', () => {
+      const handler = jest.fn();
+      const delegate = {
+        logQuery: jest.fn(),
+        logSchemaBuild: jest.fn(),
+        logMigration: jest.fn(),
+        log: jest.fn(),
+      };
+      const logger = new NestLensTypeOrmLogger(handler, 'default', delegate);
+
+      logger.logQuery('SELECT 1', []);
+      logger.logSchemaBuild('build');
+      logger.logMigration('migrate');
+      logger.log('warn', 'hi');
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(delegate.logQuery).toHaveBeenCalled();
+      expect(delegate.logSchemaBuild).toHaveBeenCalled();
+      expect(delegate.logMigration).toHaveBeenCalled();
+      expect(delegate.log).toHaveBeenCalled();
     });
   });
 });

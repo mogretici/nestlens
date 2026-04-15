@@ -112,11 +112,13 @@
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/testing": "^11.0.0",
+    "@nestjs/typeorm": "^11.0.0",
     "@playwright/test": "^1.57.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@types/better-sqlite3": "^7.6.12",
+    "better-sqlite3": "^11.6.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.2",
@@ -137,6 +139,7 @@
     "standard-version": "^9.5.0",
     "ts-jest": "^29.4.6",
     "tsc-alias": "^1.8.16",
+    "typeorm": "^0.3.20",
     "typescript": "^5.7.2"
   },
   "engines": {
