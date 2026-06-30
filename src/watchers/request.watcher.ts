@@ -1,4 +1,5 @@
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -23,10 +24,21 @@ export class RequestWatcher implements NestInterceptor {
     private readonly collector: CollectorService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
+    private readonly httpAdapterHost: HttpAdapterHost,
   ) {
     const watcherConfig = nestlensConfig.watchers?.request;
     this.config =
       typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+  }
+
+  private getRequestPath(request: NestLensRequest): string {
+    // Express exposes `path`; Fastify only exposes `url` (which includes the query string).
+    const expressPath = (request as { path?: string }).path;
+    if (typeof expressPath === 'string') {
+      return expressPath;
+    }
+    const url = (request as { url?: string }).url;
+    return typeof url === 'string' ? url.split('?')[0] : '';
   }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -45,19 +57,23 @@ export class RequestWatcher implements NestInterceptor {
     const response = ctx.getResponse<Response>();
 
     // Guard against undefined request or missing path (e.g., in non-HTTP contexts)
-    if (!request?.path) {
+    if (!request) {
+      return next.handle();
+    }
+    const requestPath = this.getRequestPath(request);
+    if (!requestPath) {
       return next.handle();
     }
 
     // Skip NestLens own routes (dashboard and API)
     const nestlensPath = this.nestlensConfig.path || DEFAULT_CONFIG.path;
     const apiPrefix = `/${NESTLENS_API_PREFIX}`;
-    if (request.path.startsWith(nestlensPath) || request.path.startsWith(apiPrefix)) {
+    if (requestPath.startsWith(nestlensPath) || requestPath.startsWith(apiPrefix)) {
       return next.handle();
     }
 
     // Skip ignored paths
-    if (this.config.ignorePaths?.some((p) => request.path.startsWith(p))) {
+    if (this.config.ignorePaths?.some((p) => requestPath.startsWith(p))) {
       return next.handle();
     }
 
@@ -67,7 +83,8 @@ export class RequestWatcher implements NestInterceptor {
 
     // Attach request ID to request object for correlation
     request.nestlensRequestId = requestId;
-    response.setHeader(REQUEST_ID_HEADER, requestId);
+    // Adapter-agnostic header write (Express: setHeader, Fastify: header)
+    this.httpAdapterHost.httpAdapter.setHeader(response, REQUEST_ID_HEADER, requestId);
 
     // Capture headers (filtered)
     const headers = this.captureHeaders(request.headers);
@@ -105,7 +122,7 @@ export class RequestWatcher implements NestInterceptor {
           const payload: RequestEntry['payload'] = {
             method: request.method,
             url: request.originalUrl || request.url,
-            path: request.path,
+            path: requestPath,
             query: request.query as Record<string, unknown>,
             params: request.params as Record<string, unknown>,
             headers,
@@ -143,7 +160,7 @@ export class RequestWatcher implements NestInterceptor {
           const payload: RequestEntry['payload'] = {
             method: request.method,
             url: request.originalUrl || request.url,
-            path: request.path,
+            path: requestPath,
             query: request.query as Record<string, unknown>,
             params: request.params as Record<string, unknown>,
             headers,

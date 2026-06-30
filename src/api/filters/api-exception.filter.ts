@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { HttpAdapterHost } from '@nestjs/core';
 import { ErrorCode, ERROR_MESSAGES } from '@/api/constants';
 import { ApiResponse, ApiError } from '@/api/dto';
 import { NestLensApiException } from '@/api/exceptions';
@@ -19,6 +19,8 @@ import { NestLensApiException } from '@/api/exceptions';
 export class NestLensApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('NestLensApi');
   private readonly isDevelopment = process.env.NODE_ENV !== 'production';
+
+  constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
   /**
    * Check if an exception is HttpException-like using duck typing.
@@ -43,7 +45,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
+    const response = ctx.getResponse<unknown>();
     const request = ctx.getRequest();
 
     const startTime = request._startTime ?? Date.now();
@@ -136,7 +138,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
       },
     };
 
-    response.status(status).json(apiResponse);
+    this.httpAdapterHost.httpAdapter.reply(response, apiResponse, status);
   }
 
   /**

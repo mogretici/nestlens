@@ -6,10 +6,24 @@
  */
 import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpAdapterHost } from '@nestjs/core';
 import { of, throwError } from 'rxjs';
 import { RequestWatcher, REQUEST_ID_HEADER } from '../../watchers/request.watcher';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG } from '../../nestlens.config';
+
+// Mock HttpAdapterHost whose adapter delegates to the response mock, mirroring
+// how ExpressAdapter forwards to the underlying response object.
+const httpAdapterHostProvider = {
+  provide: HttpAdapterHost,
+  useValue: {
+    httpAdapter: {
+      setHeader: (res: any, name: string, value: string) => res.setHeader(name, value),
+      reply: (res: any, body: any, status: number) => res.status(status).json(body),
+      redirect: (res: any, status: number, url: string) => res.redirect(status, url),
+    },
+  },
+};
 
 describe('RequestWatcher', () => {
   let watcher: RequestWatcher;
@@ -64,6 +78,7 @@ describe('RequestWatcher', () => {
       providers: [
         RequestWatcher,
         { provide: CollectorService, useValue: mockCollector },
+        httpAdapterHostProvider,
         {
           provide: NESTLENS_CONFIG,
           useValue: {
@@ -90,6 +105,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -208,6 +224,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -725,6 +742,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -794,6 +812,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -848,6 +867,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -879,6 +899,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -915,6 +936,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -957,6 +979,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -988,6 +1011,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1031,6 +1055,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1070,6 +1095,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1105,6 +1131,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1153,6 +1180,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1196,6 +1224,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1225,6 +1254,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {
@@ -1254,6 +1284,7 @@ describe('RequestWatcher', () => {
         providers: [
           RequestWatcher,
           { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
           {
             provide: NESTLENS_CONFIG,
             useValue: {

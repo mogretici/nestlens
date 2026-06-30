@@ -6,6 +6,7 @@
  */
 import { ArgumentsHost, HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpAdapterHost } from '@nestjs/core';
 import { Response } from 'express';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -56,6 +57,16 @@ describe('ExceptionWatcher', () => {
         ExceptionWatcher,
         { provide: CollectorService, useValue: mockCollector },
         { provide: NESTLENS_CONFIG, useValue: config },
+        {
+          provide: HttpAdapterHost,
+          useValue: {
+            httpAdapter: {
+              // Mirror ExpressAdapter.reply: forward to the response mock.
+              reply: (res: Response, body: unknown, status: number) =>
+                res.status(status).json(body),
+            },
+          },
+        },
       ],
     }).compile();
 

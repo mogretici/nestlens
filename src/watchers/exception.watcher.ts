@@ -6,7 +6,7 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { HttpAdapterHost } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import {
   DEFAULT_CONFIG,
@@ -26,6 +26,7 @@ export class ExceptionWatcher implements ExceptionFilter {
     private readonly collector: CollectorService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
+    private readonly httpAdapterHost: HttpAdapterHost,
   ) {
     const watcherConfig = nestlensConfig.watchers?.exception;
     this.config =
@@ -42,7 +43,7 @@ export class ExceptionWatcher implements ExceptionFilter {
 
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<NestLensRequest>();
-    const response = ctx.getResponse<Response>();
+    const response = ctx.getResponse<unknown>();
 
     // Guard against undefined request or response
     if (!request || !response) {
@@ -51,21 +52,22 @@ export class ExceptionWatcher implements ExceptionFilter {
 
     // Skip if disabled
     if (!this.config.enabled) {
-      this.throwException(exception, response);
+      this.sendException(exception, response);
       return;
     }
 
     // Skip NestLens own routes (dashboard and API)
+    const requestPath = this.getRequestPath(request);
     const nestlensPath = this.nestlensConfig.path || DEFAULT_CONFIG.path;
     const apiPrefix = `/${NESTLENS_API_PREFIX}`;
-    if (request.path?.startsWith(nestlensPath) || request.path?.startsWith(apiPrefix)) {
-      this.throwException(exception, response);
+    if (requestPath.startsWith(nestlensPath) || requestPath.startsWith(apiPrefix)) {
+      this.sendException(exception, response);
       return;
     }
 
     // Skip ignored exceptions
     if (this.config.ignoreExceptions?.includes(exception.name)) {
-      this.throwException(exception, response);
+      this.sendException(exception, response);
       return;
     }
 
@@ -87,11 +89,21 @@ export class ExceptionWatcher implements ExceptionFilter {
     // Use collectImmediate for exceptions (important to save immediately)
     this.collector.collectImmediate('exception', payload, requestId);
 
-    // Re-throw the exception to let NestJS handle the response
-    this.throwException(exception, response);
+    // Send the error response (adapter-agnostic: works on Express and Fastify)
+    this.sendException(exception, response);
   }
 
-  private throwException(exception: Error, response: Response): void {
+  private getRequestPath(request: NestLensRequest): string {
+    // Express exposes `path`; Fastify only exposes `url` (which includes the query string).
+    const expressPath = (request as { path?: string }).path;
+    if (typeof expressPath === 'string') {
+      return expressPath;
+    }
+    const url = (request as { url?: string }).url;
+    return typeof url === 'string' ? url.split('?')[0] : '';
+  }
+
+  private sendException(exception: Error, response: unknown): void {
     const status = exception instanceof HttpException ? exception.getStatus() : 500;
 
     const errorResponse =
@@ -103,7 +115,7 @@ export class ExceptionWatcher implements ExceptionFilter {
             error: 'Internal Server Error',
           };
 
-    response.status(status).json(errorResponse);
+    this.httpAdapterHost.httpAdapter.reply(response, errorResponse, status);
   }
 
   private getExceptionCode(exception: Error): string | number | undefined {

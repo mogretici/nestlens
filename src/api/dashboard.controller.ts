@@ -1,9 +1,42 @@
-import { Controller, Get, Inject, Param, Req, Res, UseGuards } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import {
+  Controller,
+  Get,
+  Inject,
+  NotFoundException,
+  Param,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
+import { createReadStream, existsSync } from 'fs';
+import { extname, join, resolve, sep } from 'path';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NestLensGuard } from './api.guard';
+
+/**
+ * Content-Type lookup for the static dashboard assets.
+ * Kept explicit so file serving stays adapter-agnostic (no reliance on
+ * Express' `res.sendFile`, which Fastify does not implement).
+ */
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.eot': 'application/vnd.ms-fontobject',
+  '.txt': 'text/plain; charset=utf-8',
+};
 
 @Controller('nestlens')
 @UseGuards(NestLensGuard)
@@ -18,253 +51,254 @@ export class DashboardController {
     this.dashboardPath = join(__dirname, '..', 'dashboard', 'public');
   }
 
+  // Dashboard root. The built index.html references all assets with absolute
+  // `/nestlens/...` URLs, so no trailing-slash redirect is needed — keeping this
+  // a plain handler makes it work identically on Express and Fastify.
   @Get()
-  serveDashboard(@Req() req: Request, @Res() res: Response) {
-    // Redirect /nestlens to /nestlens/ for SPA routing consistency
-    if (!req.originalUrl.endsWith('/')) {
-      return res.redirect(301, req.originalUrl + '/');
-    }
-
-    const indexPath = join(this.dashboardPath, 'index.html');
-    if (existsSync(indexPath)) {
-      res.sendFile('index.html', {
-        root: this.dashboardPath,
-      });
-    } else {
-      res.status(404).json({ error: 'Dashboard not found' });
-    }
+  serveDashboard(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('assets/:filename')
-  serveAssets(@Param('filename') filename: string, @Res() res: Response) {
-    const assetPath = join(this.dashboardPath, 'assets', filename);
-    if (existsSync(assetPath)) {
-      res.sendFile(filename, {
-        root: join(this.dashboardPath, 'assets'),
-      });
-    } else {
-      res.status(404).json({ error: 'Asset not found' });
-    }
+  serveAssets(@Param('filename') filename: string): StreamableFile {
+    return this.streamFile(join('assets', filename), 'Asset not found');
   }
 
   // Serve static files like favicon
   @Get(':filename.svg')
-  serveStaticFile(@Param('filename') filename: string, @Res() res: Response) {
-    const filePath = join(this.dashboardPath, `${filename}.svg`);
-    if (existsSync(filePath)) {
-      res.sendFile(`${filename}.svg`, {
-        root: this.dashboardPath,
-      });
-    } else {
-      res.status(404).json({ error: 'File not found' });
-    }
+  serveStaticFile(@Param('filename') filename: string): StreamableFile {
+    return this.streamFile(`${filename}.svg`, 'File not found');
   }
 
   // SPA routes - serve index.html for client-side routing
   @Get('requests')
-  serveRequestsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveRequestsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('queries')
-  serveQueriesRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveQueriesRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('exceptions')
-  serveExceptionsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveExceptionsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('logs')
-  serveLogsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveLogsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('entries/:id')
-  serveEntryDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveEntryDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('events')
-  serveEventsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveEventsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('events/:id')
-  serveEventDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveEventDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('jobs')
-  serveJobsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveJobsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('jobs/:id')
-  serveJobDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveJobDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('cache')
-  serveCacheRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveCacheRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('cache/:id')
-  serveCacheDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveCacheDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('mail')
-  serveMailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveMailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('mail/:id')
-  serveMailDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveMailDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('schedule')
-  serveScheduleRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveScheduleRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('schedule/:id')
-  serveScheduleDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveScheduleDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('http-client')
-  serveHttpClientRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveHttpClientRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('http-client/:id')
-  serveHttpClientDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveHttpClientDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('requests/:id')
-  serveRequestDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveRequestDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('queries/:id')
-  serveQueryDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveQueryDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('exceptions/:id')
-  serveExceptionDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveExceptionDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('logs/:id')
-  serveLogDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveLogDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   // New Advanced Routes
   @Get('redis')
-  serveRedisRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveRedisRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('redis/:id')
-  serveRedisDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveRedisDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('models')
-  serveModelsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveModelsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('models/:id')
-  serveModelDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveModelDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('notifications')
-  serveNotificationsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveNotificationsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('notifications/:id')
-  serveNotificationDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveNotificationDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('views')
-  serveViewsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveViewsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('views/:id')
-  serveViewDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveViewDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('commands')
-  serveCommandsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveCommandsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('commands/:id')
-  serveCommandDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveCommandDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('gates')
-  serveGatesRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveGatesRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('gates/:id')
-  serveGateDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveGateDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('batches')
-  serveBatchesRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveBatchesRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('batches/:id')
-  serveBatchDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveBatchDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('dumps')
-  serveDumpsRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveDumpsRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('dumps/:id')
-  serveDumpDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveDumpDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('graphql')
-  serveGraphQLRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveGraphQLRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
   @Get('graphql/:id')
-  serveGraphQLDetailRoute(@Res() res: Response) {
-    this.serveIndexHtml(res);
+  serveGraphQLDetailRoute(): StreamableFile {
+    return this.serveIndexHtml();
   }
 
-  private serveIndexHtml(res: Response): void {
-    const indexPath = join(this.dashboardPath, 'index.html');
-    if (existsSync(indexPath)) {
-      res.sendFile('index.html', {
-        root: this.dashboardPath,
-      });
-    } else {
-      res.status(404).json({ error: 'Dashboard not found' });
+  private serveIndexHtml(): StreamableFile {
+    return this.streamFile('index.html', 'Dashboard not found');
+  }
+
+  /**
+   * Resolve a path inside the dashboard directory, rejecting anything that
+   * escapes it (path traversal) or does not exist.
+   */
+  private resolveDashboardFile(relativePath: string, notFoundMessage: string): string {
+    const root = resolve(this.dashboardPath);
+    const absolutePath = resolve(root, relativePath);
+
+    if (absolutePath !== root && !absolutePath.startsWith(root + sep)) {
+      throw new NotFoundException(notFoundMessage);
     }
+
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException(notFoundMessage);
+    }
+
+    return absolutePath;
+  }
+
+  private contentTypeFor(absolutePath: string): string {
+    return MIME_TYPES[extname(absolutePath).toLowerCase()] ?? 'application/octet-stream';
+  }
+
+  /** Stream a dashboard file. Adapter-agnostic via StreamableFile. */
+  private streamFile(relativePath: string, notFoundMessage: string): StreamableFile {
+    const absolutePath = this.resolveDashboardFile(relativePath, notFoundMessage);
+    return new StreamableFile(createReadStream(absolutePath), {
+      type: this.contentTypeFor(absolutePath),
+    });
   }
 }
