@@ -5,9 +5,10 @@
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
 import { Test, TestingModule } from '@nestjs/testing';
+import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
-import { ScheduleWatcher, NESTLENS_SCHEDULER_REGISTRY } from '../../watchers/schedule.watcher';
+import { ScheduleWatcher } from '../../watchers/schedule.watcher';
 
 describe('ScheduleWatcher', () => {
   let watcher: ScheduleWatcher;
@@ -33,20 +34,23 @@ describe('ScheduleWatcher', () => {
 
   const createWatcher = async (
     config: NestLensConfig,
-    schedulerRegistry?: ReturnType<typeof createSchedulerRegistry>,
+    schedulerRegistry?: ReturnType<typeof createSchedulerRegistry> | Record<string, unknown>,
   ): Promise<ScheduleWatcher> => {
-    const providers: any[] = [
-      ScheduleWatcher,
-      { provide: CollectorService, useValue: mockCollector },
-      { provide: NESTLENS_CONFIG, useValue: config },
-    ];
-
-    if (schedulerRegistry !== undefined) {
-      providers.push({ provide: NESTLENS_SCHEDULER_REGISTRY, useValue: schedulerRegistry });
-    }
+    // Mock DiscoveryService.getProviders() to surface the SchedulerRegistry instance,
+    // mirroring how @nestjs/schedule exposes it through the global container.
+    const mockDiscovery = {
+      getProviders: jest
+        .fn()
+        .mockReturnValue(schedulerRegistry !== undefined ? [{ instance: schedulerRegistry }] : []),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers,
+      providers: [
+        ScheduleWatcher,
+        { provide: CollectorService, useValue: mockCollector },
+        { provide: NESTLENS_CONFIG, useValue: config },
+        { provide: DiscoveryService, useValue: mockDiscovery },
+      ],
     }).compile();
 
     return module.get<ScheduleWatcher>(ScheduleWatcher);
@@ -90,7 +94,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Assert - should not setup interceptors
       expect(registry.getCronJobs).not.toHaveBeenCalled();
@@ -117,7 +121,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
 
       // Act & Assert - should not throw
-      expect(() => watcher.onModuleInit()).not.toThrow();
+      expect(() => watcher.onApplicationBootstrap()).not.toThrow();
     });
 
     it('should setup interceptors when registry is available', async () => {
@@ -128,7 +132,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Assert
       expect(registry.getCronJobs).toHaveBeenCalled();
@@ -148,7 +152,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act & Assert - should not throw
-      expect(() => watcher.onModuleInit()).not.toThrow();
+      expect(() => watcher.onApplicationBootstrap()).not.toThrow();
     });
   });
 
@@ -164,7 +168,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('myJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act
       await mockJob.fireOnTick();
@@ -187,7 +191,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('completedJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act
       await mockJob.fireOnTick();
@@ -211,7 +215,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('failingJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act & Assert
       await expect(mockJob.fireOnTick()).rejects.toThrow('Job failed');
@@ -235,7 +239,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('scheduledJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act
       await mockJob.fireOnTick();
@@ -258,7 +262,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('errorJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act & Assert
       await expect(mockJob.fireOnTick()).rejects.toThrow('Critical error');
@@ -279,8 +283,8 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act - initialize twice
-      watcher.onModuleInit();
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
+      watcher.onApplicationBootstrap();
 
       // Execute job
       await mockJob.fireOnTick();
@@ -301,7 +305,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('timedJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act
       await mockJob.fireOnTick();
@@ -330,7 +334,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('patternJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act
       await mockJob.fireOnTick();
@@ -354,7 +358,7 @@ describe('ScheduleWatcher', () => {
       cronJobs.set('noCronTimeJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
       watcher = await createWatcher(mockConfig, registry);
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Act
       await mockJob.fireOnTick();
@@ -380,7 +384,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Assert
       expect((watcher as any).wrappedJobs.has('interval1')).toBe(true);
@@ -393,7 +397,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act
-      watcher.onModuleInit();
+      watcher.onApplicationBootstrap();
 
       // Assert
       expect((watcher as any).wrappedJobs.has('timeout1')).toBe(true);
@@ -415,7 +419,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act & Assert - should not throw
-      expect(() => watcher.onModuleInit()).not.toThrow();
+      expect(() => watcher.onApplicationBootstrap()).not.toThrow();
     });
 
     it('should skip null jobs', async () => {
@@ -426,7 +430,7 @@ describe('ScheduleWatcher', () => {
       watcher = await createWatcher(mockConfig, registry);
 
       // Act & Assert - should not throw
-      expect(() => watcher.onModuleInit()).not.toThrow();
+      expect(() => watcher.onApplicationBootstrap()).not.toThrow();
     });
   });
 });

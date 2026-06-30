@@ -1,49 +1,74 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ScheduleEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SchedulerRegistry = any;
+interface SchedulerRegistryLike {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getCronJobs(): Map<string, any>;
+  getIntervals(): string[];
+  getTimeouts(): string[];
+}
 
-// Token for injecting scheduler registry
-export const NESTLENS_SCHEDULER_REGISTRY = Symbol('NESTLENS_SCHEDULER_REGISTRY');
+function isSchedulerRegistry(obj: unknown): obj is SchedulerRegistryLike {
+  return (
+    !!obj &&
+    typeof obj === 'object' &&
+    typeof (obj as SchedulerRegistryLike).getCronJobs === 'function' &&
+    typeof (obj as SchedulerRegistryLike).getIntervals === 'function' &&
+    typeof (obj as SchedulerRegistryLike).getTimeouts === 'function'
+  );
+}
 
 @Injectable()
-export class ScheduleWatcher implements OnModuleInit {
+export class ScheduleWatcher implements OnApplicationBootstrap {
   private readonly logger = new Logger(ScheduleWatcher.name);
   private readonly config: ScheduleWatcherConfig;
   private readonly jobTracking = new Map<string, number>(); // jobName -> startTime
   private readonly wrappedJobs = new Set<string>(); // Track which jobs we've already wrapped
+  private schedulerRegistry?: SchedulerRegistryLike;
 
   constructor(
     private readonly collector: CollectorService,
+    private readonly discoveryService: DiscoveryService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
-    @Optional()
-    @Inject(NESTLENS_SCHEDULER_REGISTRY)
-    private readonly schedulerRegistry?: SchedulerRegistry,
   ) {
     const watcherConfig = nestlensConfig.watchers?.schedule;
     this.config =
       typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
   }
 
-  onModuleInit() {
+  onApplicationBootstrap(): void {
     if (!this.config.enabled) {
       return;
     }
 
-    // Check if scheduler registry was provided
+    // @nestjs/schedule's SchedulerRegistry is provided by the global ScheduleModule.
+    // Discover it at bootstrap (after every module's onModuleInit has registered its jobs)
+    // instead of injecting it directly, which keeps @nestjs/schedule an optional peer.
+    this.schedulerRegistry = this.findSchedulerRegistry();
+
     if (!this.schedulerRegistry) {
       this.logger.debug(
-        'ScheduleWatcher: No scheduler registry found. ' +
-          'To enable schedule tracking, install and configure @nestjs/schedule.',
+        'ScheduleWatcher: SchedulerRegistry not found. ' +
+          'To enable schedule tracking, install @nestjs/schedule and import ScheduleModule.forRoot().',
       );
       return;
     }
 
     this.setupInterceptors();
+  }
+
+  private findSchedulerRegistry(): SchedulerRegistryLike | undefined {
+    for (const wrapper of this.discoveryService.getProviders()) {
+      const instance = wrapper.instance as unknown;
+      if (isSchedulerRegistry(instance)) {
+        return instance;
+      }
+    }
+    return undefined;
   }
 
   private setupInterceptors(): void {

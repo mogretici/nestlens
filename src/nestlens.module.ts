@@ -127,6 +127,23 @@ class NestLensQueryModule {
   }
 }
 
+/**
+ * Internal module for Schedule Watcher
+ * Imports DiscoveryModule so the watcher can locate @nestjs/schedule's
+ * SchedulerRegistry from the global container at bootstrap.
+ */
+@Module({})
+class NestLensScheduleModule {
+  static forRoot(): DynamicModule {
+    return {
+      module: NestLensScheduleModule,
+      imports: [DiscoveryModule],
+      providers: [ScheduleWatcher],
+      exports: [ScheduleWatcher],
+    };
+  }
+}
+
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
   private static readonly logger = new Logger('NestLens');
@@ -207,7 +224,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
 
     // Add Schedule Watcher
     if (mergedConfig.watchers?.schedule) {
-      providers.push(ScheduleWatcher);
+      imports.push(NestLensScheduleModule.forRoot());
     }
 
     // Add Mail Watcher
