@@ -1,3 +1,11 @@
+## [0.4.2](https://github.com/mogretici/nestlens/compare/v0.4.1...v0.4.2) (2026-06-30)
+
+
+### Bug Fixes
+
+* **http:** support the Fastify adapter, not just Express ([f303bce](https://github.com/mogretici/nestlens/commit/f303bcec66a08bed7e8aa61b406c228e23419948)), closes [#8](https://github.com/mogretici/nestlens/issues/8)
+* **schedule:** auto-detect SchedulerRegistry via DiscoveryService ([3de8fe2](https://github.com/mogretici/nestlens/commit/3de8fe274747dac1e23b0bc37cc3edb8fdad4094)), closes [#7](https://github.com/mogretici/nestlens/issues/7)
+
 ## [0.4.1](https://github.com/mogretici/nestlens/compare/v0.4.0...v0.4.1) (2026-04-15)
 
 
