@@ -39,7 +39,7 @@ export const GRAPHQL_WATCHER = Symbol('GRAPHQL_WATCHER');
 /**
  * Registration mode for GraphQL plugin
  * - 'pending': Not yet registered
- * - 'auto': Registered via @Plugin decorator (Apollo) or onApplicationBootstrap (Mercurius)
+ * - 'auto': Registered via the `@Plugin` decorator (Apollo) or onApplicationBootstrap (Mercurius)
  * - 'manual': Registered manually via getPlugin()
  */
 export type RegistrationMode = 'pending' | 'auto' | 'manual';

@@ -4,172 +4,114 @@ sidebar_position: 2
 
 # Navigation
 
-The NestLens dashboard uses a hierarchical navigation structure to organize the 18 different entry types into logical groups, making it easy to find what you're looking for.
+The NestLens dashboard organizes the 19 entry types into logical groups in the sidebar, making it easy to find what you're looking for.
 
 ## Navigation Groups
 
-### Web Group
+The sidebar is grouped exactly as follows.
 
-HTTP-related activities and web traffic monitoring.
+### Overview
+
+- **Dashboard** - Aggregated metrics and recent activity
+
+### Core
 
 - **Requests** - All HTTP requests with method, path, status, and timing
-- **Exceptions** - Application errors and unhandled exceptions
-- **HTTP Client** - Outbound HTTP requests made by your application
-
-### Database Group
-
-Database operations and ORM activity tracking.
-
 - **Queries** - SQL and ORM queries with execution time
-- **Models** - Entity CRUD operations (create, read, update, delete)
+- **GraphQL** - GraphQL operations, fields, and N+1 detection
+- **Exceptions** - Application errors and unhandled exceptions
+- **Logs** - Application log messages (debug, info, warn, error)
 
-### Background Group
-
-Asynchronous operations and scheduled tasks.
+### Background
 
 - **Jobs** - Bull/BullMQ job queue processing
-- **Schedules** - Cron jobs and scheduled tasks
+- **Schedule** - Cron jobs and scheduled tasks
 - **Batches** - Batch processing operations
-- **Commands** - CLI command execution
-- **Dumps** - Data import/export operations
+- **Commands** - CQRS command execution
 
-### Communication Group
+### Data
 
-External communication and messaging.
+- **Cache** - Cache get/set/delete operations
+- **Redis** - Redis command execution
+- **Models** - Entity CRUD operations (create, read, update, delete)
 
+### Communication
+
+- **HTTP Client** - Outbound HTTP requests made by your application
 - **Mail** - Email sending operations
 - **Notifications** - Push, SMS, and other notification types
 - **Events** - Application event dispatching
 
-### Infrastructure Group
+### System
 
-System infrastructure and caching.
-
-- **Cache** - Cache get/set/delete operations
-- **Redis** - Redis command execution
-- **Gates** - Authorization and permission checks
-
-### System Group
-
-System-level operations and logging.
-
-- **Logs** - Application log messages (debug, info, warn, error)
 - **Views** - Template rendering operations
+- **Gates** - Authorization and permission checks
+- **Dumps** - Debug dump operations
 
 ## Navigation Behavior
 
 ### Active State
 
-The currently selected entry type is highlighted in the navigation sidebar with:
-- Bold text
-- Accent color background
-- Left border indicator
+The currently selected entry type is highlighted in the sidebar with an accent color and an active indicator.
 
-### Entry Counts
+### Exception Badge
 
-Each navigation item displays a real-time count badge showing the number of entries:
-- Appears only when entries exist
-- Updates automatically as new entries arrive
-- Helps identify active areas of your application
+The **Exceptions** item shows a live count badge when unresolved exceptions exist. (Other items do not display a count badge.)
 
 ### Collapsible Groups
 
 Navigation groups can be collapsed to save space:
-- Click the group header to toggle
-- State persists across page refreshes
-- Useful for focusing on specific areas
+
+- Click a group header to toggle it
+- The collapsed/expanded state is persisted in `localStorage` and restored on the next visit
 
 ## Entry Type Pages
 
-Each entry type has a dedicated page with:
+Each entry type has a dedicated page.
 
 ### List View
 
-A table or card view showing:
-- Key fields for quick scanning
-- Status indicators (success, error, slow, etc.)
-- Timestamp and duration
-- Quick action buttons
+A table view showing key fields for quick scanning, status indicators, timestamps, and durations. Rows are keyboard-navigable (see [Keyboard Shortcuts](./keyboard-shortcuts.md)).
 
-### Detail Modal
+### Detail View
 
-Click any entry to open a detailed view with:
-- Complete payload data
-- Related entries (via request ID)
-- Tags and family grouping
-- Raw JSON export option
+Clicking a row opens a dedicated detail page with:
+
+- The complete payload
+- Related entries grouped by request ID (family grouping)
+- Tags
+- Raw JSON view
 
 ## URL Structure
 
-The dashboard uses clean URLs for navigation:
+The dashboard uses clean, route-based URLs:
 
 ```
-/nestlens/requests          # All requests
-/nestlens/queries           # All queries
-/nestlens/exceptions        # All exceptions
-/nestlens/logs              # All logs
+/nestlens/requests          # Request list
+/nestlens/queries           # Query list
+/nestlens/exceptions        # Exception list
+/nestlens/requests/:id      # A single request's detail page
 ... and so on for each type
 ```
 
 ### Deep Linking
 
-URLs support filters and pagination:
+Filters are encoded in the URL query string, so filtered views are shareable and survive a refresh:
 
 ```
 /nestlens/requests?status=500&method=POST
 /nestlens/queries?slow=true
-/nestlens/exceptions?resolved=false
 ```
 
-This allows:
-- Bookmarking specific views
-- Sharing filtered results with team members
-- Browser back/forward navigation
-
-## Search Across Types
-
-The global search box searches across all entry types:
-
-1. Enter search term in the header search box
-2. Results show matching entries from all types
-3. Click any result to view full details
-4. Search supports:
-   - Partial text matching
-   - Case-insensitive search
-   - Searches across multiple fields (URL, message, query, etc.)
-
-## Breadcrumb Navigation
-
-The header shows your current location:
-
-```
-NestLens > Web > Requests > Request #12345
-```
-
-Click any breadcrumb to navigate back:
-- **NestLens** - Returns to dashboard home
-- **Web** - Shows all web-related entries
-- **Requests** - Returns to request list
-
-## Quick Navigation
-
-### Recently Viewed
-
-The dashboard remembers your last 10 visited pages for quick access via a dropdown menu in the header.
-
-### Favorites (Coming Soon)
-
-Pin frequently accessed views for one-click access.
+This enables bookmarking specific views, sharing filtered results, and using browser back/forward navigation.
 
 ## Keyboard Navigation
 
-Navigate the dashboard efficiently with keyboard shortcuts:
-
-- **Arrow Keys** - Move between entries in list view
-- **Enter** - Open selected entry details
-- **Escape** - Close detail view
-- **Ctrl+K** - Focus search box
-- **See all shortcuts** in [Keyboard Shortcuts](./keyboard-shortcuts.md)
+- **Arrow keys / Home / End** - Move between rows in a list
+- **Enter / Space** - Open the focused entry
+- **Ctrl/Cmd + K** - Clear all entries
+- **Ctrl/Cmd + D** - Toggle dark mode
+- See [Keyboard Shortcuts](./keyboard-shortcuts.md) for the full list
 
 ## Next Steps
 

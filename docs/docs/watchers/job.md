@@ -98,6 +98,68 @@ export class EmailModule implements OnModuleInit {
 }
 ```
 
+### Register a BullMQ Queue with NestLens
+
+BullMQ emits job lifecycle events through a separate `QueueEvents` instance rather than on the `Queue` itself. The Job Watcher exposes dedicated methods for this.
+
+#### Simplified API: `setupBullMQQueue()`
+
+`setupBullMQQueue(queue, queueName?)` is the easiest option — it automatically creates a `QueueEvents` instance using the queue's Redis connection and wires up tracking for you:
+
+```typescript
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { JobWatcher } from 'nestlens';
+
+@Injectable()
+export class EmailModule implements OnModuleInit, OnModuleDestroy {
+  constructor(
+    @InjectQueue('email') private emailQueue: Queue,
+    private jobWatcher: JobWatcher,
+  ) {}
+
+  async onModuleInit() {
+    // Automatically creates and manages a QueueEvents instance
+    await this.jobWatcher.setupBullMQQueue(this.emailQueue, 'email');
+  }
+
+  async onModuleDestroy() {
+    // Clean up the QueueEvents instances created by setupBullMQQueue
+    await this.jobWatcher.closeQueueEvents();
+  }
+}
+```
+
+`closeQueueEvents()` closes every `QueueEvents` instance that `setupBullMQQueue()` created. Call it in `onModuleDestroy` to release the Redis connections cleanly.
+
+#### Manual API: `setupQueueWithEvents()`
+
+If you already manage your own `QueueEvents` lifecycle, use `setupQueueWithEvents(queue, queueEvents, queueName?)` instead. The watcher will not create or close the `QueueEvents` instance — you remain responsible for it:
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue, QueueEvents } from 'bullmq';
+import { JobWatcher } from 'nestlens';
+
+@Injectable()
+export class EmailModule implements OnModuleInit {
+  private readonly queueEvents = new QueueEvents('email', {
+    connection: { host: 'localhost', port: 6379 },
+  });
+
+  constructor(
+    @InjectQueue('email') private emailQueue: Queue,
+    private jobWatcher: JobWatcher,
+  ) {}
+
+  onModuleInit() {
+    this.jobWatcher.setupQueueWithEvents(this.emailQueue, this.queueEvents, 'email');
+  }
+}
+```
+
 ### Adding Jobs
 
 ```typescript

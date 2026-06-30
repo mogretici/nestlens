@@ -20,19 +20,20 @@ NestLens captures and visualizes everything happening in your NestJS application
 - **Background Jobs** - Track Bull/BullMQ queue jobs
 - **Scheduled Tasks** - Monitor cron jobs and scheduled tasks
 - **Cache Operations** - Track cache hits, misses, and operations
-- **And much more...** - 18 watchers in total!
+- **And much more...** - 19 watchers in total!
 
 ## Why NestLens?
 
 | Feature | Description |
 |---------|-------------|
 | **Zero Configuration** | Works out of the box with sensible defaults |
-| **18 Watchers** | Complete visibility into every aspect of your app |
+| **19 Watchers** | Complete visibility into every aspect of your app |
 | **Beautiful Dashboard** | Modern React UI with dark mode support |
 | **Family Tracking** | Group related entries by request or operation |
 | **Automatic ORM Detection** | Built-in support for TypeORM and Prisma |
+| **Express & Fastify** | Works with both NestJS HTTP adapters, no extra setup |
 | **TypeScript Native** | Full type safety throughout |
-| **Production Ready** | 1,312 tests ensuring quality |
+| **Production Ready** | 1,400+ tests ensuring quality |
 
 ## Quick Preview
 
@@ -60,7 +61,7 @@ That's it! Open `http://localhost:3000/nestlens` to see your dashboard.
 | Database Query Tracking | Yes | Limited | Manual |
 | Family Grouping | Yes | No | No |
 | Slow Query Detection | Yes | No | No |
-| 18 Entry Types | Yes | No | No |
+| 19 Entry Types | Yes | No | No |
 | Dark Mode | Yes | No | N/A |
 | Rate Limiting | Yes | N/A | Manual |
 | Price | **Free** | Paid | Free |
@@ -71,4 +72,4 @@ Get started with NestLens in just a few minutes:
 
 - [Installation](/docs/getting-started/installation) - Install NestLens in your project
 - [Quick Start](/docs/getting-started/quick-start) - Set up in 3 simple steps
-- [Watchers Overview](/docs/watchers/overview) - Learn about all 18 watchers
+- [Watchers Overview](/docs/watchers/overview) - Learn about all 19 watchers

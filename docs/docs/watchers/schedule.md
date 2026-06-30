@@ -51,6 +51,22 @@ interface ScheduleEntry {
 }
 ```
 
+## Requirements
+
+The Schedule Watcher relies on `@nestjs/schedule` to discover your scheduled tasks. To enable tracking:
+
+1. **Install `@nestjs/schedule`** — it is an optional peer dependency:
+
+   ```bash
+   npm install @nestjs/schedule
+   ```
+
+2. **Import `ScheduleModule.forRoot()`** in your `AppModule`.
+
+When both are in place, the watcher automatically discovers `@nestjs/schedule`'s `SchedulerRegistry` at application bootstrap (via NestJS `DiscoveryService`) and wraps your registered cron jobs to track their execution. You do **not** need to provide any token, registry, or instance manually — discovery happens for you on `onApplicationBootstrap`, after every module has registered its jobs.
+
+If `@nestjs/schedule` is not installed or `ScheduleModule.forRoot()` is not imported, the watcher quietly stays inactive.
+
 ## Usage Example
 
 ### Setup Schedule Module

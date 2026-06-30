@@ -85,6 +85,16 @@ NestLens uses Prisma's `$use` middleware to track operations:
 3. **Operations Logged** - Records operation details
 4. **Auto-Tagged** - Associates with current request
 
+:::warning Prisma v5+ deprecation
+NestLens attaches its query tracking via `client.$use(...)`. The `$use` middleware API is **deprecated in Prisma 5** and slated for removal in a future major version, in favor of [client extensions (`$extends`)](https://www.prisma.io/docs/orm/prisma-client/client-extensions). On Prisma 5 you may see a deprecation warning; query tracking still works for now. If you are on Prisma 5+, pin or plan accordingly — a future NestLens release will migrate to `$extends`.
+:::
+
+:::caution Avoid double middleware
+The **Query Watcher** registers its own `$use` middleware (producing `query` entries), and the **Model Watcher**'s `setupPrismaClient()` registers another `$use` middleware (producing `model` entries). If both the query watcher is enabled (with a global `prisma` instance NestLens can detect) **and** you call `setupPrismaClient()` on that same client, the client will have **two** NestLens middlewares attached and each operation is processed twice. Pick one of:
+- Enable only the query watcher (no `setupPrismaClient()` call), or
+- Enable the model watcher and call `setupPrismaClient()`, but do not also expose the client as the global `prisma` instance the query watcher auto-detects.
+:::
+
 ## Query Tracking
 
 ### Tracked Operations

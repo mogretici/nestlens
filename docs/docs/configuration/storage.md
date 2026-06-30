@@ -173,12 +173,13 @@ NestLensModule.forRoot({
 
 ```typescript
 interface RedisStorageConfig {
-  host?: string;      // Redis host (default: 'localhost')
-  port?: number;      // Redis port (default: 6379)
-  password?: string;  // Redis password
-  db?: number;        // Redis database number (default: 0)
-  keyPrefix?: string; // Key prefix (default: 'nestlens:')
-  url?: string;       // Connection URL (overrides other options)
+  host?: string;          // Redis host (default: 'localhost')
+  port?: number;          // Redis port (default: 6379)
+  password?: string;      // Redis password
+  db?: number;            // Redis database number (default: 0)
+  keyPrefix?: string;     // Key prefix (default: 'nestlens:')
+  url?: string;           // Connection URL (overrides host/port/password/db)
+  commandTimeout?: number; // Command timeout in ms (default: 5000)
 }
 ```
 
@@ -188,12 +189,16 @@ NestLens uses the following Redis key patterns:
 
 ```
 {prefix}entries:{id}           # Entry data (Hash)
-{prefix}entries:all            # All entry IDs (Sorted Set)
+{prefix}entries:all            # All entry IDs (Sorted Set, score = timestamp)
 {prefix}entries:type:{type}    # Entry IDs by type (Sorted Set)
 {prefix}entries:request:{id}   # Entry IDs by request (Set)
+{prefix}entries:sequence       # Counter for entry IDs
 {prefix}tags:{entryId}         # Tags for entry (Set)
 {prefix}tags:index:{tag}       # Entry IDs by tag (Set)
+{prefix}tags:counts            # Hash of tag -> count
 {prefix}family:{hash}          # Entry IDs by family hash (Set)
+{prefix}monitored              # Hash of monitored tags
+{prefix}monitored:sequence     # Counter for monitored tag IDs
 ```
 
 ### When to Use

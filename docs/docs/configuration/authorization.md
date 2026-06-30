@@ -123,6 +123,10 @@ Provides complete control over access authorization with custom logic.
 - **Type**: `(req: Request) => boolean | AuthUser | Promise<boolean | AuthUser>`
 - **Default**: `undefined`
 
+:::note Express & Fastify
+The `req` parameter is typed as the Express `Request` for convenience, but only common fields are read (`req.headers`, `req.ip`, `req.url`). The callback works on both the Express and Fastify adapters — just stick to standard header/URL access rather than Express-only helpers.
+:::
+
 #### Simple Boolean Authorization
 
 ```typescript

@@ -103,6 +103,10 @@ export class QueueRegistration implements OnModuleInit, OnModuleDestroy {
 }
 ```
 
+:::warning BullMQ `queue.client` version note
+`setupBullMQQueue()` derives the Redis connection from `await queue.client` to construct its `QueueEvents`. The `queue.client` accessor's behavior has changed across BullMQ major versions and is deprecated/removed in **BullMQ v5+**. If you are on BullMQ 5, prefer the manual `setupQueueWithEvents()` path below and build `QueueEvents` from your own connection options instead of relying on `queue.client`.
+:::
+
 **Advanced: Manual QueueEvents management**
 
 If you need more control over the QueueEvents lifecycle, use `setupQueueWithEvents`:
@@ -134,34 +138,16 @@ export class QueueRegistration implements OnModuleInit, OnModuleDestroy {
 }
 ```
 
-## Alternative: Provider Token (Bull Classic Only)
+## Registering Queues
 
-Use the `NESTLENS_BULL_QUEUES` token to provide Bull (classic) queues:
+There is only one supported way to register queues with NestLens: call the setup methods on `JobWatcher` from an `OnModuleInit` hook, as shown in the [Setup](#3-register-your-queues) section above.
 
-```typescript
-import { NESTLENS_BULL_QUEUES } from 'nestlens';
-import { getQueueToken } from '@nestjs/bull';
+- **Bull (classic):** `jobWatcher.setupQueue(queue, name)`
+- **BullMQ:** `await jobWatcher.setupBullMQQueue(queue, name)` (auto-creates `QueueEvents`), or `jobWatcher.setupQueueWithEvents(queue, queueEvents, name)` for manual control.
 
-@Module({
-  providers: [
-    {
-      provide: NESTLENS_BULL_QUEUES,
-      useFactory: (
-        emailQueue: Queue,
-        notificationQueue: Queue,
-      ) => [
-        { queue: emailQueue, name: 'email' },
-        { queue: notificationQueue, name: 'notifications' },
-      ],
-      inject: [
-        getQueueToken('email'),
-        getQueueToken('notifications'),
-      ],
-    },
-  ],
-})
-export class AppModule {}
-```
+:::note No provider-token registration
+The package exports a `NESTLENS_BULL_QUEUES` symbol, but `JobWatcher` does **not** inject or consume it. Providing queues via this token has no effect and will not enable tracking. Always register queues by calling `setupQueue()` / `setupBullMQQueue()` explicitly.
+:::
 
 ## API Reference
 

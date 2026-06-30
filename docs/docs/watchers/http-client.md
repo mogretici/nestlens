@@ -83,10 +83,32 @@ import { HttpModule } from '@nestjs/axios';
 export class AppModule {}
 ```
 
-### Provide HttpService to NestLens
+### Provide an HTTP client to NestLens
+
+Provide an instance via the `NESTLENS_HTTP_CLIENT` token. You can pass **either** a NestJS `HttpService` **or** a raw axios instance — the watcher detects an `HttpService` and unwraps its underlying `axiosRef` automatically, so both forms work.
+
+The simplest option is to pass the `HttpService` directly:
 
 ```typescript
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { NESTLENS_HTTP_CLIENT } from 'nestlens';
+
+@Module({
+  providers: [
+    {
+      provide: NESTLENS_HTTP_CLIENT,
+      useExisting: HttpService, // HttpService is unwrapped to axiosRef automatically
+    },
+  ],
+})
+export class AppModule {}
+```
+
+You can also pass a raw axios instance (or `httpService.axiosRef`) explicitly if you prefer:
+
+```typescript
+import { Module } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { NESTLENS_HTTP_CLIENT } from 'nestlens';
 

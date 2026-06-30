@@ -60,7 +60,7 @@ With zero configuration, NestLens tracks:
 - All HTTP requests and responses
 - Database queries (TypeORM/Prisma auto-detected)
 - Unhandled exceptions
-- Application logs
+- Application logs (once you wire `NestLensLogger` via `app.useLogger()` — see Step 2)
 
 ## Next Steps
 

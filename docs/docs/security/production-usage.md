@@ -247,15 +247,17 @@ setInterval(() => {
 }, 60000);
 ```
 
-### Optimize Buffer Settings
+### Buffer Settings (Fixed)
 
-Reduce memory footprint:
+The collector's `BUFFER_SIZE` (100) and `FLUSH_INTERVAL` (1000ms) are `private readonly` constants in `CollectorService`. They are **not** configurable through `NestLensModule.forRoot(...)`:
 
 ```typescript
-// In collector.service.ts configuration
-private readonly BUFFER_SIZE = 50;      // Reduced from 100
-private readonly FLUSH_INTERVAL = 500;  // More frequent flushes
+// In CollectorService — hard-coded, not a config option
+private readonly BUFFER_SIZE = 100;
+private readonly FLUSH_INTERVAL = 1000; // 1 second
 ```
+
+To change them you must subclass `CollectorService` and provide your subclass for the collector token; there is no configuration flag. See [Performance Optimization](/docs/advanced/performance.md#changing-buffer-behavior).
 
 ### Disable Expensive Watchers
 

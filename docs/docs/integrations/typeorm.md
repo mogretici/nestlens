@@ -16,14 +16,21 @@ npm install typeorm @nestjs/typeorm
 
 No additional setup is needed. NestLens will:
 - Detect all TypeORM DataSources
-- Attach query logging automatically
+- Attach query tracking automatically
 - Track query execution times
 - Monitor slow queries
 - Record query parameters
 
 ## How It Works
 
-NestLens hooks into TypeORM's driver layer to intercept queries:
+NestLens does **not** monkey-patch the TypeORM driver. Instead, the Query Watcher uses a dual mechanism on each DataSource:
+
+1. **EntitySubscriber (success path)** - NestLens pushes a `NestLensQuerySubscriber` onto the DataSource's `subscribers` array. TypeORM calls its `afterQuery` lifecycle hook for every query the QueryRunner executes (raw queries, query builder, repository methods, transactions, schema sync). The event carries `executionTime`, `success`, `error`, and `parameters` directly.
+2. **Wrapped Logger (slow/error path)** - NestLens wraps the DataSource's existing `logger` with `NestLensTypeOrmLogger`. This delegates every call to your original logger but additionally records `logQuerySlow` and `logQueryError`. It acts as a safety net for driver code paths that skip the `afterQuery` broadcast (notably `better-sqlite3` prepare-time failures).
+
+DataSources are discovered automatically via Nest's `DiscoveryService`: NestLens scans all providers and matches instances whose constructor name is `DataSource` or `Connection` and which expose a `subscribers` array and an `options` object. Each DataSource is attached only once (idempotent).
+
+This happens during `onApplicationBootstrap`, so NestLens does not require any change to your TypeORM setup:
 
 ```typescript
 // In your app.module.ts - Standard TypeORM setup
@@ -114,6 +121,8 @@ TypeOrmModule.forRoot({
 Each query includes the connection name for easy filtering in the dashboard.
 
 ## Model Tracking
+
+> **Query tracking vs. model tracking:** The steps below apply **only** to the Model Watcher (entity lifecycle events: find/create/update/delete). Query tracking described above works automatically and does **not** require you to provide `NESTLENS_MODEL_SUBSCRIBER` — that token is consumed exclusively by the Model Watcher.
 
 Enable entity operation tracking with the Model Watcher:
 

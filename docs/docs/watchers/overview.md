@@ -171,7 +171,7 @@ This correlation allows you to see all operations that occurred during a specifi
 
 ### Memory Usage
 
-Each watcher stores collected data in the configured storage (SQLite by default). Consider:
+Each watcher stores collected data in the configured storage (in-memory by default). Consider:
 
 - Enable only watchers you need
 - Configure appropriate pruning settings

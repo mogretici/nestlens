@@ -13,7 +13,8 @@ interface NestLensConfig {
   authorization?: AuthorizationConfig;
   storage?: StorageConfig;
   pruning?: PruningConfig;
-  rateLimit?: RateLimitConfig | false;
+  rateLimit?: RateLimitConfig | false; // disabled by default
+  security?: SecurityConfig; // data masking + input validation
   watchers?: WatchersConfig;
   filter?: (entry: Entry) => boolean | Promise<boolean>;
   filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
@@ -93,6 +94,7 @@ NestLensModule.forRoot({
     gate: false,        // Monitor authorization gates (disabled by default)
     batch: false,       // Monitor batch operations (disabled by default)
     dump: false,        // Monitor dump/debug operations (disabled by default)
+    graphql: false,     // Monitor GraphQL operations (disabled by default)
   },
 });
 ```

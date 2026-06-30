@@ -15,6 +15,18 @@ Access control in NestLens operates on multiple layers:
 3. **Custom Authorization** - Implement custom authentication logic
 4. **Role-Based Access** - Control access based on user roles
 
+### Guard Evaluation Order
+
+`NestLensGuard` evaluates these checks in a fixed order. The first failing check denies access:
+
+1. **Rate limit** - per-IP request limit (checked before anything else; returns `429 Too Many Requests` when exceeded)
+2. **Environment** - current environment must be in `allowedEnvironments`
+3. **IP whitelist** - client IP must match `allowedIps` (only enforced when `allowedIps` is non-empty)
+4. **`canAccess`** - the custom function must not return `false`
+5. **`requiredRoles`** - the user must have all required roles
+
+> **Important:** `requiredRoles` is **only** enforced when `canAccess` returns an `AuthUser` **object**. If `canAccess` returns a boolean `true` (or is not defined), the attached user is `undefined` and the role check is skipped entirely. To use role-based access, your `canAccess` function must return an `AuthUser` object, not just `true`.
+
 ## Environment Restrictions
 
 The simplest form of access control limits NestLens to specific environments.

@@ -131,35 +131,34 @@ export class CustomService {
 
 Create custom watchers using provider tokens.
 
-### NESTLENS_BULL_QUEUES
+### Registering Bull/BullMQ Queues
 
-Register Bull/BullMQ queues for job tracking:
+:::warning Use `setupQueue()`, not a provider token
+A `NESTLENS_BULL_QUEUES` symbol is exported, but `JobWatcher` does not inject or consume it, so providing queues via that token has **no effect**. Register queues by calling the `JobWatcher` setup methods from an `OnModuleInit` hook instead.
+:::
 
 ```typescript
-import { NESTLENS_BULL_QUEUES } from 'nestlens';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
-import { getQueueToken } from '@nestjs/bull';
+import { JobWatcher } from 'nestlens';
 
-@Module({
-  providers: [
-    {
-      provide: NESTLENS_BULL_QUEUES,
-      useFactory: (
-        emailQueue: Queue,
-        smsQueue: Queue,
-      ) => [
-        { queue: emailQueue, name: 'email' },
-        { queue: smsQueue, name: 'sms' },
-      ],
-      inject: [
-        getQueueToken('email'),
-        getQueueToken('sms'),
-      ],
-    },
-  ],
-})
-export class QueueModule {}
+@Injectable()
+export class QueueRegistration implements OnModuleInit {
+  constructor(
+    @InjectQueue('email') private emailQueue: Queue,
+    @InjectQueue('sms') private smsQueue: Queue,
+    private jobWatcher: JobWatcher,
+  ) {}
+
+  async onModuleInit() {
+    this.jobWatcher.setupQueue(this.emailQueue, 'email');
+    this.jobWatcher.setupQueue(this.smsQueue, 'sms');
+  }
+}
 ```
+
+For BullMQ, use `await this.jobWatcher.setupBullMQQueue(queue, name)` instead. See [Bull / BullMQ Integration](./bull-bullmq.md).
 
 ### NESTLENS_REDIS_CLIENT
 

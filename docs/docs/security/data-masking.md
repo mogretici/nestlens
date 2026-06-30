@@ -33,21 +33,27 @@ headers: {
 
 // Stored in NestLens
 headers: {
-  'authorization': '********',
-  'x-api-key': '********',
-  'cookie': '********'
+  'authorization': '***REDACTED***',
+  'x-api-key': '***REDACTED***',
+  'cookie': '***REDACTED***'
 }
 ```
 
 ### Masked Header Patterns
 
-By default, these headers are masked:
+By default, these 9 headers are masked (case-insensitive):
 
 - `authorization`
 - `cookie`
 - `set-cookie`
 - `x-api-key`
 - `x-auth-token`
+- `x-access-token`
+- `x-refresh-token`
+- `x-csrf-token`
+- `proxy-authorization`
+
+The default replacement string is `***REDACTED***`.
 
 ### HTTP Client Requests
 
@@ -140,8 +146,8 @@ These field names are automatically masked:
 {
   id: 123,
   email: 'user@example.com',
-  password: '********',
-  apiKey: '********',
+  password: '***MASKED***',
+  apiKey: '***MASKED***',
 }
 ```
 
@@ -158,6 +164,78 @@ NestLensModule.forRoot({
   },
 })
 ```
+
+## Global Security Configuration
+
+The top-level `security` option configures the global `DataMaskerService`, which masks request headers, body/query parameters, and user fields across watchers. Anything you list here is **added** to the built-in defaults (it does not replace them).
+
+```typescript
+NestLensModule.forRoot({
+  security: {
+    dataMasking: {
+      // Additional headers to mask (merged with the 9 defaults)
+      sensitiveHeaders: ['x-internal-token'],
+      // Additional body/query params to mask (merged with defaults)
+      sensitiveParams: ['otp', 'pin'],
+      // Additional user object fields to mask (merged with defaults)
+      sensitiveUserFields: ['mfaSecret'],
+      // Replacement string. Default: '***REDACTED***'
+      maskReplacement: '***REDACTED***',
+    },
+
+    // Stack trace handling: 'none' | 'partial' | 'full'
+    // 'partial' is the default behavior in production
+    stackTraceSanitization: 'partial',
+
+    // Input validation limits for the dashboard API
+    validation: {
+      maxFilterArrayLength: 100, // default
+      maxSearchLength: 500,      // default
+      maxTagLength: 100,         // default
+      maxTagsPerEntry: 50,       // default
+    },
+  },
+})
+```
+
+### Default Masked Body/Query Parameters
+
+The global data masker masks these parameter names by default (case-insensitive):
+
+- `password`
+- `passwd`
+- `secret`
+- `token`
+- `api_key`
+- `apikey`
+- `api-key`
+- `access_token`
+- `refresh_token`
+- `auth_token`
+- `credit_card`
+- `creditcard`
+- `card_number`
+- `cvv`
+- `cvc`
+- `ssn`
+- `social_security`
+- `private_key`
+- `privatekey`
+
+### Default Masked User Fields
+
+When request user context is captured, these user object fields are masked by default (case-insensitive):
+
+- `password`
+- `passwordHash`
+- `password_hash`
+- `hashedPassword`
+- `token`
+- `apiKey`
+- `api_key`
+- `secret`
+
+> **Note:** These defaults belong to the global `DataMaskerService`. The Model Watcher uses a separate, smaller list (see [Model Data Masking](#model-data-masking)) and replaces matched values with `***MASKED***` rather than `***REDACTED***`.
 
 ## Custom Masking
 

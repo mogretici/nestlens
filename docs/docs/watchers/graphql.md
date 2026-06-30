@@ -86,7 +86,6 @@ NestLensModule.forRoot({
 | `captureMessageData` | boolean | `false` | Capture message payload data |
 | `maxTrackedMessages` | number | `100` | Maximum messages to track per subscription |
 | `trackConnectionEvents` | boolean | `true` | Track connection/disconnection events |
-| `transportMode` | string | `'auto'` | Transport mode: 'gateway', 'adapter', 'auto' |
 
 ## Payload Structure
 
@@ -144,11 +143,13 @@ interface GraphQLEntry {
 
 ## Usage Example
 
+GraphQL monitoring is **zero-config**. Once you enable the watcher with `graphql: true`, NestLens auto-detects whether you are running Apollo Server or Mercurius and registers the necessary plugin/hooks for you. No manual plugin wiring is required.
+
 ### Apollo Server Integration
 
-```typescript
-import { GraphQLWatcher } from 'nestlens';
+Just enable the watcher. NestLens detects `@nestjs/apollo` / `@apollo/server` and automatically registers its Apollo plugin during module setup:
 
+```typescript
 @Module({
   imports: [
     NestLensModule.forRoot({
@@ -156,30 +157,39 @@ import { GraphQLWatcher } from 'nestlens';
         graphql: true,
       },
     }),
-    GraphQLModule.forRootAsync({
-      imports: [NestLensModule],
-      inject: [GraphQLWatcher],
-      useFactory: (graphqlWatcher: GraphQLWatcher) => ({
-        autoSchemaFile: true,
-        plugins: [graphqlWatcher.getPlugin()],
-      }),
+    GraphQLModule.forRoot({
+      driver: ApolloDriver,
+      autoSchemaFile: true,
     }),
   ],
 })
 export class AppModule {}
 ```
 
+You no longer need to inject `GraphQLWatcher` and add `graphqlWatcher.getPlugin()` manually — the plugin is wired up for you.
+
 ### Mercurius Integration
 
-```typescript
-import { GraphQLWatcher } from 'nestlens';
+Mercurius is handled automatically as well. NestLens detects `mercurius` / `@nestjs/mercurius` and registers its hooks via `onApplicationBootstrap` after Fastify is ready:
 
-// With Fastify adapter
-fastify.register(mercurius, {
-  schema,
-  hooks: graphqlWatcher.getPlugin(),
-});
+```typescript
+@Module({
+  imports: [
+    NestLensModule.forRoot({
+      watchers: {
+        graphql: true,
+      },
+    }),
+    GraphQLModule.forRoot({
+      driver: MercuriusDriver,
+      autoSchemaFile: true,
+    }),
+  ],
+})
+export class AppModule {}
 ```
+
+No manual `fastify.register(mercurius, { hooks: ... })` wiring is required.
 
 ## N+1 Query Detection
 
@@ -271,13 +281,16 @@ In the NestLens dashboard, GraphQL entries appear in the GraphQL tab showing:
 
 ## Sensitive Data Handling
 
-The GraphQL Watcher automatically masks sensitive variables:
+The GraphQL Watcher automatically masks these sensitive variables by default:
 
-- `password`, `token`, `secret`
+- `password`
+- `token`, `secret`
 - `apiKey`, `api_key`
 - `accessToken`, `access_token`
 - `refreshToken`, `refresh_token`
 - `authorization`
+- `apiSecret`, `api_secret`
+- `privateKey`, `private_key`
 - `creditCard`, `credit_card`
 - `ssn`, `pin`
 

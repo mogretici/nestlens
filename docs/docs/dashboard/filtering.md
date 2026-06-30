@@ -234,9 +234,8 @@ Toggle between modes in the tag filter dropdown.
 
 Remove all active filters:
 
-1. **Clear All Button** - Click "Clear All" in filter bar
-2. **Keyboard Shortcut** - Press `Ctrl+Shift+C`
-3. **Navigation** - Click entry type in sidebar
+1. **Clear All Button** - Click "Clear All" in the filter bar
+2. **Navigation** - Click the entry type in the sidebar to reset its view
 
 ## Filter Persistence
 

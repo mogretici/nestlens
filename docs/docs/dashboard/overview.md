@@ -55,7 +55,7 @@ Each entry type has a tailored display showing relevant information:
 - **Queries** - SQL/query text, parameters, execution time, and slow query indicator
 - **Exceptions** - Error type, message, stack trace, and context
 - **Jobs** - Queue name, status, attempts, and processing duration
-- **And more** - Each of the 18 entry types has optimized visualization
+- **And more** - Each of the 19 entry types has optimized visualization
 
 ## Dashboard Layout
 
@@ -64,25 +64,27 @@ Each entry type has a tailored display showing relevant information:
 The left sidebar provides quick access to all entry types, organized by category. Each navigation item shows:
 
 - Entry type icon and name
-- Real-time count badge (if entries exist)
 - Active state indicator
+- A live count badge on **Exceptions** when unresolved exceptions exist
 
 ### Main Content Area
 
 The central area displays:
 
-- **Filter Bar** - Quick access to active filters and search
+- **Filter Bar** - Shows active filters and lets you clear them
 - **Entry List** - Paginated list of entries with key information
 - **Detail View** - Full entry details when selected
 
 ### Header Controls
 
-The top bar includes:
+The sidebar header includes:
 
-- **Search** - Full-text search across entries
-- **Filters** - Advanced filtering options
-- **Refresh** - Manual refresh trigger
-- **Settings** - Dashboard preferences
+- **Recording toggle** - Pause or resume entry collection
+- **Dark mode toggle** - Switch between light and dark themes
+- **Clear all data** - Remove every stored entry
+- **Documentation link** - Open these docs
+
+Each entry-type page also has its own toolbar with an **Auto Refresh** toggle, a **Refresh** button, and an active-filter bar with **Clear All**.
 
 ## Auto-Refresh
 

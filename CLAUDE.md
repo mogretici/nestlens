@@ -108,21 +108,28 @@ API Controller → InputValidator → Storage.getEntries(filter) → Response
 All config is in `nestlens.config.ts`. Main config interface: `NestLensConfig`.
 Watchers can be enabled with boolean or detailed config object.
 
-### GraphQL Watcher Integration (Important!)
-GraphQL watcher is special - it requires manual integration with Apollo Server's plugin system.
-Unlike other watchers, simply enabling `graphql: true` is not enough.
+### GraphQL Watcher Integration
+GraphQL monitoring is zero-config. When `watchers.graphql` is enabled, `NestLensModule`
+detects the GraphQL server and auto-registers the watcher:
+- **Apollo** (`@nestjs/apollo` / `@apollo/server`): `NestLensApolloPlugin` is added as a
+  provider (`nestlens.module.ts:97-99`) and auto-discovered by Apollo's
+  `PluginsExplorerService` via a dynamic `@Plugin()` decorator.
+- **Mercurius** (`mercurius` / `@nestjs/mercurius`): `MercuriusAutoRegistrar` hooks in
+  during `onApplicationBootstrap` (`nestlens.module.ts:101-103`).
 
 ```typescript
-// NestLensModule must be in GraphQLModule.forRootAsync imports
-// GraphQLWatcher must be injected and added as Apollo plugin
-GraphQLModule.forRootAsync({
-  imports: [NestLensModule.forRoot({ watchers: { graphql: true } })],
-  inject: [GraphQLWatcher],
-  useFactory: (graphqlWatcher: GraphQLWatcher) => ({
-    plugins: [graphqlWatcher.getPlugin()],
-  }),
-});
+// Just enable the watcher — no manual plugin wiring needed:
+@Module({
+  imports: [
+    NestLensModule.forRoot({ watchers: { graphql: true } }),
+    GraphQLModule.forRoot({ driver: ApolloDriver, autoSchemaFile: true }),
+  ],
+})
+export class AppModule {}
 ```
+
+`GraphQLWatcher.getPlugin()` still exists for manual wiring in non-standard setups, but
+it is no longer required for Apollo or Mercurius.
 
 ## Testing Notes
 

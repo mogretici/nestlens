@@ -2,6 +2,10 @@
 
 NestLens includes built-in rate limiting to protect the dashboard and API endpoints from abuse and excessive requests. This ensures stable performance and prevents resource exhaustion.
 
+:::info Disabled by default
+Rate limiting is **off by default** — NestLens is a development/debugging tool. `rateLimit` defaults to `false`. Provide a `RateLimitConfig` object to turn it on (recommended when the dashboard is exposed beyond localhost). Set it back to `false` to disable it explicitly.
+:::
+
 ## RateLimitConfig Interface
 
 The rate limiting configuration provides controls for managing request rates:
@@ -424,10 +428,19 @@ If rate limiting appears ineffective:
 
 If behind multiple reverse proxies:
 
-1. **Trust proxy setting**: Configure Express to trust proxy headers
+1. **Trust proxy setting**: Tell your HTTP adapter to trust proxy headers so the real client IP is used.
+
 ```typescript
-// In your main.ts
+// Express (main.ts)
 app.set('trust proxy', true);
+```
+
+```typescript
+// Fastify (main.ts) — pass it to the adapter
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter({ trustProxy: true }),
+);
 ```
 
 2. **Verify X-Forwarded-For**: Check that the header contains the real client IP

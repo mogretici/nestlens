@@ -19,7 +19,7 @@ The NestLens dashboard is divided into several sections:
 - **Queries** - Database query monitoring
 - **Exceptions** - Error tracking
 - **Logs** - Application logs
-- And 14 more entry types...
+- And 15 more entry types...
 
 ### Key Metrics
 
@@ -68,9 +68,11 @@ Toggle dark mode with:
 
 - `Ctrl/Cmd + K` - Clear all entries
 - `Ctrl/Cmd + D` - Toggle dark mode
-- `Arrow Keys` - Navigate table rows
-- `Enter` - Open entry details
-- `Escape` - Close modals
+- `Arrow Keys` / `Home` / `End` - Navigate table rows
+- `Enter` / `Space` - Open the focused entry
+- `Escape` - Close the mobile sidebar
+
+See the full list in [Keyboard Shortcuts](/docs/dashboard/keyboard-shortcuts).
 
 ## Next Steps
 

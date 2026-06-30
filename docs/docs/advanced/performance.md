@@ -19,23 +19,27 @@ NestLens is designed for minimal overhead:
 
 The collector uses buffering to minimize database writes.
 
-### Default Buffer Settings
+### Buffer Settings
 
 ```typescript
-// In CollectorService
+// In CollectorService (hard-coded constants)
 private readonly BUFFER_SIZE = 100;      // Entries before flush
 private readonly FLUSH_INTERVAL = 1000;  // 1 second
 ```
 
-### Optimize Buffer Size
+:::note Not configurable
+`BUFFER_SIZE` and `FLUSH_INTERVAL` are `private readonly` constants on `CollectorService`. They are **not** exposed through `NestLensModule.forRoot(...)` and cannot be set via configuration. There is no config option for them today.
+:::
 
-Increase buffer size for higher throughput:
+### Changing Buffer Behavior
+
+The only way to change these values is to subclass `CollectorService` and provide your subclass for the collector token. Because the fields are `private readonly`, you must redeclare them in the subclass (and re-implement any flush logic that reads them):
 
 ```typescript
-// In your fork/extension
+// Requires extending CollectorService and overriding the relevant fields/methods.
 class OptimizedCollector extends CollectorService {
-  private readonly BUFFER_SIZE = 500;      // Larger buffer
-  private readonly FLUSH_INTERVAL = 5000;  // Flush every 5 seconds
+  protected readonly BUFFER_SIZE = 500;      // Larger buffer
+  protected readonly FLUSH_INTERVAL = 5000;  // Flush every 5 seconds
 }
 ```
 

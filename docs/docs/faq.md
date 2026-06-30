@@ -174,8 +174,6 @@ export class ExportService {
 }
 ```
 
-Or use the dashboard's export functionality (coming soon).
-
 ### How do I clear old entries?
 
 NestLens automatically prunes old entries:
@@ -488,7 +486,7 @@ See [Performance Optimization](/docs/advanced/performance.md).
 
 3. **Check initialization order**: NestLens should be imported after TypeORM
 
-4. **Check console logs** for "TypeORM query logging initialized"
+4. **Check console logs** for `TypeORM query watcher attached to N DataSource(s)` (logged at application bootstrap when at least one DataSource is found)
 
 ### Prisma queries not tracked
 
@@ -507,6 +505,8 @@ See [Performance Optimization](/docs/advanced/performance.md).
    const modelWatcher = this.moduleRef.get(ModelWatcher);
    modelWatcher.setupPrismaClient(this.prisma);
    ```
+
+4. **Check console logs** for `Prisma query watcher attached (global instance)` (logged when NestLens detects the global `prisma` client)
 
 See [Prisma Integration](/docs/integrations/prisma.md).
 
