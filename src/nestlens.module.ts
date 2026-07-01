@@ -11,12 +11,19 @@ import {
 import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core';
 import { DEFAULT_CONFIG, NestLensConfig, NESTLENS_CONFIG } from './nestlens.config';
 import { CollectorService } from './core/collector.service';
+import { AlertingService } from './core/alerting.service';
 import { PruningService } from './core/pruning.service';
 import { TagService } from './core/tag.service';
 import { FamilyHashService } from './core/family-hash.service';
 import { STORAGE } from './core/storage';
 import { createStorage } from './core/storage/storage.factory';
-import { NestLensApiController, DashboardController, NestLensGuard, TagController } from './api';
+import {
+  NestLensApiController,
+  DashboardController,
+  NestLensGuard,
+  NestLensStreamController,
+  TagController,
+} from './api';
 import {
   RequestWatcher,
   QueryWatcher,
@@ -167,7 +174,12 @@ export class NestLensModule implements NestModule, OnModuleInit {
 
     const providers: Provider[] = [NestLensGuard];
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
-    const controllers = [NestLensApiController, TagController, DashboardController];
+    const controllers = [
+      NestLensApiController,
+      TagController,
+      NestLensStreamController,
+      DashboardController,
+    ];
 
     const imports: DynamicModule['imports'] = [
       // Core module provides shared services (config, storage, collector, pruning)
@@ -225,6 +237,11 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // Add Schedule Watcher
     if (mergedConfig.watchers?.schedule) {
       imports.push(NestLensScheduleModule.forRoot());
+    }
+
+    // Add Alerting (webhook notifications on collected entries)
+    if (mergedConfig.alerting?.enabled) {
+      providers.push(AlertingService);
     }
 
     // Add Mail Watcher

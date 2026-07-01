@@ -1,5 +1,38 @@
 import { Request } from 'express';
-import { Entry } from './types';
+import { Entry, EntryType } from './types';
+
+/**
+ * Payload format for an alerting webhook.
+ * - 'slack': Slack incoming-webhook JSON (`{ text }`)
+ * - 'discord': Discord webhook JSON (`{ content }`)
+ * - 'generic': raw `{ event, entry }` JSON
+ */
+export type AlertingWebhookType = 'slack' | 'discord' | 'generic';
+
+/**
+ * A single alerting destination.
+ */
+export interface AlertingWebhook {
+  /** Webhook URL to POST alerts to. */
+  url: string;
+  /** Payload format. Default: 'generic'. */
+  type?: AlertingWebhookType;
+  /** Entry types that trigger this webhook. Default: ['exception']. */
+  events?: EntryType[];
+  /** Minimum milliseconds between alerts sharing the same dedup key. Default: 60000. */
+  throttleMs?: number;
+}
+
+/**
+ * Proactive alerting: POST collected entries (exceptions by default) to webhooks.
+ */
+export interface AlertingConfig {
+  enabled?: boolean;
+  /** One or more webhook destinations. */
+  webhooks?: AlertingWebhook[];
+  /** Per-delivery timeout in milliseconds. Default: 5000. */
+  timeoutMs?: number;
+}
 
 /**
  * Authenticated user information returned from authorization
@@ -413,6 +446,13 @@ export interface NestLensConfig {
    */
   security?: SecurityConfig;
 
+  // Alerting
+  /**
+   * Proactive alerting — POST collected entries (exceptions by default) to
+   * Slack/Discord/generic webhooks. Disabled by default.
+   */
+  alerting?: AlertingConfig;
+
   // Entry Filtering
   /**
    * Filter function to determine if an entry should be collected.
@@ -462,6 +502,7 @@ export const DEFAULT_CONFIG: Required<
     | 'filterBatch'
     | 'rateLimit'
     | 'security'
+    | 'alerting'
   >
 > & {
   authorization: AuthorizationConfig;

@@ -70,8 +70,8 @@ describe('NestLensModule', () => {
         // Act
         const dynamicModule = NestLensModule.forRoot(config);
 
-        // Assert
-        expect(dynamicModule.controllers).toHaveLength(3);
+        // Assert: API, Tag, Stream (SSE) and Dashboard controllers
+        expect(dynamicModule.controllers).toHaveLength(4);
       });
 
       it('should include core module in imports', () => {
