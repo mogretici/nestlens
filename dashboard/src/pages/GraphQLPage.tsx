@@ -99,6 +99,7 @@ export default function GraphQLPage() {
     loadMore,
     loadNew,
     autoRefreshEnabled,
+    live,
     setAutoRefresh,
     meta,
     isHighlighted,
@@ -202,6 +203,7 @@ export default function GraphQLPage() {
         totalCount={meta?.total}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
+        live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
         onClearAllFilters={clearAll}

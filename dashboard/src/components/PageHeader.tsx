@@ -26,6 +26,8 @@ interface PageHeaderProps {
   onRefresh?: () => void;
   autoRefreshEnabled?: boolean;
   onAutoRefreshToggle?: (enabled: boolean) => void;
+  /** Real-time SSE connection is open — shows a "Live" indicator. */
+  live?: boolean;
 
   // Filters
   filters?: FilterItem[];
@@ -50,6 +52,7 @@ export default function PageHeader({
   onRefresh,
   autoRefreshEnabled,
   onAutoRefreshToggle,
+  live,
   filters = [],
   onClearAllFilters,
   actions,
@@ -114,6 +117,18 @@ export default function PageHeader({
         <div className="flex items-center space-x-2">
           {/* Custom Actions */}
           {actions}
+
+          {/* Live (SSE) indicator */}
+          {live && (
+            <span
+              data-testid="live-indicator"
+              className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
+              title="Live — entries stream in real time"
+            >
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span>Live</span>
+            </span>
+          )}
 
           {/* Auto-Refresh Toggle */}
           {onAutoRefreshToggle && (

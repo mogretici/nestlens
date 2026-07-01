@@ -39,6 +39,7 @@ export default function ModelsPage() {
     loadMore,
     loadNew,
     autoRefreshEnabled,
+    live,
     setAutoRefresh,
     meta,
     isHighlighted,
@@ -145,6 +146,7 @@ export default function ModelsPage() {
         totalCount={meta?.total}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
+        live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
         onClearAllFilters={clearAll}

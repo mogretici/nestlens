@@ -39,6 +39,7 @@ export default function ViewsPage() {
     loadMore,
     loadNew,
     autoRefreshEnabled,
+    live,
     setAutoRefresh,
     meta,
     isHighlighted,
@@ -142,6 +143,7 @@ export default function ViewsPage() {
         totalCount={meta?.total}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
+        live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
         onClearAllFilters={clearAll}

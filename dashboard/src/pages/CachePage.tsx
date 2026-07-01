@@ -38,6 +38,7 @@ export default function CachePage() {
     loadMore,
     loadNew,
     autoRefreshEnabled,
+    live,
     setAutoRefresh,
     meta,
     isHighlighted,
@@ -128,6 +129,7 @@ export default function CachePage() {
         totalCount={meta?.total}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
+        live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
         onClearAllFilters={clearAll}

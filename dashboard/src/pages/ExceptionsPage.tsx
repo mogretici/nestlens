@@ -50,6 +50,7 @@ export default function ExceptionsPage() {
     loadMore,
     loadNew,
     autoRefreshEnabled,
+    live,
     setAutoRefresh,
     updateEntry,
     meta,
@@ -215,6 +216,7 @@ export default function ExceptionsPage() {
         totalCount={meta?.total}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
+        live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
         onClearAllFilters={clearAll}
