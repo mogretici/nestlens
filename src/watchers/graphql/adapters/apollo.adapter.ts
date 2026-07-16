@@ -179,6 +179,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
         const ip = adapter.getClientIp(httpRequest);
         const userAgent = adapter.getUserAgent(httpRequest);
         const user = adapter.extractUser(httpRequest);
+        const headers = adapter.extractHeaders(requestContext, httpRequest);
 
         return {
           async parsingDidStart() {
@@ -325,6 +326,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
               potentialN1: n1Warnings.length > 0 ? n1Warnings : undefined,
               ip,
               userAgent,
+              headers,
               user,
               fieldTraces,
             };
@@ -340,10 +342,11 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
                   request: {
                     ip,
                     userAgent,
+                    headers,
                   },
                 });
                 if (tags && tags.length > 0) {
-                  (payload as unknown as { tags?: string[] }).tags = tags;
+                  payload.tags = tags;
                 }
               } catch {
                 // Ignore tag errors
@@ -374,6 +377,37 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
     }
 
     return parts.join('.');
+  }
+
+  /**
+   * Extract request headers from the HTTP request or Apollo's header map
+   */
+  private extractHeaders(
+    requestContext: ApolloRequestContext,
+    httpRequest: Record<string, unknown> | undefined,
+  ): Record<string, string> | undefined {
+    if (!this.config.captureHeaders) {
+      return undefined;
+    }
+
+    // Prefer the underlying HTTP request (Express/Fastify req from context)
+    const fromRequest = this.captureRequestHeaders(httpRequest);
+    if (fromRequest) {
+      return fromRequest;
+    }
+
+    // Fallback to Apollo's HTTPGraphQLRequest header map
+    const headerMap = requestContext.request.http?.headers;
+    if (headerMap && typeof headerMap.entries === 'function') {
+      const headers: Record<string, unknown> = {};
+      for (const [key, value] of headerMap.entries()) {
+        headers[key] = value;
+      }
+      const result = this.maskHeaders(headers);
+      return Object.keys(result).length > 0 ? result : undefined;
+    }
+
+    return undefined;
   }
 
   /**

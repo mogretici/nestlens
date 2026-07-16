@@ -150,6 +150,45 @@ export abstract class BaseGraphQLAdapter {
   }
 
   /**
+   * Capture request headers with sensitive values masked
+   */
+  protected captureRequestHeaders(request: unknown): Record<string, string> | undefined {
+    if (!this.config.captureHeaders || !request || typeof request !== 'object') {
+      return undefined;
+    }
+
+    const req = request as Record<string, unknown>;
+    const headers = req.headers as Record<string, unknown> | undefined;
+
+    if (!headers || typeof headers !== 'object') {
+      return undefined;
+    }
+
+    const result = this.maskHeaders(headers);
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  /**
+   * Mask sensitive header values
+   */
+  protected maskHeaders(headers: Record<string, unknown>): Record<string, string> {
+    const sensitiveHeaders = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token'];
+    const result: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(headers)) {
+      if (sensitiveHeaders.includes(key.toLowerCase())) {
+        result[key] = '***';
+      } else if (typeof value === 'string') {
+        result[key] = value;
+      } else if (Array.isArray(value)) {
+        result[key] = value.join(', ');
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Get the user agent from a request
    */
   protected getUserAgent(request: unknown): string | undefined {

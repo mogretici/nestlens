@@ -10,6 +10,7 @@ export interface ResolvedGraphQLConfig {
   maxQuerySize: number;
   captureVariables: boolean;
   sensitiveVariables: string[];
+  captureHeaders: boolean;
   ignoreIntrospection: boolean;
   ignoreOperations: string[];
   traceFieldResolvers: boolean;
@@ -74,6 +75,7 @@ export const GRAPHQL_DEFAULTS = {
     'ssn',
     'pin',
   ],
+  captureHeaders: true,
   ignoreIntrospection: true,
   ignoreOperations: [] as string[],
   traceFieldResolvers: false,
@@ -124,6 +126,7 @@ export function resolveGraphQLConfig(
     maxQuerySize: config.maxQuerySize ?? GRAPHQL_DEFAULTS.maxQuerySize,
     captureVariables: config.captureVariables ?? GRAPHQL_DEFAULTS.captureVariables,
     sensitiveVariables: config.sensitiveVariables ?? GRAPHQL_DEFAULTS.sensitiveVariables,
+    captureHeaders: config.captureHeaders ?? GRAPHQL_DEFAULTS.captureHeaders,
     ignoreIntrospection: config.ignoreIntrospection ?? GRAPHQL_DEFAULTS.ignoreIntrospection,
     ignoreOperations: config.ignoreOperations ?? GRAPHQL_DEFAULTS.ignoreOperations,
     traceFieldResolvers: config.traceFieldResolvers ?? GRAPHQL_DEFAULTS.traceFieldResolvers,

@@ -1,10 +1,13 @@
-import { IsOptional, IsIn, IsArray, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsIn, IsString } from 'class-validator';
 import {
   TransformLimit,
   TransformSequence,
   TransformCommaSeparatedArray,
   TransformCommaSeparatedNumbersOrErr,
   TransformStringToBoolean,
+  IsCommaSeparatedStrings,
+  IsCommaSeparatedList,
+  IsBooleanLike,
 } from './transformers';
 import { EntryType } from '@/types';
 
@@ -57,297 +60,258 @@ export class CursorQueryDto {
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   levels?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   contexts?: string[];
 
   // ==================== Query Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   queryTypes?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   sources?: string[];
 
   @IsOptional()
   @TransformStringToBoolean()
-  @IsBoolean()
+  @IsBooleanLike()
   slow?: boolean;
 
   // ==================== Request/HTTP Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   methods?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   paths?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedNumbersOrErr()
-  @IsArray()
+  @IsCommaSeparatedList()
   statuses?: (number | 'ERR')[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   controllers?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   hostnames?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   ips?: string[];
 
   // ==================== Exception Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   names?: string[];
 
   @IsOptional()
   @TransformStringToBoolean()
-  @IsBoolean()
+  @IsBooleanLike()
   resolved?: boolean;
 
   // ==================== Event Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   eventNames?: string[];
 
   // ==================== Schedule Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   scheduleStatuses?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   scheduleNames?: string[];
 
   // ==================== Job Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   jobStatuses?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   jobNames?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   queues?: string[];
 
   // ==================== Cache Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   cacheOperations?: string[];
 
   // ==================== Mail Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   mailStatuses?: string[];
 
   // ==================== Redis Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   redisStatuses?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   redisCommands?: string[];
 
   // ==================== Model Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   modelActions?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   entities?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   modelSources?: string[];
 
   // ==================== Notification Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   notificationTypes?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   notificationStatuses?: string[];
 
   // ==================== View Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   viewFormats?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   viewStatuses?: string[];
 
   // ==================== Command Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   commandStatuses?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   commandNames?: string[];
 
   // ==================== Gate Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   gateNames?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   gateResults?: string[];
 
   // ==================== Batch Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   batchStatuses?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   batchOperations?: string[];
 
   // ==================== Dump Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   dumpStatuses?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   dumpOperations?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   dumpFormats?: string[];
 
   // ==================== GraphQL Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   operationTypes?: string[];
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   operationNames?: string[];
 
   @IsOptional()
   @TransformStringToBoolean()
-  @IsBoolean()
+  @IsBooleanLike()
   hasErrors?: boolean;
 
   @IsOptional()
   @TransformStringToBoolean()
-  @IsBoolean()
+  @IsBooleanLike()
   hasN1?: boolean;
 
   // ==================== Common Filters ====================
 
   @IsOptional()
   @TransformCommaSeparatedArray()
-  @IsArray()
-  @IsString({ each: true })
+  @IsCommaSeparatedStrings()
   tags?: string[];
 
   @IsOptional()

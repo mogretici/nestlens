@@ -798,10 +798,15 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
         if (!entryTagSet || !normalizedFilterTags.some((t) => entryTagSet.has(t))) return false;
       }
 
-      // Search filter
+      // Search filter (matches payload content or entry tags)
       if (filters.search) {
+        const term = filters.search.toLowerCase();
         const payloadStr = JSON.stringify(payload).toLowerCase();
-        if (!payloadStr.includes(filters.search.toLowerCase())) return false;
+        const entryTagSet = this.entryTags.get(entry.id!);
+        const tagMatch = entryTagSet
+          ? [...entryTagSet].some((t) => t.toLowerCase().includes(term))
+          : false;
+        if (!payloadStr.includes(term) && !tagMatch) return false;
       }
 
       return true;

@@ -191,6 +191,8 @@ export interface GraphQLWatcherConfig {
   captureVariables?: boolean;
   /** Variable names to mask (case-insensitive). Default: ['password', 'token', 'secret', 'apiKey', 'api_key', 'accessToken', 'access_token', 'refreshToken', 'refresh_token', 'authorization'] */
   sensitiveVariables?: string[];
+  /** Capture request headers (sensitive headers masked). Default: true */
+  captureHeaders?: boolean;
   /** Skip introspection queries (__schema, __type). Default: true */
   ignoreIntrospection?: boolean;
   /** Operation names to ignore. Example: ['HealthCheck', 'InternalMetrics'] */

@@ -206,6 +206,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   // Toolbar states
   const queryToolbar = useGraphQLToolbar();
   const variablesToolbar = useJsonToolbar();
+  const headersToolbar = useJsonToolbar();
   const responseToolbar = useJsonToolbar();
 
   const [activeTab, setActiveTab] = useState('query');
@@ -228,6 +229,22 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
       searchBar={variablesToolbar.SearchBar}
       maxHeight={400}
     />
+  );
+
+  // Headers tab content
+  const headersCount = Object.keys(payload.headers || {}).length;
+  const headersContent = headersCount > 0 ? (
+    <ControlledInlineJson
+      data={(payload.headers || {}) as JsonValue}
+      toolbarState={headersToolbar.state}
+      searchBar={headersToolbar.SearchBar}
+      maxHeight={400}
+    />
+  ) : (
+    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+      <p>No headers captured for this operation.</p>
+      <p className="text-xs mt-1">Ensure <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">captureHeaders</code> is enabled in the GraphQL watcher config.</p>
+    </div>
   );
 
   // Response tab content
@@ -270,6 +287,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   const clientTabs = [
     { id: 'query', label: 'Query', content: queryContent },
     { id: 'variables', label: 'Variables', content: variablesContent },
+    { id: 'headers', label: `Headers${headersCount ? ` (${headersCount})` : ''}`, content: headersContent },
   ];
 
   // Server-side tabs (what the server returned/processed)
@@ -288,6 +306,8 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
         return <queryToolbar.Toolbar code={payload.query} />;
       case 'variables':
         return <variablesToolbar.Toolbar data={(payload.variables || {}) as JsonValue} />;
+      case 'headers':
+        return headersCount > 0 ? <headersToolbar.Toolbar data={(payload.headers || {}) as JsonValue} /> : null;
       default:
         return null;
     }

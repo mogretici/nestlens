@@ -778,10 +778,12 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       params.push(...normalizedTags);
     }
 
-    // Search filter (searches in payload)
+    // Search filter (searches in payload and entry tags)
     if (filters.search) {
-      conditions.push(`e.payload LIKE ?`);
-      params.push(`%${filters.search}%`);
+      conditions.push(
+        `(e.payload LIKE ? OR EXISTS (SELECT 1 FROM nestlens_tags st WHERE st.entry_id = e.id AND st.tag LIKE ?))`,
+      );
+      params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
     return { conditions, params };
