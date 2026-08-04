@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { parseDate } from '../utils/date';
 import { Hexagon } from 'lucide-react';
+import EntrySearchInput from '../components/EntrySearchInput';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters, HeaderFilter } from '../hooks/useEntryFilters';
 import {
@@ -16,6 +17,7 @@ import DataTable, {
   DurationCell,
   GraphQLErrorBadge,
   N1WarningBadge,
+  TagsList,
 } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { GraphQLEntry, isGraphQLEntry } from '../types';
@@ -33,6 +35,7 @@ export default function GraphQLPage() {
     serverFilters: baseServerFilters,
     headerFilters: baseHeaderFilters,
     hasFilters: baseHasFilters,
+    addFilter,
   } = useEntryFilters('graphql');
 
   // Add boolean filters to server filters
@@ -169,6 +172,20 @@ export default function GraphQLPage() {
       ),
     },
     {
+      key: 'tags',
+      header: 'Tags',
+      minWidth: '150px',
+      render: (entry) => (
+        <TagsList
+          tags={(entry.tags || []).filter(
+            (t) => !['query', 'mutation', 'subscription'].includes(t.toLowerCase())
+          )}
+          max={3}
+          onTagClick={(tag, e) => { e.stopPropagation(); addFilter('tags', tag); }}
+        />
+      ),
+    },
+    {
       key: 'time',
       header: 'Time',
       width: '180px',
@@ -179,7 +196,7 @@ export default function GraphQLPage() {
         </TextCell>
       ),
     },
-  ], [handleFilterByErrors, handleFilterByN1]);
+  ], [handleFilterByErrors, handleFilterByN1, addFilter]);
 
   // Loading spinner
   if (loading && entries.length === 0) {
@@ -208,6 +225,8 @@ export default function GraphQLPage() {
       />
 
       <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+        <EntrySearchInput placeholder="Search by operation, type, tag, or query content..." />
+
         <NewEntriesButton
           count={newEntriesCount}
           onClick={loadNew}

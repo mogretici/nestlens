@@ -118,8 +118,14 @@ export interface GraphQLPayload {
   ip?: string;
   /** User agent string */
   userAgent?: string;
+  /** Request headers (sensitive values masked) */
+  headers?: Record<string, string>;
   /** Authenticated user info */
   user?: RequestUser;
+
+  // Tagging
+  /** Custom tags for this operation */
+  tags?: string[];
 
   // Batching (for batched queries like Apollo batch link)
   /** Index in the batch (0-based) */

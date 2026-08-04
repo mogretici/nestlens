@@ -310,7 +310,9 @@ export interface GraphQLPayload {
   potentialN1?: PotentialN1Warning[];
   ip?: string;
   userAgent?: string;
+  headers?: Record<string, string>;
   user?: RequestUser;
+  tags?: string[];
   batchIndex?: number;
   batchSize?: number;
   batchId?: string;

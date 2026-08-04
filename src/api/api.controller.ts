@@ -13,9 +13,9 @@ import {
   UseGuards,
   UseInterceptors,
   UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { NestLensValidationPipe } from './pipes';
 import { STORAGE, StorageInterface } from '@/core';
 import { PruningService } from '@/core';
 import { CollectorService } from '@/core';
@@ -32,13 +32,7 @@ import { NestLensApiException } from '@/api/exceptions';
 @UseGuards(NestLensGuard)
 @UseFilters(NestLensApiExceptionFilter)
 @UseInterceptors(NestLensApiResponseInterceptor)
-@UsePipes(
-  new ValidationPipe({
-    transform: true,
-    whitelist: true,
-    transformOptions: { enableImplicitConversion: true },
-  }),
-)
+@UsePipes(new NestLensValidationPipe())
 export class NestLensApiController {
   private lastPruneRun: Date | null = null;
   private nextPruneRun: Date | null = null;

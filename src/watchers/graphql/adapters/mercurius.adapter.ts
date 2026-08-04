@@ -256,6 +256,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         const ip = request?.ip;
         const userAgent = request?.headers?.['user-agent'];
         const user = adapter.extractUser({ user: request?.user });
+        const headers = adapter.captureRequestHeaders(request);
 
         // Calculate depth
         const depthResult = calculateDepth(tracking.query);
@@ -312,6 +313,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           potentialN1: n1Warnings.length > 0 ? n1Warnings : undefined,
           ip,
           userAgent,
+          headers,
           user,
           fieldTraces,
         };
@@ -327,10 +329,11 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
               request: {
                 ip,
                 userAgent,
+                headers,
               },
             });
             if (tags && tags.length > 0) {
-              (payload as unknown as { tags?: string[] }).tags = tags;
+              payload.tags = tags;
             }
           } catch {
             // Ignore tag errors

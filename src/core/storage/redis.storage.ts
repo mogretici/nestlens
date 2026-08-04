@@ -283,12 +283,13 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       });
     }
 
+    // Hydrate tags before filtering so tag-aware filters (e.g. search) work
+    let hydratedEntries = await this.hydrateEntriesWithTags(entries);
+
     // Apply advanced filters
     if (params.filters) {
-      entries = this.applyAdvancedFilters(entries, params.filters);
+      hydratedEntries = this.applyAdvancedFilters(hydratedEntries, params.filters);
     }
-
-    const hydratedEntries = await this.hydrateEntriesWithTags(entries);
     const total = await client.zcard(indexKey);
 
     return {
@@ -774,8 +775,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         if (!filters.levels.includes(payload.level as string)) return false;
       }
       if (filters.search) {
+        const term = filters.search.toLowerCase();
         const payloadStr = JSON.stringify(payload).toLowerCase();
-        if (!payloadStr.includes(filters.search.toLowerCase())) return false;
+        const tagMatch = (entry.tags || []).some((t) => t.toLowerCase().includes(term));
+        if (!payloadStr.includes(term) && !tagMatch) return false;
       }
       if (filters.resolved !== undefined) {
         const isResolved = !!entry.resolvedAt;
