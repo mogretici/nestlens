@@ -1,3 +1,11 @@
+# [0.5.0](https://github.com/mogretici/nestlens/compare/v0.4.2...v0.5.0) (2026-08-04)
+
+
+### Features
+
+* GraphQL headers & tags, entry search, and duplicate-package-safe API validation ([a735cf8](https://github.com/mogretici/nestlens/commit/a735cf8de75d3c35f9a57519493e767bbbbceb08))
+* **graphql:** make masked request headers configurable ([60d1420](https://github.com/mogretici/nestlens/commit/60d1420a1cd7f1af5d3a685c7060ee702fb612be))
+
 ## [0.4.2](https://github.com/mogretici/nestlens/compare/v0.4.1...v0.4.2) (2026-06-30)
 
 
