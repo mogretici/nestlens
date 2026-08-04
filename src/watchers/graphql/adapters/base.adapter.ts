@@ -172,7 +172,7 @@ export abstract class BaseGraphQLAdapter {
    * Mask sensitive header values
    */
   protected maskHeaders(headers: Record<string, unknown>): Record<string, string> {
-    const sensitiveHeaders = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token'];
+    const sensitiveHeaders = this.config.sensitiveHeaders.map((h) => h.toLowerCase());
     const result: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(headers)) {
@@ -180,6 +180,8 @@ export abstract class BaseGraphQLAdapter {
         result[key] = '***';
       } else if (typeof value === 'string') {
         result[key] = value;
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
+        result[key] = String(value);
       } else if (Array.isArray(value)) {
         result[key] = value.join(', ');
       }
