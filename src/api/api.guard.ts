@@ -8,7 +8,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 
 /**
