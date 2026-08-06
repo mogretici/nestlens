@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';

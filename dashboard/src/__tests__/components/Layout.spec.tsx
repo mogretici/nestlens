@@ -68,11 +68,11 @@ describe('Layout', () => {
 
       // Both mobile and desktop navs exist, so we check for at least one
       expect(screen.getAllByText('Overview').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Monitoring').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Debugging').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Core').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Background').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Storage').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Advanced').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Data').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Communication').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('System').length).toBeGreaterThan(0);
     });
 
     it('renders navigation items', () => {
@@ -99,23 +99,21 @@ describe('Layout', () => {
     it('collapses group on header click', () => {
       renderLayout();
 
-      // Click on Monitoring group header
-      const groupHeaders = screen.getAllByText('Monitoring');
+      // Click on Core group header
+      const groupHeaders = screen.getAllByText('Core');
       fireEvent.click(groupHeaders[0]);
 
       // Requests should be hidden (collapsed)
       // Check aria-expanded
-      const buttons = screen.getAllByRole('button', { name: /monitoring/i });
-      const monitoringButton = buttons.find((btn) =>
-        btn.textContent?.includes('Monitoring')
-      );
-      expect(monitoringButton).toHaveAttribute('aria-expanded', 'false');
+      const buttons = screen.getAllByRole('button', { name: /core/i });
+      const coreButton = buttons.find((btn) => btn.textContent?.includes('Core'));
+      expect(coreButton).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('expands collapsed group on click', () => {
       renderLayout();
 
-      const groupHeaders = screen.getAllByText('Monitoring');
+      const groupHeaders = screen.getAllByText('Core');
 
       // Collapse
       fireEvent.click(groupHeaders[0]);
@@ -123,21 +121,19 @@ describe('Layout', () => {
       // Expand
       fireEvent.click(groupHeaders[0]);
 
-      const buttons = screen.getAllByRole('button', { name: /monitoring/i });
-      const monitoringButton = buttons.find((btn) =>
-        btn.textContent?.includes('Monitoring')
-      );
-      expect(monitoringButton).toHaveAttribute('aria-expanded', 'true');
+      const buttons = screen.getAllByRole('button', { name: /core/i });
+      const coreButton = buttons.find((btn) => btn.textContent?.includes('Core'));
+      expect(coreButton).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('persists collapsed state to localStorage', () => {
       renderLayout();
 
-      const groupHeaders = screen.getAllByText('Monitoring');
+      const groupHeaders = screen.getAllByText('Core');
       fireEvent.click(groupHeaders[0]);
 
       const saved = localStorage.getItem('nestlens-collapsed-groups');
-      expect(saved).toBe(JSON.stringify(['Monitoring']));
+      expect(saved).toBe(JSON.stringify(['Core']));
     });
   });
 
@@ -530,33 +526,31 @@ describe('Layout', () => {
 
   describe('Collapsed Groups Persistence', () => {
     it('loads collapsed groups from localStorage', () => {
-      localStorage.setItem('nestlens-collapsed-groups', JSON.stringify(['Monitoring']));
+      localStorage.setItem('nestlens-collapsed-groups', JSON.stringify(['Core']));
 
       renderLayout();
 
-      // Monitoring group should be collapsed
-      const buttons = screen.getAllByRole('button', { name: /monitoring/i });
-      const monitoringButton = buttons.find((btn) =>
-        btn.textContent?.includes('Monitoring')
-      );
-      expect(monitoringButton).toHaveAttribute('aria-expanded', 'false');
+      // Core group should be collapsed
+      const buttons = screen.getAllByRole('button', { name: /core/i });
+      const coreButton = buttons.find((btn) => btn.textContent?.includes('Core'));
+      expect(coreButton).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('toggles multiple groups independently', () => {
       renderLayout();
 
-      // Collapse Monitoring
-      const monitoringHeaders = screen.getAllByText('Monitoring');
-      fireEvent.click(monitoringHeaders[0]);
+      // Collapse Core
+      const coreHeaders = screen.getAllByText('Core');
+      fireEvent.click(coreHeaders[0]);
 
-      // Collapse Debugging
-      const debuggingHeaders = screen.getAllByText('Debugging');
-      fireEvent.click(debuggingHeaders[0]);
+      // Collapse Data
+      const dataHeaders = screen.getAllByText('Data');
+      fireEvent.click(dataHeaders[0]);
 
       // Both should be in localStorage
       const saved = JSON.parse(localStorage.getItem('nestlens-collapsed-groups') || '[]');
-      expect(saved).toContain('Monitoring');
-      expect(saved).toContain('Debugging');
+      expect(saved).toContain('Core');
+      expect(saved).toContain('Data');
     });
   });
 
@@ -577,15 +571,13 @@ describe('Layout', () => {
       renderLayout();
 
       // Collapse a group
-      const monitoringHeaders = screen.getAllByText('Monitoring');
-      fireEvent.click(monitoringHeaders[0]);
+      const coreHeaders = screen.getAllByText('Core');
+      fireEvent.click(coreHeaders[0]);
 
       // Check aria-expanded is false
-      const buttons = screen.getAllByRole('button', { name: /monitoring/i });
-      const monitoringButton = buttons.find((btn) =>
-        btn.textContent?.includes('Monitoring')
-      );
-      expect(monitoringButton).toHaveAttribute('aria-expanded', 'false');
+      const buttons = screen.getAllByRole('button', { name: /core/i });
+      const coreButton = buttons.find((btn) => btn.textContent?.includes('Core'));
+      expect(coreButton).toHaveAttribute('aria-expanded', 'false');
     });
   });
 });

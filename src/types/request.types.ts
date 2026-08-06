@@ -1,4 +1,4 @@
-import { Request } from 'express';
+import type { Request } from 'express';
 
 /**
  * Extended Express Request with NestLens request ID
