@@ -19,6 +19,8 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { get as httpGet, IncomingMessage } from 'http';
 import { NestLensModule } from '../../nestlens.module';
+import { DEFAULT_CONFIG } from '../../nestlens.config';
+import { toBaseHref } from '../../api/route-path';
 
 @Controller('demo')
 class DemoController {
@@ -110,7 +112,7 @@ describe.each<AdapterName>(['Express', 'Fastify'])('SSE live-tail on %s adapter'
   });
 
   it('pushes a newly collected entry to a connected client in real time', async () => {
-    const sse = openSse(`${baseUrl}/__nestlens__/stream`);
+    const sse = openSse(`${baseUrl}${toBaseHref(DEFAULT_CONFIG.path)}/__nestlens__/stream`);
     try {
       // Give the connection a moment to establish before producing an entry.
       await sleep(150);

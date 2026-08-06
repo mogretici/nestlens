@@ -10,6 +10,7 @@ import {
   LoadMoreButton,
 } from '../components/PaginationControls';
 import PageHeader, { ToggleSwitch } from '../components/PageHeader';
+import EntrySearchInput from '../components/EntrySearchInput';
 import DataTable, {
   Column,
   TextCell,
@@ -166,6 +167,8 @@ export default function QueriesPage() {
 
       {/* Content */}
       <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+        <EntrySearchInput placeholder="Search by SQL, table, source, tag, or content..." />
+
         {/* New entries button */}
         <NewEntriesButton
           count={newEntriesCount}

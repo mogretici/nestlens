@@ -27,8 +27,16 @@ export function TransformCommaSeparatedArray() {
 export function TransformCommaSeparatedNumbersOrErr() {
   return Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null || value === '') return undefined;
-    const parts = String(value).split(',').filter(Boolean);
-    return parts.map((s) => (s.toUpperCase() === 'ERR' ? ('ERR' as const) : parseInt(s, 10)));
+    const parts = Array.isArray(value)
+      ? value.filter((v) => v !== null && v !== undefined && v !== '')
+      : String(value).split(',').filter(Boolean);
+    return parts.map((s) =>
+      typeof s === 'number'
+        ? s
+        : String(s).toUpperCase() === 'ERR'
+          ? ('ERR' as const)
+          : parseInt(String(s), 10),
+    );
   });
 }
 
@@ -38,6 +46,7 @@ export function TransformCommaSeparatedNumbersOrErr() {
 export function TransformStringToBoolean() {
   return Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null) return undefined;
+    if (typeof value === 'boolean') return value;
     return value === 'true';
   });
 }

@@ -1,3 +1,32 @@
+# [0.6.0](https://github.com/mogretici/nestlens/compare/v0.5.2...v0.6.0) (2026-08-06)
+
+
+### Features
+
+* honour the configured path when mounting the dashboard and API ([2c58bae](https://github.com/mogretici/nestlens/commit/2c58baed91489475d0a7b8fe01ccb03271efbaff)), closes [#10](https://github.com/mogretici/nestlens/issues/10)
+
+## [0.5.2](https://github.com/mogretici/nestlens/compare/v0.5.1...v0.5.2) (2026-08-06)
+
+
+### Bug Fixes
+
+* **dashboard:** make duration and number formatting deterministic ([c37ad7c](https://github.com/mogretici/nestlens/commit/c37ad7c3cf9f910670ff1d5410759e28c5006814))
+
+## [0.5.1](https://github.com/mogretici/nestlens/compare/v0.5.0...v0.5.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* stop importing @nestjs/swagger as an undeclared dependency ([213a766](https://github.com/mogretici/nestlens/commit/213a766950717056f886a968a5783595a8c6fd64))
+
+# [0.5.0](https://github.com/mogretici/nestlens/compare/v0.4.2...v0.5.0) (2026-08-04)
+
+
+### Features
+
+* GraphQL headers & tags, entry search, and duplicate-package-safe API validation ([a735cf8](https://github.com/mogretici/nestlens/commit/a735cf8de75d3c35f9a57519493e767bbbbceb08))
+* **graphql:** make masked request headers configurable ([60d1420](https://github.com/mogretici/nestlens/commit/60d1420a1cd7f1af5d3a685c7060ee702fb612be))
+
 ## [0.4.2](https://github.com/mogretici/nestlens/compare/v0.4.1...v0.4.2) (2026-06-30)
 
 

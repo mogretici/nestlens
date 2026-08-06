@@ -75,6 +75,9 @@ export class TagService {
       case 'dump':
         this.addDumpTags(entry, tags);
         break;
+      case 'graphql':
+        this.addGraphQLTags(entry, tags);
+        break;
     }
 
     // Add tags to storage if entry has an ID
@@ -124,6 +127,43 @@ export class TagService {
     // Custom tags from payload
     if (payload.tags && Array.isArray(payload.tags)) {
       tags.push(...payload.tags.map((t) => t.toUpperCase()));
+    }
+  }
+
+  private addGraphQLTags(entry: Entry, tags: string[]): void {
+    if (entry.type !== 'graphql') return;
+    const payload = entry.payload;
+
+    // Error/success tags
+    if (payload.hasErrors || payload.statusCode >= 400) {
+      tags.push('ERROR');
+    } else {
+      tags.push('SUCCESS');
+    }
+
+    // Slow operation (> 1000ms)
+    if (payload.duration && payload.duration > 1000) {
+      tags.push('SLOW');
+    }
+
+    // Potential N+1 queries detected
+    if (payload.potentialN1 && payload.potentialN1.length > 0) {
+      tags.push('N+1');
+    }
+
+    // User tag
+    if (payload.user?.id) {
+      tags.push(`USER:${payload.user.id}`);
+    }
+
+    // Custom tags from payload (set via the graphql watcher's tags config)
+    if (payload.tags && Array.isArray(payload.tags)) {
+      for (const tag of payload.tags) {
+        const upper = tag.toUpperCase();
+        if (!tags.includes(upper)) {
+          tags.push(upper);
+        }
+      }
     }
   }
 

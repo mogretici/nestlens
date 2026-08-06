@@ -13,9 +13,8 @@ import {
   UseGuards,
   UseInterceptors,
   UsePipes,
-  ValidationPipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { NestLensValidationPipe } from './pipes';
 import { STORAGE, StorageInterface } from '@/core';
 import { PruningService } from '@/core';
 import { CollectorService } from '@/core';
@@ -27,18 +26,11 @@ import { NestLensApiExceptionFilter } from '@/api/filters';
 import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
 
-@ApiTags('NestLens')
 @Controller(`${NESTLENS_API_PREFIX}/api`)
 @UseGuards(NestLensGuard)
 @UseFilters(NestLensApiExceptionFilter)
 @UseInterceptors(NestLensApiResponseInterceptor)
-@UsePipes(
-  new ValidationPipe({
-    transform: true,
-    whitelist: true,
-    transformOptions: { enableImplicitConversion: true },
-  }),
-)
+@UsePipes(new NestLensValidationPipe())
 export class NestLensApiController {
   private lastPruneRun: Date | null = null;
   private nextPruneRun: Date | null = null;
@@ -76,22 +68,6 @@ export class NestLensApiController {
   }
 
   @Get('entries')
-  @ApiOperation({ summary: 'Get paginated entries with offset pagination' })
-  @ApiQuery({ name: 'type', required: false, description: 'Filter by entry type' })
-  @ApiQuery({ name: 'requestId', required: false, description: 'Filter by request ID' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Number of entries per page (max 100)' })
-  @ApiQuery({ name: 'offset', required: false, description: 'Offset for pagination' })
-  @ApiQuery({
-    name: 'from',
-    required: false,
-    description: 'Filter entries from this date (ISO 8601)',
-  })
-  @ApiQuery({
-    name: 'to',
-    required: false,
-    description: 'Filter entries until this date (ISO 8601)',
-  })
-  @ApiResponse({ status: 200, description: 'Paginated list of entries' })
   async getEntries(
     @Query('type') type?: EntryType,
     @Query('requestId') requestId?: string,
@@ -130,9 +106,6 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflicts
    */
   @Get('entries/cursor')
-  @ApiOperation({ summary: 'Get entries with cursor-based pagination and filtering' })
-  @ApiResponse({ status: 200, description: 'Cursor-paginated list of entries with filters' })
-  @ApiResponse({ status: 400, description: 'Invalid query parameters' })
   async getEntriesWithCursor(
     @Query() query: CursorQueryDto,
   ): Promise<CursorPaginatedResponse<Entry>> {
@@ -181,10 +154,6 @@ export class NestLensApiController {
   }
 
   @Get('entries/:id')
-  @ApiOperation({ summary: 'Get a single entry by ID' })
-  @ApiParam({ name: 'id', type: 'number', description: 'Entry ID' })
-  @ApiResponse({ status: 200, description: 'Entry with related entries if applicable' })
-  @ApiResponse({ status: 404, description: 'Entry not found' })
   async getEntry(@Param('id', ParseIntPipe) id: number) {
     const entry = await this.storage.findById(id);
 
@@ -209,8 +178,6 @@ export class NestLensApiController {
   }
 
   @Get('stats')
-  @ApiOperation({ summary: 'Get entry statistics by type' })
-  @ApiResponse({ status: 200, description: 'Statistics object with counts by entry type' })
   async getStats() {
     const stats = await this.storage.getStats();
     return { data: stats };

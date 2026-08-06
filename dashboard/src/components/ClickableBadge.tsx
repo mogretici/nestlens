@@ -61,6 +61,11 @@ const getUrlParam = (value: string, filterType?: FilterType): string => {
   }
 
   // Auto-detection when no filterType is specified (fallback for legacy usage)
+  // USER:<id> auto-tags contain ':' and would be misdetected as hostnames
+  if (/^user:/i.test(value)) {
+    return 'tags';
+  }
+
   // Check for IPv4 addresses FIRST (before status code detection)
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(value)) {
     return 'ips';

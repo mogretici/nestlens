@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Entry } from '../types';
+import { nestlensUrl } from '../basePath';
 
 /** NestLens Server-Sent Events endpoint (same origin as the API). */
 function getStreamUrl(): string {
-  return `${window.location.origin}/__nestlens__/stream`;
+  return nestlensUrl('/stream');
 }
 
 export interface UseEntryStreamResult {

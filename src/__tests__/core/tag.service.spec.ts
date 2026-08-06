@@ -1053,6 +1053,151 @@ describe('TagService', () => {
       });
     });
 
+    describe('GraphQL Tags', () => {
+      it('should add SUCCESS tag when there are no errors', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: { operationName: 'GetUser', statusCode: 200, duration: 10 },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('SUCCESS');
+        expect(tags).not.toContain('ERROR');
+      });
+
+      it('should add ERROR tag when payload.hasErrors is true', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: { operationName: 'GetUser', hasErrors: true, statusCode: 200, duration: 10 },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('ERROR');
+        expect(tags).not.toContain('SUCCESS');
+      });
+
+      it('should add ERROR tag when statusCode >= 400', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: { operationName: 'GetUser', statusCode: 500, duration: 10 },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('ERROR');
+      });
+
+      it('should add SLOW tag for operations > 1000ms', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: { operationName: 'GetUser', statusCode: 200, duration: 1500 },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('SLOW');
+      });
+
+      it('should add N+1 tag when potential N+1 queries are detected', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: {
+            operationName: 'GetUsers',
+            statusCode: 200,
+            duration: 10,
+            potentialN1: [{ resolver: 'User.posts', count: 20 }],
+          },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('N+1');
+      });
+
+      it('should add USER tag when user.id exists', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: {
+            operationName: 'GetUser',
+            statusCode: 200,
+            duration: 10,
+            user: { id: 'user-42' },
+          },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('USER:user-42');
+      });
+
+      it('should include custom tags (uppercased) from the payload', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: {
+            operationName: 'GetUser',
+            statusCode: 200,
+            duration: 10,
+            tags: ['checkout', 'critical'],
+          },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags).toContain('CHECKOUT');
+        expect(tags).toContain('CRITICAL');
+      });
+
+      it('should not duplicate a custom tag that matches an auto tag', async () => {
+        // Arrange
+        const entry = {
+          id: 1,
+          type: 'graphql' as const,
+          payload: {
+            operationName: 'GetUser',
+            statusCode: 200,
+            duration: 10,
+            tags: ['success'],
+          },
+        } as unknown as Entry;
+
+        // Act
+        const tags = await service.autoTag(entry);
+
+        // Assert
+        expect(tags.filter((t) => t === 'SUCCESS')).toHaveLength(1);
+      });
+    });
+
     describe('Entry without ID', () => {
       it('should not call storage.addTags when entry has no id', async () => {
         // Arrange

@@ -11,14 +11,12 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { TagService } from '../core/tag.service';
 import { NESTLENS_API_PREFIX } from '../nestlens.config';
 import { NestLensGuard } from './api.guard';
 import { NestLensApiExceptionFilter } from './filters/api-exception.filter';
 import { NestLensApiResponseInterceptor } from './interceptors/api-response.interceptor';
 
-@ApiTags('NestLens Tags')
 @Controller(`${NESTLENS_API_PREFIX}/api/tags`)
 @UseGuards(NestLensGuard)
 @UseFilters(NestLensApiExceptionFilter)

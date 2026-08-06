@@ -7,10 +7,14 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import { createReadStream, existsSync } from 'fs';
+import { createReadStream, existsSync, readFileSync } from 'fs';
 import { extname, join, resolve, sep } from 'path';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NestLensGuard } from './api.guard';
+import { toBaseHref } from './route-path';
+
+const escapeHtmlAttribute = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**
  * Content-Type lookup for the static dashboard assets.
@@ -38,6 +42,8 @@ const MIME_TYPES: Record<string, string> = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+// The prefix here is only the default; `NestLensModule.forRoot()` rewrites it
+// from `config.path` before Nest resolves routes.
 @Controller('nestlens')
 @UseGuards(NestLensGuard)
 export class DashboardController {
@@ -267,8 +273,28 @@ export class DashboardController {
     return this.serveIndexHtml();
   }
 
+  /**
+   * The dashboard bundle is built once but can be mounted anywhere, so the
+   * mount point is injected into `index.html` at request time: `<base>` resolves
+   * the bundle's relative asset URLs, and `window.__NESTLENS_BASE__` tells the
+   * SPA where to put its router basename and API calls.
+   */
   private serveIndexHtml(): StreamableFile {
-    return this.streamFile('index.html', 'Dashboard not found');
+    const absolutePath = this.resolveDashboardFile('index.html', 'Dashboard not found');
+    const html = readFileSync(absolutePath, 'utf8');
+
+    return new StreamableFile(Buffer.from(this.injectBasePath(html), 'utf8'), {
+      type: MIME_TYPES['.html'] as string,
+    });
+  }
+
+  private injectBasePath(html: string): string {
+    const baseHref = toBaseHref(this.config.path);
+    const injection =
+      `<base href="${escapeHtmlAttribute(`${baseHref}/`)}" />` +
+      `<script>window.__NESTLENS_BASE__=${JSON.stringify(baseHref)}</script>`;
+
+    return html.replace('<head>', `<head>${injection}`);
   }
 
   /**

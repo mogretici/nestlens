@@ -1,0 +1,59 @@
+name: E2E
+
+# Deliberately manual. The suite drives three web servers across 126 tests and
+# takes far longer on a two-core runner than it does locally, so it is not worth
+# gating every pull request on. Trigger it from the Actions tab before a release
+# or when touching the dashboard.
+on:
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: Browser to run
+        type: choice
+        default: chromium
+        options: [chromium, firefox, webkit]
+
+jobs:
+  e2e:
+    name: E2E (${{ inputs.browser }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install dashboard dependencies
+        run: npm ci
+        working-directory: dashboard
+
+      # The example app installs NestLens from `file:..` as a copy (see
+      # example/.npmrc), so dist/ has to exist before its install runs.
+      - name: Build library and dashboard
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: example
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps ${{ inputs.browser }}
+
+      - name: Run E2E tests
+        run: npm run test:e2e -- --project=${{ inputs.browser }}
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ inputs.browser }}
+          path: playwright-report/
+          retention-days: 7

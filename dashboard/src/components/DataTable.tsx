@@ -470,11 +470,12 @@ export function DurationCell({ ms, slowThreshold = 1000, verySlowThreshold = 500
     colorClass = 'text-gray-600 dark:text-gray-300';
   }
 
-  // Format duration
+  // Format duration: whole milliseconds render without trailing decimals,
+  // fractional milliseconds keep two decimals, seconds always show two decimals.
   if (ms >= 1000) {
     displayValue = `${(ms / 1000).toFixed(2)}s`;
   } else {
-    displayValue = `${ms.toFixed(2)}ms`;
+    displayValue = `${Number.isInteger(ms) ? ms : ms.toFixed(2)}ms`;
   }
 
   return (

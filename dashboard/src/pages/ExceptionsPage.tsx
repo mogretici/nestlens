@@ -10,6 +10,7 @@ import {
   LoadMoreButton,
 } from '../components/PaginationControls';
 import PageHeader, { FilterTabs } from '../components/PageHeader';
+import EntrySearchInput from '../components/EntrySearchInput';
 import DataTable, {
   Column,
   TextCell,
@@ -231,6 +232,8 @@ export default function ExceptionsPage() {
 
       {/* Content */}
       <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+        <EntrySearchInput placeholder="Search by exception name, message, tag, or content..." />
+
         {/* New entries button */}
         <NewEntriesButton
           count={newEntriesCount}
