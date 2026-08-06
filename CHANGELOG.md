@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/mogretici/nestlens/compare/v0.5.2...v0.6.0) (2026-08-06)
+
+
+### Features
+
+* honour the configured path when mounting the dashboard and API ([2c58bae](https://github.com/mogretici/nestlens/commit/2c58baed91489475d0a7b8fe01ccb03271efbaff)), closes [#10](https://github.com/mogretici/nestlens/issues/10)
+
 ## [0.5.2](https://github.com/mogretici/nestlens/compare/v0.5.1...v0.5.2) (2026-08-06)
 
 
