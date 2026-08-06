@@ -10,8 +10,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "rimraf dist && tsc && tsc-alias && npm run build:dashboard",
-    "build:lib": "tsc && tsc-alias",
+    "build": "rimraf dist && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json && npm run build:dashboard",
+    "build:lib": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build:dashboard": "cd dashboard && npm run build && mkdir -p ../dist/dashboard/public && cp -r dist/* ../dist/dashboard/public/",
     "dev": "tsc --watch",
     "lint": "eslint \"src/**/*.ts\"",
