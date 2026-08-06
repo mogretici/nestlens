@@ -54,6 +54,35 @@ http://localhost:3000/nestlens
 
 You should see the NestLens dashboard!
 
+To mount it somewhere else, set [`path`](/docs/configuration/basic-config) — the
+dashboard and its API move together:
+
+```typescript
+NestLensModule.forRoot({ path: '/admin/monitoring' });
+// Dashboard at http://localhost:3000/admin/monitoring
+```
+
+### Getting a 403 instead?
+
+```json
+{ "message": "NestLens is not available in this environment", "statusCode": 403 }
+```
+
+NestLens only serves the dashboard in `development`, `local` and `test` by
+default, regardless of `enabled`. If your `NODE_ENV` is anything else — `dev`,
+`staging`, `production` — add it explicitly:
+
+```typescript
+NestLensModule.forRoot({
+  authorization: {
+    allowedEnvironments: ['development', 'local', 'test', 'dev'],
+  },
+});
+```
+
+See [Authorization](/docs/configuration/authorization) for IP whitelisting and
+role-based access.
+
 ## What's Tracked by Default
 
 With zero configuration, NestLens tracks:

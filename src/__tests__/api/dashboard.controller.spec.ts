@@ -3,13 +3,14 @@ import { NotFoundException, StreamableFile } from '@nestjs/common';
 import { DashboardController } from '../../api/dashboard.controller';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 
-// Mock fs module (createReadStream returns a real Readable so StreamableFile accepts it)
+// Mock fs module (createReadStream returns a real Readable so StreamableFile accepts it).
+// readFileSync is only used for index.html, which the controller reads as utf8 text.
 jest.mock('fs', () => {
   const { Readable } = require('stream');
   return {
     existsSync: jest.fn(),
     createReadStream: jest.fn(() => Readable.from(['<html></html>'])),
-    readFileSync: jest.fn(() => Buffer.from('<html></html>')),
+    readFileSync: jest.fn(() => '<html><head></head><body></body></html>'),
   };
 });
 
@@ -45,6 +46,37 @@ describe('DashboardController', () => {
     it('should set dashboard path correctly', () => {
       expect(controller['dashboardPath']).toContain('dashboard');
       expect(controller['dashboardPath']).toContain('public');
+    });
+  });
+
+  describe('base path injection', () => {
+    const servedHtml = async (config: NestLensConfig): Promise<string> => {
+      const module = await Test.createTestingModule({
+        controllers: [DashboardController],
+        providers: [{ provide: NESTLENS_CONFIG, useValue: config }],
+      }).compile();
+
+      const stream = module.get<DashboardController>(DashboardController).serveDashboard();
+
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream.getStream()) {
+        chunks.push(Buffer.from(chunk as Buffer));
+      }
+      return Buffer.concat(chunks).toString('utf8');
+    };
+
+    it('tells the SPA where NestLens is mounted', async () => {
+      const html = await servedHtml({ enabled: true, path: '/admin/monitoring' });
+
+      expect(html).toContain('<base href="/admin/monitoring/" />');
+      expect(html).toContain('window.__NESTLENS_BASE__="/admin/monitoring"');
+    });
+
+    it('falls back to the default mount point', async () => {
+      const html = await servedHtml({ enabled: true });
+
+      expect(html).toContain('<base href="/nestlens/" />');
+      expect(html).toContain('window.__NESTLENS_BASE__="/nestlens"');
     });
   });
 

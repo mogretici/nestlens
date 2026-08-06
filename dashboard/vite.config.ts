@@ -27,7 +27,9 @@ const trailingSlashRedirect = () => ({
 
 export default defineConfig({
   plugins: [react(), trailingSlashRedirect()],
-  base: '/nestlens/',
+  // Relative asset URLs so one build can be mounted at any `NestLensConfig.path`.
+  // DashboardController injects a matching <base href> into index.html.
+  base: './',
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },

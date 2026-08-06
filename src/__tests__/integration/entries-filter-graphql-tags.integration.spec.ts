@@ -19,7 +19,8 @@ import { ExpressAdapter } from '@nestjs/platform-express';
 import request from 'supertest';
 import { NestLensModule } from '../../nestlens.module';
 import { CollectorService } from '../../core/collector.service';
-import { NESTLENS_API_PREFIX } from '../../nestlens.config';
+import { DEFAULT_CONFIG, NESTLENS_API_PREFIX } from '../../nestlens.config';
+import { toBaseHref } from '../../api/route-path';
 import type { Entry } from '../../types';
 
 @Controller('demo')
@@ -36,7 +37,9 @@ class DemoController {
 })
 class AppModule {}
 
-const CURSOR = `/${NESTLENS_API_PREFIX}/api/entries/cursor`;
+// The API lives under the configured mount point, so derive it from the default
+// rather than hard-coding a prefix.
+const CURSOR = `${toBaseHref(DEFAULT_CONFIG.path)}/${NESTLENS_API_PREFIX}/api/entries/cursor`;
 
 describe('Entries filter pipe + GraphQL tags + search (real HTTP)', () => {
   let app: INestApplication;
@@ -74,14 +77,12 @@ describe('Entries filter pipe + GraphQL tags + search (real HTTP)', () => {
   });
 
   it('accepts several comma-separated / boolean filters together (no 400)', async () => {
-    const res = await request(httpServer())
-      .get(CURSOR)
-      .query({
-        methods: 'GET,POST',
-        operationNames: 'GetUser',
-        hasErrors: 'false',
-        levels: 'log,error',
-      });
+    const res = await request(httpServer()).get(CURSOR).query({
+      methods: 'GET,POST',
+      operationNames: 'GetUser',
+      hasErrors: 'false',
+      levels: 'log,error',
+    });
     expect(res.status).toBe(200);
   });
 
