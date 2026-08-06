@@ -1,3 +1,10 @@
+## [0.5.2](https://github.com/mogretici/nestlens/compare/v0.5.1...v0.5.2) (2026-08-06)
+
+
+### Bug Fixes
+
+* **dashboard:** make duration and number formatting deterministic ([c37ad7c](https://github.com/mogretici/nestlens/commit/c37ad7c3cf9f910670ff1d5410759e28c5006814))
+
 ## [0.5.1](https://github.com/mogretici/nestlens/compare/v0.5.0...v0.5.1) (2026-08-06)
 
 
