@@ -40,9 +40,18 @@ npm run lint               # ESLint on src/**/*.ts
 
 ### Example App
 ```bash
+npm run build              # Required first — the example installs dist/, not src/
+cd example && npm install  # Re-run after every library rebuild
 cd example && npm start    # Run example NestJS app with NestLens
 cd example && npm run seed # Generate test data via test-requests.sh
 ```
+
+The example installs NestLens from `file:..` as a **copy**, not a symlink
+(`example/.npmrc` sets `install-links=true`). A symlink makes Node load
+`@nestjs/core` twice — once from the repo root, once from `example/` — and the
+app dies at bootstrap with `Nest can't resolve dependencies of DiscoveryService
+(ModulesContainer)`. The cost is that library changes only reach the example
+after a rebuild plus `npm install`.
 
 ## Architecture
 
@@ -137,3 +146,11 @@ it is no longer required for Apollo or Mercurius.
 - Test setup in `src/__tests__/setup.ts`
 - E2E tests require both example app (port 3000) and dashboard dev server (port 5173)
 - Playwright config auto-starts both servers in non-CI mode
+- Before the first E2E run: `npm run build`, then `cd example && npm install`,
+  then `npx playwright install`
+- Lint, type check, library tests and dashboard tests run on every push and
+  pull request (`.github/workflows/ci.yml`) — about two minutes
+- E2E is **not** part of that. It drives three web servers and takes far longer
+  on a two-core runner than locally, so it runs on demand: Actions tab →
+  **E2E** → *Run workflow*, picking a browser. Run it before a release or after
+  dashboard changes.
