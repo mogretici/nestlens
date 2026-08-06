@@ -5,6 +5,26 @@
 
 * honour the configured path when mounting the dashboard and API ([2c58bae](https://github.com/mogretici/nestlens/commit/2c58baed91489475d0a7b8fe01ccb03271efbaff)), closes [#10](https://github.com/mogretici/nestlens/issues/10)
 
+
+### ⚠️ Behaviour change — the REST API moved
+
+`NestLensConfig.path` was documented as the base URL for the dashboard **and** its API, but nothing read it when mounting routes. It now works, which means the API sits under the configured prefix instead of the server root:
+
+| | before | after (default `path`) |
+|---|---|---|
+| Dashboard | `/nestlens` | `/nestlens` — unchanged |
+| REST API | `/__nestlens__/api/*` | `/nestlens/__nestlens__/api/*` |
+| SSE stream | `/__nestlens__/stream` | `/nestlens/__nestlens__/stream` |
+
+Nothing to do if you only use the dashboard. Update your URLs if you call the internal API directly:
+
+```diff
+- curl -X POST http://localhost:3000/__nestlens__/api/prune
++ curl -X POST http://localhost:3000/nestlens/__nestlens__/api/prune
+```
+
+Shipped as a minor rather than a major because the package is still pre-1.0, where [SemVer §4](https://semver.org/#spec-item-4) allows breaking changes without a major bump.
+
 ## [0.5.2](https://github.com/mogretici/nestlens/compare/v0.5.1...v0.5.2) (2026-08-06)
 
 
