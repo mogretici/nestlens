@@ -47,3 +47,9 @@ docs/api/
 
 # Misc
 *.tgz
+
+# Local tool caches
+.claude/cache/
+.claude/tsc-cache/
+.tldr/
+.tldrignore
