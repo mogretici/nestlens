@@ -4,6 +4,28 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Pin the default locale to 'en-US' so number/date formatting is deterministic
+// across developer machines and CI, regardless of the host system locale.
+// Components call `.toLocaleString()` without an explicit locale; without this
+// override the output would follow the machine locale (e.g. "1.234.567" on tr-TR).
+const originalNumberToLocaleString = Number.prototype.toLocaleString;
+Number.prototype.toLocaleString = function (
+  this: number,
+  locales?: Intl.LocalesArgument,
+  options?: Intl.NumberFormatOptions,
+): string {
+  return originalNumberToLocaleString.call(this, locales ?? 'en-US', options);
+};
+
+const originalDateToLocaleString = Date.prototype.toLocaleString;
+Date.prototype.toLocaleString = function (
+  this: Date,
+  locales?: Intl.LocalesArgument,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  return originalDateToLocaleString.call(this, locales ?? 'en-US', options);
+};
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
