@@ -8,8 +8,15 @@ import {
   OnModuleInit,
   Provider,
 } from '@nestjs/common';
+import { PATH_METADATA } from '@nestjs/common/constants';
 import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core';
-import { DEFAULT_CONFIG, NestLensConfig, NESTLENS_CONFIG } from './nestlens.config';
+import {
+  DEFAULT_CONFIG,
+  NestLensConfig,
+  NESTLENS_API_PREFIX,
+  NESTLENS_CONFIG,
+} from './nestlens.config';
+import { toRoutePrefix } from './api/route-path';
 import { CollectorService } from './core/collector.service';
 import { PruningService } from './core/pruning.service';
 import { TagService } from './core/tag.service';
@@ -169,6 +176,8 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
     const controllers = [NestLensApiController, TagController, DashboardController];
 
+    this.mountControllersAt(mergedConfig.path);
+
     const imports: DynamicModule['imports'] = [
       // Core module provides shared services (config, storage, collector, pruning)
       NestLensCoreModule.forRoot(mergedConfig),
@@ -286,6 +295,33 @@ export class NestLensModule implements NestModule, OnModuleInit {
       providers,
       exports,
     };
+  }
+
+  /**
+   * Applies the configured `path` to the NestLens controllers.
+   *
+   * Controller prefixes are compile-time metadata, so a runtime-configurable
+   * mount point has to be written back onto the classes before Nest's
+   * RoutesResolver reads them during `app.init()`. `forRoot()` runs well ahead
+   * of that, so rewriting the metadata here is what makes `path` take effect.
+   *
+   * Every controller — dashboard, API and tags — moves as one unit, so the
+   * whole surface stays reachable under a single prefix.
+   */
+  private static mountControllersAt(path: string | undefined): void {
+    const prefix = toRoutePrefix(path);
+    const withPrefix = (suffix: string): string =>
+      [prefix, suffix].filter((part) => part.length > 0).join('/');
+
+    const mounts: ReadonlyArray<[object, string]> = [
+      [DashboardController, withPrefix('')],
+      [NestLensApiController, withPrefix(`${NESTLENS_API_PREFIX}/api`)],
+      [TagController, withPrefix(`${NESTLENS_API_PREFIX}/api/tags`)],
+    ];
+
+    for (const [controller, routePath] of mounts) {
+      Reflect.defineMetadata(PATH_METADATA, routePath, controller);
+    }
   }
 
   private static mergeConfig(config: NestLensConfig): NestLensConfig {

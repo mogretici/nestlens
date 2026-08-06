@@ -65,6 +65,15 @@ NestLensModule.forRoot({
 });
 ```
 
+The internal API moves with the dashboard, so every endpoint stays under the
+same prefix:
+
+| Path | Serves |
+|---|---|
+| `/admin/monitoring` | Dashboard |
+| `/admin/monitoring/__nestlens__/api/*` | REST API |
+| `/admin/monitoring/__nestlens__/stream` | SSE live-tail |
+
 ## Watchers Configuration
 
 Watchers are the core monitoring components that collect data about different aspects of your application. Each watcher can be enabled/disabled individually and configured with specific options.

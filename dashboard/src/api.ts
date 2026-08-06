@@ -11,14 +11,11 @@ import {
   MonitoredTag,
   GroupedEntry,
 } from './types';
+import { nestlensUrl } from './basePath';
 
-const getApiBase = () => {
-  // API is served at /__nestlens__/api to avoid route conflicts with dashboard
-  const origin = window.location.origin;
-  return `${origin}/__nestlens__/api`;
-};
-
-const API_BASE = getApiBase();
+// The API sits under the configured mount point, behind the `__nestlens__`
+// prefix that keeps it from colliding with the dashboard's own SPA routes.
+const API_BASE = nestlensUrl('/api');
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, options);
