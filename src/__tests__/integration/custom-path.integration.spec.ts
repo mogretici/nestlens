@@ -10,7 +10,7 @@
  * These tests pin the documented contract: the whole NestLens surface —
  * dashboard, API and tags — moves under the configured path together.
  */
-import { INestApplication, Module } from '@nestjs/common';
+import { INestApplication, Module, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { NestLensModule } from '../../nestlens.module';
@@ -108,6 +108,38 @@ describe('issue #10 - configurable path', () => {
     });
 
     it('serves the API at the path documented in the docs', async () => {
+      const res = await request(app.getHttpServer()).get('/nestlens/__nestlens__/api/entries');
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // NestLens is a debugging surface, not part of the host's public API. Without
+  // VERSION_NEUTRAL the dashboard would land on /v1/nestlens and move again on
+  // every version bump, while the injected <base href> kept pointing at the
+  // unversioned path — assets 404, blank page.
+  describe('with URI versioning enabled', () => {
+    let app: INestApplication;
+
+    beforeAll(async () => {
+      @Module({ imports: [NestLensModule.forRoot({})] })
+      class AppModule {}
+
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+      app = moduleRef.createNestApplication();
+      app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+      await app.init();
+    });
+
+    afterAll(async () => {
+      await app?.close();
+    });
+
+    it('keeps the dashboard off the version segment', async () => {
+      const res = await request(app.getHttpServer()).get('/nestlens');
+      expect(routeExists(res.status, res.body)).toBe(true);
+    });
+
+    it('keeps the API off the version segment', async () => {
       const res = await request(app.getHttpServer()).get('/nestlens/__nestlens__/api/entries');
       expect(res.status).toBe(200);
     });

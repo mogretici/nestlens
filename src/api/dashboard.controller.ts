@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { createReadStream, existsSync, readFileSync } from 'fs';
 import { extname, join, resolve, sep } from 'path';
+import { ApplicationConfig } from '@nestjs/core';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NestLensGuard } from './api.guard';
 import { toBaseHref } from './route-path';
@@ -52,6 +53,7 @@ export class DashboardController {
   constructor(
     @Inject(NESTLENS_CONFIG)
     private readonly config: NestLensConfig,
+    private readonly applicationConfig: ApplicationConfig,
   ) {
     // Dashboard static files are bundled in dist/dashboard/public
     this.dashboardPath = join(__dirname, '..', 'dashboard', 'public');
@@ -288,8 +290,32 @@ export class DashboardController {
     });
   }
 
+  /**
+   * Where the dashboard actually lives, from the browser's point of view.
+   *
+   * `config.path` alone is not enough: `app.setGlobalPrefix('api')` shifts every
+   * NestLens route to `/api/nestlens` without the module knowing, and the
+   * injected `<base href>` would then point the bundle at `/nestlens/assets/*` —
+   * a 404 for every asset, leaving a blank page while the API kept working.
+   */
+  private mountPoint(): string {
+    const dashboardPath = toBaseHref(this.config.path);
+    const globalPrefix = this.applicationConfig.getGlobalPrefix().replace(/^\/|\/$/g, '');
+
+    if (!globalPrefix) return dashboardPath;
+
+    // A route listed under `exclude` keeps the global prefix off, so the
+    // dashboard stays where `config.path` put it.
+    const exclusions = this.applicationConfig.getGlobalPrefixOptions().exclude ?? [];
+    const isExcluded = exclusions.some((route) =>
+      route.pathRegex?.test(dashboardPath.length > 0 ? dashboardPath : '/'),
+    );
+
+    return isExcluded ? dashboardPath : `/${globalPrefix}${dashboardPath}`;
+  }
+
   private injectBasePath(html: string): string {
-    const baseHref = toBaseHref(this.config.path);
+    const baseHref = this.mountPoint();
     const injection =
       `<base href="${escapeHtmlAttribute(`${baseHref}/`)}" />` +
       `<script>window.__NESTLENS_BASE__=${JSON.stringify(baseHref)}</script>`;
