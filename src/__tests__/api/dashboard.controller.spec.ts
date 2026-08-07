@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, StreamableFile } from '@nestjs/common';
+import { ApplicationConfig } from '@nestjs/core';
+import { NotFoundException, RequestMethod, StreamableFile } from '@nestjs/common';
 import { DashboardController } from '../../api/dashboard.controller';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 
@@ -28,7 +29,10 @@ describe('DashboardController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DashboardController],
-      providers: [{ provide: NESTLENS_CONFIG, useValue: mockConfig }],
+      providers: [
+        { provide: NESTLENS_CONFIG, useValue: mockConfig },
+        { provide: ApplicationConfig, useValue: new ApplicationConfig() },
+      ],
     }).compile();
 
     controller = module.get<DashboardController>(DashboardController);
@@ -50,10 +54,19 @@ describe('DashboardController', () => {
   });
 
   describe('base path injection', () => {
-    const servedHtml = async (config: NestLensConfig): Promise<string> => {
+    const servedHtml = async (
+      config: NestLensConfig,
+      configureApp: (appConfig: ApplicationConfig) => void = () => {},
+    ): Promise<string> => {
+      const applicationConfig = new ApplicationConfig();
+      configureApp(applicationConfig);
+
       const module = await Test.createTestingModule({
         controllers: [DashboardController],
-        providers: [{ provide: NESTLENS_CONFIG, useValue: config }],
+        providers: [
+          { provide: NESTLENS_CONFIG, useValue: config },
+          { provide: ApplicationConfig, useValue: applicationConfig },
+        ],
       }).compile();
 
       const stream = module.get<DashboardController>(DashboardController).serveDashboard();
@@ -77,6 +90,44 @@ describe('DashboardController', () => {
 
       expect(html).toContain('<base href="/nestlens/" />');
       expect(html).toContain('window.__NESTLENS_BASE__="/nestlens"');
+    });
+
+    // Regression guard: `setGlobalPrefix` shifts every NestLens route without the
+    // module knowing. Getting this wrong points the bundle at /nestlens/assets/*
+    // while it actually lives at /api/nestlens/assets/* — every asset 404s and
+    // the dashboard renders blank, even though the API answers fine.
+    it('accounts for a global prefix', async () => {
+      const html = await servedHtml({ enabled: true }, (app) => app.setGlobalPrefix('api'));
+
+      expect(html).toContain('<base href="/api/nestlens/" />');
+      expect(html).toContain('window.__NESTLENS_BASE__="/api/nestlens"');
+    });
+
+    it('combines a global prefix with a custom path', async () => {
+      const html = await servedHtml({ enabled: true, path: '/dev/nestlens' }, (app) =>
+        app.setGlobalPrefix('api'),
+      );
+
+      expect(html).toContain('<base href="/api/dev/nestlens/" />');
+    });
+
+    it('tolerates a global prefix written with slashes', async () => {
+      const html = await servedHtml({ enabled: true }, (app) => app.setGlobalPrefix('/api/'));
+
+      expect(html).toContain('<base href="/api/nestlens/" />');
+    });
+
+    it('ignores the global prefix when NestLens is excluded from it', async () => {
+      const html = await servedHtml({ enabled: true }, (app) => {
+        app.setGlobalPrefix('api');
+        app.setGlobalPrefixOptions({
+          exclude: [
+            { path: '/nestlens', pathRegex: /^\/nestlens/, requestMethod: RequestMethod.GET },
+          ],
+        });
+      });
+
+      expect(html).toContain('<base href="/nestlens/" />');
     });
   });
 
