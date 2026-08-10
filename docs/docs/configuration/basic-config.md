@@ -10,6 +10,7 @@ The main configuration interface for NestLens is `NestLensConfig`, which provide
 interface NestLensConfig {
   enabled?: boolean;
   path?: string;
+  trustProxy?: boolean; // honour X-Forwarded-Prefix, off by default
   authorization?: AuthorizationConfig;
   storage?: StorageConfig;
   pruning?: PruningConfig;
@@ -103,6 +104,58 @@ app.setGlobalPrefix('api', {
 
 NestLens is also excluded from URI versioning — `app.enableVersioning()` will not
 move the dashboard to `/v1/nestlens`, so its URL stays put across version bumps.
+
+### trustProxy
+
+Honours the `X-Forwarded-Prefix` header when building the dashboard's asset and
+API URLs.
+
+- **Type**: `boolean`
+- **Default**: `false`
+
+You need this only when a reverse proxy strips a path segment before forwarding
+to your application. With this nginx configuration the browser is at
+`/tools/nestlens` while your application only ever sees `/nestlens`:
+
+```nginx
+location /tools/ {
+  proxy_pass http://app:3000/;
+  proxy_set_header X-Forwarded-Prefix /tools;
+}
+```
+
+Nothing inside the application can detect that rewrite, so without the header
+the dashboard points its assets at `/nestlens/assets/*` — a path the proxy does
+not serve. The page loads blank while the API keeps working.
+
+```typescript
+NestLensModule.forRoot({ trustProxy: true });
+// With X-Forwarded-Prefix: /tools → dashboard resolves against /tools/nestlens
+```
+
+The same applies to a Kubernetes ingress that rewrites the path:
+
+```yaml
+annotations:
+  nginx.ingress.kubernetes.io/rewrite-target: /$2
+  nginx.ingress.kubernetes.io/x-forwarded-prefix: /tools
+```
+
+:::warning Enable this only behind a proxy that sets the header itself
+
+`X-Forwarded-Prefix` can be sent by anyone. NestLens ignores values that are not
+plain absolute paths — a scheme, a host, `//`, `..`, a query string or markup is
+dropped rather than sanitised — but a proxy that forwards a client-supplied
+header still lets a request influence where the dashboard resolves its URLs, and
+a shared cache in front of your application could serve that response to others.
+
+Leave `trustProxy` off unless your proxy **overwrites** the header on every
+request, and no path segment is being stripped otherwise.
+
+:::
+
+If your proxy does not rewrite the path — it forwards `/nestlens` unchanged —
+you do not need this option at all.
 
 ## Watchers Configuration
 
