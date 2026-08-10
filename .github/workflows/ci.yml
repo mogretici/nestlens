@@ -54,6 +54,16 @@ jobs:
       matrix:
         nestjs: [9, 10, 11]
         node: [18, 20, 22]
+        include:
+          # Companion packages have their own peer ranges, so each NestJS
+          # version is paired with the release an application on that version
+          # would actually install.
+          - nestjs: 9
+            schedule: 3
+          - nestjs: 10
+            schedule: 4
+          - nestjs: 11
+            schedule: 6
         exclude:
           # NestJS 11 requires Node >= 20.
           - nestjs: 11
@@ -78,12 +88,18 @@ jobs:
             @nestjs/core@${{ matrix.nestjs }} \
             @nestjs/platform-express@${{ matrix.nestjs }} \
             @nestjs/platform-fastify@${{ matrix.nestjs }} \
-            @nestjs/testing@${{ matrix.nestjs }}
+            @nestjs/testing@${{ matrix.nestjs }} \
+            @nestjs/schedule@${{ matrix.schedule }}
 
+      # Installing a companion package can drag NestJS back up through peer
+      # resolution, which would quietly test the wrong version.
       - name: Report resolved versions
         run: |
-          node -e "for (const m of ['@nestjs/core','@nestjs/common','@nestjs/platform-fastify']) \
+          node -e "for (const m of ['@nestjs/core','@nestjs/common','@nestjs/platform-fastify','@nestjs/schedule']) \
             console.log(m, require(m + '/package.json').version)"
+          node -e "const major = require('@nestjs/core/package.json').version.split('.')[0]; \
+            if (major !== '${{ matrix.nestjs }}') { \
+              console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
 
       - name: Run library tests
         run: npm test
