@@ -1,3 +1,11 @@
+# [0.7.0](https://github.com/mogretici/nestlens/compare/v0.6.2...v0.7.0) (2026-08-10)
+
+
+### Features
+
+* **dashboard:** real-time live-tail over SSE ([f53190e](https://github.com/mogretici/nestlens/commit/f53190eed6a96b7a0bb33daf1e5404bf348ad269))
+* real-time entry stream powering SSE live-tail and webhook alerting ([eeda758](https://github.com/mogretici/nestlens/commit/eeda758049c19fcdeefdbe9f7f8b8bcc25bca983))
+
 ## [0.6.2](https://github.com/mogretici/nestlens/compare/v0.6.1...v0.6.2) (2026-08-10)
 
 
