@@ -74,6 +74,36 @@ same prefix:
 | `/admin/monitoring/__nestlens__/api/*` | REST API |
 | `/admin/monitoring/__nestlens__/stream` | SSE live-tail |
 
+### Working with a global prefix
+
+`app.setGlobalPrefix()` applies to NestLens too, so the dashboard follows your
+prefix. No configuration is needed — just remember where it lands:
+
+```typescript
+app.setGlobalPrefix('api');
+// Dashboard at http://localhost:3000/api/nestlens
+```
+
+Combined with a custom `path`, both segments stack:
+
+```typescript
+app.setGlobalPrefix('api');
+NestLensModule.forRoot({ path: '/dev/nestlens' });
+// Dashboard at http://localhost:3000/api/dev/nestlens
+```
+
+If you would rather keep NestLens off the prefix, exclude it:
+
+```typescript
+app.setGlobalPrefix('api', {
+  exclude: [{ path: 'nestlens{/*path}', method: RequestMethod.ALL }],
+});
+// Dashboard stays at http://localhost:3000/nestlens
+```
+
+NestLens is also excluded from URI versioning — `app.enableVersioning()` will not
+move the dashboard to `/v1/nestlens`, so its URL stays put across version bumps.
+
 ## Watchers Configuration
 
 Watchers are the core monitoring components that collect data about different aspects of your application. Each watcher can be enabled/disabled individually and configured with specific options.
