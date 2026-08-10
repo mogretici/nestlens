@@ -1,3 +1,22 @@
+# [0.8.0](https://github.com/mogretici/nestlens/compare/v0.7.0...v0.8.0) (2026-08-10)
+
+
+### Bug Fixes
+
+* order entries deterministically when timestamps collide ([0ce9372](https://github.com/mogretici/nestlens/commit/0ce937227d4068c30437842dab5d11ecbddd8d45))
+* track scheduled jobs on NestJS 9 and 10 ([02f485e](https://github.com/mogretici/nestlens/commit/02f485ee942958c43b112eac56d6a6e60f167350))
+
+
+### Features
+
+* remove deprecated configuration fields ([378aeed](https://github.com/mogretici/nestlens/commit/378aeedd1ef3693e8bc2fe98f3a3ad800110740a))
+* serve NestLens's own responses outside the host's pipeline ([2207446](https://github.com/mogretici/nestlens/commit/2207446332298e4f0c821bdc8e508546349d9f1b))
+
+
+### Performance Improvements
+
+* let browsers cache the dashboard bundle ([f8f5565](https://github.com/mogretici/nestlens/commit/f8f556500965830057d42709ab4203b8bd3f6ed5))
+
 # [0.7.0](https://github.com/mogretici/nestlens/compare/v0.6.2...v0.7.0) (2026-08-10)
 
 
