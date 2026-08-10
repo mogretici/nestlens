@@ -49,18 +49,6 @@ describe('createStorage', () => {
       expect(storage.findWithCursor).toBeDefined();
       await storage.close();
     });
-
-    it('should support legacy config format', async () => {
-      // Act
-      const storage = await createStorage({
-        type: 'sqlite',
-        filename: ':memory:',
-      });
-
-      // Assert
-      expect(storage.save).toBeDefined();
-      await storage.close();
-    });
   });
 
   describe('redis driver', () => {
@@ -92,35 +80,11 @@ describe('createStorage', () => {
       await storage.close();
     });
 
-    it('should prioritize driver over legacy type', async () => {
+    it('should honour an explicit sqlite driver', async () => {
       // Act
       const storage = await createStorage({
-        driver: 'memory',
-        type: 'sqlite', // Legacy, should be ignored
-      });
-
-      // Assert
-      expect(storage).toBeInstanceOf(MemoryStorage);
-      await storage.close();
-    });
-
-    it('should fall back to sqlite for legacy type config', async () => {
-      // Act
-      const storage = await createStorage({
-        type: 'sqlite',
-        filename: ':memory:',
-      });
-
-      // Assert
-      // Should create SqliteStorage, not MemoryStorage
-      expect(storage).not.toBeInstanceOf(MemoryStorage);
-      await storage.close();
-    });
-
-    it('should fall back to sqlite for legacy filename config', async () => {
-      // Act
-      const storage = await createStorage({
-        filename: ':memory:',
+        driver: 'sqlite',
+        sqlite: { filename: ':memory:' },
       });
 
       // Assert

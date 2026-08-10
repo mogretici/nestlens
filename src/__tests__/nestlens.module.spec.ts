@@ -112,7 +112,7 @@ describe('NestLensModule', () => {
       it('should merge custom config with defaults', () => {
         // Arrange
         const customConfig: NestLensConfig = {
-          storage: { filename: 'custom.db' },
+          storage: { driver: 'sqlite', sqlite: { filename: 'custom.db' } },
         };
 
         // Act
@@ -568,7 +568,8 @@ describe('NestLensModule', () => {
         const config: NestLensConfig = {
           enabled: true,
           storage: {
-            filename: 'custom.db',
+            driver: 'sqlite',
+            sqlite: { filename: 'custom.db' },
           },
         };
 
@@ -699,7 +700,7 @@ describe('NestLensModule', () => {
       // Arrange
       const config: NestLensConfig = {
         enabled: true,
-        storage: { filename: ':memory:' },
+        storage: { driver: 'sqlite', sqlite: { filename: ':memory:' } },
         watchers: {
           request: true,
           exception: true,
@@ -718,7 +719,7 @@ describe('NestLensModule', () => {
       // Arrange
       const config: NestLensConfig = {
         enabled: true,
-        storage: { filename: ':memory:' },
+        storage: { driver: 'sqlite', sqlite: { filename: ':memory:' } },
       };
 
       // Act

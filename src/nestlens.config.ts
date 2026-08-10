@@ -347,12 +347,6 @@ export interface StorageConfig {
 
   /** In-memory storage configuration */
   memory?: MemoryStorageConfig;
-
-  // Legacy options (deprecated, for backwards compatibility)
-  /** @deprecated Use driver: 'sqlite' instead */
-  type?: 'sqlite';
-  /** @deprecated Use sqlite.filename instead */
-  filename?: string;
 }
 
 export interface PruningConfig {
@@ -424,14 +418,8 @@ export interface NestLensConfig {
   enabled?: boolean;
   path?: string; // default: '/nestlens'
 
-  // Authorization (new unified config)
+  // Authorization
   authorization?: AuthorizationConfig;
-
-  // Legacy security options (deprecated, use authorization instead)
-  /** @deprecated Use authorization.allowedIps instead */
-  allowedIps?: string[];
-  /** @deprecated Use authorization.canAccess instead */
-  canAccess?: (req: Request) => boolean | AuthUser | Promise<boolean | AuthUser>;
 
   // Storage
   storage?: StorageConfig;
@@ -549,9 +537,6 @@ export const DEFAULT_CONFIG: Required<
     memory: {
       maxEntries: 10000,
     },
-    // Legacy (for backwards compatibility)
-    type: undefined,
-    filename: undefined,
   },
   pruning: {
     enabled: true,
