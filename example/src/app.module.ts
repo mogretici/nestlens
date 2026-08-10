@@ -16,9 +16,6 @@ import { NestLensModule, GraphQLWatcher } from 'nestlens';
 const nestLensModule = NestLensModule.forRoot({
   enabled: true,
   path: '/nestlens',
-  storage: {
-    filename: './nestlens.db',
-  },
   watchers: {
     request: true,
     exception: true,

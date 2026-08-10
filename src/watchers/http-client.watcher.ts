@@ -3,8 +3,58 @@ import { CollectorService } from '../core/collector.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AxiosInstance = any;
+/**
+ * The axios surface this watcher touches.
+ *
+ * axios is an optional peer, so its types cannot be imported — these describe
+ * the runtime shape instead. Anything accepting an instance takes `unknown`
+ * and narrows here, so callers can pass a real `AxiosInstance` or an
+ * `HttpService` without a type conflict.
+ */
+interface RequestConfigLike {
+  metadata?: { nestlensStartTime?: number };
+  method?: string;
+  url?: string;
+  headers?: Record<string, unknown>;
+  data?: unknown;
+}
+
+interface ResponseLike {
+  config: RequestConfigLike;
+  status?: number;
+  headers?: Record<string, unknown>;
+  data?: unknown;
+}
+
+interface RequestErrorLike {
+  config?: RequestConfigLike;
+  message?: string;
+  response?: { status?: number; headers?: Record<string, unknown>; data?: unknown };
+}
+
+interface InterceptorManager<T> {
+  use(onFulfilled: (value: T) => T, onRejected: (error: unknown) => unknown): unknown;
+}
+
+interface AxiosLike {
+  interceptors: {
+    request: InterceptorManager<RequestConfigLike>;
+    response: InterceptorManager<ResponseLike>;
+  };
+}
+
+function hasInterceptors(value: unknown): value is AxiosLike {
+  if (!value || typeof value !== 'object') return false;
+  const { interceptors } = value as { interceptors?: unknown };
+  if (!interceptors || typeof interceptors !== 'object') return false;
+
+  const { request, response } = interceptors as { request?: unknown; response?: unknown };
+
+  return (
+    typeof (request as InterceptorManager<unknown> | undefined)?.use === 'function' &&
+    typeof (response as InterceptorManager<unknown> | undefined)?.use === 'function'
+  );
+}
 
 // Token for injecting custom axios instance
 export const NESTLENS_HTTP_CLIENT = Symbol('NESTLENS_HTTP_CLIENT');
@@ -21,7 +71,7 @@ export class HttpClientWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_HTTP_CLIENT)
-    private readonly axiosInstance?: AxiosInstance,
+    private readonly axiosInstance?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.httpClient;
     this.config =
@@ -50,45 +100,38 @@ export class HttpClientWatcher implements OnModuleInit {
    * Setup interceptors on an axios instance.
    * Can be called manually if you want to track a specific axios instance.
    */
-  setupInterceptors(axiosInstance: AxiosInstance): void {
-    if (!axiosInstance || typeof axiosInstance.interceptors !== 'object') {
+  setupInterceptors(axiosInstance: unknown): void {
+    // @nestjs/axios wraps the real instance behind `axiosRef`.
+    const candidate =
+      (axiosInstance as { axiosRef?: unknown } | undefined)?.axiosRef ?? axiosInstance;
+
+    if (!hasInterceptors(candidate)) {
       this.logger.warn('Invalid axios instance provided');
       return;
     }
 
-    const axios = axiosInstance.axiosRef || axiosInstance;
-
     // Request interceptor - capture start time
-    axios.interceptors.request.use(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (config: any) => {
+    candidate.interceptors.request.use(
+      (config) => {
         config.metadata = {
           ...config.metadata,
           nestlensStartTime: Date.now(),
         };
         return config;
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (error: any) => {
-        return Promise.reject(error);
-      },
+      (error: unknown) => Promise.reject(error),
     );
 
     // Response interceptor - capture response and log
-    axios.interceptors.response.use(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (response: any) => {
+    candidate.interceptors.response.use(
+      (response) => {
         this.collectEntry(response.config, response.status, response.headers, response.data);
         return response;
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (error: any) => {
-        const config = error.config;
-        const status = error.response?.status;
-        const headers = error.response?.headers;
-        const data = error.response?.data;
+      (error: unknown) => {
+        const { config, response, message } = (error ?? {}) as RequestErrorLike;
 
-        this.collectEntry(config, status, headers, data, error.message);
+        this.collectEntry(config, response?.status, response?.headers, response?.data, message);
 
         return Promise.reject(error);
       },

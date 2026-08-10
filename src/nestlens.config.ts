@@ -347,12 +347,6 @@ export interface StorageConfig {
 
   /** In-memory storage configuration */
   memory?: MemoryStorageConfig;
-
-  // Legacy options (deprecated, for backwards compatibility)
-  /** @deprecated Use driver: 'sqlite' instead */
-  type?: 'sqlite';
-  /** @deprecated Use sqlite.filename instead */
-  filename?: string;
 }
 
 export interface PruningConfig {
@@ -424,14 +418,22 @@ export interface NestLensConfig {
   enabled?: boolean;
   path?: string; // default: '/nestlens'
 
-  // Authorization (new unified config)
-  authorization?: AuthorizationConfig;
+  /**
+   * Trust the `X-Forwarded-Prefix` header when building the dashboard's asset
+   * and API URLs. Enable this only when NestLens sits behind a reverse proxy
+   * that strips a path segment (nginx `proxy_pass` with a trailing slash, a
+   * Kubernetes ingress rewrite) *and* that proxy sets the header itself.
+   *
+   * Off by default: the header is attacker-controlled, and honouring it
+   * unconditionally would let a request repoint the dashboard's URLs — which a
+   * shared cache in front of the application could then serve to other users.
+   *
+   * @default false
+   */
+  trustProxy?: boolean;
 
-  // Legacy security options (deprecated, use authorization instead)
-  /** @deprecated Use authorization.allowedIps instead */
-  allowedIps?: string[];
-  /** @deprecated Use authorization.canAccess instead */
-  canAccess?: (req: Request) => boolean | AuthUser | Promise<boolean | AuthUser>;
+  // Authorization
+  authorization?: AuthorizationConfig;
 
   // Storage
   storage?: StorageConfig;
@@ -503,19 +505,10 @@ export interface NestLensConfig {
 export const DEFAULT_CONFIG: Required<
   Omit<
     NestLensConfig,
-    | 'allowedIps'
-    | 'canAccess'
-    | 'authorization'
-    | 'filter'
-    | 'filterBatch'
-    | 'rateLimit'
-    | 'security'
-    | 'alerting'
+    'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security' | 'alerting'
   >
 > & {
   authorization: AuthorizationConfig;
-  allowedIps?: string[];
-  canAccess?: (req: Request) => boolean | AuthUser | Promise<boolean | AuthUser>;
   filter?: (entry: Entry) => boolean | Promise<boolean>;
   filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
   rateLimit?: RateLimitConfig | false;
@@ -523,6 +516,7 @@ export const DEFAULT_CONFIG: Required<
 } = {
   enabled: true,
   path: '/nestlens',
+  trustProxy: false,
   authorization: {
     allowedEnvironments: ['development', 'local', 'test'],
     environmentVariable: 'NODE_ENV',
@@ -530,8 +524,6 @@ export const DEFAULT_CONFIG: Required<
     canAccess: undefined,
     requiredRoles: undefined,
   },
-  allowedIps: undefined,
-  canAccess: undefined,
   filter: undefined,
   filterBatch: undefined,
   rateLimit: false, // Rate limiting disabled by default - NestLens is a dev tool
@@ -549,9 +541,6 @@ export const DEFAULT_CONFIG: Required<
     memory: {
       maxEntries: 10000,
     },
-    // Legacy (for backwards compatibility)
-    type: undefined,
-    filename: undefined,
   },
   pruning: {
     enabled: true,

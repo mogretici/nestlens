@@ -343,19 +343,6 @@ describe('NestLensGuard', () => {
       // Assert
       expect(result).toBe(true);
     });
-
-    it('should use legacy allowedIps as fallback', async () => {
-      // Arrange
-      mockConfig.allowedIps = ['192.168.1.1'];
-      delete mockConfig.authorization!.allowedIps;
-      const context = createMockContext({ ip: '192.168.1.1' });
-
-      // Act
-      const result = await guard.canActivate(context);
-
-      // Assert
-      expect(result).toBe(true);
-    });
   });
 
   // ============================================================================
@@ -428,18 +415,6 @@ describe('NestLensGuard', () => {
 
       // Act & Assert
       await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
-    });
-
-    it('should use legacy canAccess as fallback', async () => {
-      // Arrange
-      mockConfig.canAccess = () => true;
-      delete mockConfig.authorization!.canAccess;
-
-      // Act
-      const result = await guard.canActivate(createMockContext());
-
-      // Assert
-      expect(result).toBe(true);
     });
   });
 

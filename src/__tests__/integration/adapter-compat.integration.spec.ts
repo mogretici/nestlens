@@ -18,7 +18,7 @@ import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import request from 'supertest';
 import { NestLensModule } from '../../nestlens.module';
 import { DashboardController } from '../../api/dashboard.controller';
@@ -117,7 +117,7 @@ describe.each<AdapterName>(['Express', 'Fastify'])('NestLens on %s adapter', (ad
   describe('DashboardController', () => {
     const maybe = hasBuiltDashboard ? it : it.skip;
 
-    maybe('serves index.html as text/html on the dashboard root (StreamableFile)', async () => {
+    maybe('serves index.html as text/html on the dashboard root', async () => {
       const res = await request(server).get('/nestlens');
 
       expect(res.status).toBe(200);
@@ -132,10 +132,48 @@ describe.each<AdapterName>(['Express', 'Fastify'])('NestLens on %s adapter', (ad
       expect(res.headers['content-type']).toContain('text/html');
     });
 
+    // The SPA's catch-all is a bare `*`, the only wildcard both routers accept:
+    // Fastify refuses to register anything after the star, and older Express
+    // path-to-regexp versions refuse the named `*path` form. Getting this wrong
+    // does not fail a unit test — the app simply throws at startup on one
+    // adapter, so it has to be exercised against both real routers.
+    maybe('serves a nested SPA route as index.html', async () => {
+      const res = await request(server).get('/nestlens/requests/abc-123');
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('text/html');
+    });
+
     maybe('returns 404 for a missing asset (NotFoundException)', async () => {
       const res = await request(server).get('/nestlens/assets/does-not-exist.js');
 
       expect(res.status).toBe(404);
+    });
+
+    // Regression guard: the controller writes the response itself, and handing
+    // Express a raw Buffer made it serialise the file as
+    // `{"type":"Buffer","data":[...]}` — every script and font served as JSON,
+    // so the dashboard rendered blank with no error anywhere. Checking status
+    // and content-type is not enough; only the bytes catch this.
+    maybe('serves an asset byte-for-byte identical to the file on disk', async () => {
+      const assetDir = join(realDashboardPublic, 'assets');
+      const asset = readdirSync(assetDir).find((name) => name.endsWith('.js'));
+      expect(asset).toBeDefined();
+
+      const onDisk = readFileSync(join(assetDir, asset as string));
+      const res = await request(server)
+        .get(`/nestlens/assets/${asset}`)
+        .buffer(true)
+        .parse((response, callback) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk: Buffer) => chunks.push(chunk));
+          response.on('end', () => callback(null, Buffer.concat(chunks)));
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toContain('application/javascript');
+      expect(Buffer.isBuffer(res.body)).toBe(true);
+      expect((res.body as Buffer).equals(onDisk)).toBe(true);
     });
   });
 });

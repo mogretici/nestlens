@@ -147,9 +147,8 @@ export class NestLensGuard implements CanActivate {
     return {
       allowedEnvironments: authConfig.allowedEnvironments ?? ['development', 'local', 'test'],
       environmentVariable: authConfig.environmentVariable ?? 'NODE_ENV',
-      // Legacy options as fallback
-      allowedIps: authConfig.allowedIps ?? this.config.allowedIps,
-      canAccess: authConfig.canAccess ?? this.config.canAccess,
+      allowedIps: authConfig.allowedIps,
+      canAccess: authConfig.canAccess,
       requiredRoles: authConfig.requiredRoles,
     };
   }

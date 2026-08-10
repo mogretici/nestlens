@@ -3,8 +3,10 @@ import { CollectorService } from '../core/collector.service';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CommandBus = any;
+/** The @nestjs/cqrs CommandBus surface this watcher touches. */
+interface CommandBusLike {
+  execute?: (command: unknown) => Promise<unknown>;
+}
 
 /**
  * Token for injecting NestJS CQRS CommandBus
@@ -29,7 +31,7 @@ export class CommandWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_COMMAND_BUS)
-    private readonly commandBus?: CommandBus,
+    private readonly commandBus?: CommandBusLike,
   ) {
     const watcherConfig = nestlensConfig.watchers?.command;
     this.config =

@@ -4,21 +4,51 @@ import { CollectorService } from '../core/collector.service';
 import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ScheduleEntry } from '../types';
 
+/**
+ * The part of a `cron` job this watcher touches.
+ *
+ * `@nestjs/schedule` is an optional peer, so its types cannot be imported —
+ * this describes the runtime shape instead, and every field is probed before
+ * use because it has changed across versions.
+ */
+interface CronJobLike {
+  fireOnTick: () => unknown;
+  cronTime?: { source?: unknown };
+  nextDate?: () => unknown;
+}
+
 interface SchedulerRegistryLike {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getCronJobs(): Map<string, any>;
+  getCronJobs(): Map<string, CronJobLike>;
   getIntervals(): string[];
   getTimeouts(): string[];
+  addCronJob?: (name: string, job: CronJobLike, ...rest: unknown[]) => unknown;
 }
 
 function isSchedulerRegistry(obj: unknown): obj is SchedulerRegistryLike {
+  if (!obj || typeof obj !== 'object') return false;
+  const candidate = obj as Partial<SchedulerRegistryLike>;
+
   return (
-    !!obj &&
-    typeof obj === 'object' &&
-    typeof (obj as SchedulerRegistryLike).getCronJobs === 'function' &&
-    typeof (obj as SchedulerRegistryLike).getIntervals === 'function' &&
-    typeof (obj as SchedulerRegistryLike).getTimeouts === 'function'
+    typeof candidate.getCronJobs === 'function' &&
+    typeof candidate.getIntervals === 'function' &&
+    typeof candidate.getTimeouts === 'function'
   );
+}
+
+/**
+ * `nextDate()` returns a Luxon `DateTime` on cron v3 (shipped with
+ * `@nestjs/schedule` v4+) and a plain `Date` on older releases.
+ */
+function toIsoString(value: unknown): string | undefined {
+  if (value instanceof Date) return value.toISOString();
+  if (!value || typeof value !== 'object') return undefined;
+
+  const candidate = value as { toISO?: () => string | null; toISOString?: () => string };
+
+  if (typeof candidate.toISO === 'function') return candidate.toISO() ?? undefined;
+  if (typeof candidate.toISOString === 'function') return candidate.toISOString();
+
+  return undefined;
 }
 
 @Injectable()
@@ -46,8 +76,8 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     }
 
     // @nestjs/schedule's SchedulerRegistry is provided by the global ScheduleModule.
-    // Discover it at bootstrap (after every module's onModuleInit has registered its jobs)
-    // instead of injecting it directly, which keeps @nestjs/schedule an optional peer.
+    // Discover it at bootstrap instead of injecting it directly, which keeps
+    // @nestjs/schedule an optional peer.
     this.schedulerRegistry = this.findSchedulerRegistry();
 
     if (!this.schedulerRegistry) {
@@ -63,7 +93,7 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
 
   private findSchedulerRegistry(): SchedulerRegistryLike | undefined {
     for (const wrapper of this.discoveryService.getProviders()) {
-      const instance = wrapper.instance as unknown;
+      const instance: unknown = wrapper.instance;
       if (isSchedulerRegistry(instance)) {
         return instance;
       }
@@ -72,28 +102,27 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
   }
 
   private setupInterceptors(): void {
-    if (!this.schedulerRegistry) return;
+    const registry = this.schedulerRegistry;
+    if (!registry) return;
 
     try {
-      // Wrap cron jobs
-      const cronJobs = this.schedulerRegistry.getCronJobs();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      cronJobs.forEach((job: any, name: any) => {
+      // Order matters: start intercepting before sweeping, so a job registered
+      // between the two is not missed.
+      this.interceptRegistrations(registry);
+
+      const cronJobs = registry.getCronJobs();
+      cronJobs.forEach((job, name) => {
         this.wrapCronJob(name, job);
       });
 
-      // Wrap intervals
-      const intervals = this.schedulerRegistry.getIntervals();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      intervals.forEach((interval: any) => {
-        this.wrapInterval(interval);
+      const intervals = registry.getIntervals();
+      intervals.forEach((name) => {
+        this.wrapInterval(name);
       });
 
-      // Wrap timeouts
-      const timeouts = this.schedulerRegistry.getTimeouts();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      timeouts.forEach((timeout: any) => {
-        this.wrapTimeout(timeout);
+      const timeouts = registry.getTimeouts();
+      timeouts.forEach((name) => {
+        this.wrapTimeout(name);
       });
 
       this.logger.log(
@@ -104,8 +133,32 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private wrapCronJob(name: string, job: any): void {
+  /**
+   * Wraps jobs as they are registered, rather than relying on them already
+   * being there.
+   *
+   * `@nestjs/schedule` adds cron jobs to the registry from its own
+   * `onApplicationBootstrap` — the same lifecycle phase this watcher runs in —
+   * so which one goes first depends on the module graph. On NestJS 9 and 10
+   * this watcher ran first and swept an empty registry, and schedule tracking
+   * silently recorded nothing. Hooking the registration removes the ordering
+   * question, and it also catches jobs an application adds at runtime, which a
+   * bootstrap-time sweep alone would never see.
+   */
+  private interceptRegistrations(registry: SchedulerRegistryLike): void {
+    const addCronJob = registry.addCronJob;
+    if (typeof addCronJob !== 'function') return;
+
+    const original = addCronJob.bind(registry);
+
+    registry.addCronJob = (name: string, job: CronJobLike, ...rest: unknown[]): unknown => {
+      const result = original(name, job, ...rest);
+      this.wrapCronJob(name, job);
+      return result;
+    };
+  }
+
+  private wrapCronJob(name: string, job: CronJobLike | undefined): void {
     if (this.wrappedJobs.has(name)) return;
     this.wrappedJobs.add(name);
 
@@ -113,7 +166,7 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
 
     const originalFireOnTick = job.fireOnTick.bind(job);
 
-    job.fireOnTick = async () => {
+    job.fireOnTick = async (): Promise<void> => {
       const startTime = Date.now();
       const jobKey = `cron:${name}`;
       this.jobTracking.set(jobKey, startTime);
@@ -171,27 +224,17 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     this.logger.debug(`Timeout ${name} registered but cannot be wrapped`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private getCronPattern(job: any): string | undefined {
-    try {
-      // Try to get cron pattern from the job
-      if (job.cronTime?.source) {
-        return job.cronTime.source;
-      }
-      return undefined;
-    } catch {
-      return undefined;
-    }
+  private getCronPattern(job: CronJobLike): string | undefined {
+    const source = job.cronTime?.source;
+
+    return typeof source === 'string' ? source : undefined;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private getNextRun(job: any): string | undefined {
+  private getNextRun(job: CronJobLike): string | undefined {
+    if (typeof job.nextDate !== 'function') return undefined;
+
     try {
-      if (job.nextDate && typeof job.nextDate === 'function') {
-        const next = job.nextDate();
-        return next?.toISOString();
-      }
-      return undefined;
+      return toIsoString(job.nextDate());
     } catch {
       return undefined;
     }

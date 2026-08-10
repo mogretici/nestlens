@@ -9,18 +9,8 @@ const logger = new Logger('StorageFactory');
  * Handles both new and legacy configuration formats.
  */
 function resolveDriver(config: StorageConfig): StorageDriver {
-  // New config format - driver is explicitly set
   if (config.driver) {
     return config.driver;
-  }
-
-  // Legacy config format - check for type: 'sqlite' or filename
-  if (config.type === 'sqlite' || config.filename) {
-    logger.warn(
-      'Using deprecated storage configuration. ' +
-        "Please migrate to: { driver: 'sqlite', sqlite: { filename: '...' } }",
-    );
-    return 'sqlite';
   }
 
   // Default to memory (zero-config, works everywhere)
@@ -48,8 +38,7 @@ async function createSqliteStorage(config: StorageConfig): Promise<StorageInterf
     // Lazy load to avoid importing native module until needed
     const { SqliteStorage } = await import('./sqlite.storage');
 
-    // Support both new and legacy config
-    const filename = config.sqlite?.filename ?? config.filename ?? '.cache/nestlens.db';
+    const filename = config.sqlite?.filename ?? '.cache/nestlens.db';
 
     const storage = new SqliteStorage(filename);
     await storage.initialize();

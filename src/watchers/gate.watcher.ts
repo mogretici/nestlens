@@ -3,8 +3,12 @@ import { CollectorService } from '../core/collector.service';
 import { GateWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { GateEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type GateService = any;
+type GateMethod = (
+  gate: string,
+  action?: string,
+  subject?: unknown,
+  user?: unknown,
+) => Promise<boolean>;
 
 /**
  * Token for injecting authorization/gate service
@@ -33,7 +37,7 @@ export class GateWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_GATE_SERVICE)
-    private readonly gateService?: GateService,
+    private readonly gateService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.gate;
     this.config =
@@ -71,13 +75,23 @@ export class GateWatcher implements OnModuleInit {
   }
 
   private wrapMethod(methodName: string): void {
-    if (!this.gateService || typeof this.gateService[methodName] !== 'function') {
+    // The service is user-supplied and its methods are looked up by name, so
+    // the shape is checked at runtime rather than declared.
+    const service: Record<string, unknown> | undefined = this.gateService as
+      | Record<string, unknown>
+      | undefined;
+
+    if (!service) return;
+
+    const existing = service[methodName];
+
+    if (typeof existing !== 'function') {
       return;
     }
 
-    const originalMethod = this.gateService[methodName].bind(this.gateService);
+    const originalMethod = (existing as GateMethod).bind(service);
 
-    this.gateService[methodName] = async (
+    service[methodName] = async (
       gate: string,
       action?: string,
       subject?: unknown,

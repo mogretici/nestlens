@@ -40,3 +40,66 @@ jobs:
       - name: Run dashboard tests
         run: npx vitest run
         working-directory: dashboard
+
+  # package.json promises NestJS 9/10/11 on Node >= 18. Until this matrix
+  # existed the promise was only ever exercised on one of those combinations,
+  # so a peer range that had quietly stopped being true would have shipped
+  # unnoticed.
+  compatibility:
+    name: NestJS ${{ matrix.nestjs }} on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        nestjs: [9, 10, 11]
+        node: [18, 20, 22]
+        include:
+          # Companion packages have their own peer ranges, so each NestJS
+          # version is paired with the release an application on that version
+          # would actually install.
+          - nestjs: 9
+            schedule: 3
+          - nestjs: 10
+            schedule: 4
+          - nestjs: 11
+            schedule: 6
+        exclude:
+          # NestJS 11 requires Node >= 20.
+          - nestjs: 11
+            node: 18
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Pin NestJS to ${{ matrix.nestjs }}
+        run: |
+          npm install --no-save --legacy-peer-deps --no-audit --no-fund \
+            @nestjs/common@${{ matrix.nestjs }} \
+            @nestjs/core@${{ matrix.nestjs }} \
+            @nestjs/platform-express@${{ matrix.nestjs }} \
+            @nestjs/platform-fastify@${{ matrix.nestjs }} \
+            @nestjs/testing@${{ matrix.nestjs }} \
+            @nestjs/schedule@${{ matrix.schedule }}
+
+      # Installing a companion package can drag NestJS back up through peer
+      # resolution, which would quietly test the wrong version.
+      - name: Report resolved versions
+        run: |
+          node -e "for (const m of ['@nestjs/core','@nestjs/common','@nestjs/platform-fastify','@nestjs/schedule']) \
+            console.log(m, require(m + '/package.json').version)"
+          node -e "const major = require('@nestjs/core/package.json').version.split('.')[0]; \
+            if (major !== '${{ matrix.nestjs }}') { \
+              console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
+
+      - name: Run library tests
+        run: npm test

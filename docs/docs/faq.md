@@ -433,16 +433,20 @@ Not directly, but you can:
    ```
    Make sure `NODE_ENV` matches
 
-2. **Check IP whitelist**:
+2. **Check IP whitelist** (inside `authorization`):
    ```typescript
-   allowedIps: ['127.0.0.1', 'localhost']
+   authorization: {
+     allowedIps: ['127.0.0.1', 'localhost'],
+   }
    ```
 
-3. **Check custom auth**:
+3. **Check custom auth** (inside `authorization`):
    ```typescript
-   canAccess: (req) => {
-     console.log('Auth check:', req.headers);
-     return true; // Test with always true
+   authorization: {
+     canAccess: (req) => {
+       console.log('Auth check:', req.headers);
+       return true; // Test with always true
+     },
    }
    ```
 

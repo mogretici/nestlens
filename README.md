@@ -77,10 +77,12 @@ IP whitelist, role-based access, and automatic data masking for production safet
 npm install nestlens
 ```
 
-> **Upgrading from 0.5.x?** `path` now actually works, so the REST API moved
-> under it: `/__nestlens__/api/*` is `/nestlens/__nestlens__/api/*` as of
-> 0.6.0. The dashboard is unchanged; only direct API callers need to update
-> their URLs. See the [0.6.0 release notes](https://github.com/mogretici/nestlens/releases/tag/v0.6.0).
+> **Upgrading?** 0.8.0 removes the configuration fields deprecated in 0.4.0
+> (`storage.type`, `storage.filename`, top-level `allowedIps` / `canAccess`) and
+> keeps NestLens's own responses out of your global interceptors. 0.6.0 moved
+> the REST API under `path`: `/__nestlens__/api/*` became
+> `/nestlens/__nestlens__/api/*`. Both are covered in the
+> [upgrade guide](https://nestlens-docs.vercel.app/docs/getting-started/upgrading).
 
 ## Quick Start
 

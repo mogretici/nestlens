@@ -254,6 +254,51 @@ describe('ScheduleWatcher', () => {
       );
     });
 
+    // cron v3 — shipped with @nestjs/schedule v4 and up — returns a Luxon
+    // DateTime from nextDate(), which has no toISOString(). Calling it threw,
+    // the error was swallowed, and nextRun came back empty on every modern
+    // installation.
+    it('should include next run time when the job returns a Luxon DateTime', async () => {
+      // Arrange
+      const iso = '2024-06-01T12:00:00.000Z';
+      const mockJob = createMockCronJob('luxonJob');
+      mockJob.nextDate = jest.fn().mockReturnValue({ toISO: () => iso });
+      const cronJobs = new Map();
+      cronJobs.set('luxonJob', mockJob);
+      const registry = createSchedulerRegistry(cronJobs);
+      watcher = await createWatcher(mockConfig, registry);
+      watcher.onApplicationBootstrap();
+
+      // Act
+      await mockJob.fireOnTick();
+
+      // Assert
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'schedule',
+        expect.objectContaining({ status: 'completed', nextRun: iso }),
+      );
+    });
+
+    it('should omit next run time when the job cannot report one', async () => {
+      // Arrange
+      const mockJob = createMockCronJob('unknownShapeJob');
+      mockJob.nextDate = jest.fn().mockReturnValue({ somethingElse: true });
+      const cronJobs = new Map();
+      cronJobs.set('unknownShapeJob', mockJob);
+      const registry = createSchedulerRegistry(cronJobs);
+      watcher = await createWatcher(mockConfig, registry);
+      watcher.onApplicationBootstrap();
+
+      // Act
+      await mockJob.fireOnTick();
+
+      // Assert
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'schedule',
+        expect.objectContaining({ status: 'completed', nextRun: undefined }),
+      );
+    });
+
     it('should re-throw job errors', async () => {
       // Arrange
       const mockJob = createMockCronJob('errorJob');

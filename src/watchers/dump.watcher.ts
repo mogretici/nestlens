@@ -3,8 +3,7 @@ import { CollectorService } from '../core/collector.service';
 import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type DumpService = any;
+type DumpMethod = (options?: unknown) => Promise<unknown>;
 
 /**
  * Token for injecting dump/export/import service
@@ -28,7 +27,7 @@ export class DumpWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_DUMP_SERVICE)
-    private readonly dumpService?: DumpService,
+    private readonly dumpService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.dump;
     this.config =
@@ -67,14 +66,23 @@ export class DumpWatcher implements OnModuleInit {
   }
 
   private wrapMethod(methodName: string): void {
-    if (!this.dumpService || typeof this.dumpService[methodName] !== 'function') {
+    // The service is user-supplied and its methods are looked up by name, so
+    // the shape is checked at runtime rather than declared.
+    const service: Record<string, unknown> | undefined = this.dumpService as
+      | Record<string, unknown>
+      | undefined;
+    if (!service) return;
+
+    const existing = service[methodName];
+
+    if (typeof existing !== 'function') {
       return;
     }
 
-    const originalMethod = this.dumpService[methodName].bind(this.dumpService);
+    const originalMethod = (existing as DumpMethod).bind(service);
     const operation = this.getOperationType(methodName);
 
-    this.dumpService[methodName] = async (options?: unknown): Promise<unknown> => {
+    service[methodName] = async (options?: unknown): Promise<unknown> => {
       const dumpId = `${methodName}-${Date.now()}`;
       const startTime = Date.now();
 

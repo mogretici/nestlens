@@ -3,10 +3,57 @@ import { CollectorService } from '../core/collector.service';
 import { JobWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { JobEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type BullQueue = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type BullMQQueueEvents = any;
+/**
+ * The Bull / BullMQ surface this watcher touches.
+ *
+ * Neither package is a declared dependency, so these describe the runtime
+ * shape. Public methods accept `unknown` and narrow, so callers can pass a
+ * real `Queue` or `QueueEvents` without a type conflict.
+ */
+interface BullJobLike {
+  id?: string | number;
+  name?: string;
+  data?: unknown;
+  attemptsMade?: number;
+}
+
+type EventListener = (...args: never[]) => void;
+
+interface BullQueueLike {
+  name?: string;
+  client?: unknown;
+  on?: (event: string, listener: EventListener) => unknown;
+  getJob?: (id: string) => Promise<BullJobLike | undefined | null>;
+}
+
+/** Bull v3 emits job events on the queue itself. */
+type EmittingQueue = BullQueueLike & { on: (event: string, listener: EventListener) => unknown };
+
+/** BullMQ reports events through QueueEvents and looks jobs up on the queue. */
+type JobLookupQueue = BullQueueLike & {
+  getJob: (id: string) => Promise<BullJobLike | undefined | null>;
+};
+
+interface BullQueueEventsLike {
+  on(event: string, listener: EventListener): unknown;
+  close?: () => Promise<unknown>;
+}
+
+function emitsEvents(value: unknown): value is EmittingQueue {
+  return !!value && typeof value === 'object' && typeof (value as BullQueueLike).on === 'function';
+}
+
+function looksUpJobs(value: unknown): value is JobLookupQueue {
+  return (
+    !!value && typeof value === 'object' && typeof (value as BullQueueLike).getJob === 'function'
+  );
+}
+
+function isQueueEvents(value: unknown): value is BullQueueEventsLike {
+  return (
+    !!value && typeof value === 'object' && typeof (value as BullQueueEventsLike).on === 'function'
+  );
+}
 
 // Token for injecting Bull queues
 export const NESTLENS_BULL_QUEUES = Symbol('NESTLENS_BULL_QUEUES');
@@ -16,7 +63,7 @@ export class JobWatcher implements OnModuleInit {
   private readonly logger = new Logger(JobWatcher.name);
   private readonly config: JobWatcherConfig;
   private readonly jobTracking = new Map<string, number>(); // jobId -> startTime
-  private readonly managedQueueEvents: BullMQQueueEvents[] = []; // QueueEvents created by setupBullMQQueue
+  private readonly managedQueueEvents: BullQueueEventsLike[] = []; // QueueEvents created by setupBullMQQueue
 
   constructor(
     private readonly collector: CollectorService,
@@ -42,8 +89,8 @@ export class JobWatcher implements OnModuleInit {
    * Setup interceptors on a Bull/BullMQ queue.
    * Call this manually for each queue you want to track.
    */
-  setupQueue(queue: BullQueue, queueName?: string): void {
-    if (!queue || typeof queue.on !== 'function') {
+  setupQueue(queue: unknown, queueName?: string): void {
+    if (!emitsEvents(queue)) {
       this.logger.warn('Invalid queue instance provided');
       return;
     }
@@ -56,17 +103,17 @@ export class JobWatcher implements OnModuleInit {
     });
 
     // Track when jobs start processing
-    queue.on('active', (job: BullQueue) => {
+    queue.on('active', (job: BullJobLike) => {
       this.handleJobActive(name, job);
     });
 
     // Track when jobs complete
-    queue.on('completed', (job: BullQueue, result: unknown) => {
+    queue.on('completed', (job: BullJobLike, result: unknown) => {
       this.handleJobCompleted(name, job, result);
     });
 
     // Track when jobs fail
-    queue.on('failed', (job: BullQueue, error: Error) => {
+    queue.on('failed', (job: BullJobLike, error: Error) => {
       this.handleJobFailed(name, job, error);
     });
 
@@ -85,8 +132,8 @@ export class JobWatcher implements OnModuleInit {
    * @param queue - The BullMQ Queue instance
    * @param queueName - Optional queue name (defaults to queue.name)
    */
-  async setupBullMQQueue(queue: BullQueue, queueName?: string): Promise<void> {
-    if (!queue || typeof queue.getJob !== 'function') {
+  async setupBullMQQueue(queue: unknown, queueName?: string): Promise<void> {
+    if (!looksUpJobs(queue)) {
       this.logger.warn('Invalid BullMQ queue instance provided');
       return;
     }
@@ -95,8 +142,8 @@ export class JobWatcher implements OnModuleInit {
       const name = queueName || queue.name || 'unknown';
 
       // Get Redis connection from the queue
-      const client = await queue.client;
-      const connection = client.options;
+      const client = (await queue.client) as { options?: unknown } | undefined;
+      const connection = client?.options;
 
       // Dynamically require bullmq to create QueueEvents
 
@@ -120,7 +167,7 @@ export class JobWatcher implements OnModuleInit {
   async closeQueueEvents(): Promise<void> {
     for (const queueEvents of this.managedQueueEvents) {
       try {
-        await queueEvents.close();
+        await queueEvents.close?.();
       } catch (error) {
         this.logger.debug(`Failed to close QueueEvents: ${error}`);
       }
@@ -136,16 +183,18 @@ export class JobWatcher implements OnModuleInit {
    * @param queueEvents - The BullMQ QueueEvents instance (for listening to events)
    * @param queueName - Optional queue name (defaults to queue.name)
    */
-  setupQueueWithEvents(queue: BullQueue, queueEvents: BullMQQueueEvents, queueName?: string): void {
-    if (!queue || typeof queue.getJob !== 'function') {
+  setupQueueWithEvents(queue: unknown, queueEvents: unknown, queueName?: string): void {
+    if (!looksUpJobs(queue)) {
       this.logger.warn('Invalid BullMQ queue instance provided');
       return;
     }
 
-    if (!queueEvents || typeof queueEvents.on !== 'function') {
+    if (!isQueueEvents(queueEvents)) {
       this.logger.warn('Invalid BullMQ QueueEvents instance provided');
       return;
     }
+
+    const getJob = queue.getJob.bind(queue);
 
     const name = queueName || queue.name || 'unknown';
 
@@ -159,7 +208,7 @@ export class JobWatcher implements OnModuleInit {
     // Need to fetch job first, then call existing handler
     queueEvents.on('active', async (args: { jobId: string }) => {
       try {
-        const job = await queue.getJob(args.jobId);
+        const job = await getJob(args.jobId);
         if (job) this.handleJobActive(name, job);
       } catch (error) {
         this.logger.debug(`Failed to track BullMQ active job: ${error}`);
@@ -170,7 +219,7 @@ export class JobWatcher implements OnModuleInit {
     // Need to fetch job and parse returnvalue
     queueEvents.on('completed', async (args: { jobId: string; returnvalue: string }) => {
       try {
-        const job = await queue.getJob(args.jobId);
+        const job = await getJob(args.jobId);
         if (!job) return;
 
         // Parse returnvalue (BullMQ sends it as JSON string)
@@ -191,7 +240,7 @@ export class JobWatcher implements OnModuleInit {
     // Need to fetch job and convert failedReason to Error
     queueEvents.on('failed', async (args: { jobId: string; failedReason: string }) => {
       try {
-        const job = await queue.getJob(args.jobId);
+        const job = await getJob(args.jobId);
         if (!job) return;
 
         // Convert failedReason string to Error object for existing handler
@@ -214,10 +263,10 @@ export class JobWatcher implements OnModuleInit {
   private async handleJobWaiting(
     queueName: string,
     jobId: string,
-    queue: BullQueue,
+    queue: BullQueueLike,
   ): Promise<void> {
     try {
-      const job = await queue.getJob(jobId);
+      const job = await queue.getJob?.(jobId);
       if (!job) return;
 
       const payload: JobEntry['payload'] = {
@@ -234,9 +283,9 @@ export class JobWatcher implements OnModuleInit {
     }
   }
 
-  private handleJobActive(queueName: string, job: BullQueue): void {
+  private handleJobActive(queueName: string, job: BullJobLike): void {
     try {
-      const jobId = job.id || String(job);
+      const jobId = String(job.id ?? job);
       this.jobTracking.set(jobId, Date.now());
 
       const payload: JobEntry['payload'] = {
@@ -253,9 +302,9 @@ export class JobWatcher implements OnModuleInit {
     }
   }
 
-  private handleJobCompleted(queueName: string, job: BullQueue, result: unknown): void {
+  private handleJobCompleted(queueName: string, job: BullJobLike, result: unknown): void {
     try {
-      const jobId = job.id || String(job);
+      const jobId = String(job.id ?? job);
       const startTime = this.jobTracking.get(jobId);
       const duration = startTime ? Date.now() - startTime : undefined;
       this.jobTracking.delete(jobId);
@@ -276,9 +325,9 @@ export class JobWatcher implements OnModuleInit {
     }
   }
 
-  private handleJobFailed(queueName: string, job: BullQueue, error: Error): void {
+  private handleJobFailed(queueName: string, job: BullJobLike, error: Error): void {
     try {
-      const jobId = job.id || String(job);
+      const jobId = String(job.id ?? job);
       const startTime = this.jobTracking.get(jobId);
       const duration = startTime ? Date.now() - startTime : undefined;
       this.jobTracking.delete(jobId);
@@ -302,10 +351,10 @@ export class JobWatcher implements OnModuleInit {
   private async handleJobDelayed(
     queueName: string,
     jobId: string,
-    queue: BullQueue,
+    queue: BullQueueLike,
   ): Promise<void> {
     try {
-      const job = await queue.getJob(jobId);
+      const job = await queue.getJob?.(jobId);
       if (!job) return;
 
       const payload: JobEntry['payload'] = {

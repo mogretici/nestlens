@@ -3,8 +3,25 @@ import { CollectorService } from '../core/collector.service';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EventEmitter2 = any;
+/**
+ * The EventEmitter2 surface this watcher touches.
+ *
+ * `@nestjs/event-emitter` is an optional peer, so its types cannot be
+ * imported — this describes the runtime shape.
+ */
+interface EventEmitterLike {
+  onAny(listener: (event: string | string[], ...values: unknown[]) => void): unknown;
+  listeners(event: string): unknown[];
+}
+
+function isEventEmitter(value: unknown): value is EventEmitterLike {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as EventEmitterLike).onAny === 'function' &&
+    typeof (value as EventEmitterLike).listeners === 'function'
+  );
+}
 
 // Token for injecting event emitter
 export const NESTLENS_EVENT_EMITTER = Symbol('NESTLENS_EVENT_EMITTER');
@@ -20,7 +37,7 @@ export class EventWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_EVENT_EMITTER)
-    private readonly eventEmitter?: EventEmitter2,
+    private readonly eventEmitter?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.event;
     this.config =
@@ -45,10 +62,11 @@ export class EventWatcher implements OnModuleInit {
   }
 
   private setupInterceptors(): void {
-    if (!this.eventEmitter) return;
+    const emitter = this.eventEmitter;
+    if (!isEventEmitter(emitter)) return;
 
     // Use onAny to intercept all events
-    this.eventEmitter.onAny((event: string | string[], ...values: unknown[]) => {
+    emitter.onAny((event: string | string[], ...values: unknown[]) => {
       const startTime = Date.now();
 
       // Normalize event name
@@ -73,12 +91,12 @@ export class EventWatcher implements OnModuleInit {
   }
 
   private getListenerNames(eventName: string): string[] {
-    if (!this.eventEmitter) return [];
+    const emitter = this.eventEmitter;
+    if (!isEventEmitter(emitter)) return [];
 
     try {
-      const listeners = this.eventEmitter.listeners(eventName);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return listeners.map((listener: any) => {
+      const listeners = emitter.listeners(eventName);
+      return listeners.map((listener: unknown) => {
         // Try to extract function/class name
         if (typeof listener === 'function') {
           return listener.name || 'anonymous';
