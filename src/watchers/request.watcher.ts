@@ -1,17 +1,12 @@
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from '@nestjs/common';
-import { HttpAdapterHost } from '@nestjs/core';
+import { ApplicationConfig, HttpAdapterHost } from '@nestjs/core';
+import { isNestLensRequest } from '../api/route-path';
 import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
 import { CollectorService } from '../core/collector.service';
-import {
-  DEFAULT_CONFIG,
-  NestLensConfig,
-  NESTLENS_API_PREFIX,
-  NESTLENS_CONFIG,
-  RequestWatcherConfig,
-} from '../nestlens.config';
+import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
 import { NestLensRequest, RequestEntry, RequestUser, GraphQLEntry } from '../types';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
@@ -25,6 +20,7 @@ export class RequestWatcher implements NestInterceptor {
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
     private readonly httpAdapterHost: HttpAdapterHost,
+    private readonly applicationConfig: ApplicationConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.request;
     this.config =
@@ -65,10 +61,16 @@ export class RequestWatcher implements NestInterceptor {
       return next.handle();
     }
 
-    // Skip NestLens own routes (dashboard and API)
-    const nestlensPath = this.nestlensConfig.path || DEFAULT_CONFIG.path;
-    const apiPrefix = `/${NESTLENS_API_PREFIX}`;
-    if (requestPath.startsWith(nestlensPath) || requestPath.startsWith(apiPrefix)) {
+    // Skip NestLens's own traffic — dashboard, API and event stream. The global
+    // prefix has to be taken into account, otherwise NestLens records its own
+    // dashboard polling and buries the entries the user actually came for.
+    if (
+      isNestLensRequest(
+        requestPath,
+        this.nestlensConfig.path,
+        this.applicationConfig.getGlobalPrefix(),
+      )
+    ) {
       return next.handle();
     }
 

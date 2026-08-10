@@ -91,6 +91,32 @@ NestLensModule.forRoot({
 
 Access at: `http://localhost:3000/my-custom-path`
 
+### Does NestLens work with `setGlobalPrefix`?
+
+Yes, and no extra configuration is needed. Nest applies the global prefix to
+NestLens as well, so the dashboard moves with it:
+
+```typescript
+app.setGlobalPrefix('api');
+// Dashboard at http://localhost:3000/api/nestlens
+```
+
+The same goes for `app.enableVersioning()` — except there NestLens deliberately
+stays *out* of the version segment, so the dashboard URL does not change every
+time you bump your API version.
+
+See [Basic Configuration](/docs/configuration/basic-config) for excluding
+NestLens from the prefix.
+
+### Does NestLens record its own requests?
+
+No. The dashboard, its REST API and the event stream are all skipped, so
+browsing NestLens never adds entries to it. This holds under a global prefix and
+a custom `path` too.
+
+If you do see NestLens requests in the dashboard, you are on a version older
+than `0.6.2` — earlier releases missed them when a global prefix was set.
+
 ### How do I configure TypeORM integration?
 
 TypeORM integration is automatic - just install TypeORM and enable the query watcher:
