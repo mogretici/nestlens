@@ -24,7 +24,6 @@ import {
   Injectable,
   Module,
   NestInterceptor,
-  Post,
 } from '@nestjs/common';
 import { APP_INTERCEPTOR, NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
