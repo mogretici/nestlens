@@ -22,6 +22,39 @@ describe('SqliteStorage', () => {
   });
 
   // ============================================================================
+  // ordering
+  // ============================================================================
+
+  describe('ordering', () => {
+    /**
+     * `created_at` only has millisecond resolution, so a burst of traffic
+     * produces rows that all share a timestamp. The timestamps are levelled
+     * here to force that collision every time.
+     *
+     * Unlike the in-memory backend, SQLite happens to return these in rowid
+     * order today even without an explicit tie-break — so this does not fail
+     * if `ORDER BY` loses `id`. SQL leaves the order of equal keys undefined,
+     * which means that behaviour is not something to rely on; what this pins
+     * is the contract every backend has to meet, so the three cannot drift.
+     */
+    it('orders rows sharing a timestamp by id, newest first', async () => {
+      for (let i = 0; i < 10; i++) {
+        await storage.save({
+          type: 'log',
+          payload: { level: 'log', message: `entry-${i}` },
+        } as Entry);
+      }
+
+      const { db } = storage as unknown as { db: { exec: (sql: string) => void } };
+      db.exec("UPDATE nestlens_entries SET created_at = '2024-01-01T00:00:00.000Z'");
+
+      const all = await storage.find({});
+
+      expect(all.map((entry) => entry.id)).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    });
+  });
+
+  // ============================================================================
   // save
   // ============================================================================
 
