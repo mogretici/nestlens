@@ -80,4 +80,45 @@ describe('ScheduleWatcher integration (@nestjs/schedule)', () => {
       await app.close();
     }
   });
+
+  /**
+   * `@nestjs/schedule` populates the registry from its own
+   * `onApplicationBootstrap`, the same phase this watcher runs in, so which
+   * one goes first depends on the module graph. On NestJS 9 and 10 the watcher
+   * went first, swept an empty registry and silently recorded nothing.
+   *
+   * The watcher hooks registration rather than relying on that ordering, which
+   * this pins down: a job added after startup — as an application may legitimately
+   * do — still gets tracked.
+   */
+  it('tracks a cron job registered after startup', async () => {
+    const app = await NestFactory.create(ScheduleAppModule, { logger: false });
+    await app.init();
+
+    try {
+      const collector = app.get(CollectorService);
+      const collectSpy = jest.spyOn(collector, 'collect');
+      const registry = app.get(SchedulerRegistry);
+      const watcher = app.get(ScheduleWatcher) as unknown as { wrappedJobs: Set<string> };
+
+      const lateName = 'registered-after-startup';
+      const existing = registry.getCronJobs().get(CRON_NAME);
+      expect(existing).toBeDefined();
+
+      // Re-registering the same job object under a new name is enough: what
+      // matters is that the watcher sees the registration at all.
+      registry.addCronJob(lateName, existing!);
+
+      expect(watcher.wrappedJobs.has(lateName)).toBe(true);
+
+      await registry.getCronJobs().get(lateName)!.fireOnTick();
+
+      expect(collectSpy).toHaveBeenCalledWith(
+        'schedule',
+        expect.objectContaining({ name: lateName, status: 'started' }),
+      );
+    } finally {
+      await app.close();
+    }
+  });
 });
