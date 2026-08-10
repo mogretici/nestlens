@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from '../nestlens.config';
+import { DEFAULT_CONFIG, NESTLENS_API_PREFIX } from '../nestlens.config';
 
 /**
  * Normalizes a configured `path` into a Nest controller prefix.
@@ -23,4 +23,32 @@ export const toRoutePrefix = (path: string | undefined): string => {
 export const toBaseHref = (path: string | undefined): string => {
   const prefix = toRoutePrefix(path);
   return prefix.length > 0 ? `/${prefix}` : '';
+};
+
+/** Normalizes Nest's global prefix into `/api` form, or `''` when unset. */
+export const toGlobalPrefix = (globalPrefix: string | undefined): string => {
+  const trimmed = (globalPrefix ?? '').replace(/^\/|\/$/g, '');
+  return trimmed.length > 0 ? `/${trimmed}` : '';
+};
+
+/**
+ * Whether a request belongs to NestLens itself — its dashboard, its API or its
+ * event stream.
+ *
+ * Watchers use this to skip their own traffic. `config.path` alone is not
+ * enough: `app.setGlobalPrefix('api')` moves every NestLens route to
+ * `/api/nestlens/...`, and a check that only looks for `/nestlens` stops
+ * matching. NestLens then records its own dashboard polling, which both buries
+ * real entries and keeps generating new ones on every refresh.
+ */
+export const isNestLensRequest = (
+  requestPath: string,
+  configuredPath: string | undefined,
+  globalPrefix?: string,
+): boolean => {
+  const prefix = toGlobalPrefix(globalPrefix);
+  const dashboard = `${prefix}${toBaseHref(configuredPath)}`;
+  const api = `${prefix}/${NESTLENS_API_PREFIX}`;
+
+  return requestPath.startsWith(dashboard) || requestPath.startsWith(api);
 };

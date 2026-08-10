@@ -6,15 +6,10 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import { HttpAdapterHost } from '@nestjs/core';
+import { ApplicationConfig, HttpAdapterHost } from '@nestjs/core';
+import { isNestLensRequest } from '../api/route-path';
 import { CollectorService } from '../core/collector.service';
-import {
-  DEFAULT_CONFIG,
-  ExceptionWatcherConfig,
-  NestLensConfig,
-  NESTLENS_API_PREFIX,
-  NESTLENS_CONFIG,
-} from '../nestlens.config';
+import { ExceptionWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ExceptionEntry, NestLensRequest } from '../types';
 
 @Catch()
@@ -27,6 +22,7 @@ export class ExceptionWatcher implements ExceptionFilter {
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
     private readonly httpAdapterHost: HttpAdapterHost,
+    private readonly applicationConfig: ApplicationConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.exception;
     this.config =
@@ -56,11 +52,15 @@ export class ExceptionWatcher implements ExceptionFilter {
       return;
     }
 
-    // Skip NestLens own routes (dashboard and API)
+    // Skip NestLens's own traffic — dashboard, API and event stream.
     const requestPath = this.getRequestPath(request);
-    const nestlensPath = this.nestlensConfig.path || DEFAULT_CONFIG.path;
-    const apiPrefix = `/${NESTLENS_API_PREFIX}`;
-    if (requestPath.startsWith(nestlensPath) || requestPath.startsWith(apiPrefix)) {
+    if (
+      isNestLensRequest(
+        requestPath,
+        this.nestlensConfig.path,
+        this.applicationConfig.getGlobalPrefix(),
+      )
+    ) {
       this.sendException(exception, response);
       return;
     }
