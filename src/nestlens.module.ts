@@ -19,12 +19,19 @@ import {
 } from './nestlens.config';
 import { toRoutePrefix } from './api/route-path';
 import { CollectorService } from './core/collector.service';
+import { AlertingService } from './core/alerting.service';
 import { PruningService } from './core/pruning.service';
 import { TagService } from './core/tag.service';
 import { FamilyHashService } from './core/family-hash.service';
 import { STORAGE } from './core/storage';
 import { createStorage } from './core/storage/storage.factory';
-import { NestLensApiController, DashboardController, NestLensGuard, TagController } from './api';
+import {
+  NestLensApiController,
+  DashboardController,
+  NestLensGuard,
+  NestLensStreamController,
+  TagController,
+} from './api';
 import {
   RequestWatcher,
   QueryWatcher,
@@ -175,7 +182,12 @@ export class NestLensModule implements NestModule, OnModuleInit {
 
     const providers: Provider[] = [NestLensGuard];
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
-    const controllers = [NestLensApiController, TagController, DashboardController];
+    const controllers = [
+      NestLensApiController,
+      TagController,
+      NestLensStreamController,
+      DashboardController,
+    ];
 
     this.mountControllersAt(mergedConfig.path);
 
@@ -235,6 +247,11 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // Add Schedule Watcher
     if (mergedConfig.watchers?.schedule) {
       imports.push(NestLensScheduleModule.forRoot());
+    }
+
+    // Add Alerting (webhook notifications on collected entries)
+    if (mergedConfig.alerting?.enabled) {
+      providers.push(AlertingService);
     }
 
     // Add Mail Watcher
@@ -306,8 +323,8 @@ export class NestLensModule implements NestModule, OnModuleInit {
    * RoutesResolver reads them during `app.init()`. `forRoot()` runs well ahead
    * of that, so rewriting the metadata here is what makes `path` take effect.
    *
-   * Every controller — dashboard, API and tags — moves as one unit, so the
-   * whole surface stays reachable under a single prefix.
+   * Every controller — dashboard, API, tags and the SSE stream — moves as one
+   * unit, so the whole surface stays reachable under a single prefix.
    */
   private static mountControllersAt(path: string | undefined): void {
     const prefix = toRoutePrefix(path);
@@ -318,6 +335,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
       [DashboardController, withPrefix('')],
       [NestLensApiController, withPrefix(`${NESTLENS_API_PREFIX}/api`)],
       [TagController, withPrefix(`${NESTLENS_API_PREFIX}/api/tags`)],
+      [NestLensStreamController, withPrefix(`${NESTLENS_API_PREFIX}/stream`)],
     ];
 
     for (const [controller, routePath] of mounts) {

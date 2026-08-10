@@ -52,6 +52,9 @@ interface NestLensConfig {
   /** Authorization configuration */
   authorization?: AuthorizationConfig;
 
+  /** Webhook alerting configuration */
+  alerting?: AlertingConfig;
+
   /** Single entry filter function */
   filter?: (entry: Entry) => boolean | Promise<boolean>;
 
@@ -145,6 +148,38 @@ interface PruningConfig {
   interval?: number;
 }
 ```
+
+## Alerting Configuration
+
+```typescript
+interface AlertingConfig {
+  /** Enable webhook alerting (default: false) */
+  enabled?: boolean;
+
+  /** One or more webhook destinations */
+  webhooks?: AlertingWebhook[];
+
+  /** Per-delivery timeout in milliseconds (default: 5000) */
+  timeoutMs?: number;
+}
+
+interface AlertingWebhook {
+  /** Webhook URL to POST alerts to */
+  url: string;
+
+  /** Payload format (default: 'generic') */
+  type?: 'slack' | 'discord' | 'generic';
+
+  /** Entry types that trigger this webhook (default: ['exception']) */
+  events?: EntryType[];
+
+  /** Minimum milliseconds between alerts sharing a dedup key (default: 60000) */
+  throttleMs?: number;
+}
+```
+
+See [Alerting](/docs/configuration/alerting) for payload shapes and throttling
+behaviour.
 
 ## Watchers Configuration
 

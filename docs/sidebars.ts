@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
         'configuration/storage',
         'configuration/pruning',
         'configuration/rate-limiting',
+        'configuration/alerting',
       ],
     },
     {
@@ -99,6 +100,7 @@ const sidebars: SidebarsConfig = {
         'dashboard/navigation',
         'dashboard/filtering',
         'dashboard/keyboard-shortcuts',
+        'dashboard/live-tail',
       ],
     },
     {

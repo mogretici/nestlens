@@ -156,6 +156,44 @@ describe('CollectorService', () => {
     });
   });
 
+  describe('entryStream$ (real-time)', () => {
+    it('emits a saved entry to subscribers on collectImmediate', async () => {
+      const saved = createMockEntry({ id: 42 });
+      mockStorage.save.mockResolvedValue(saved);
+      const received: Entry[] = [];
+      const sub = service.entryStream$.subscribe((e) => received.push(e));
+
+      await service.collectImmediate('request', createMockRequestPayload());
+
+      expect(received).toHaveLength(1);
+      expect(received[0].id).toBe(42);
+      sub.unsubscribe();
+    });
+
+    it('emits flushed entries to subscribers after persistence', async () => {
+      const saved = createMockEntry({ id: 7 });
+      mockStorage.saveBatch.mockResolvedValue([saved]);
+      const received: Entry[] = [];
+      const sub = service.entryStream$.subscribe((e) => received.push(e));
+
+      await service.collect('request', createMockRequestPayload());
+      await service.flush();
+
+      expect(received.map((e) => e.id)).toContain(7);
+      sub.unsubscribe();
+    });
+
+    it('completes the stream on shutdown', async () => {
+      let completed = false;
+      const sub = service.entryStream$.subscribe({ complete: () => (completed = true) });
+
+      await service.shutdown();
+
+      expect(completed).toBe(true);
+      sub.unsubscribe();
+    });
+  });
+
   describe('flush', () => {
     it('should save all buffered entries', async () => {
       const savedEntries = [createMockEntry({ id: 1 }), createMockEntry({ id: 2 })];

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Observable, Subject } from 'rxjs';
 import { Entry, EntryType } from '../types';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
 import { TagService } from './tag.service';
@@ -15,6 +16,22 @@ export class CollectorService implements OnModuleDestroy {
   private isPaused = false;
   private pausedAt?: Date;
   private pauseReason?: string;
+
+  // Real-time stream of persisted entries. Powers the SSE live-tail and the
+  // alerting service. Entries are emitted after they have been saved (so they
+  // carry an id), never blocking collection if a subscriber misbehaves.
+  private readonly entrySubject = new Subject<Entry>();
+
+  /** Observable that emits every entry right after it is persisted. */
+  get entryStream$(): Observable<Entry> {
+    return this.entrySubject.asObservable();
+  }
+
+  private emit(entry: Entry): void {
+    // RxJS isolates throwing subscribers from the producer; each subscriber
+    // (SSE, alerting) is responsible for swallowing its own errors.
+    this.entrySubject.next(entry);
+  }
 
   constructor(
     @Inject(STORAGE)
@@ -146,6 +163,8 @@ export class CollectorService implements OnModuleDestroy {
       // Apply auto-tagging and family hash after saving
       await this.applyAutoTagging(savedEntry);
 
+      this.emit(savedEntry);
+
       return savedEntry;
     } catch (error) {
       this.logger.error(`Failed to save entry: ${error}`);
@@ -227,6 +246,9 @@ export class CollectorService implements OnModuleDestroy {
 
       // Optimized: Apply auto-tagging in parallel instead of sequentially
       await Promise.all(savedEntries.map((entry) => this.applyAutoTagging(entry)));
+
+      // Notify real-time subscribers (SSE, alerting) after persistence
+      savedEntries.forEach((entry) => this.emit(entry));
     } catch (error) {
       this.logger.error(`Failed to flush entries: ${error}`);
       // Put entries back in buffer
@@ -254,6 +276,7 @@ export class CollectorService implements OnModuleDestroy {
       this.flushTimer = null;
     }
     await this.flush();
+    this.entrySubject.complete();
   }
 
   /**

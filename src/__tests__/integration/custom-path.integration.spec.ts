@@ -65,6 +65,23 @@ describe('issue #10 - configurable path', () => {
       expect(res.status).toBe(200);
     });
 
+    // A live SSE response never completes, so supertest would hang waiting for
+    // the body. Asserting the route resolves is enough here — sse-stream.integration
+    // covers the streaming behaviour itself.
+    it('serves the SSE stream under the configured path', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/dev/nestlens/__nestlens__/stream')
+        .set('Accept', 'text/event-stream')
+        .timeout({ deadline: 300 })
+        .catch((error: Error & { timeout?: number }) => {
+          if (error.timeout) return null;
+          throw error;
+        });
+
+      // Reaching the timeout means the connection stayed open: the route exists.
+      expect(res).toBeNull();
+    });
+
     it('leaves nothing behind on the default path', async () => {
       const dashboard = await request(app.getHttpServer()).get('/nestlens');
       expect(routeExists(dashboard.status, dashboard.body)).toBe(false);

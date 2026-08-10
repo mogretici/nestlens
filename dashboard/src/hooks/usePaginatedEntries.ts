@@ -7,6 +7,7 @@ import {
   CursorFilters,
 } from '../api';
 import { Entry, EntryType, CursorPaginationMeta } from '../types';
+import { useEntryStream } from './useEntryStream';
 
 interface UsePaginatedEntriesOptions {
   type?: EntryType;
@@ -42,6 +43,8 @@ interface UsePaginatedEntriesResult<T extends Entry> {
   autoRefreshEnabled: boolean;
   updateEntry: (entry: Entry) => void;
   isHighlighted: (id: number) => boolean;
+  /** Whether the real-time SSE connection is currently open. */
+  live: boolean;
 }
 
 const AUTO_REFRESH_STORAGE_KEY = 'nestlens-auto-refresh';
@@ -327,6 +330,35 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     return () => clearInterval(cleanupInterval);
   }, [cleanupHighlights]);
 
+  // Real-time: when the server pushes a matching entry over SSE, refresh
+  // immediately instead of waiting for the next poll. Bursts are coalesced.
+  const streamDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const handleStreamedEntry = useCallback(
+    (entry: Entry) => {
+      if (type && entry.type !== type) return;
+      if (streamDebounceRef.current) return;
+      streamDebounceRef.current = setTimeout(() => {
+        streamDebounceRef.current = null;
+        if (autoRefreshEnabled) {
+          void autoLoadNew();
+        } else {
+          void checkForNew();
+        }
+      }, 200);
+    },
+    [type, autoRefreshEnabled, autoLoadNew, checkForNew],
+  );
+  const { connected: live } = useEntryStream(handleStreamedEntry);
+
+  useEffect(() => {
+    return () => {
+      if (streamDebounceRef.current) {
+        clearTimeout(streamDebounceRef.current);
+        streamDebounceRef.current = null;
+      }
+    };
+  }, []);
+
   return {
     entries,
     loading,
@@ -342,5 +374,6 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     autoRefreshEnabled,
     updateEntry,
     isHighlighted,
+    live,
   };
 }
