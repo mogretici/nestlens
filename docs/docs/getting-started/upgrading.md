@@ -81,6 +81,14 @@ Not breaking — new and off by default. If a proxy serves NestLens under a
 stripped path segment, see
 [`trustProxy`](../configuration/basic-config.md#trustproxy).
 
+### Also in this release
+
+The dashboard bundle is now read from disk once and kept in memory, and its
+fingerprinted assets are served with a long-lived `Cache-Control` while
+`index.html` stays `no-cache`. Nothing to configure; the dashboard just costs
+your application less per load. See
+[performance](../advanced/performance.md#serving-the-dashboard).
+
 ## Verified NestJS and Node versions
 
 Every release is tested against this matrix in CI:

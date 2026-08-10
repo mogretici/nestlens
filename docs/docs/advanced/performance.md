@@ -15,6 +15,24 @@ NestLens is designed for minimal overhead:
 - **Memory Usage**: Less than 50MB typical (with buffering)
 - **CPU Impact**: Less than 2% in most applications
 
+### Serving the dashboard
+
+The dashboard is a static bundle served by NestLens itself, so it is worth
+knowing what it costs the application hosting it:
+
+- Files are read from disk **once** and kept in memory. Serving them is the only
+  work per request; the event loop of your application is not blocked reading
+  ~1 MB off disk every time somebody opens the dashboard.
+- Fingerprinted assets (`assets/*`) are sent with
+  `Cache-Control: public, max-age=31536000, immutable`, so a browser that has
+  loaded the dashboard once re-fetches nothing until you upgrade NestLens.
+- `index.html` is sent with `Cache-Control: no-cache`. It carries the mount
+  point injected per request and points at the current bundle, so it is
+  revalidated every time — that is what makes the immutable assets safe.
+
+None of this applies when the dashboard is disabled: no files are read and
+nothing is cached.
+
 ## Buffer Configuration
 
 The collector uses buffering to minimize database writes.
