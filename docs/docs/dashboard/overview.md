@@ -15,7 +15,9 @@ The NestLens dashboard provides a powerful, real-time interface for monitoring a
 
 ### Real-Time Monitoring
 
-The dashboard updates automatically as new entries are collected, giving you live visibility into:
+New entries are pushed to the dashboard over Server-Sent Events the moment they
+are collected — see [Live Tail](./live-tail.md). This gives you live visibility
+into:
 
 - HTTP requests and responses
 - Database queries and performance

@@ -83,13 +83,14 @@ async function waitFor<T>(fn: () => T | undefined, timeoutMs = 4000): Promise<T>
 
 type AdapterName = 'Express' | 'Fastify';
 
-async function createApp(adapter: AdapterName): Promise<INestApplication> {
+async function createApp(adapter: AdapterName, globalPrefix?: string): Promise<INestApplication> {
   const app =
     adapter === 'Fastify'
       ? await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
           logger: false,
         })
       : await NestFactory.create(AppModule, new ExpressAdapter(), { logger: false });
+  if (globalPrefix) app.setGlobalPrefix(globalPrefix);
   await app.listen(0);
   if (adapter === 'Fastify') {
     await (app as NestFastifyApplication).getHttpAdapter().getInstance().ready();
@@ -124,6 +125,41 @@ describe.each<AdapterName>(['Express', 'Fastify'])('SSE live-tail on %s adapter'
       expect(entryEvent).toBeDefined();
       const payload = JSON.parse(entryEvent.data);
       expect(payload.type).toBe('exception');
+    } finally {
+      sse.close();
+    }
+  });
+});
+
+/**
+ * `app.setGlobalPrefix()` shifts every NestLens route without the module knowing.
+ * Routing for the dashboard and the REST API is covered in custom-path.integration,
+ * but the stream needs its own check: a route that merely *resolves* under the
+ * prefix is not enough — entries have to actually reach a connected client there.
+ */
+describe('SSE live-tail under a global prefix', () => {
+  let app: INestApplication;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    app = await createApp('Express', 'api');
+    baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('::1', '127.0.0.1');
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('pushes entries to a client connected under the prefixed path', async () => {
+    const sse = openSse(`${baseUrl}/api${toBaseHref(DEFAULT_CONFIG.path)}/__nestlens__/stream`);
+    try {
+      await sleep(150);
+
+      await fetch(`${baseUrl}/api/demo/boom`).catch(() => undefined);
+
+      const entryEvent = await waitFor(() => sse.events.find((e) => e.type === 'entry'));
+      expect(entryEvent).toBeDefined();
+      expect(JSON.parse(entryEvent.data).type).toBe('exception');
     } finally {
       sse.close();
     }

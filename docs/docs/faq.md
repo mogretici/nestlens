@@ -658,6 +658,20 @@ GET /nestlens/__nestlens__/api/stats
 GET /nestlens/__nestlens__/api/tags
 ```
 
+There is also a Server-Sent Events endpoint that pushes entries as they are
+collected — this is what powers the dashboard's [live tail](/docs/dashboard/live-tail):
+
+```bash
+GET /nestlens/__nestlens__/stream
+```
+
+```javascript
+const stream = new EventSource('/nestlens/__nestlens__/stream');
+stream.addEventListener('entry', (event) => {
+  console.log(JSON.parse(event.data));
+});
+```
+
 All API endpoints require the same authentication as the dashboard.
 
 ## Support
