@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseFilters,
   UseGuards,
   UseInterceptors,
@@ -26,6 +27,17 @@ import { NestLensApiExceptionFilter } from '@/api/filters';
 import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
 
+/**
+ * Every handler here takes an unused `@Res() _res` parameter. It is not a
+ * mistake and the value is never touched: its presence is how a handler tells
+ * Nest "the response is written for you", which stops the framework from
+ * writing a second time after `NestLensApiResponseInterceptor` has already
+ * replied. Without it, Nest 9/10 on Express throws
+ * `Cannot set headers after they are sent to the client` on every request.
+ *
+ * Handlers still return their data, so they stay directly unit-testable and the
+ * envelope shape lives in one place — the interceptor.
+ */
 @Controller(`${NESTLENS_API_PREFIX}/api`)
 @UseGuards(NestLensGuard)
 @UseFilters(NestLensApiExceptionFilter)
@@ -75,6 +87,7 @@ export class NestLensApiController {
     @Query('offset') offset?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Res() _res?: unknown,
   ) {
     const parsedLimit = this.parseLimit(limit);
     const parsedOffset = this.parseOffset(offset);
@@ -108,6 +121,7 @@ export class NestLensApiController {
   @Get('entries/cursor')
   async getEntriesWithCursor(
     @Query() query: CursorQueryDto,
+    @Res() _res?: unknown,
   ): Promise<CursorPaginatedResponse<Entry>> {
     return this.storage.findWithCursor(query.type, {
       limit: query.limit ?? DEFAULT_LIMIT,
@@ -118,7 +132,7 @@ export class NestLensApiController {
   }
 
   @Get('entries/latest-sequence')
-  async getLatestSequence(@Query('type') type?: EntryType) {
+  async getLatestSequence(@Query('type') type?: EntryType, @Res() _res?: unknown) {
     const sequence = await this.storage.getLatestSequence(type);
     return { data: sequence };
   }
@@ -127,6 +141,7 @@ export class NestLensApiController {
   async checkNewEntries(
     @Query('afterSequence') afterSequence: string,
     @Query('type') type?: EntryType,
+    @Res() _res?: unknown,
   ) {
     const seq = parseInt(afterSequence, 10);
     const count = await this.storage.hasEntriesAfter(seq, type);
@@ -138,7 +153,11 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflict
    */
   @Get('entries/grouped')
-  async getGroupedEntries(@Query('type') type?: EntryType, @Query('limit') limit?: string) {
+  async getGroupedEntries(
+    @Query('type') type?: EntryType,
+    @Query('limit') limit?: string,
+    @Res() _res?: unknown,
+  ) {
     const groups = await this.storage.getGroupedByFamilyHash(type, this.parseLimit(limit));
     return { data: groups };
   }
@@ -148,13 +167,17 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflict
    */
   @Get('entries/family/:hash')
-  async getEntriesByFamilyHash(@Param('hash') hash: string, @Query('limit') limit?: string) {
+  async getEntriesByFamilyHash(
+    @Param('hash') hash: string,
+    @Query('limit') limit?: string,
+    @Res() _res?: unknown,
+  ) {
     const entries = await this.storage.findByFamilyHash(hash, this.parseLimit(limit));
     return { data: entries };
   }
 
   @Get('entries/:id')
-  async getEntry(@Param('id', ParseIntPipe) id: number) {
+  async getEntry(@Param('id', ParseIntPipe) id: number, @Res() _res?: unknown) {
     const entry = await this.storage.findById(id);
 
     if (!entry) {
@@ -178,13 +201,17 @@ export class NestLensApiController {
   }
 
   @Get('stats')
-  async getStats() {
+  async getStats(@Res() _res?: unknown) {
     const stats = await this.storage.getStats();
     return { data: stats };
   }
 
   @Get('requests')
-  async getRequests(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async getRequests(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Res() _res?: unknown,
+  ) {
     return this.getEntries('request', undefined, limit, offset);
   }
 
@@ -193,6 +220,7 @@ export class NestLensApiController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('slow') slow?: string,
+    @Res() _res?: unknown,
   ) {
     const parsedLimit = this.parseLimit(limit);
     const parsedOffset = this.parseOffset(offset);
@@ -220,7 +248,11 @@ export class NestLensApiController {
   }
 
   @Get('exceptions')
-  async getExceptions(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async getExceptions(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Res() _res?: unknown,
+  ) {
     return this.getEntries('exception', undefined, limit, offset);
   }
 
@@ -229,6 +261,7 @@ export class NestLensApiController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('level') level?: string,
+    @Res() _res?: unknown,
   ) {
     const parsedLimit = this.parseLimit(limit);
     const parsedOffset = this.parseOffset(offset);
@@ -260,7 +293,7 @@ export class NestLensApiController {
    * Storage stats endpoint
    */
   @Get('storage/stats')
-  async getStorageStats() {
+  async getStorageStats(@Res() _res?: unknown) {
     const stats = await this.storage.getStorageStats();
     return { data: stats };
   }
@@ -269,7 +302,7 @@ export class NestLensApiController {
    * Pruning endpoints
    */
   @Get('pruning/status')
-  async getPruningStatus() {
+  async getPruningStatus(@Res() _res?: unknown) {
     const config = this.config.pruning;
     const storageStats = await this.storage.getStorageStats();
 
@@ -289,7 +322,7 @@ export class NestLensApiController {
   }
 
   @Post('pruning/run')
-  async runPruning() {
+  async runPruning(@Res() _res?: unknown) {
     const maxAgeHours = this.config.pruning?.maxAge ?? 24;
     const before = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
 
@@ -310,7 +343,7 @@ export class NestLensApiController {
   }
 
   @Delete('entries')
-  async clearEntries() {
+  async clearEntries(@Res() _res?: unknown) {
     await this.storage.clear();
     return { success: true, message: 'All entries cleared' };
   }
@@ -321,7 +354,7 @@ export class NestLensApiController {
    * Mark an entry (exception) as resolved
    */
   @Patch('entries/:id/resolve')
-  async resolveEntry(@Param('id', ParseIntPipe) id: number) {
+  async resolveEntry(@Param('id', ParseIntPipe) id: number, @Res() _res?: unknown) {
     await this.storage.resolveEntry(id);
     const entry = await this.storage.findById(id);
     return { success: true, data: entry };
@@ -331,7 +364,7 @@ export class NestLensApiController {
    * Mark an entry as unresolved
    */
   @Patch('entries/:id/unresolve')
-  async unresolveEntry(@Param('id', ParseIntPipe) id: number) {
+  async unresolveEntry(@Param('id', ParseIntPipe) id: number, @Res() _res?: unknown) {
     await this.storage.unresolveEntry(id);
     const entry = await this.storage.findById(id);
     return { success: true, data: entry };
@@ -343,7 +376,7 @@ export class NestLensApiController {
    * Pause recording
    */
   @Post('recording/pause')
-  async pauseRecording(@Body() body: { reason?: string }) {
+  async pauseRecording(@Body() body: { reason?: string }, @Res() _res?: unknown) {
     this.collectorService.pause(body.reason);
     const status = this.collectorService.getRecordingStatus();
     return { success: true, data: status };
@@ -353,7 +386,7 @@ export class NestLensApiController {
    * Resume recording
    */
   @Post('recording/resume')
-  async resumeRecording() {
+  async resumeRecording(@Res() _res?: unknown) {
     this.collectorService.resume();
     const status = this.collectorService.getRecordingStatus();
     return { success: true, data: status };
@@ -363,7 +396,7 @@ export class NestLensApiController {
    * Get recording status
    */
   @Get('recording/status')
-  async getRecordingStatus() {
+  async getRecordingStatus(@Res() _res?: unknown) {
     const status = this.collectorService.getRecordingStatus();
     return { data: status };
   }

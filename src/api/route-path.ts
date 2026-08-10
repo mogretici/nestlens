@@ -25,6 +25,44 @@ export const toBaseHref = (path: string | undefined): string => {
   return prefix.length > 0 ? `/${prefix}` : '';
 };
 
+/**
+ * Path segments a forwarded prefix may contain. Anything else — a scheme, a
+ * host, an authority (`//evil.com`), a query, a fragment or an encoded
+ * traversal — is rejected outright rather than sanitised, since a prefix that
+ * needs cleaning is not one worth trusting.
+ */
+const SAFE_FORWARDED_PREFIX = /^\/[A-Za-z0-9\-._~/]*$/;
+
+/**
+ * Normalizes an `X-Forwarded-Prefix` header into `/tools` form, or `''` when it
+ * is absent or unusable.
+ *
+ * A reverse proxy that strips a path segment before forwarding (nginx
+ * `location /tools/ { proxy_pass http://app:3000/; }`, or a Kubernetes ingress
+ * rewrite) leaves the application seeing `/nestlens` while the browser is at
+ * `/tools/nestlens`. The dashboard's `<base href>` has to describe the
+ * browser's view, not the application's, or every asset 404s.
+ *
+ * The value is attacker-controlled — anyone can send this header — so it is
+ * only consulted when `trustProxy` is explicitly enabled, and even then it must
+ * be a plain absolute path. Reflecting an unvalidated value would let a request
+ * point the dashboard's asset and API URLs at another origin, which a shared
+ * cache in front of the application could then serve to other users.
+ */
+export const toForwardedPrefix = (header: string | string[] | undefined): string => {
+  // Duplicated headers arrive as an array; a proxy chain disagreeing with
+  // itself is not something to guess about.
+  if (typeof header !== 'string') return '';
+
+  const candidate = header.trim().replace(/\/+$/, '');
+
+  if (candidate.length === 0) return '';
+  if (!SAFE_FORWARDED_PREFIX.test(candidate)) return '';
+  if (candidate.includes('//') || candidate.includes('..')) return '';
+
+  return candidate;
+};
+
 /** Normalizes Nest's global prefix into `/api` form, or `''` when unset. */
 export const toGlobalPrefix = (globalPrefix: string | undefined): string => {
   const trimmed = (globalPrefix ?? '').replace(/^\/|\/$/g, '');
