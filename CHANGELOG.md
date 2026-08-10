@@ -1,3 +1,10 @@
+## [0.6.2](https://github.com/mogretici/nestlens/compare/v0.6.1...v0.6.2) (2026-08-10)
+
+
+### Bug Fixes
+
+* stop recording NestLens's own traffic behind a global prefix ([dfb8839](https://github.com/mogretici/nestlens/commit/dfb8839390524f9f339917b6170f0a6beb150e79))
+
 ## [0.6.1](https://github.com/mogretici/nestlens/compare/v0.6.0...v0.6.1) (2026-08-07)
 
 
