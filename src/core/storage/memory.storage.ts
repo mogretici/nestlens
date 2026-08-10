@@ -101,8 +101,14 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       results = results.filter((e) => new Date(e.createdAt!).getTime() <= toTime);
     }
 
-    // Sort by createdAt DESC (newest first)
-    results.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+    // Sort by createdAt DESC (newest first), falling back to id so entries
+    // recorded within the same millisecond keep a stable, meaningful order.
+    // Without the tie-break, ordering depends on how insertions happen to land
+    // across the millisecond boundary, which makes paging skip or repeat rows.
+    results.sort((a, b) => {
+      const byTime = new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime();
+      return byTime !== 0 ? byTime : b.id! - a.id!;
+    });
 
     // Apply pagination
     if (filter.offset) {

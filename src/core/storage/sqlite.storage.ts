@@ -225,7 +225,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       params.push(filter.to.toISOString());
     }
 
-    sql += ' ORDER BY created_at DESC';
+    // id breaks ties so rows written in the same millisecond page consistently.
+    sql += ' ORDER BY created_at DESC, id DESC';
 
     if (filter.limit) {
       sql += ' LIMIT ?';

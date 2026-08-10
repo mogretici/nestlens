@@ -512,6 +512,35 @@ describe('MemoryStorage', () => {
 
   // ==================== Cursor Pagination Tests ====================
 
+  describe('ordering', () => {
+    /**
+     * `createdAt` only has millisecond resolution, so a burst of traffic
+     * produces entries that all share a timestamp. Ordering by time alone
+     * leaves those in an arbitrary order, and where the millisecond boundary
+     * happens to fall then decides what a page contains — the dashboard skips
+     * or repeats rows, and it looks intermittent rather than wrong.
+     */
+    it('orders entries sharing a timestamp by id, newest first', async () => {
+      const saved: Entry[] = [];
+      for (let i = 0; i < 10; i++) {
+        saved.push(await storage.save(createEntry('request', { index: i })));
+      }
+
+      // Force the exact collision a fast machine produces on its own: the
+      // first four in one millisecond, the rest in the next.
+      const boundary = new Date(1_000).toISOString();
+      const after = new Date(1_001).toISOString();
+      saved.forEach((entry, index) => {
+        (entry as { createdAt: string }).createdAt = index < 4 ? boundary : after;
+      });
+
+      const all = await storage.find({});
+      const ids = all.map((entry) => entry.id!);
+
+      expect(ids).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    });
+  });
+
   describe('findWithCursor', () => {
     beforeEach(async () => {
       for (let i = 0; i < 10; i++) {
