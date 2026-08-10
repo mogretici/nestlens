@@ -276,6 +276,30 @@ describe('DashboardController', () => {
     });
   });
 
+  describe('caching policy', () => {
+    // Vite fingerprints these filenames, so a changed file arrives under a new
+    // URL and the browser never has to ask about the old one again.
+    it('lets the browser keep fingerprinted assets forever', () => {
+      controller.serveAssets('index-Bu05f2IL.js', RES);
+
+      expect(written.headers['Cache-Control']).toBe('public, max-age=31536000, immutable');
+    });
+
+    // index.html keeps its name across releases and carries a per-request mount
+    // point, so caching it would pin the browser to a stale bundle.
+    it('revalidates index.html every time', () => {
+      controller.serveDashboard(RES);
+
+      expect(written.headers['Cache-Control']).toBe('no-cache');
+    });
+
+    it('revalidates root-level icons, which are not fingerprinted', () => {
+      controller.serveStaticFile('nestlens-icon', RES);
+
+      expect(written.headers['Cache-Control']).toBe('no-cache');
+    });
+  });
+
   describe('serving root-level SVGs', () => {
     it('sets the SVG content type', () => {
       controller.serveStaticFile('favicon', RES);

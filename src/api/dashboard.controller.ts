@@ -19,6 +19,18 @@ import { toBaseHref, toForwardedPrefix } from './route-path';
 /** Set by reverse proxies that serve the application under a stripped path. */
 const FORWARDED_PREFIX_HEADER = 'x-forwarded-prefix';
 
+/**
+ * Cache policies for the bundled dashboard.
+ *
+ * Vite fingerprints everything under `assets/` (`index-Bu05f2IL.js`), so a
+ * changed file always arrives under a new URL and the old one can be kept
+ * forever. Everything else — `index.html` and the root-level icons — keeps its
+ * name across releases, and `index.html` additionally carries a mount point
+ * injected per request, so it must be revalidated every time.
+ */
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+const NO_CACHE = 'no-cache';
+
 const escapeHtmlAttribute = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -68,13 +80,13 @@ export class DashboardController {
 
   @Get('assets/:filename')
   serveAssets(@Param('filename') filename: string, @Res() res: unknown): void {
-    this.sendFile(res, join('assets', filename), 'Asset not found');
+    this.sendFile(res, join('assets', filename), 'Asset not found', IMMUTABLE);
   }
 
   // Favicon and other root-level static files.
   @Get(':filename.svg')
   serveStaticFile(@Param('filename') filename: string, @Res() res: unknown): void {
-    this.sendFile(res, `${filename}.svg`, 'File not found');
+    this.sendFile(res, `${filename}.svg`, 'File not found', NO_CACHE);
   }
 
   @Get()
@@ -110,13 +122,18 @@ export class DashboardController {
       forwardedPrefix,
     );
 
-    this.send(res, html, MIME_TYPES['.html'] as string);
+    this.send(res, html, MIME_TYPES['.html'] as string, NO_CACHE);
   }
 
-  private sendFile(res: unknown, relativePath: string, notFoundMessage: string): void {
+  private sendFile(
+    res: unknown,
+    relativePath: string,
+    notFoundMessage: string,
+    cacheControl: string,
+  ): void {
     const absolutePath = this.resolveDashboardFile(relativePath, notFoundMessage);
 
-    this.send(res, this.readCached(absolutePath), this.contentTypeFor(absolutePath));
+    this.send(res, this.readCached(absolutePath), this.contentTypeFor(absolutePath), cacheControl);
   }
 
   /**
@@ -149,11 +166,17 @@ export class DashboardController {
    * this HTML into JSON — the dashboard then loads nothing. Taking over the
    * response keeps NestLens's own surface out of that pipeline.
    */
-  private send(res: unknown, body: string | Buffer, contentType: string): void {
+  private send(
+    res: unknown,
+    body: string | Buffer,
+    contentType: string,
+    cacheControl: string,
+  ): void {
     const adapter = this.httpAdapterHost.httpAdapter;
     const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
 
     adapter.setHeader(res, 'Content-Type', contentType);
+    adapter.setHeader(res, 'Cache-Control', cacheControl);
     // A raw Buffer cannot go through `reply()`: Express treats any object as
     // JSON and serialises it to `{"type":"Buffer","data":[...]}`, which turns
     // every script and font into garbage. StreamableFile is the shape both
