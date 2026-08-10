@@ -3,8 +3,16 @@ import { CollectorService } from '../core/collector.service';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ViewEngine = any;
+/**
+ * The view engine surface this watcher touches — a single `render` method.
+ * Its arguments vary by engine (view, options, callback), and the wrapper
+ * forwards them untouched, so they stay a generic list.
+ */
+type RenderMethod = (...args: unknown[]) => unknown;
+
+interface ViewEngineLike {
+  render?: RenderMethod;
+}
 
 /**
  * Token for injecting view engine
@@ -19,7 +27,7 @@ export const NESTLENS_VIEW_ENGINE = Symbol('NESTLENS_VIEW_ENGINE');
 export class ViewWatcher implements OnModuleInit {
   private readonly logger = new Logger(ViewWatcher.name);
   private readonly config: ViewWatcherConfig;
-  private originalRender?: Function;
+  private originalRender?: RenderMethod;
 
   constructor(
     private readonly collector: CollectorService,
@@ -27,7 +35,7 @@ export class ViewWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_VIEW_ENGINE)
-    private readonly viewEngine?: ViewEngine,
+    private readonly viewEngine?: ViewEngineLike,
   ) {
     const watcherConfig = nestlensConfig.watchers?.view;
     this.config =
@@ -65,7 +73,7 @@ export class ViewWatcher implements OnModuleInit {
     }
   }
 
-  private wrapRenderMethod(originalRender: Function): Function {
+  private wrapRenderMethod(originalRender: RenderMethod): RenderMethod {
     return async (...args: unknown[]): Promise<unknown> => {
       const startTime = Date.now();
       let status: 'rendered' | 'error' = 'rendered';

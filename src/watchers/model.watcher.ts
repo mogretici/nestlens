@@ -3,8 +3,50 @@ import { CollectorService } from '../core/collector.service';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type EntitySubscriber = any;
+/**
+ * The TypeORM subscriber surface this watcher touches.
+ *
+ * typeorm is an optional peer, so its types cannot be imported — these
+ * describe the runtime shape. Only `entity` is ever read off an event.
+ */
+interface EntityEventLike {
+  entity?: unknown;
+  metadata?: { name?: string };
+}
+
+type LoadHook = (entity: unknown, event: EntityEventLike) => void;
+type EntityHook = (event: EntityEventLike) => void;
+
+/** The Prisma middleware surface this watcher touches. */
+interface PrismaMiddlewareParams {
+  model?: string;
+  action?: string;
+  args?: { where?: unknown };
+}
+
+type PrismaNext = (params: PrismaMiddlewareParams) => Promise<unknown>;
+
+interface PrismaClientLike {
+  $use: (
+    middleware: (params: PrismaMiddlewareParams, next: PrismaNext) => Promise<unknown>,
+  ) => void;
+}
+
+function isPrismaClient(value: unknown): value is PrismaClientLike {
+  return (
+    !!value && typeof value === 'object' && typeof (value as PrismaClientLike).$use === 'function'
+  );
+}
+
+interface EntitySubscriberLike {
+  afterLoad?: LoadHook;
+  beforeInsert?: EntityHook;
+  afterInsert?: EntityHook;
+  beforeUpdate?: EntityHook;
+  afterUpdate?: EntityHook;
+  beforeRemove?: EntityHook;
+  afterRemove?: EntityHook;
+}
 
 /**
  * Token for injecting TypeORM EntitySubscriber
@@ -47,7 +89,7 @@ export class ModelWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_MODEL_SUBSCRIBER)
-    private readonly entitySubscriber?: EntitySubscriber,
+    private readonly entitySubscriber?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
     this.config =
@@ -76,12 +118,13 @@ export class ModelWatcher implements OnModuleInit {
    * Setup TypeORM entity subscriber hooks
    */
   private setupTypeOrmInterceptors(): void {
-    if (!this.entitySubscriber) return;
+    const subscriber = this.entitySubscriber as EntitySubscriberLike | undefined;
+    if (!subscriber) return;
 
     // Track entity loading (find operations)
-    if (typeof this.entitySubscriber.afterLoad === 'function') {
-      const originalAfterLoad = this.entitySubscriber.afterLoad.bind(this.entitySubscriber);
-      this.entitySubscriber.afterLoad = (entity: unknown, event: any) => {
+    if (typeof subscriber.afterLoad === 'function') {
+      const originalAfterLoad = subscriber.afterLoad.bind(subscriber);
+      subscriber.afterLoad = (entity: unknown, event: EntityEventLike) => {
         this.handleAfterLoad(entity, event);
         if (originalAfterLoad) {
           originalAfterLoad(entity, event);
@@ -90,9 +133,9 @@ export class ModelWatcher implements OnModuleInit {
     }
 
     // Track entity insertion (create operations)
-    if (typeof this.entitySubscriber.beforeInsert === 'function') {
-      const originalBeforeInsert = this.entitySubscriber.beforeInsert.bind(this.entitySubscriber);
-      this.entitySubscriber.beforeInsert = (event: any) => {
+    if (typeof subscriber.beforeInsert === 'function') {
+      const originalBeforeInsert = subscriber.beforeInsert.bind(subscriber);
+      subscriber.beforeInsert = (event: EntityEventLike) => {
         this.handleBeforeInsert(event);
         if (originalBeforeInsert) {
           originalBeforeInsert(event);
@@ -100,9 +143,9 @@ export class ModelWatcher implements OnModuleInit {
       };
     }
 
-    if (typeof this.entitySubscriber.afterInsert === 'function') {
-      const originalAfterInsert = this.entitySubscriber.afterInsert.bind(this.entitySubscriber);
-      this.entitySubscriber.afterInsert = (event: any) => {
+    if (typeof subscriber.afterInsert === 'function') {
+      const originalAfterInsert = subscriber.afterInsert.bind(subscriber);
+      subscriber.afterInsert = (event: EntityEventLike) => {
         this.handleAfterInsert(event);
         if (originalAfterInsert) {
           originalAfterInsert(event);
@@ -111,9 +154,9 @@ export class ModelWatcher implements OnModuleInit {
     }
 
     // Track entity updates
-    if (typeof this.entitySubscriber.beforeUpdate === 'function') {
-      const originalBeforeUpdate = this.entitySubscriber.beforeUpdate.bind(this.entitySubscriber);
-      this.entitySubscriber.beforeUpdate = (event: any) => {
+    if (typeof subscriber.beforeUpdate === 'function') {
+      const originalBeforeUpdate = subscriber.beforeUpdate.bind(subscriber);
+      subscriber.beforeUpdate = (event: EntityEventLike) => {
         this.handleBeforeUpdate(event);
         if (originalBeforeUpdate) {
           originalBeforeUpdate(event);
@@ -121,9 +164,9 @@ export class ModelWatcher implements OnModuleInit {
       };
     }
 
-    if (typeof this.entitySubscriber.afterUpdate === 'function') {
-      const originalAfterUpdate = this.entitySubscriber.afterUpdate.bind(this.entitySubscriber);
-      this.entitySubscriber.afterUpdate = (event: any) => {
+    if (typeof subscriber.afterUpdate === 'function') {
+      const originalAfterUpdate = subscriber.afterUpdate.bind(subscriber);
+      subscriber.afterUpdate = (event: EntityEventLike) => {
         this.handleAfterUpdate(event);
         if (originalAfterUpdate) {
           originalAfterUpdate(event);
@@ -132,9 +175,9 @@ export class ModelWatcher implements OnModuleInit {
     }
 
     // Track entity deletion
-    if (typeof this.entitySubscriber.beforeRemove === 'function') {
-      const originalBeforeRemove = this.entitySubscriber.beforeRemove.bind(this.entitySubscriber);
-      this.entitySubscriber.beforeRemove = (event: any) => {
+    if (typeof subscriber.beforeRemove === 'function') {
+      const originalBeforeRemove = subscriber.beforeRemove.bind(subscriber);
+      subscriber.beforeRemove = (event: EntityEventLike) => {
         this.handleBeforeRemove(event);
         if (originalBeforeRemove) {
           originalBeforeRemove(event);
@@ -142,9 +185,9 @@ export class ModelWatcher implements OnModuleInit {
       };
     }
 
-    if (typeof this.entitySubscriber.afterRemove === 'function') {
-      const originalAfterRemove = this.entitySubscriber.afterRemove.bind(this.entitySubscriber);
-      this.entitySubscriber.afterRemove = (event: any) => {
+    if (typeof subscriber.afterRemove === 'function') {
+      const originalAfterRemove = subscriber.afterRemove.bind(subscriber);
+      subscriber.afterRemove = (event: EntityEventLike) => {
         this.handleAfterRemove(event);
         if (originalAfterRemove) {
           originalAfterRemove(event);
@@ -159,17 +202,17 @@ export class ModelWatcher implements OnModuleInit {
    * Setup Prisma client interceptors.
    * Call this manually with your Prisma client instance.
    */
-  setupPrismaClient(prismaClient: any): void {
-    if (!prismaClient?.$use) {
+  setupPrismaClient(prismaClient: unknown): void {
+    if (!isPrismaClient(prismaClient)) {
       this.logger.warn('Invalid Prisma client provided');
       return;
     }
 
     // Use Prisma middleware to track operations
-    prismaClient.$use(async (params: any, next: any) => {
+    prismaClient.$use(async (params: PrismaMiddlewareParams, next: PrismaNext) => {
       const startTime = Date.now();
       const entity = params.model || 'unknown';
-      const action = this.mapPrismaAction(params.action);
+      const action = this.mapPrismaAction(params.action ?? '');
 
       // Skip if entity should be ignored
       if (this.config.ignoreEntities?.includes(entity)) {
@@ -210,7 +253,7 @@ export class ModelWatcher implements OnModuleInit {
     this.logger.log('Model interceptors installed for Prisma');
   }
 
-  private handleAfterLoad(entity: unknown, event: any): void {
+  private handleAfterLoad(entity: unknown, event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
 
     // Skip if entity should be ignored
@@ -229,7 +272,7 @@ export class ModelWatcher implements OnModuleInit {
     );
   }
 
-  private handleBeforeInsert(event: any): void {
+  private handleBeforeInsert(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
     const trackingKey = `insert-${entityName}-${Date.now()}`;
 
@@ -240,7 +283,7 @@ export class ModelWatcher implements OnModuleInit {
     });
   }
 
-  private handleAfterInsert(event: any): void {
+  private handleAfterInsert(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
     const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
       key.startsWith(`insert-${entityName}`),
@@ -269,7 +312,7 @@ export class ModelWatcher implements OnModuleInit {
     );
   }
 
-  private handleBeforeUpdate(event: any): void {
+  private handleBeforeUpdate(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
     const trackingKey = `update-${entityName}-${Date.now()}`;
 
@@ -280,7 +323,7 @@ export class ModelWatcher implements OnModuleInit {
     });
   }
 
-  private handleAfterUpdate(event: any): void {
+  private handleAfterUpdate(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
     const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
       key.startsWith(`update-${entityName}`),
@@ -309,7 +352,7 @@ export class ModelWatcher implements OnModuleInit {
     );
   }
 
-  private handleBeforeRemove(event: any): void {
+  private handleBeforeRemove(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
     const trackingKey = `remove-${entityName}-${Date.now()}`;
 
@@ -320,7 +363,7 @@ export class ModelWatcher implements OnModuleInit {
     });
   }
 
-  private handleAfterRemove(event: any): void {
+  private handleAfterRemove(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
     const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
       key.startsWith(`remove-${entityName}`),

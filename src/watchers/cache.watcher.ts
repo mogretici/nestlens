@@ -3,8 +3,17 @@ import { CollectorService } from '../core/collector.service';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Cache = any;
+/**
+ * The cache-manager surface this watcher touches. Every method is optional
+ * because the store decides which ones exist, and cache-manager v5 dropped
+ * `reset()`.
+ */
+interface CacheLike {
+  get?: (key: string) => Promise<unknown>;
+  set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
+  del?: (key: string) => Promise<void>;
+  reset?: () => Promise<void>;
+}
 
 // Try to import CACHE_MANAGER, but make it optional
 let CACHE_MANAGER: string | symbol = 'CACHE_MANAGER';
@@ -32,7 +41,7 @@ export class CacheWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(CACHE_MANAGER)
-    private readonly cacheManager?: Cache,
+    private readonly cacheManager?: CacheLike,
   ) {
     const watcherConfig = nestlensConfig.watchers?.cache;
     this.config =

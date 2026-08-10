@@ -3,8 +3,35 @@ import { CollectorService } from '../core/collector.service';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MailerService = any;
+/**
+ * The mailer surface this watcher touches.
+ *
+ * Both `@nestjs-modules/mailer` and plain nodemailer expose `sendMail`, and
+ * neither is a declared dependency, so this describes the runtime shape.
+ * Anything accepting a mailer takes `unknown` and narrows here, so callers can
+ * pass their real service without a type conflict.
+ */
+interface MailOptionsLike {
+  to?: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
+  subject?: string;
+  html?: string;
+  text?: string;
+  from?: string;
+}
+
+type SendMail = (mailOptions: MailOptionsLike) => Promise<unknown>;
+
+interface MailerLike {
+  sendMail: SendMail;
+}
+
+function isMailer(value: unknown): value is MailerLike {
+  return (
+    !!value && typeof value === 'object' && typeof (value as MailerLike).sendMail === 'function'
+  );
+}
 
 // Token for injecting mailer service
 export const NESTLENS_MAILER_SERVICE = Symbol('NESTLENS_MAILER_SERVICE');
@@ -13,8 +40,7 @@ export const NESTLENS_MAILER_SERVICE = Symbol('NESTLENS_MAILER_SERVICE');
 export class MailWatcher implements OnModuleInit {
   private readonly logger = new Logger(MailWatcher.name);
   private readonly config: MailWatcherConfig;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private originalSendMail?: (...args: any[]) => Promise<any>;
+  private originalSendMail?: SendMail;
 
   constructor(
     private readonly collector: CollectorService,
@@ -22,7 +48,7 @@ export class MailWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_MAILER_SERVICE)
-    private readonly mailerService?: MailerService,
+    private readonly mailerService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.mail;
     this.config =
@@ -47,14 +73,14 @@ export class MailWatcher implements OnModuleInit {
   }
 
   private setupInterceptors(): void {
-    if (!this.mailerService) return;
+    const mailer = this.mailerService;
+    if (!mailer) return;
 
     // Try to wrap sendMail method (common for both @nestjs-modules/mailer and nodemailer)
-    if (typeof this.mailerService.sendMail === 'function') {
-      this.originalSendMail = this.mailerService.sendMail.bind(this.mailerService);
+    if (isMailer(mailer)) {
+      this.originalSendMail = mailer.sendMail.bind(mailer);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.mailerService.sendMail = async (mailOptions: any): Promise<any> => {
+      mailer.sendMail = async (mailOptions: MailOptionsLike): Promise<unknown> => {
         const startTime = Date.now();
 
         try {
@@ -90,16 +116,15 @@ export class MailWatcher implements OnModuleInit {
    * Setup interceptors on a mailer service.
    * Can be called manually if you want to track a specific mailer instance.
    */
-  setupMailer(mailerService: MailerService): void {
-    if (!mailerService || typeof mailerService.sendMail !== 'function') {
+  setupMailer(mailerService: unknown): void {
+    if (!isMailer(mailerService)) {
       this.logger.warn('Invalid mailer service provided');
       return;
     }
 
     const originalSendMail = mailerService.sendMail.bind(mailerService);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mailerService.sendMail = async (mailOptions: any): Promise<any> => {
+    mailerService.sendMail = async (mailOptions: MailOptionsLike): Promise<unknown> => {
       const startTime = Date.now();
 
       try {
@@ -129,7 +154,7 @@ export class MailWatcher implements OnModuleInit {
   }
 
   private collectEntry(
-    mailOptions: any,
+    mailOptions: MailOptionsLike,
     status: 'sent' | 'failed',
     duration: number,
     error?: string,

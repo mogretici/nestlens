@@ -3,8 +3,7 @@ import { CollectorService } from '../core/collector.service';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RedisClient = any;
+type RedisCommand = (...args: unknown[]) => unknown;
 
 /**
  * Token for injecting Redis client
@@ -32,7 +31,7 @@ const SENSITIVE_KEY_PATTERNS = [
 export class RedisWatcher implements OnModuleInit {
   private readonly logger = new Logger(RedisWatcher.name);
   private readonly config: RedisWatcherConfig;
-  private originalMethods?: Map<string, Function>;
+  private originalMethods?: Map<string, RedisCommand>;
 
   constructor(
     private readonly collector: CollectorService,
@@ -40,7 +39,7 @@ export class RedisWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_REDIS_CLIENT)
-    private readonly redisClient?: RedisClient,
+    private readonly redisClient?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.redis;
     this.config =
@@ -98,23 +97,30 @@ export class RedisWatcher implements OnModuleInit {
       'mset',
     ];
 
+    // The client is user-supplied and its commands are looked up by name, so
+    // the shape is checked at runtime rather than declared.
+    const client = this.redisClient as Record<string, unknown> | undefined;
+    if (!client) return;
+
     for (const command of commandsToTrack) {
+      const existing = client[command];
+
       // Skip if command doesn't exist or should be ignored
-      if (!this.redisClient[command] || this.config.ignoreCommands?.includes(command)) {
+      if (typeof existing !== 'function' || this.config.ignoreCommands?.includes(command)) {
         continue;
       }
 
       // Store original method
-      this.originalMethods.set(command, this.redisClient[command].bind(this.redisClient));
+      this.originalMethods.set(command, (existing as RedisCommand).bind(client));
 
       // Wrap the command
-      this.redisClient[command] = this.wrapCommand(command, this.originalMethods.get(command)!);
+      client[command] = this.wrapCommand(command, this.originalMethods.get(command)!);
     }
 
     this.logger.log('Redis interceptors installed');
   }
 
-  private wrapCommand(command: string, originalMethod: Function): Function {
+  private wrapCommand(command: string, originalMethod: RedisCommand): RedisCommand {
     return async (...args: unknown[]): Promise<unknown> => {
       const startTime = Date.now();
       let status: 'success' | 'error' = 'success';

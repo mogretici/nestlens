@@ -3,8 +3,7 @@ import { CollectorService } from '../core/collector.service';
 import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type BatchProcessor = any;
+type BatchMethod = (name: string, items: unknown[], options?: unknown) => Promise<unknown>;
 
 /**
  * Token for injecting batch processor service
@@ -35,7 +34,7 @@ export class BatchWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_BATCH_PROCESSOR)
-    private readonly batchProcessor?: BatchProcessor,
+    private readonly batchProcessor?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.batch;
     this.config =
@@ -72,13 +71,22 @@ export class BatchWatcher implements OnModuleInit {
   }
 
   private wrapMethod(methodName: string): void {
-    if (!this.batchProcessor || typeof this.batchProcessor[methodName] !== 'function') {
+    // The processor is user-supplied and its methods are looked up by name, so
+    // the shape is checked at runtime rather than declared.
+    const processor: Record<string, unknown> | undefined = this.batchProcessor as
+      | Record<string, unknown>
+      | undefined;
+    if (!processor) return;
+
+    const existing = processor[methodName];
+
+    if (typeof existing !== 'function') {
       return;
     }
 
-    const originalMethod = this.batchProcessor[methodName].bind(this.batchProcessor);
+    const originalMethod = (existing as BatchMethod).bind(processor);
 
-    this.batchProcessor[methodName] = async (
+    processor[methodName] = async (
       name: string,
       items: unknown[],
       options?: unknown,

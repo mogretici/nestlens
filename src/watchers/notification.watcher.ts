@@ -3,8 +3,7 @@ import { CollectorService } from '../core/collector.service';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type NotificationService = any;
+type NotificationMethod = (...args: unknown[]) => unknown;
 
 /**
  * Token for injecting notification service
@@ -19,7 +18,7 @@ export const NESTLENS_NOTIFICATION_SERVICE = Symbol('NESTLENS_NOTIFICATION_SERVI
 export class NotificationWatcher implements OnModuleInit {
   private readonly logger = new Logger(NotificationWatcher.name);
   private readonly config: NotificationWatcherConfig;
-  private originalMethods?: Map<string, Function>;
+  private originalMethods?: Map<string, NotificationMethod>;
 
   constructor(
     private readonly collector: CollectorService,
@@ -27,7 +26,7 @@ export class NotificationWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_NOTIFICATION_SERVICE)
-    private readonly notificationService?: NotificationService,
+    private readonly notificationService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.notification;
     this.config =
@@ -66,20 +65,23 @@ export class NotificationWatcher implements OnModuleInit {
       { name: 'send', type: 'email' as const }, // Generic send method
     ];
 
+    // The service is user-supplied and its methods are looked up by name, so
+    // the shape is checked at runtime rather than declared.
+    const service = this.notificationService as Record<string, unknown> | undefined;
+    if (!service) return;
+
     for (const { name, type } of methodsToTrack) {
-      if (!this.notificationService[name]) {
+      const existing = service[name];
+
+      if (typeof existing !== 'function') {
         continue;
       }
 
       // Store original method
-      this.originalMethods.set(name, this.notificationService[name].bind(this.notificationService));
+      this.originalMethods.set(name, (existing as NotificationMethod).bind(service));
 
       // Wrap the method
-      this.notificationService[name] = this.wrapNotificationMethod(
-        name,
-        type,
-        this.originalMethods.get(name)!,
-      );
+      service[name] = this.wrapNotificationMethod(name, type, this.originalMethods.get(name)!);
     }
 
     this.logger.log('Notification interceptors installed');
@@ -88,8 +90,8 @@ export class NotificationWatcher implements OnModuleInit {
   private wrapNotificationMethod(
     methodName: string,
     notificationType: 'email' | 'sms' | 'push' | 'socket' | 'webhook',
-    originalMethod: Function,
-  ): Function {
+    originalMethod: NotificationMethod,
+  ): NotificationMethod {
     return async (...args: unknown[]): Promise<unknown> => {
       const startTime = Date.now();
       let status: 'sent' | 'failed' = 'sent';
