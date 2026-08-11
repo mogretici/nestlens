@@ -43,7 +43,6 @@ export default function EntrySearchInput({ placeholder = 'Search...' }: EntrySea
   // Sync input when the URL changes externally (chip removed, clear all, navigation)
   useEffect(() => {
     setSearchInput(urlSearch);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSearch]);
 
   return (

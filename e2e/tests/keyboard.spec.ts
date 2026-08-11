@@ -58,11 +58,10 @@ test.describe('Table Keyboard Navigation', () => {
     await entries.goto('requests');
     await entries.waitForLoad();
 
-    const rowCount = await entries.getRowCount();
-    if (rowCount < 2) {
-      test.skip();
-      return;
-    }
+    // Not a skip: the suite seeds the application before it runs, so too few
+    // rows means the seeding or the table is broken. Skipping reported that as
+    // a pass, which is how a genuinely unseeded run once came back green.
+    expect(await entries.getRowCount()).toBeGreaterThanOrEqual(2);
 
     // The handler lives on the row, so a row has to hold focus — clicking the
     // table does not give it to one, and clicking a row would open the entry.
@@ -81,11 +80,7 @@ test.describe('Table Keyboard Navigation', () => {
     await entries.goto('requests');
     await entries.waitForLoad();
 
-    const rowCount = await entries.getRowCount();
-    if (rowCount === 0) {
-      test.skip();
-      return;
-    }
+    expect(await entries.getRowCount()).toBeGreaterThan(0);
 
     // Focus rather than click — clicking opens the entry on its own, so the
     // original version proved nothing about the Enter key.
@@ -101,11 +96,7 @@ test.describe('Table Keyboard Navigation', () => {
     await entries.goto('requests');
     await entries.waitForLoad();
 
-    const rowCount = await entries.getRowCount();
-    if (rowCount < 3) {
-      test.skip();
-      return;
-    }
+    expect(await entries.getRowCount()).toBeGreaterThanOrEqual(3);
 
     const rows = page.locator('tbody tr[tabindex]');
     await rows.first().focus();

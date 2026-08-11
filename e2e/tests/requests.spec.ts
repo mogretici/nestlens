@@ -45,14 +45,22 @@ test.describe('Filters', () => {
   });
 
   test('filter appears in URL', async ({ page }) => {
-    // Click on a method badge if one exists
-    const badge = page.getByText('GET').first();
-    const isBadgeVisible = await badge.isVisible().catch(() => false);
+    // Whichever method the first row happens to carry: naming one ties the
+    // test to what the seed sent last, and `GET` was simply absent from the
+    // first page often enough to matter.
+    const badge = page.locator('tbody tr').first().getByRole('button').first();
+    await expect(badge).toBeVisible();
+    const method = ((await badge.textContent()) ?? '').trim();
+    expect(method).not.toBe('');
 
-    if (isBadgeVisible) {
+    // Retried as a unit: a click that lands before React has attached the
+    // handler does nothing at all, and the page gives no signal that it is
+    // ready — the badge simply ignores the first click and the assertion then
+    // waits out its timeout for a navigation nobody started.
+    await expect(async () => {
       await badge.click();
-      await expect(page).toHaveURL(/methods=get/i);
-    }
+      await expect(page).toHaveURL(new RegExp(`methods=${method}`, 'i'), { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
   });
 
   test('filter persists on page reload', async ({ page }) => {
@@ -64,19 +72,25 @@ test.describe('Filters', () => {
     await expect(page).toHaveURL(/methods=get/i);
   });
 
-  test('clear all removes filters', async ({ page }) => {
-    // Navigate with filter
-    await page.goto('/requests?methods=get');
+  /**
+   * The single-filter path. "Clear all" only appears once more than one filter
+   * is active — filters.spec.ts covers that — so with one filter the chip's own
+   * remove button is the way out, and it had no test at all. The previous
+   * version of this test looked for "Clear all" behind an `if (isVisible)` and
+   * so passed without ever finding it.
+   */
+  test('removing the only filter chip clears the URL', async ({ page }) => {
+    // Upper case is what the dashboard itself puts in the URL.
+    await page.goto('/requests?methods=GET');
     await page.waitForSelector('main', { state: 'visible' });
 
-    // Click Clear All if visible
-    const clearButton = page.getByText('Clear all');
-    const isVisible = await clearButton.isVisible().catch(() => false);
+    const chip = page.getByRole('button', { name: /Remove Method filter: GET/i });
+    await expect(chip).toBeVisible();
 
-    if (isVisible) {
-      await clearButton.click();
-      await expect(page).not.toHaveURL(/methods=/);
-    }
+    await expect(async () => {
+      await chip.click();
+      await expect(page).not.toHaveURL(/methods=/, { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
   });
 });
 
@@ -85,16 +99,15 @@ test.describe('Entry Details', () => {
     await page.goto('/requests');
     await page.waitForSelector('main', { state: 'visible' });
 
-    // Find a clickable row
+    // The suite seeds the application, so a row missing here is a failure
+    // rather than a reason to pass quietly.
     const row = page.locator('tbody tr[tabindex="0"]').first();
-    const isRowVisible = await row.isVisible().catch(() => false);
+    await expect(row).toBeVisible();
 
-    if (isRowVisible) {
+    await expect(async () => {
       await row.click();
-
-      // Should navigate to detail page
-      await expect(page).toHaveURL(/\/requests\/\d+/);
-    }
+      await expect(page).toHaveURL(/\/requests\/\d+/, { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
   });
 
   test('back navigation returns to list', async ({ page }) => {
@@ -120,16 +133,13 @@ test.describe('Keyboard Navigation', () => {
   });
 
   test('Enter key opens entry detail', async ({ page }) => {
-    // Focus on a row
     const row = page.locator('tbody tr[tabindex="0"]').first();
-    const isRowVisible = await row.isVisible().catch(() => false);
+    await expect(row).toBeVisible();
 
-    if (isRowVisible) {
+    await expect(async () => {
       await row.focus();
       await page.keyboard.press('Enter');
-
-      // Should navigate to detail
-      await expect(page).toHaveURL(/\/requests\/\d+/);
-    }
+      await expect(page).toHaveURL(/\/requests\/\d+/, { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
   });
 });

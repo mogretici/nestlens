@@ -650,8 +650,7 @@ export function validateConfig(): string[] {
 export const getEntryTypeConfig = getEntryConfig;
 
 // Run validation in development (Vite provides import.meta.env)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) {
+if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
   const errors = validateConfig();
   if (errors.length > 0) {
     console.error('[entryTypes] Configuration errors:', errors);
