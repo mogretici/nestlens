@@ -4,6 +4,7 @@
  * Tests for automatic entry pruning service.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PruningService } from '../../core/pruning.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -104,6 +105,69 @@ describe('PruningService', () => {
     });
   });
 
+  describe('non-positive durations', () => {
+    /**
+     * `interval: 0` used to be read as "unset" and silently became 60 minutes.
+     * Taken literally it would reschedule the timer on every tick instead, so
+     * neither reading is what the author meant — the value is a mistake, and
+     * the service now says so rather than guessing in silence.
+     * `enabled: false` is the documented way to switch pruning off.
+     */
+    it('refuses a zero interval and says why', async () => {
+      // Arrange
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      mockConfig.pruning = { enabled: true, interval: 0 };
+      const module = await Test.createTestingModule({
+        providers: [
+          PruningService,
+          { provide: NESTLENS_CONFIG, useValue: mockConfig },
+          { provide: STORAGE, useValue: mockStorage },
+        ],
+      }).compile();
+      const service = module.get<PruningService>(PruningService);
+
+      // Act
+      service.onModuleInit();
+
+      // Assert - the default interval stands, and the mistake is reported
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('pruning.interval'));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('enabled: false'));
+      jest.advanceTimersByTime(60 * 60 * 1000);
+      expect(mockStorage.prune).toHaveBeenCalledTimes(2);
+
+      // Cleanup
+      await service.onModuleDestroy();
+      warn.mockRestore();
+    });
+
+    it('refuses a zero maxAge rather than deleting everything', async () => {
+      // Arrange
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      mockConfig.pruning = { enabled: true, maxAge: 0 };
+      const module = await Test.createTestingModule({
+        providers: [
+          PruningService,
+          { provide: NESTLENS_CONFIG, useValue: mockConfig },
+          { provide: STORAGE, useValue: mockStorage },
+        ],
+      }).compile();
+      const service = module.get<PruningService>(PruningService);
+
+      // Act
+      service.onModuleInit();
+
+      // Assert - 24 hours back, not "everything up to now"
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('pruning.maxAge'));
+      const [before] = mockStorage.prune.mock.calls[0] as [Date];
+      const hoursBack = (Date.now() - before.getTime()) / (60 * 60 * 1000);
+      expect(hoursBack).toBeCloseTo(24, 1);
+
+      // Cleanup
+      await service.onModuleDestroy();
+      warn.mockRestore();
+    });
+  });
+
   // ============================================================================
   // Interval Pruning
   // ============================================================================
@@ -139,13 +203,9 @@ describe('PruningService', () => {
       jest.setSystemTime(now);
       service.onModuleInit();
 
-      // Assert - prune should be called with date 24 hours ago
+      // Assert - prune should be called with the date 24 hours ago
       const expectedDate = new Date(now - 24 * 60 * 60 * 1000);
-      expect(mockStorage.prune).toHaveBeenCalledWith(
-        expect.objectContaining({
-          getTime: expect.any(Function),
-        }),
-      );
+      expect(mockStorage.prune).toHaveBeenCalledWith(expectedDate);
     });
   });
 
