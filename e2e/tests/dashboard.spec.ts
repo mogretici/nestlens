@@ -31,8 +31,14 @@ test.describe('Dashboard', () => {
 
   test('logo links to home page', async ({ page }) => {
     await dashboard.navigateTo('/requests');
-    await dashboard.logo.click();
-    await expect(page).toHaveURL('/');
+
+    // Retried as a unit: a click landing before React attaches its handler is
+    // simply ignored, and the assertion then waits out its timeout for a
+    // navigation that was never started.
+    await expect(async () => {
+      await dashboard.logo.click();
+      await expect(page).toHaveURL('/', { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
   });
 
   test('displays theme toggle button', async ({ page }) => {

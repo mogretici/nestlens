@@ -56,12 +56,14 @@ test.describe('Filters E2E', () => {
     await page.goto('/requests?methods=GET&statuses=200');
     await entries.waitForLoad();
 
-    if (await entries.clearFiltersButton.isVisible()) {
-      await entries.clearFiltersButton.click();
+    // Two filters are in the URL, so the control that clears them has to be
+    // offered — skipping when it is absent reported a missing control as a pass.
+    await expect(entries.clearFiltersButton).toBeVisible();
 
-      // URL should be clean
-      await expect(page).toHaveURL('/requests');
-    }
+    await expect(async () => {
+      await entries.clearFiltersButton.click();
+      await expect(page).toHaveURL('/requests', { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
   });
 
   test('multiple filters work together', async ({ page }) => {
