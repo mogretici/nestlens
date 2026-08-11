@@ -41,7 +41,7 @@ npm run lint               # ESLint on src/**/*.ts
 ### Example App
 ```bash
 npm run build              # Required first — the example installs dist/, not src/
-cd example && npm install  # Re-run after every library rebuild
+cd example && rm -rf node_modules/nestlens && npm install   # After every rebuild
 cd example && npm start    # Run example NestJS app with NestLens
 cd example && npm run seed # Generate test data via test-requests.sh
 ```
@@ -52,6 +52,12 @@ The example installs NestLens from `file:..` as a **copy**, not a symlink
 app dies at bootstrap with `Nest can't resolve dependencies of DiscoveryService
 (ModulesContainer)`. The cost is that library changes only reach the example
 after a rebuild plus `npm install`.
+
+**`npm install` alone is not enough.** npm treats the `file:` dependency as
+already satisfied and leaves the old copy in place, so the example keeps
+running whatever version was installed first — it was found sitting three
+releases behind, which silently made every E2E run test stale code. Delete
+`example/node_modules/nestlens` first.
 
 ## Architecture
 
@@ -146,8 +152,24 @@ it is no longer required for Apollo or Mercurius.
 - Test setup in `src/__tests__/setup.ts`
 - E2E tests require both example app (port 3000) and dashboard dev server (port 5173)
 - Playwright config auto-starts both servers in non-CI mode
-- Before the first E2E run: `npm run build`, then `cd example && npm install`,
-  then `npx playwright install`
+- Before the first E2E run: `npm run build`, then
+  `cd example && rm -rf node_modules/nestlens && npm install`, then
+  `npx playwright install`
+- The `chromium` / `firefox` / `webkit` projects load the dashboard from the
+  **Vite dev server**, so they never exercise what the package ships. The
+  `production` project (`--project=production`) runs
+  `e2e/tests/production-serving.spec.ts` against the example app instead,
+  covering static file serving, the injected `<base href>`, the SPA wildcard,
+  cache headers and asset integrity. Run it whenever
+  `dashboard.controller.ts` changes — it needs a fresh build and example
+  install to mean anything.
+- That project stays deliberately small. Playwright gives each test a cold
+  cache, so re-running the functional suite there would re-download the ~1 MB
+  bundle per test to re-cover what the dev-server projects already cover, and
+  those specs assume the dashboard sits at the origin root. What only the
+  production project can check is that the bytes leaving the package are
+  correct — 0.8.0 served every script as `{"type":"Buffer","data":[…]}` and
+  not one existing test noticed.
 - Lint, type check, library tests and dashboard tests run on every push and
   pull request (`.github/workflows/ci.yml`) — about two minutes
 - E2E is **not** part of that. It drives three web servers and takes far longer

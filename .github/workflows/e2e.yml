@@ -12,6 +12,12 @@ on:
         type: choice
         default: chromium
         options: [chromium, firefox, webkit]
+      production:
+        description: >-
+          Also run the production project, which serves the dashboard from the
+          built package instead of the Vite dev server
+        type: boolean
+        default: true
 
 jobs:
   e2e:
@@ -49,6 +55,13 @@ jobs:
 
       - name: Run E2E tests
         run: npm run test:e2e -- --project=${{ inputs.browser }}
+
+      # Covers what the package actually ships — static file serving, the
+      # injected <base href>, the SPA wildcard and cache headers — none of
+      # which the dev-server projects touch.
+      - name: Run E2E tests against the built package
+        if: ${{ inputs.production }}
+        run: npm run test:e2e -- --project=production
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
