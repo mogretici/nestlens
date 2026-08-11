@@ -99,10 +99,11 @@ export class DashboardController {
    * router, so it gets index.html and React decides what to render — including
    * its own not-found page. Declared last so the asset and SVG routes above win.
    *
-   * The pattern is a bare `*` because that is the only form both routers accept:
-   * Fastify rejects anything after the star ("Wildcard must be the last
-   * character in the route"), which rules out Express/path-to-regexp v8's
-   * named `*path`.
+   * The bare `*` here is the fallback, not the final answer: it is the one form
+   * every router has always accepted, and Express 5 takes it only under protest,
+   * logging a deprecation notice about our route on every boot.
+   * {@link SpaRouteRegistrar} replaces it with whichever form the adapter in use
+   * actually wants, before Nest resolves routes.
    */
   @Get('*')
   serveSpaRoute(@Res() res: unknown, @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string): void {
