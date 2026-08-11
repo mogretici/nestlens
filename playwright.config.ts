@@ -22,17 +22,44 @@ export default defineConfig({
   },
 
   projects: [
+    // The production spec targets the example app directly, so these skip it —
+    // they would resolve its paths against the dev server's origin.
     {
       name: 'chromium',
+      testIgnore: /production-serving\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'firefox',
+      testIgnore: /production-serving\.spec\.ts/,
       use: { ...devices['Desktop Firefox'] },
     },
     {
       name: 'webkit',
+      testIgnore: /production-serving\.spec\.ts/,
       use: { ...devices['Desktop Safari'] },
+    },
+    // The projects above load the dashboard from the Vite dev server, so they
+    // never touch the code that ships: static file serving, the injected
+    // `<base href>`, the SPA wildcard and the cache headers. This one drives
+    // the example application, where the bundle comes out of the package the
+    // same way it would in a user's app.
+    //
+    // It runs one focused spec rather than the whole suite. Playwright gives
+    // each test a cold cache, so re-running the functional tests here would
+    // re-download the ~1 MB bundle per test to re-cover what the dev-server
+    // projects already cover. What only this can check is that the bytes
+    // leaving the package are correct.
+    //
+    // Needs `npm run build` and a refreshed `example/node_modules/nestlens` to
+    // mean anything — see CLAUDE.md, npm does not re-copy a `file:` dependency.
+    {
+      name: 'production',
+      testMatch: /production-serving\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
     },
   ],
 
