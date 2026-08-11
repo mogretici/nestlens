@@ -8,7 +8,12 @@ test.describe('Entry Pages', () => {
     await entries.waitForLoad();
 
     // Page header should be visible
-    await expect(page.locator('h1, [role="heading"]').filter({ hasText: /request/i }).first()).toBeVisible();
+    await expect(
+      page
+        .locator('h1, [role="heading"]')
+        .filter({ hasText: /request/i })
+        .first(),
+    ).toBeVisible();
   });
 
   test('queries page loads correctly', async ({ page }) => {
@@ -16,7 +21,9 @@ test.describe('Entry Pages', () => {
     await entries.goto('queries');
     await entries.waitForLoad();
 
-    await expect(page.locator('h1, [role="heading"]').filter({ hasText: /quer/i }).first()).toBeVisible();
+    await expect(
+      page.locator('h1, [role="heading"]').filter({ hasText: /quer/i }).first(),
+    ).toBeVisible();
   });
 
   test('logs page loads correctly', async ({ page }) => {
@@ -24,7 +31,9 @@ test.describe('Entry Pages', () => {
     await entries.goto('logs');
     await entries.waitForLoad();
 
-    await expect(page.locator('h1, [role="heading"]').filter({ hasText: /log/i }).first()).toBeVisible();
+    await expect(
+      page.locator('h1, [role="heading"]').filter({ hasText: /log/i }).first(),
+    ).toBeVisible();
   });
 
   test('exceptions page loads correctly', async ({ page }) => {
@@ -32,7 +41,12 @@ test.describe('Entry Pages', () => {
     await entries.goto('exceptions');
     await entries.waitForLoad();
 
-    await expect(page.locator('h1, [role="heading"]').filter({ hasText: /exception/i }).first()).toBeVisible();
+    await expect(
+      page
+        .locator('h1, [role="heading"]')
+        .filter({ hasText: /exception/i })
+        .first(),
+    ).toBeVisible();
   });
 
   test('jobs page loads correctly', async ({ page }) => {
@@ -40,7 +54,9 @@ test.describe('Entry Pages', () => {
     await entries.goto('jobs');
     await entries.waitForLoad();
 
-    await expect(page.locator('h1, [role="heading"]').filter({ hasText: /job/i }).first()).toBeVisible();
+    await expect(
+      page.locator('h1, [role="heading"]').filter({ hasText: /job/i }).first(),
+    ).toBeVisible();
   });
 });
 
@@ -129,8 +145,9 @@ test.describe('Entry Detail', () => {
       await entries.clickRow(0);
       await page.waitForTimeout(300);
 
-      // Should show exception info
-      const exceptionInfo = page.locator('text=/Error|Exception|stack/i');
+      // Scoped to the content area: the sidebar has an "Exceptions" link, and
+      // its hidden mobile copy is what an unscoped locator matches first.
+      const exceptionInfo = page.locator('main').getByText(/Error|Exception|stack/i);
       await expect(exceptionInfo.first()).toBeVisible();
     }
   });
@@ -146,7 +163,12 @@ test.describe('Entry Detail', () => {
       await page.waitForTimeout(300);
 
       // Should show level
-      await expect(page.getByText(/error|warn|info|debug|log/i).first()).toBeVisible();
+      await expect(
+        page
+          .locator('main')
+          .getByText(/error|warn|info|debug/i)
+          .first(),
+      ).toBeVisible();
     }
   });
 });

@@ -15,7 +15,7 @@ test.describe('Requests Page', () => {
   });
 
   test('displays data table', async ({ page }) => {
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
 
     // Table should be present
     await expect(page.getByRole('grid')).toBeVisible();
@@ -27,22 +27,21 @@ test.describe('Requests Page', () => {
     await expect(page).toHaveURL(/\/requests/);
   });
 
-  test('displays empty state when no entries', async ({ page }) => {
-    // If no entries, should show empty message
-    await page.waitForLoadState('networkidle');
+  test('shows either the table or an empty state', async ({ page }) => {
+    await page.waitForSelector('main', { state: 'visible' });
 
-    // Either table with data or empty state
-    const hasTable = await page.getByRole('grid').isVisible();
-    const hasEmptyState = await page.getByText(/no requests/i).isVisible().catch(() => false);
+    // `isVisible()` reads the DOM once, before the table has rendered; this
+    // waits for whichever of the two the page ends up showing.
+    const tableOrEmptyState = page.getByRole('grid').or(page.getByText(/no requests/i));
 
-    expect(hasTable || hasEmptyState).toBeTruthy();
+    await expect(tableOrEmptyState.first()).toBeVisible();
   });
 });
 
 test.describe('Filters', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
   });
 
   test('filter appears in URL', async ({ page }) => {
@@ -59,7 +58,7 @@ test.describe('Filters', () => {
   test('filter persists on page reload', async ({ page }) => {
     // Navigate with filter in URL
     await page.goto('/requests?methods=get');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
 
     // URL should still have filter
     await expect(page).toHaveURL(/methods=get/i);
@@ -68,7 +67,7 @@ test.describe('Filters', () => {
   test('clear all removes filters', async ({ page }) => {
     // Navigate with filter
     await page.goto('/requests?methods=get');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
 
     // Click Clear All if visible
     const clearButton = page.getByText('Clear all');
@@ -84,7 +83,7 @@ test.describe('Filters', () => {
 test.describe('Entry Details', () => {
   test('clicking entry row navigates to detail', async ({ page }) => {
     await page.goto('/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
 
     // Find a clickable row
     const row = page.locator('tbody tr[tabindex="0"]').first();
@@ -99,14 +98,17 @@ test.describe('Entry Details', () => {
   });
 
   test('back navigation returns to list', async ({ page }) => {
-    // Navigate directly to a request detail page
-    await page.goto('/requests/1');
-    await page.waitForLoadState('networkidle');
+    // Through the list, not straight to the detail — going back from the first
+    // page in a fresh context lands on about:blank, which says nothing about
+    // the app.
+    await page.goto('/requests');
+    await page.waitForSelector('main', { state: 'visible' });
 
-    // Go back
+    await page.goto('/requests/1');
+    await page.waitForSelector('main', { state: 'visible' });
+
     await page.goBack();
 
-    // Should be on list page
     await expect(page).toHaveURL(/\/requests$/);
   });
 });
@@ -114,7 +116,7 @@ test.describe('Entry Details', () => {
 test.describe('Keyboard Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
   });
 
   test('Enter key opens entry detail', async ({ page }) => {

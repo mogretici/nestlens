@@ -64,15 +64,16 @@ test.describe('Table Keyboard Navigation', () => {
       return;
     }
 
-    // Focus on table
-    await entries.table.click();
+    // The handler lives on the row, so a row has to hold focus — clicking the
+    // table does not give it to one, and clicking a row would open the entry.
+    const rows = page.locator('tbody tr[tabindex]');
+    await rows.first().focus();
 
-    // Press Down arrow
     await page.keyboard.press('ArrowDown');
 
-    // Verify focus moved (row should have focus indicator)
-    const focusedRow = page.locator('[data-focused="true"], :focus-within tr');
-    await expect(focusedRow.first()).toBeVisible();
+    // The table moves real DOM focus rather than marking rows with an
+    // attribute, so focus itself is the thing to assert on.
+    await expect(rows.nth(1)).toBeFocused();
   });
 
   test('Enter opens entry detail', async ({ page }) => {
@@ -86,20 +87,13 @@ test.describe('Table Keyboard Navigation', () => {
       return;
     }
 
-    // Click first row to focus
-    await entries.clickRow(0);
+    // Focus rather than click — clicking opens the entry on its own, so the
+    // original version proved nothing about the Enter key.
+    await page.locator('tbody tr[tabindex]').first().focus();
 
-    // Press Enter
     await page.keyboard.press('Enter');
 
-    // Should navigate to detail or show detail panel
-    await page.waitForTimeout(300);
-
-    // URL should change or detail view should appear
-    const hasDetail = await page.locator('[data-testid="entry-detail"]').isVisible();
-    const urlHasId = /\/\d+|#\d+/.test(page.url());
-
-    expect(hasDetail || urlHasId).toBe(true);
+    await expect(page).toHaveURL(/\/requests\/\d+/);
   });
 
   test('Home/End navigate to first/last row', async ({ page }) => {
@@ -113,19 +107,13 @@ test.describe('Table Keyboard Navigation', () => {
       return;
     }
 
-    // Focus table
-    await entries.table.click();
+    const rows = page.locator('tbody tr[tabindex]');
+    await rows.first().focus();
 
-    // Press End to go to last row
     await page.keyboard.press('End');
-    await page.waitForTimeout(100);
+    await expect(rows.last()).toBeFocused();
 
-    // Press Home to go to first row
     await page.keyboard.press('Home');
-    await page.waitForTimeout(100);
-
-    // First row should be focused
-    const firstRow = entries.rows.first();
-    await expect(firstRow).toBeVisible();
+    await expect(rows.first()).toBeFocused();
   });
 });
