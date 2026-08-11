@@ -13,16 +13,24 @@ export class DashboardPage {
   readonly logo: Locator;
   readonly navItems: Locator;
   readonly mobileMenuButton: Locator;
+  readonly mobileSidebar: Locator;
 
   constructor(page: Page) {
     this.page = page;
-    this.sidebar = page.locator('[data-testid="sidebar"]').or(page.locator('aside'));
+    // The layout renders a mobile and a desktop sidebar at the same time and
+    // hides one with CSS, so anything matching both has to take the visible
+    // one — `.first()` picks whichever comes first in the DOM, which is the
+    // hidden mobile copy.
+    this.sidebar = page.locator('[data-testid="sidebar"]');
     this.mainContent = page.locator('main');
     this.themeToggle = page.getByRole('button', { name: /dark mode|light mode|theme/i });
     this.clearButton = page.getByRole('button', { name: /clear/i });
-    this.logo = page.locator('a[href="/"]').first();
-    this.navItems = page.locator('nav a');
+    this.logo = page.locator('a[href="/"]:visible').first();
+    this.navItems = page.locator('nav:visible a');
     this.mobileMenuButton = page.getByRole('button', { name: /menu/i });
+    // The drawer the menu button opens — a separate element from the desktop
+    // sidebar, which stays hidden at mobile widths.
+    this.mobileSidebar = page.locator('[data-testid="mobile-sidebar"]');
   }
 
   async goto() {

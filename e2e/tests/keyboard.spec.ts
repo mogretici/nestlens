@@ -17,32 +17,38 @@ test.describe('Keyboard Shortcuts', () => {
     expect(afterToggle).not.toBe(initialDark);
   });
 
-  test('Ctrl+K opens clear dialog', async ({ page }) => {
+  /**
+   * The shortcut goes through `window.confirm`, which the browser owns — there
+   * is no dialog element to assert on, and dismissing it is what Escape would
+   * have done anyway.
+   */
+  test('Ctrl+K asks for confirmation before clearing', async ({ page }) => {
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
-    // Press Ctrl+K
-    await page.keyboard.press('Control+k');
+    let asked: string | null = null;
+    page.once('dialog', async (dialog) => {
+      asked = dialog.message();
+      await dialog.dismiss();
+    });
 
-    // Dialog should appear
-    const dialog = page.getByRole('dialog').or(page.locator('[role="alertdialog"]'));
-    await expect(dialog).toBeVisible();
+    await page.locator('body').click();
+    await page.keyboard.press('ControlOrMeta+k');
+
+    await expect.poll(() => asked).toMatch(/clear/i);
   });
 
-  test('Escape closes open dialogs', async ({ page }) => {
+  test('dismissing the Ctrl+K confirmation keeps entries', async ({ page }) => {
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
-    // Open dialog first
-    await page.keyboard.press('Control+k');
-    const dialog = page.getByRole('dialog').or(page.locator('[role="alertdialog"]'));
-    await expect(dialog).toBeVisible();
+    page.once('dialog', (dialog) => dialog.dismiss());
+    const before = await page.locator('table tbody tr').count();
 
-    // Press Escape
-    await page.keyboard.press('Escape');
+    await page.locator('body').click();
+    await page.keyboard.press('ControlOrMeta+k');
 
-    // Dialog should close
-    await expect(dialog).not.toBeVisible();
+    await expect(page.locator('table tbody tr')).toHaveCount(before);
   });
 });
 
@@ -88,11 +94,11 @@ test.describe('Table Keyboard Navigation', () => {
 
     // Should navigate to detail or show detail panel
     await page.waitForTimeout(300);
-    
+
     // URL should change or detail view should appear
     const hasDetail = await page.locator('[data-testid="entry-detail"]').isVisible();
     const urlHasId = /\/\d+|#\d+/.test(page.url());
-    
+
     expect(hasDetail || urlHasId).toBe(true);
   });
 

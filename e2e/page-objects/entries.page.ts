@@ -21,7 +21,9 @@ export class EntriesPage {
     this.rows = page.locator('tbody tr').or(page.locator('[role="row"]'));
     this.pageHeader = page.locator('[data-testid="page-header"]').or(page.locator('header'));
     this.filterChips = page.locator('[data-testid="filter-chip"]').or(page.locator('.filter-chip'));
-    this.clearFiltersButton = page.getByRole('button', { name: /clear all/i });
+    // Exact, because the sidebar's "Clear all data" button matches a loose
+    // /clear all/ as well and the two do very different things.
+    this.clearFiltersButton = page.getByRole('button', { name: 'Clear all', exact: true });
     this.pagination = page.locator('[data-testid="pagination"]').or(page.locator('.pagination'));
     this.loadingSpinner = page.locator('[data-testid="loading"]').or(page.locator('.animate-spin'));
     this.emptyState = page.locator('[data-testid="empty-state"]').or(page.getByText(/no entries/i));
