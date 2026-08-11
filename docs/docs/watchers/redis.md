@@ -36,7 +36,7 @@ NestLensModule.forRoot({
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable/disable Redis tracking |
 | `ignoreCommands` | string[] | `[]` | Commands to ignore |
-| `maxResultSize` | number | `1024` | Max result size to capture (bytes) |
+| `maxResultSize` | number | `1024` | Max result size to capture (bytes). `0` records the size only, never the content |
 
 ## Payload Structure
 

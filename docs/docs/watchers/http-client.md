@@ -41,7 +41,7 @@ NestLensModule.forRoot({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable/disable HTTP client tracking |
-| `maxBodySize` | number | `64 * 1024` | Max body size to capture (bytes) |
+| `maxBodySize` | number | `64 * 1024` | Max body size to capture (bytes). `0` records the size only, never the content |
 | `captureRequestBody` | boolean | `true` | Capture request body |
 | `captureResponseBody` | boolean | `true` | Capture response body |
 | `ignoreHosts` | string[] | `[]` | Hosts to ignore |

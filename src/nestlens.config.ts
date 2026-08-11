@@ -88,7 +88,7 @@ export interface QueryWatcherConfig {
 export interface RequestWatcherConfig {
   enabled?: boolean;
   ignorePaths?: string[];
-  maxBodySize?: number; // bytes, default: 64KB
+  maxBodySize?: number; // bytes, default: 64KB; 0 captures none
   captureHeaders?: boolean;
   captureBody?: boolean;
   captureResponse?: boolean;
@@ -133,7 +133,7 @@ export interface MailWatcherConfig {
 
 export interface HttpClientWatcherConfig {
   enabled?: boolean;
-  maxBodySize?: number; // bytes, default: 64KB
+  maxBodySize?: number; // bytes, default: 64KB; 0 captures none
   captureRequestBody?: boolean; // default: true
   captureResponseBody?: boolean; // default: true
   ignoreHosts?: string[]; // hosts to ignore (e.g., ['localhost', 'internal-service'])
@@ -147,7 +147,7 @@ export interface CommandWatcherConfig {
   enabled?: boolean;
   capturePayload?: boolean; // default: true
   captureResult?: boolean; // default: true
-  maxPayloadSize?: number; // bytes, default: 64KB
+  maxPayloadSize?: number; // bytes, default: 64KB; 0 captures none
 }
 
 export interface GateWatcherConfig {
@@ -168,7 +168,7 @@ export interface DumpWatcherConfig {
 export interface RedisWatcherConfig {
   enabled?: boolean;
   ignoreCommands?: string[]; // commands to ignore (e.g., ['ping', 'info'])
-  maxResultSize?: number; // bytes, default: 1KB
+  maxResultSize?: number; // bytes, default: 1KB; 0 captures none
 }
 
 export interface ModelWatcherConfig {

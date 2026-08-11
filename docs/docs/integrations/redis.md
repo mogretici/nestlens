@@ -248,7 +248,7 @@ Keys containing these patterns are automatically masked:
 interface RedisWatcherConfig {
   enabled?: boolean;
   ignoreCommands?: string[];     // Commands to ignore
-  maxResultSize?: number;        // Max result size in bytes (default: 1KB)
+  maxResultSize?: number;        // Max result size in bytes (default: 1KB); 0 captures none
 }
 ```
 

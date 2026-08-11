@@ -109,6 +109,20 @@ describe('HttpClientWatcher', () => {
       expect((watcher as any).maxBodySize).toBe(64 * 1024);
     });
 
+    /**
+     * A configured zero is a decision, not a missing value: `||` turned
+     * "capture no bodies" into the 64KB default.
+     */
+    it('keeps a maxBodySize of zero', async () => {
+      // Arrange
+      mockConfig.watchers = { httpClient: { enabled: true, maxBodySize: 0 } };
+      const axios = createAxiosInstance();
+      watcher = await createWatcher(mockConfig, axios);
+
+      // Assert
+      expect((watcher as unknown as { maxBodySize: number }).maxBodySize).toBe(0);
+    });
+
     it('should use custom maxBodySize from config', async () => {
       // Arrange
       mockConfig.watchers = { httpClient: { enabled: true, maxBodySize: 1024 } };

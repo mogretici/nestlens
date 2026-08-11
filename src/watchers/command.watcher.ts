@@ -59,9 +59,10 @@ export class CommandWatcher implements OnModuleInit {
     if (!this.commandBus) return;
 
     // Store original execute method
-    this.originalExecute = this.commandBus.execute?.bind(this.commandBus);
+    const originalExecute = this.commandBus.execute?.bind(this.commandBus);
+    this.originalExecute = originalExecute;
 
-    if (!this.originalExecute) {
+    if (!originalExecute) {
       this.logger.warn('CommandBus does not have execute method');
       return;
     }
@@ -78,7 +79,7 @@ export class CommandWatcher implements OnModuleInit {
       this.collectEntry(commandName, 'executing', 0, command, undefined, undefined);
 
       try {
-        const result = await this.originalExecute!(command);
+        const result = await originalExecute(command);
         const duration = Date.now() - startTime;
         this.commandTracking.delete(commandId);
 
@@ -162,7 +163,7 @@ export class CommandWatcher implements OnModuleInit {
     try {
       // Limit size to prevent huge payloads from bloating storage
       const json = JSON.stringify(data);
-      const maxSize = this.config.maxPayloadSize || 64 * 1024; // 64KB default
+      const maxSize = this.config.maxPayloadSize ?? 64 * 1024; // 64KB default; 0 captures nothing
       if (json.length > maxSize) {
         return { _truncated: true, _size: json.length };
       }

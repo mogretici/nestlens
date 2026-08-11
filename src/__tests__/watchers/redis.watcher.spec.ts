@@ -754,6 +754,35 @@ describe('RedisWatcher', () => {
       );
     });
 
+    /**
+     * Zero is a size limit like any other, and the one that means "record that
+     * a result came back, never its contents". Read with `||` it was falsy and
+     * silently became the 1KB default.
+     */
+    it('captures no result contents when maxResultSize is zero', async () => {
+      // Arrange
+      mockConfig.watchers = { redis: { enabled: true, maxResultSize: 0 } };
+      const client = createRedisClient({
+        get: jest.fn().mockResolvedValue('super-secret-session-token'),
+      });
+      watcher = await createWatcher(mockConfig, client);
+      watcher.onModuleInit();
+
+      // Act
+      await client.get('cache:medium');
+
+      // Assert
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'redis',
+        expect.objectContaining({
+          result: expect.objectContaining({ _truncated: true }),
+        }),
+      );
+      expect(JSON.stringify(mockCollector.collect.mock.calls)).not.toContain(
+        'super-secret-session-token',
+      );
+    });
+
     it('should use custom maxResultSize', async () => {
       // Arrange
       mockConfig.watchers = { redis: { enabled: true, maxResultSize: 100 } };

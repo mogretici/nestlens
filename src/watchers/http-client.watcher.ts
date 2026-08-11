@@ -76,7 +76,7 @@ export class HttpClientWatcher implements OnModuleInit {
     const watcherConfig = nestlensConfig.watchers?.httpClient;
     this.config =
       typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
-    this.maxBodySize = this.config.maxBodySize || 64 * 1024; // 64KB default
+    this.maxBodySize = this.config.maxBodySize ?? 64 * 1024; // 64KB default; 0 captures nothing
   }
 
   onModuleInit() {
@@ -157,7 +157,7 @@ export class HttpClientWatcher implements OnModuleInit {
   ): void {
     if (!config) return;
 
-    const startTime = config.metadata?.nestlensStartTime || Date.now();
+    const startTime = config.metadata?.nestlensStartTime ?? Date.now();
     const duration = Date.now() - startTime;
 
     // Parse URL
@@ -182,11 +182,11 @@ export class HttpClientWatcher implements OnModuleInit {
     // Merge default and custom sensitive params
     const sensitiveRequestParams = [
       ...HttpClientWatcher.DEFAULT_SENSITIVE_REQUEST_PARAMS,
-      ...(this.config.sensitiveRequestParams || []),
+      ...(this.config.sensitiveRequestParams ?? []),
     ];
     const sensitiveResponseParams = [
       ...HttpClientWatcher.DEFAULT_SENSITIVE_RESPONSE_PARAMS,
-      ...(this.config.sensitiveResponseParams || []),
+      ...(this.config.sensitiveResponseParams ?? []),
     ];
 
     const payload: HttpClientEntry['payload'] = {
@@ -253,7 +253,7 @@ export class HttpClientWatcher implements OnModuleInit {
 
     const sensitiveHeaders = [
       ...HttpClientWatcher.DEFAULT_SENSITIVE_HEADERS,
-      ...(this.config.sensitiveHeaders || []),
+      ...(this.config.sensitiveHeaders ?? []),
     ].map((h) => h.toLowerCase());
 
     const result: Record<string, string> = {};
