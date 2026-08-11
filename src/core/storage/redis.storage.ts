@@ -22,10 +22,12 @@ import { RedisStorageConfig } from '../../nestlens.config';
  *
  * Redis Key Structure:
  * - {prefix}entries:{id} - Hash storing entry data
- * - {prefix}entries:all - Sorted set of all entry IDs (score = timestamp)
- * - {prefix}entries:type:{type} - Sorted set of entry IDs by type
+ * - {prefix}entries:all - Sorted set of all entry IDs (score = id)
+ * - {prefix}entries:type:{type} - Sorted set of entry IDs by type (score = id)
+ * - {prefix}entries:createdAt - Sorted set of entry IDs by save time, for pruning
  * - {prefix}entries:request:{requestId} - Set of entry IDs for a request
  * - {prefix}entries:sequence - Counter for entry IDs
+ * - {prefix}schema - Index layout version, so an upgrade rescores once
  * - {prefix}tags:{entryId} - Set of tags for an entry
  * - {prefix}tags:index:{tag} - Set of entry IDs with this tag
  * - {prefix}tags:counts - Hash of tag -> count
@@ -33,6 +35,12 @@ import { RedisStorageConfig } from '../../nestlens.config';
  * - {prefix}monitored:sequence - Counter for monitored tag IDs
  * - {prefix}family:{hash} - Set of entry IDs with this family hash
  */
+/**
+ * Bumped when the meaning of an index score changes, so an existing database is
+ * rewritten once rather than read with the wrong assumption.
+ */
+const INDEX_SCHEMA_VERSION = '2';
+
 @Injectable()
 export class RedisStorage implements StorageInterface, OnModuleDestroy {
   private readonly logger = new Logger(RedisStorage.name);
@@ -97,7 +105,66 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async initialize(): Promise<void> {
     this.client = await this.loadRedisClient();
+    await this.migrateIndexScores();
     this.logger.log('Redis storage initialized');
+  }
+
+  /**
+   * Rescores an index written by an earlier version.
+   *
+   * Entries used to be scored by their save time, which put a millisecond clock
+   * where the cursor expects a sequence number. Left alone after an upgrade, the
+   * old members would keep their huge timestamp scores and sort above every new
+   * entry — so the listing would open on yesterday's data and paging would
+   * misbehave around the boundary.
+   *
+   * The ids are already there as members, so the scores can simply be rewritten
+   * and the time index rebuilt from each entry's own `createdAt`. Nothing is
+   * deleted: an upgrade keeps whatever the application had recorded.
+   */
+  private async migrateIndexScores(): Promise<void> {
+    const client = this.getClient();
+    const schemaKey = this.key('schema');
+
+    if ((await client.get(schemaKey)) === INDEX_SCHEMA_VERSION) {
+      return;
+    }
+
+    const ids = await client.zrange(this.key('entries', 'all'), 0, -1);
+
+    if (ids.length > 0) {
+      const reader = client.pipeline();
+      for (const id of ids) {
+        reader.hgetall(this.key('entries', id));
+      }
+      const hashes = (await reader.exec()) ?? [];
+
+      const writer = client.pipeline();
+      let rescored = 0;
+
+      ids.forEach((id, index) => {
+        const hash = hashes[index]?.[1] as Record<string, string> | undefined;
+        if (!hash?.type) {
+          return;
+        }
+
+        writer.zadd(this.key('entries', 'all'), Number(id), id);
+        writer.zadd(this.key('entries', 'type', hash.type), Number(id), id);
+
+        const createdAt = Date.parse(hash.createdAt ?? '');
+        writer.zadd(
+          this.key('entries', 'createdAt'),
+          Number.isNaN(createdAt) ? Number(id) : createdAt,
+          id,
+        );
+        rescored += 1;
+      });
+
+      await writer.exec();
+      this.logger.log(`Rescored ${rescored} entries onto the sequence index`);
+    }
+
+    await client.set(schemaKey, INDEX_SCHEMA_VERSION);
   }
 
   // ==================== Core CRUD Operations ====================
@@ -134,9 +201,15 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       entry.resolvedAt ?? '',
     );
 
-    // Add to sorted sets for indexing
-    await client.zadd(this.key('entries', 'all'), timestamp, String(id));
-    await client.zadd(this.key('entries', 'type', entry.type), timestamp, String(id));
+    // Scored by id, not by time: the id is what a cursor carries, and it is
+    // unique. Scoring by timestamp made `beforeSequence` compare an id against a
+    // millisecond clock — every page after the first came back empty — and gave
+    // entries saved in the same millisecond equal scores, so an exclusive range
+    // would have skipped them.
+    await client.zadd(this.key('entries', 'all'), id, String(id));
+    await client.zadd(this.key('entries', 'type', entry.type), id, String(id));
+    // Pruning is the one thing that genuinely asks a time question.
+    await client.zadd(this.key('entries', 'createdAt'), timestamp, String(id));
 
     // Add to request index if applicable
     if (entry.requestId) {
@@ -183,8 +256,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         entry.resolvedAt ?? '',
       );
 
-      pipeline.zadd(this.key('entries', 'all'), timestamp + i, String(id));
-      pipeline.zadd(this.key('entries', 'type', entry.type), timestamp + i, String(id));
+      pipeline.zadd(this.key('entries', 'all'), id, String(id));
+      pipeline.zadd(this.key('entries', 'type', entry.type), id, String(id));
+      pipeline.zadd(this.key('entries', 'createdAt'), timestamp + i, String(id));
 
       if (entry.requestId) {
         pipeline.sadd(this.key('entries', 'request', entry.requestId), String(id));
@@ -480,7 +554,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const maxScore = before.getTime();
 
-    const ids = await client.zrangebyscore(this.key('entries', 'all'), '-inf', maxScore);
+    const ids = await client.zrangebyscore(this.key('entries', 'createdAt'), '-inf', maxScore);
     if (ids.length === 0) return 0;
 
     for (const id of ids) {
@@ -495,7 +569,17 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const maxScore = before.getTime();
 
-    const ids = await client.zrangebyscore(this.key('entries', 'type', type), '-inf', maxScore);
+    const olderThanCutoff = await client.zrangebyscore(
+      this.key('entries', 'createdAt'),
+      '-inf',
+      maxScore,
+    );
+
+    // The type index is scored by id now, so it can no longer answer a time
+    // question on its own; membership is what it is asked for instead.
+    const typeKey = this.key('entries', 'type', type);
+    const membership = await Promise.all(olderThanCutoff.map((id) => client.zscore(typeKey, id)));
+    const ids = olderThanCutoff.filter((_, index) => membership[index] !== null);
 
     if (ids.length === 0) return 0;
 
@@ -752,6 +836,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     await client.del(this.key('entries', String(id)));
     await client.zrem(this.key('entries', 'all'), String(id));
     await client.zrem(this.key('entries', 'type', hash.type), String(id));
+    await client.zrem(this.key('entries', 'createdAt'), String(id));
 
     if (hash.requestId) {
       await client.srem(this.key('entries', 'request', hash.requestId), String(id));

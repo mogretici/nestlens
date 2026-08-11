@@ -114,7 +114,15 @@ describe('RedisStorage', () => {
       expect(saved.createdAt).toBeDefined();
       expect(saved.type).toBe('request');
       expect(mockClient.hset).toHaveBeenCalled();
-      expect(mockClient.zadd).toHaveBeenCalledTimes(2); // all + type index
+      // Indexed by sequence for ordering and paging, and by time for pruning.
+      const indexedKeys = mockClient.zadd.mock.calls.map((call: unknown[]) => String(call[0]));
+      expect(indexedKeys).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('entries:all'),
+          expect.stringContaining('entries:type:request'),
+          expect.stringContaining('entries:createdAt'),
+        ]),
+      );
 
       await storage.close();
     });
@@ -870,5 +878,115 @@ describe('RedisStorage', () => {
 
       await storage.close();
     });
+  });
+});
+
+/**
+ * Cursor pagination, against sorted sets that behave like Redis.
+ *
+ * The tests above hand the storage a client made of `jest.fn()`s, which answers
+ * whatever the test told it to and records the calls. That is enough to check
+ * that a command was issued, and blind to what the command means: for a long
+ * time the code asked `zrevrangebyscore` for members scored below an entry's
+ * *id* while every member was scored by its *save time*. The call looked right,
+ * the assertion passed, and on Redis the dashboard's second page came back
+ * empty — every time, for everyone.
+ *
+ * `ioredis-mock` implements the sorted sets, so these ask for pages and read
+ * what comes back.
+ */
+describe('RedisStorage cursor pagination', () => {
+  const seedCount = 5;
+
+  async function createStorageWithRealSortedSets(): Promise<RedisStorage> {
+    const RedisMock = (await import('ioredis-mock')).default;
+    const storage = new RedisStorage({ keyPrefix: 'pagination-test:' });
+
+    // Instances of the mock share their data, so each test starts by clearing
+    // it — otherwise the sequence counter carries over and the ids under test
+    // are whatever the previous test left behind.
+    const client = new RedisMock();
+    await client.flushall();
+    (storage as unknown as { client: unknown }).client = client;
+    await (storage as unknown as { migrateIndexScores: () => Promise<void> }).migrateIndexScores();
+
+    for (let index = 0; index < seedCount; index++) {
+      await storage.save({
+        type: 'request',
+        payload: {
+          method: 'GET',
+          url: `/page-${index}`,
+          path: `/page-${index}`,
+          statusCode: 200,
+          duration: 1,
+          memory: 1,
+        },
+      } as Entry);
+    }
+
+    return storage;
+  }
+
+  it('walks back through the list one page at a time', async () => {
+    // Arrange
+    const storage = await createStorageWithRealSortedSets();
+
+    // Act
+    const firstPage = await storage.findWithCursor('request', { limit: 2 });
+    const secondPage = await storage.findWithCursor('request', {
+      limit: 2,
+      beforeSequence: firstPage.meta.oldestSequence ?? undefined,
+    });
+
+    // Assert - the regression: the second page used to come back empty
+    expect(firstPage.data.map((entry) => entry.id)).toEqual([5, 4]);
+    expect(secondPage.data.map((entry) => entry.id)).toEqual([3, 2]);
+  });
+
+  it('answers "anything newer than this" with only what is newer', async () => {
+    // Arrange
+    const storage = await createStorageWithRealSortedSets();
+
+    // Act
+    const newer = await storage.findWithCursor('request', { limit: 10, afterSequence: 3 });
+
+    // Assert - this used to return the entire set, oldest first
+    expect(newer.data.map((entry) => entry.id)).toEqual([5, 4]);
+  });
+
+  /**
+   * Entries saved inside the same millisecond used to share a score, so an
+   * exclusive range around the cursor dropped whichever ones sat on the
+   * boundary. Ids are unique, so a page cannot swallow its neighbours.
+   */
+  it('loses nothing when entries share a timestamp', async () => {
+    // Arrange
+    const storage = await createStorageWithRealSortedSets();
+
+    // Act - page through the whole list in twos
+    const collected: number[] = [];
+    let cursor: number | undefined;
+    for (let page = 0; page < seedCount; page++) {
+      const result = await storage.findWithCursor('request', { limit: 2, beforeSequence: cursor });
+      collected.push(...result.data.map((entry) => entry.id as number));
+      if (!result.meta.hasMore) break;
+      cursor = result.meta.oldestSequence ?? undefined;
+    }
+
+    // Assert
+    expect(collected).toEqual([5, 4, 3, 2, 1]);
+  });
+
+  it('still prunes by age once the index is scored by sequence', async () => {
+    // Arrange
+    const storage = await createStorageWithRealSortedSets();
+
+    // Act - everything recorded so far is older than a moment from now
+    const pruned = await storage.prune(new Date(Date.now() + 1000));
+
+    // Assert
+    expect(pruned).toBe(seedCount);
+    const remaining = await storage.findWithCursor('request', { limit: 10 });
+    expect(remaining.data).toEqual([]);
   });
 });
