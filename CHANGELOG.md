@@ -1,3 +1,10 @@
+## [0.8.4](https://github.com/mogretici/nestlens/compare/v0.8.3...v0.8.4) (2026-08-11)
+
+
+### Bug Fixes
+
+* **package:** declare the express types and stop shipping unusable maps ([bc69c15](https://github.com/mogretici/nestlens/commit/bc69c15d02746e24edce1438326d90012f45aa7d))
+
 ## [0.8.3](https://github.com/mogretici/nestlens/compare/v0.8.2...v0.8.3) (2026-08-11)
 
 
