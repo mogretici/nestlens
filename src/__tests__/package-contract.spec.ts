@@ -15,7 +15,7 @@
  * Packages that are genuinely optional must be loaded lazily inside a function
  * with `require`, so importing NestLens never pulls them in.
  */
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { builtinModules } from 'module';
 import { join, relative, resolve } from 'path';
 
@@ -29,6 +29,7 @@ interface StaticImport {
 
 const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 };
 
@@ -37,15 +38,47 @@ const declaredPackages = new Set([
   ...Object.keys(packageJson.peerDependencies ?? {}),
 ]);
 
-const nodeBuiltins = new Set(builtinModules);
+/** Tests may reach for anything installed, including dev-only packages. */
+const installablePackages = new Set([
+  ...declaredPackages,
+  ...Object.keys(packageJson.devDependencies ?? {}),
+]);
+
+// `builtinModules` lists `path`, never `node:path`, so the prefixed form of
+// every builtin has to be accepted too.
+const nodeBuiltins = new Set([...builtinModules, ...builtinModules.map((name) => `node:${name}`)]);
 
 const toPackageName = (specifier: string): string =>
   specifier.startsWith('@')
     ? specifier.split('/').slice(0, 2).join('/')
     : (specifier.split('/')[0] as string);
 
+/**
+ * File contents with comments removed.
+ *
+ * The collectors below match raw text, so a specifier written inside a comment
+ * — an example in a doc block, a commented-out import — reads as a real
+ * dependency. This spec's own documentation was the first false positive.
+ */
+const readCode = (file: string): string =>
+  readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
 const isRelative = (specifier: string): boolean =>
   specifier.startsWith('.') || specifier.startsWith('@/');
+
+const collectAllFiles = (dir: string, acc: string[] = []): string[] => {
+  for (const name of readdirSync(dir)) {
+    const fullPath = join(dir, name);
+    if (statSync(fullPath).isDirectory()) {
+      collectAllFiles(fullPath, acc);
+      continue;
+    }
+    if (name.endsWith('.ts') && !name.endsWith('.d.ts')) acc.push(fullPath);
+  }
+  return acc;
+};
 
 const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
   for (const name of readdirSync(dir)) {
@@ -65,7 +98,7 @@ const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
  * `import type ...` is excluded: TypeScript erases it entirely.
  */
 const collectStaticImports = (file: string): StaticImport[] => {
-  const source = readFileSync(file, 'utf8');
+  const source = readCode(file);
   const pattern = /(?:^|\n)\s*import\s+(type\s+)?(?:[^;'"]*?\sfrom\s+)?['"]([^'"]+)['"]/g;
   const found: StaticImport[] = [];
 
@@ -88,7 +121,7 @@ const collectStaticImports = (file: string): StaticImport[] => {
  * one — failed to compile with TS7016 unless it had `skipLibCheck` on.
  */
 const collectTypeImports = (file: string): StaticImport[] => {
-  const source = readFileSync(file, 'utf8');
+  const source = readCode(file);
   const pattern = /(?:^|\n)\s*import\s+type\s+(?:[^;'"]*?\sfrom\s+)?['"]([^'"]+)['"]/g;
   const found: StaticImport[] = [];
 
@@ -107,8 +140,37 @@ const typesPackageFor = (packageName: string): string =>
     ? `@types/${packageName.slice(1).replace('/', '__')}`
     : `@types/${packageName}`;
 
+/**
+ * `await import('x')` and `require('x')` inside a function, which the two
+ * collectors above deliberately ignore: in `src` a lazy require is how an
+ * optional integration is meant to be loaded, but a test that reaches for a
+ * package still needs that package installed.
+ */
+const collectDeferredImports = (file: string): StaticImport[] => {
+  const source = readCode(file);
+  const pattern = /\b(?:import|require)\(\s*['"]([^'"]+)['"]\s*\)/g;
+  const found: StaticImport[] = [];
+
+  for (const match of source.matchAll(pattern)) {
+    const [, specifier] = match;
+    if (!specifier || isRelative(specifier)) continue;
+    found.push({ packageName: toPackageName(specifier), file: relative(REPO_ROOT, file) });
+  }
+
+  return found;
+};
+
 describe('package contract', () => {
   const sourceFiles = collectSourceFiles(SRC_ROOT);
+
+  const testImports = (): StaticImport[] =>
+    collectAllFiles(SRC_ROOT)
+      .filter((file) => file.includes('__tests__'))
+      .flatMap((file) => [
+        ...collectStaticImports(file),
+        ...collectTypeImports(file),
+        ...collectDeferredImports(file),
+      ]);
 
   it('finds source files to inspect', () => {
     expect(sourceFiles.length).toBeGreaterThan(0);
@@ -153,6 +215,50 @@ describe('package contract', () => {
 
     expect(buildConfig.compilerOptions?.sourceMap).toBe(false);
     expect(buildConfig.compilerOptions?.declarationMap).toBe(false);
+  });
+
+  /**
+   * Tests are exempt from the rule above — they are not published — but not from
+   * being installable. A package present in this repo's `node_modules` without
+   * being declared anywhere runs here and is missing on a fresh checkout: the
+   * whole matrix failed on `ioredis-mock`'s types, which this machine happened
+   * to have and CI did not.
+   */
+  it('declares every package the tests reach for', () => {
+    const undeclared = testImports()
+      .filter(({ packageName }) => !nodeBuiltins.has(packageName))
+      .filter(
+        ({ packageName }) =>
+          !installablePackages.has(packageName) &&
+          !installablePackages.has(typesPackageFor(packageName)),
+      );
+
+    const report = undeclared.map((i) => `${i.packageName} (used by ${i.file})`).sort();
+
+    expect([...new Set(report)]).toEqual([]);
+  });
+
+  /**
+   * Declaring the package is not enough when its types live somewhere else.
+   * `ioredis-mock` ships no declarations; this machine happened to have
+   * `@types/ioredis-mock` pulled in behind the scenes, so the suite compiled
+   * here and failed on every job in the matrix. If the types are what makes a
+   * test compile, they are a dependency like any other.
+   */
+  it('declares the separate type packages the tests compile against', () => {
+    const missing = testImports()
+      .filter(({ packageName }) => !nodeBuiltins.has(packageName))
+      .filter(({ packageName }) => {
+        const typesPackage = typesPackageFor(packageName);
+
+        return (
+          existsSync(join(REPO_ROOT, 'node_modules', typesPackage)) &&
+          !installablePackages.has(typesPackage)
+        );
+      })
+      .map((i) => `${typesPackageFor(i.packageName)} (needed by ${i.file})`);
+
+    expect([...new Set(missing)].sort()).toEqual([]);
   });
 
   it('keeps optional integrations out of module-scope imports', () => {

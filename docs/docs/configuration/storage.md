@@ -189,10 +189,12 @@ NestLens uses the following Redis key patterns:
 
 ```
 {prefix}entries:{id}           # Entry data (Hash)
-{prefix}entries:all            # All entry IDs (Sorted Set, score = timestamp)
-{prefix}entries:type:{type}    # Entry IDs by type (Sorted Set)
+{prefix}entries:all            # All entry IDs (Sorted Set, score = id)
+{prefix}entries:type:{type}    # Entry IDs by type (Sorted Set, score = id)
+{prefix}entries:createdAt      # Entry IDs by save time (Sorted Set), used for pruning
 {prefix}entries:request:{id}   # Entry IDs by request (Set)
 {prefix}entries:sequence       # Counter for entry IDs
+{prefix}schema                 # Index layout version; an upgrade rescores once
 {prefix}tags:{entryId}         # Tags for entry (Set)
 {prefix}tags:index:{tag}       # Entry IDs by tag (Set)
 {prefix}tags:counts            # Hash of tag -> count
