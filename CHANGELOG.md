@@ -1,3 +1,13 @@
+## [0.8.2](https://github.com/mogretici/nestlens/compare/v0.8.1...v0.8.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* **core:** reject a non-positive pruning interval or age ([190c10d](https://github.com/mogretici/nestlens/commit/190c10d3d028e2ee89984a218cb38beacf88dcf9))
+* **storage:** read limit 0 the same way on every backend ([03764c4](https://github.com/mogretici/nestlens/commit/03764c4cfd5b622ed559cd1d96c6a4de5141c321))
+* **storage:** report why Redis storage failed to start ([bc6d473](https://github.com/mogretici/nestlens/commit/bc6d473fde6ba988d23508d0e2da1f67dd4297fc))
+* **watchers:** honour a capture size limit of zero ([93b891f](https://github.com/mogretici/nestlens/commit/93b891f4d9c213625a3c919bccb99b1a69a9d19c))
+
 ## [0.8.1](https://github.com/mogretici/nestlens/compare/v0.8.0...v0.8.1) (2026-08-11)
 
 
