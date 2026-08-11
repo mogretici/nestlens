@@ -104,7 +104,16 @@ export class NestLensGuard implements CanActivate {
     if (allowedIps && allowedIps.length > 0) {
       const clientIp = this.getClientIp(request);
       if (!this.isIpAllowed(clientIp, allowedIps)) {
-        this.logger.warn(`Access denied: IP '${clientIp}' not in allowed list`);
+        // A request carrying a forwarding header while NestLens is not
+        // configured to trust one is the shape of a real proxy deployment
+        // missing a setting — worth saying, because the alternative is a 403
+        // that looks like the whitelist is simply wrong.
+        const behindSomething = !this.config.trustProxy && request.headers['x-forwarded-for'];
+        const hint = behindSomething
+          ? ' (request carried X-Forwarded-For; set trustProxy: true if a proxy you control sets it)'
+          : '';
+
+        this.logger.warn(`Access denied: IP '${clientIp}' not in allowed list${hint}`);
         throw new ForbiddenException('Access denied from this IP address');
       }
     }
@@ -212,11 +221,26 @@ export class NestLensGuard implements CanActivate {
    * Get client IP from request
    */
   private getClientIp(request: Request): string {
-    const forwardedFor = request.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-      return ips.trim();
+    // `X-Forwarded-For` is written by whoever sends the request, and nothing
+    // strips it unless something in front does. Read unconditionally it turned
+    // the IP whitelist into a formality: a header claiming an allowed address
+    // was enough to reach the dashboard, and the dashboard is where every
+    // recorded Authorization header, cookie and request body ends up.
+    //
+    // Behind a proxy the socket address is the proxy's and the header is the
+    // only way to see the client — so it is read once the application says it
+    // is behind one, the same line `X-Forwarded-Prefix` is held to.
+    if (this.config.trustProxy) {
+      const forwardedFor = request.headers['x-forwarded-for'];
+      if (forwardedFor) {
+        const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
+        return ips.trim();
+      }
     }
+
+    // Express fills `request.ip` from the forwarding header itself when the
+    // host application enables its own `trust proxy`, which is the host's
+    // decision to make and is honoured here.
     return request.ip || request.socket?.remoteAddress || '';
   }
 
