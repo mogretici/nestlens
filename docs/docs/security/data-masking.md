@@ -198,9 +198,22 @@ NestLensModule.forRoot({
 })
 ```
 
+### How a Field Name Is Matched
+
+A field is masked when its name **contains** one of the terms below. Case,
+underscores and dashes are ignored, so `access_token`, `access-token` and
+`accessToken` are the same name — and `confirmPassword`, `currentPassword`,
+`stripeSecretKey` and `refreshToken` all match too, which is what payloads
+actually look like.
+
+This masks a little more than strictly necessary — a field called `tokenCount`
+goes as well. That is the safer direction for something recording production
+traffic; narrow the configured list if a particular field needs to stay
+readable.
+
 ### Default Masked Body/Query Parameters
 
-The global data masker masks these parameter names by default (case-insensitive):
+A field is masked when its name contains any of these:
 
 - `password`
 - `passwd`
@@ -224,7 +237,8 @@ The global data masker masks these parameter names by default (case-insensitive)
 
 ### Default Masked User Fields
 
-When request user context is captured, these user object fields are masked by default (case-insensitive):
+When request user context is captured, a field of the user object is masked when
+its name contains any of these:
 
 - `password`
 - `passwordHash`

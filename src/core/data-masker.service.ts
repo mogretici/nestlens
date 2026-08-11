@@ -76,11 +76,40 @@ const DEFAULT_MASK = '***REDACTED***';
  * Service for masking sensitive data in entries.
  * Prevents sensitive information from being stored or displayed.
  */
+/**
+ * A field name reduced to letters and digits, lower case.
+ *
+ * `access_token`, `access-token` and `accessToken` are the same field written
+ * three ways, and a payload uses whichever the framework or the author
+ * preferred. Comparing the reduced forms means the term list does not have to
+ * enumerate them.
+ */
+const normalizeFieldName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Whether a field name contains any of the terms.
+ *
+ * Containment rather than equality: the list held `password`, and payloads hold
+ * `confirmPassword`, `currentPassword`, `passwordConfirmation`. Every one of
+ * those went to storage and to the dashboard in the clear, as did
+ * `accessToken`, `refreshToken`, `clientSecret` and `stripeSecretKey` — the
+ * names real payloads actually use.
+ *
+ * It masks more than it strictly must — `tokenCount` goes too — which is the
+ * right direction for something recording production traffic. A field that
+ * should be readable can be kept by narrowing the configured list.
+ */
+const matchesSensitiveTerm = (fieldName: string, terms: readonly string[]): boolean => {
+  const normalized = normalizeFieldName(fieldName);
+
+  return terms.some((term) => term.length > 0 && normalized.includes(term));
+};
+
 @Injectable()
 export class DataMaskerService {
-  private readonly sensitiveHeaders: Set<string>;
-  private readonly sensitiveParams: Set<string>;
-  private readonly sensitiveUserFields: Set<string>;
+  private readonly sensitiveHeaders: readonly string[];
+  private readonly sensitiveParams: readonly string[];
+  private readonly sensitiveUserFields: readonly string[];
   private readonly maskReplacement: string;
   private readonly sanitizeStackTraces: boolean;
   private readonly isProduction: boolean;
@@ -90,9 +119,9 @@ export class DataMaskerService {
     const params = [...DEFAULT_SENSITIVE_PARAMS, ...(config?.sensitiveParams ?? [])];
     const userFields = [...DEFAULT_SENSITIVE_USER_FIELDS, ...(config?.sensitiveUserFields ?? [])];
 
-    this.sensitiveHeaders = new Set(headers.map((h) => h.toLowerCase()));
-    this.sensitiveParams = new Set(params.map((p) => p.toLowerCase()));
-    this.sensitiveUserFields = new Set(userFields.map((f) => f.toLowerCase()));
+    this.sensitiveHeaders = headers.map(normalizeFieldName);
+    this.sensitiveParams = params.map(normalizeFieldName);
+    this.sensitiveUserFields = userFields.map(normalizeFieldName);
     this.maskReplacement = config?.maskReplacement ?? DEFAULT_MASK;
     this.sanitizeStackTraces = config?.sanitizeStackTraces ?? true;
     this.isProduction = process.env.NODE_ENV === 'production';
@@ -109,8 +138,7 @@ export class DataMaskerService {
     const masked: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(headers)) {
-      const lowerKey = key.toLowerCase();
-      if (this.sensitiveHeaders.has(lowerKey)) {
+      if (matchesSensitiveTerm(key, this.sensitiveHeaders)) {
         masked[key] = this.maskReplacement;
       } else {
         masked[key] = String(value ?? '');
@@ -156,9 +184,7 @@ export class DataMaskerService {
     const masked: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
-      const lowerKey = key.toLowerCase();
-
-      if (this.sensitiveParams.has(lowerKey)) {
+      if (matchesSensitiveTerm(key, this.sensitiveParams)) {
         masked[key] = this.maskReplacement;
       } else if (value !== null && typeof value === 'object') {
         if (Array.isArray(value)) {
@@ -190,9 +216,7 @@ export class DataMaskerService {
     const userObj = user as Record<string, unknown>;
 
     for (const [key, value] of Object.entries(userObj)) {
-      const lowerKey = key.toLowerCase();
-
-      if (this.sensitiveUserFields.has(lowerKey)) {
+      if (matchesSensitiveTerm(key, this.sensitiveUserFields)) {
         masked[key] = this.maskReplacement;
       } else if (value !== null && typeof value === 'object') {
         masked[key] = this.maskUserInfo(value);
@@ -232,11 +256,10 @@ export class DataMaskerService {
    * Check if a key is sensitive.
    */
   isSensitiveKey(key: string): boolean {
-    const lowerKey = key.toLowerCase();
     return (
-      this.sensitiveHeaders.has(lowerKey) ||
-      this.sensitiveParams.has(lowerKey) ||
-      this.sensitiveUserFields.has(lowerKey)
+      matchesSensitiveTerm(key, this.sensitiveHeaders) ||
+      matchesSensitiveTerm(key, this.sensitiveParams) ||
+      matchesSensitiveTerm(key, this.sensitiveUserFields)
     );
   }
 
