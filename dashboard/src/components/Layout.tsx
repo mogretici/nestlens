@@ -33,7 +33,13 @@ import {
   Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { clearEntries, getRecordingStatus, pauseRecording, resumeRecording, RecordingStatus } from '../api';
+import {
+  clearEntries,
+  getRecordingStatus,
+  pauseRecording,
+  resumeRecording,
+  RecordingStatus,
+} from '../api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useStats } from '../contexts/StatsContext';
 
@@ -123,9 +129,7 @@ const iconColors: Record<string, string> = {
 const navigationGroups = [
   {
     name: 'Overview',
-    items: [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard, colorKey: 'dashboard' },
-    ],
+    items: [{ name: 'Dashboard', href: '/', icon: LayoutDashboard, colorKey: 'dashboard' }],
   },
   {
     name: 'Core',
@@ -133,7 +137,13 @@ const navigationGroups = [
       { name: 'Requests', href: '/requests', icon: Activity, colorKey: 'request' },
       { name: 'Queries', href: '/queries', icon: Database, colorKey: 'query' },
       { name: 'GraphQL', href: '/graphql', icon: GitBranch, colorKey: 'graphql' },
-      { name: 'Exceptions', href: '/exceptions', icon: AlertTriangle, badge: 'exceptions', colorKey: 'exception' },
+      {
+        name: 'Exceptions',
+        href: '/exceptions',
+        icon: AlertTriangle,
+        badge: 'exceptions',
+        colorKey: 'exception',
+      },
       { name: 'Logs', href: '/logs', icon: FileText, colorKey: 'log' },
     ],
   },
@@ -204,7 +214,7 @@ export default function Layout() {
   });
 
   const toggleGroup = useCallback((groupName: string) => {
-    setCollapsedGroups(prev => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(groupName)) {
         next.delete(groupName);
@@ -216,16 +226,19 @@ export default function Layout() {
     });
   }, []);
 
-  const getBadgeCount = useCallback((badgeKey: BadgeKey): number => {
-    if (!stats) return 0;
-    switch (badgeKey) {
-      case 'exceptions':
-        // Use unresolvedExceptions if available, otherwise fall back to total
-        return stats.unresolvedExceptions ?? stats.byType.exception ?? 0;
-      default:
-        return 0;
-    }
-  }, [stats]);
+  const getBadgeCount = useCallback(
+    (badgeKey: BadgeKey): number => {
+      if (!stats) return 0;
+      switch (badgeKey) {
+        case 'exceptions':
+          // Use unresolvedExceptions if available, otherwise fall back to total
+          return stats.unresolvedExceptions ?? stats.byType.exception ?? 0;
+        default:
+          return 0;
+      }
+    },
+    [stats],
+  );
 
   const applyTheme = useCallback((preference: 'system' | 'light' | 'dark') => {
     let shouldBeDark = false;
@@ -308,20 +321,17 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile sidebar */}
-      <div
-        className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? '' : 'hidden'}`}
-      >
+      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? '' : 'hidden'}`}>
+        <div className="fixed inset-0 bg-gray-900/80" onClick={() => setSidebarOpen(false)} />
         <div
-          className="fixed inset-0 bg-gray-900/80"
-          onClick={() => setSidebarOpen(false)}
-        />
-        <div id="mobile-sidebar" className="fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-800 flex flex-col">
+          id="mobile-sidebar"
+          data-testid="mobile-sidebar"
+          className="fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-800 flex flex-col"
+        >
           <div className="flex h-16 items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
             <Link to="/" className="flex items-center space-x-2">
               <Telescope className="h-8 w-8 text-primary-600" />
-              <span className="text-xl font-bold text-gray-900 dark:text-white">
-                NestLens
-              </span>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">NestLens</span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -352,10 +362,12 @@ export default function Layout() {
                   {!isCollapsed && (
                     <div className="mt-1 space-y-0.5">
                       {group.items.map((item) => {
-                        const isActive = item.href === '/'
-                          ? location.pathname === '/'
-                          : location.pathname.startsWith(item.href);
-                        const badgeCount = 'badge' in item ? getBadgeCount(item.badge as BadgeKey) : 0;
+                        const isActive =
+                          item.href === '/'
+                            ? location.pathname === '/'
+                            : location.pathname.startsWith(item.href);
+                        const badgeCount =
+                          'badge' in item ? getBadgeCount(item.badge as BadgeKey) : 0;
                         return (
                           <Link
                             key={item.name}
@@ -369,7 +381,9 @@ export default function Layout() {
                             onClick={() => setSidebarOpen(false)}
                           >
                             <div className="flex items-center space-x-3">
-                              <item.icon className={`h-4 w-4 ${iconColors[item.colorKey] || 'text-gray-400'}`} />
+                              <item.icon
+                                className={`h-4 w-4 ${iconColors[item.colorKey] || 'text-gray-400'}`}
+                              />
                               <span className="text-sm">{item.name}</span>
                             </div>
                             {badgeCount > 0 && (
@@ -419,7 +433,10 @@ export default function Layout() {
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+      <div
+        data-testid="sidebar"
+        className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col"
+      >
         <div className="flex flex-col h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
           {/* Logo */}
           <div className="flex h-16 items-center px-4 border-b border-gray-200 dark:border-gray-700">
@@ -428,9 +445,7 @@ export default function Layout() {
                 <Telescope className="h-6 w-6 text-primary-600 dark:text-primary-400" />
               </div>
               <div>
-                <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  NestLens
-                </span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">NestLens</span>
                 <span className="hidden xl:inline text-xs text-gray-400 dark:text-gray-500 ml-1.5">
                   v{__APP_VERSION__}
                 </span>
@@ -462,10 +477,12 @@ export default function Layout() {
                   {!isCollapsed && (
                     <div className="mt-1 space-y-0.5">
                       {group.items.map((item) => {
-                        const isActive = item.href === '/'
-                          ? location.pathname === '/'
-                          : location.pathname.startsWith(item.href);
-                        const badgeCount = 'badge' in item ? getBadgeCount(item.badge as BadgeKey) : 0;
+                        const isActive =
+                          item.href === '/'
+                            ? location.pathname === '/'
+                            : location.pathname.startsWith(item.href);
+                        const badgeCount =
+                          'badge' in item ? getBadgeCount(item.badge as BadgeKey) : 0;
                         return (
                           <Link
                             key={item.name}
@@ -478,15 +495,19 @@ export default function Layout() {
                             }`}
                           >
                             <div className="flex items-center space-x-3">
-                              <item.icon className={`h-[18px] w-[18px] ${iconColors[item.colorKey] || 'text-gray-400'}`} />
+                              <item.icon
+                                className={`h-[18px] w-[18px] ${iconColors[item.colorKey] || 'text-gray-400'}`}
+                              />
                               <span className="text-sm">{item.name}</span>
                             </div>
                             {badgeCount > 0 && (
-                              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold rounded-full transition-colors ${
-                                isActive
-                                  ? 'bg-primary-200 text-primary-800 dark:bg-primary-800 dark:text-primary-200'
-                                  : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'
-                              }`}>
+                              <span
+                                className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold rounded-full transition-colors ${
+                                  isActive
+                                    ? 'bg-primary-200 text-primary-800 dark:bg-primary-800 dark:text-primary-200'
+                                    : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'
+                                }`}
+                              >
                                 {badgeCount > 99 ? '99+' : badgeCount}
                               </span>
                             )}

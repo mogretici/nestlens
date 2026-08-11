@@ -88,21 +88,28 @@ test.describe('Clear Data Dialog', () => {
     await dashboard.goto();
   });
 
-  test('shows confirmation dialog on clear click', async ({ page }) => {
+  /**
+   * Clearing goes through `window.confirm`, so there is no dialog in the DOM to
+   * query — the browser owns it. These drive it the way Playwright exposes it.
+   */
+  test('asks for confirmation before clearing', async ({ page }) => {
+    let asked: string | null = null;
+    page.once('dialog', async (dialog) => {
+      asked = dialog.message();
+      await dialog.dismiss();
+    });
+
     await dashboard.openClearDialog();
 
-    // Verify dialog appears
-    const dialog = page.getByRole('dialog').or(page.locator('[role="alertdialog"]'));
-    await expect(dialog).toBeVisible();
+    await expect.poll(() => asked).toMatch(/clear/i);
   });
 
-  test('closes dialog on cancel', async ({ page }) => {
+  test('keeps entries when the confirmation is dismissed', async ({ page }) => {
+    page.once('dialog', (dialog) => dialog.dismiss());
+    const before = await page.locator('table tbody tr').count();
+
     await dashboard.openClearDialog();
 
-    const cancelButton = page.getByRole('button', { name: /cancel|close/i });
-    await cancelButton.click();
-
-    const dialog = page.getByRole('dialog').or(page.locator('[role="alertdialog"]'));
-    await expect(dialog).not.toBeVisible();
+    await expect(page.locator('table tbody tr')).toHaveCount(before);
   });
 });

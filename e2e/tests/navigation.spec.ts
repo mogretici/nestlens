@@ -54,11 +54,11 @@ test.describe('Navigation', () => {
   test('deep linking to entry detail works', async ({ page }) => {
     // Navigate directly to a detail page URL
     await page.goto('/requests');
-    
+
     // If entries exist, click one and verify URL changes
     const rows = page.locator('tbody tr, [role="row"]');
     const rowCount = await rows.count();
-    
+
     if (rowCount > 0) {
       await rows.first().click();
       await expect(page).toHaveURL(/requests\/\d+|requests#/);
@@ -81,7 +81,7 @@ test.describe('Mobile Navigation', () => {
     await dashboard.goto();
 
     await dashboard.mobileMenuButton.click();
-    await expect(dashboard.sidebar).toBeVisible();
+    await expect(dashboard.mobileSidebar).toBeVisible();
   });
 
   test('closes sidebar on navigation', async ({ page }) => {
