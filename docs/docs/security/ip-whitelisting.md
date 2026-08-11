@@ -178,22 +178,32 @@ NestLensModule.forRoot({
 
 ### Behind Reverse Proxy
 
-When behind nginx, Apache, or cloud load balancers:
+When behind nginx, Apache, or cloud load balancers, tell NestLens as well:
 
 ```typescript
-// main.ts
-app.set('trust proxy', true);
-
-// NestLens will automatically use X-Forwarded-For header
+NestLensModule.forRoot({
+  trustProxy: true,          // required for X-Forwarded-For to be read
+  authorization: {
+    allowedIps: ['192.168.1.100'],
+  },
+})
 ```
 
 ### X-Forwarded-For Header
 
-NestLens automatically checks:
+Which address the whitelist is checked against:
 
-1. `X-Forwarded-For` header (if behind proxy)
-2. `req.ip` from Express
+1. `X-Forwarded-For` — **only when `trustProxy: true`**
+2. `req.ip` from Express, which reflects the header itself if the application
+   has set its own `app.set('trust proxy', …)`
 3. `req.socket.remoteAddress` as fallback
+
+:::danger Do not enable `trustProxy` without a proxy
+`X-Forwarded-For` is written by whoever sends the request. It only says
+something true when a proxy you control overwrites it. With `trustProxy: true`
+and nothing in front, any caller can present an allowed address and the
+whitelist stops meaning anything.
+:::
 
 ### Multiple Proxies
 
@@ -208,14 +218,13 @@ app.set('trust proxy', 'loopback, linklocal, uniquelocal');
 
 ### 1. IP Spoofing Protection
 
-NestLens uses safe IP extraction:
+The address is taken from the connection, not from a header the caller can
+write. `X-Forwarded-For` is read only under `trustProxy: true`, where a proxy
+you control is responsible for overwriting it — the same condition
+`X-Forwarded-Prefix` is held to.
 
-```typescript
-// Automatically handles:
-// - X-Forwarded-For header parsing
-// - IPv6 normalization
-// - Localhost variations
-```
+IPv6 localhost (`::1`) is normalized to `127.0.0.1`, so a localhost-only
+whitelist behaves the same on both stacks.
 
 ### 2. Wildcard Safety
 

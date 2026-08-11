@@ -4,7 +4,7 @@
  * Tests for authorization, IP whitelisting, environment checks,
  * and role-based access control.
  */
-import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NestLensGuard, NestLensRequest } from '../../api/api.guard';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -302,8 +302,10 @@ describe('NestLensGuard', () => {
       expect(result).toBe(true);
     });
 
-    it('should get IP from x-forwarded-for header', async () => {
-      // Arrange
+    it('should get IP from x-forwarded-for header behind a trusted proxy', async () => {
+      // Arrange - the header is only the client's address once the application
+      // has said something in front is rewriting it
+      mockConfig.trustProxy = true;
       mockConfig.authorization!.allowedIps = ['203.0.113.195'];
       const context = createMockContext({
         ip: '127.0.0.1',
@@ -317,8 +319,9 @@ describe('NestLensGuard', () => {
       expect(result).toBe(true);
     });
 
-    it('should handle array x-forwarded-for header', async () => {
+    it('should handle array x-forwarded-for header behind a trusted proxy', async () => {
       // Arrange
+      mockConfig.trustProxy = true;
       mockConfig.authorization!.allowedIps = ['203.0.113.195'];
       const context = createMockContext({
         ip: '127.0.0.1',
@@ -660,5 +663,104 @@ describe('NestLensGuard', () => {
       // Assert
       expect(result).toBe(true);
     });
+  });
+});
+
+/**
+ * The IP whitelist against a spoofed forwarding header.
+ *
+ * `allowedIps` is documented as a way to keep the dashboard to an office range
+ * or to localhost, and the dashboard is where every recorded Authorization
+ * header, cookie, request body and query ends up. A control that decides who
+ * sees that cannot take the client's word for who they are: `X-Forwarded-For`
+ * is set by whoever sends the request unless something in front overwrites it.
+ *
+ * NestLens already draws this line for the mount point, which honours
+ * `X-Forwarded-Prefix` only under `trustProxy`. This is the same line.
+ */
+describe('NestLensGuard IP whitelist and forwarding headers', () => {
+  const buildGuard = async (config: NestLensConfig): Promise<NestLensGuard> => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: config }],
+    }).compile();
+
+    return module.get<NestLensGuard>(NestLensGuard);
+  };
+
+  const requestFrom = (socketIp: string, forwardedFor?: string): ExecutionContext =>
+    ({
+      switchToHttp: () => ({
+        getRequest: () => ({
+          ip: socketIp,
+          socket: { remoteAddress: socketIp },
+          headers: forwardedFor ? { 'x-forwarded-for': forwardedFor } : {},
+        }),
+      }),
+    }) as ExecutionContext;
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'test';
+  });
+
+  it('refuses a caller that claims an allowed address in a header', async () => {
+    // Arrange - the office range is allowed; the caller is not in it
+    const guard = await buildGuard({
+      enabled: true,
+      authorization: { allowedEnvironments: ['test'], allowedIps: ['10.0.0.5'] },
+    });
+
+    // Act & Assert - the header is the caller's own claim
+    await expect(guard.canActivate(requestFrom('203.0.113.9', '10.0.0.5'))).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('says what is likely missing when a proxy header was ignored', async () => {
+    // Arrange
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const guard = await buildGuard({
+      enabled: true,
+      authorization: { allowedEnvironments: ['test'], allowedIps: ['10.0.0.5'] },
+    });
+
+    // Act
+    await expect(guard.canActivate(requestFrom('172.16.0.1', '10.0.0.5'))).rejects.toThrow(
+      ForbiddenException,
+    );
+
+    // Assert - a 403 that explains itself rather than looking like a wrong list
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('trustProxy'));
+    warn.mockRestore();
+  });
+
+  it('still allows a caller whose own address is on the list', async () => {
+    // Arrange
+    const guard = await buildGuard({
+      enabled: true,
+      authorization: { allowedEnvironments: ['test'], allowedIps: ['10.0.0.5'] },
+    });
+
+    // Act & Assert
+    await expect(guard.canActivate(requestFrom('10.0.0.5'))).resolves.toBe(true);
+  });
+
+  /**
+   * Behind a proxy the socket address is the proxy's, so the header is the only
+   * way to see the client — but only once the application has said it is behind
+   * one, which is what `trustProxy` means everywhere else in NestLens.
+   */
+  it('reads the forwarding header once the application says it is behind a proxy', async () => {
+    // Arrange
+    const guard = await buildGuard({
+      enabled: true,
+      trustProxy: true,
+      authorization: { allowedEnvironments: ['test'], allowedIps: ['10.0.0.5'] },
+    });
+
+    // Act & Assert - the proxy terminates the connection, the client is in the header
+    await expect(guard.canActivate(requestFrom('172.16.0.1', '10.0.0.5'))).resolves.toBe(true);
+    await expect(guard.canActivate(requestFrom('172.16.0.1', '203.0.113.9'))).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 });
