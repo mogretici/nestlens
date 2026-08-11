@@ -88,12 +88,14 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
     return 'queries';
   });
 
-  // If no entries, don't render
-  if (tabs.length === 0) {
-    return null;
-  }
-
   // Calculate query stats
+  //
+  // Above the early return on purpose: React identifies hooks by call order, so
+  // returning before this one means a render with no related entries calls one
+  // hook fewer than the render before it. Navigating from an entry that has
+  // related entries to one that does not reuses this component instance, and
+  // React then throws "rendered fewer hooks than expected" — taking the detail
+  // page down.
   const queryStats = useMemo(() => {
     if (grouped.queries.length === 0) return null;
     const total = grouped.queries.reduce((sum, q) => sum + q.payload.duration, 0);
@@ -101,6 +103,12 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
     const duplicates = grouped.queries.length - uniqueQueries;
     return { total, duplicates };
   }, [grouped.queries]);
+
+  // If no entries, don't render
+  if (tabs.length === 0) {
+    return null;
+  }
+
 
   return (
     <div className="card overflow-hidden">
