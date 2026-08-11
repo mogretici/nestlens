@@ -927,6 +927,27 @@ describe('RedisStorage cursor pagination', () => {
     return storage;
   }
 
+  /**
+   * ioredis connects in the background, so the rescore is the first command
+   * anything sends — and the first chance an unreachable Redis has to throw.
+   * A monitoring tool does not get to stop the application it is watching from
+   * starting, which is what CI caught when this went out without a guard.
+   */
+  it('starts even when Redis cannot answer', async () => {
+    // Arrange
+    const storage = new RedisStorage({ keyPrefix: 'unreachable:' });
+    const unreachable = {
+      get: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:6379')),
+    };
+    (storage as unknown as { client: unknown }).client = unreachable;
+    (storage as unknown as { loadRedisClient: () => Promise<unknown> }).loadRedisClient =
+      async () => unreachable;
+
+    // Act & Assert
+    await expect(storage.initialize()).resolves.toBeUndefined();
+    expect(unreachable.get).toHaveBeenCalled();
+  });
+
   it('walks back through the list one page at a time', async () => {
     // Arrange
     const storage = await createStorageWithRealSortedSets();

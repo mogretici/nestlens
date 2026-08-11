@@ -105,7 +105,18 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async initialize(): Promise<void> {
     this.client = await this.loadRedisClient();
-    await this.migrateIndexScores();
+
+    // ioredis connects in the background, so this is the first command anything
+    // sends — and the first chance for an unreachable Redis to throw. NestLens
+    // is a debugging tool: it does not get to stop the application it is
+    // watching from starting. The rescore is retried on the next boot.
+    try {
+      await this.migrateIndexScores();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not prepare the entry indexes: ${reason}`);
+    }
+
     this.logger.log('Redis storage initialized');
   }
 
