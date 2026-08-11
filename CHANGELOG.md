@@ -1,3 +1,10 @@
+## [0.8.7](https://github.com/mogretici/nestlens/compare/v0.8.6...v0.8.7) (2026-08-11)
+
+
+### Bug Fixes
+
+* **security:** stop reading X-Forwarded-For when no proxy is trusted ([fa76233](https://github.com/mogretici/nestlens/commit/fa7623368fedb9319d954ad3c853c96be1489249))
+
 ## [0.8.6](https://github.com/mogretici/nestlens/compare/v0.8.5...v0.8.6) (2026-08-11)
 
 
