@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Logs Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/logs');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
   });
 
   test('displays page header with title', async ({ page }) => {
@@ -22,7 +22,7 @@ test.describe('Logs Page', () => {
 
   test('filter by level via URL', async ({ page }) => {
     await page.goto('/logs?levels=error');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
 
     // Should show filter in header
     await expect(page).toHaveURL(/levels=error/);
@@ -32,7 +32,7 @@ test.describe('Logs Page', () => {
 test.describe('Exceptions Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/exceptions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
   });
 
   test('displays page header with title', async ({ page }) => {
@@ -48,7 +48,7 @@ test.describe('Exceptions Page', () => {
 test.describe('Queries Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/queries');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('main', { state: 'visible' });
   });
 
   test('displays page header with title', async ({ page }) => {

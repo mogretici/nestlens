@@ -5,9 +5,7 @@ import { resolve } from 'path';
 import { readFileSync } from 'fs';
 
 // Read version from root package.json (single source of truth)
-const rootPackageJson = JSON.parse(
-  readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
-);
+const rootPackageJson = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'));
 const APP_VERSION = rootPackageJson.version;
 
 // Custom plugin to redirect /nestlens to /nestlens/
@@ -52,9 +50,15 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // NestLens serves its API under the configured `path`, which defaults to
+      // `/nestlens` — since 0.6.0, when `path` started applying to the API as
+      // well. The dev server has no mount point of its own, so the bundle asks
+      // for `/__nestlens__/...` and the prefix is added back here. Without it
+      // every request 404s and the dashboard renders empty in dev.
       '/__nestlens__': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        rewrite: (path) => `/nestlens${path}`,
       },
     },
     // Handle SPA routing - redirect all routes to index.html

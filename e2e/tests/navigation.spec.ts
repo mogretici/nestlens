@@ -55,14 +55,15 @@ test.describe('Navigation', () => {
     // Navigate directly to a detail page URL
     await page.goto('/requests');
 
-    // If entries exist, click one and verify URL changes
-    const rows = page.locator('tbody tr, [role="row"]');
-    const rowCount = await rows.count();
+    // Only the clickable data rows: `[role="row"]` also matches the header,
+    // so counting before the body renders finds it and clicks a header cell —
+    // which navigates nowhere. Chromium happened to render fast enough to hide
+    // this; Firefox did not.
+    const rows = page.locator('tbody tr[tabindex]');
+    await rows.first().waitFor({ state: 'visible' });
 
-    if (rowCount > 0) {
-      await rows.first().click();
-      await expect(page).toHaveURL(/requests\/\d+|requests#/);
-    }
+    await rows.first().click();
+    await expect(page).toHaveURL(/requests\/\d+|requests#/);
   });
 });
 

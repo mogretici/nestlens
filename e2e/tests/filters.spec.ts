@@ -13,10 +13,10 @@ test.describe('Filters E2E', () => {
   test('clicking badge adds filter to URL', async ({ page }) => {
     // Find and click a status badge (e.g., 200)
     const badge = page.locator('[data-value="200"], [data-value="GET"]').first();
-    
+
     if (await badge.isVisible()) {
       await badge.click();
-      
+
       // Verify URL contains filter parameter
       await expect(page).toHaveURL(/[?&]/);
     }
@@ -84,7 +84,7 @@ test.describe('Filter Categories', () => {
     // All visible methods should be POST
     const methodBadges = page.locator('text="POST"');
     const count = await methodBadges.count();
-    
+
     if (count > 0) {
       // Verify filtering worked
       expect(count).toBeGreaterThan(0);
