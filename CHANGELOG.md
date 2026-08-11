@@ -1,3 +1,11 @@
+## [0.8.3](https://github.com/mogretici/nestlens/compare/v0.8.2...v0.8.3) (2026-08-11)
+
+
+### Bug Fixes
+
+* **dashboard:** call useMemo before the early return in RelatedEntries ([08d2f1e](https://github.com/mogretici/nestlens/commit/08d2f1eaa10df45892a7edf636ae008c2aa6020e))
+* **deps:** update dependencies with published advisories ([280998a](https://github.com/mogretici/nestlens/commit/280998a3d523be90319c87ba646db33fba3532c2))
+
 ## [0.8.2](https://github.com/mogretici/nestlens/compare/v0.8.1...v0.8.2) (2026-08-11)
 
 
