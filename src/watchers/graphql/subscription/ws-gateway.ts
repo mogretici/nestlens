@@ -171,8 +171,6 @@ export function createWsMessageInterceptor(tracker: SubscriptionTracker) {
         }
       }
 
-      const protocol = connectionProtocols.get(connectionId);
-
       switch (type) {
         case GraphQLWsMessageType.ConnectionInit:
         case LegacyWsMessageType.GQL_CONNECTION_INIT:
@@ -280,22 +278,6 @@ function detectProtocol(
   }
 
   return undefined;
-}
-
-/**
- * Wrap a WebSocket server to add tracking
- *
- * This is a utility for wrapping existing WebSocket servers.
- */
-export function wrapWebSocketServer(tracker: SubscriptionTracker, wsServer: unknown): void {
-  // This is a placeholder for actual WebSocket server wrapping
-  // The implementation would depend on the specific WebSocket library being used
-  // For graphql-ws:
-  // const server = useServer({ ... }, wsServer);
-  // For subscriptions-transport-ws:
-  // SubscriptionServer.create({ ... }, wsServer);
-  // In practice, users would integrate the handlers directly
-  // with their WebSocket server setup
 }
 
 /**

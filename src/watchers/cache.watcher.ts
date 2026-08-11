@@ -77,14 +77,15 @@ export class CacheWatcher implements OnModuleInit {
     };
 
     // Wrap get method
-    if (this.originalMethods.get) {
+    const originalGet = this.originalMethods.get;
+    if (originalGet) {
       this.cacheManager.get = async (key: string): Promise<unknown> => {
         const startTime = Date.now();
         let hit = false;
         let value: unknown;
 
         try {
-          value = await this.originalMethods!.get!(key);
+          value = await originalGet(key);
           hit = value !== undefined && value !== null;
           return value;
         } finally {
@@ -95,12 +96,13 @@ export class CacheWatcher implements OnModuleInit {
     }
 
     // Wrap set method
-    if (this.originalMethods.set) {
+    const originalSet = this.originalMethods.set;
+    if (originalSet) {
       this.cacheManager.set = async (key: string, value: unknown, ttl?: number): Promise<void> => {
         const startTime = Date.now();
 
         try {
-          return await this.originalMethods!.set!(key, value, ttl);
+          return await originalSet(key, value, ttl);
         } finally {
           const duration = Date.now() - startTime;
           this.collectEntry('set', key, undefined, duration, value, ttl);
@@ -109,12 +111,13 @@ export class CacheWatcher implements OnModuleInit {
     }
 
     // Wrap del method
-    if (this.originalMethods.del) {
+    const originalDel = this.originalMethods.del;
+    if (originalDel) {
       this.cacheManager.del = async (key: string): Promise<void> => {
         const startTime = Date.now();
 
         try {
-          return await this.originalMethods!.del!(key);
+          return await originalDel(key);
         } finally {
           const duration = Date.now() - startTime;
           this.collectEntry('del', key, undefined, duration);
@@ -123,12 +126,13 @@ export class CacheWatcher implements OnModuleInit {
     }
 
     // Wrap reset method (clear all)
-    if (this.originalMethods.reset) {
+    const originalReset = this.originalMethods.reset;
+    if (originalReset) {
       this.cacheManager.reset = async (): Promise<void> => {
         const startTime = Date.now();
 
         try {
-          return await this.originalMethods!.reset!();
+          return await originalReset();
         } finally {
           const duration = Date.now() - startTime;
           this.collectEntry('clear', '*', undefined, duration);

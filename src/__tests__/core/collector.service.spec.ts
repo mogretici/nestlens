@@ -4,7 +4,7 @@ import { STORAGE, StorageInterface } from '../../core/storage/storage.interface'
 import { TagService } from '../../core/tag.service';
 import { FamilyHashService } from '../../core/family-hash.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
-import { Entry, RequestEntry } from '../../types';
+import { Entry } from '../../types';
 
 describe('CollectorService', () => {
   let service: CollectorService;

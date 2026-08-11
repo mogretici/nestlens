@@ -617,7 +617,7 @@ describe('RequestWatcher', () => {
       // Act
       try {
         await watcher.intercept(context, handler).toPromise();
-      } catch (e) {
+      } catch {
         // Expected
       }
 
@@ -646,7 +646,7 @@ describe('RequestWatcher', () => {
       // Act
       try {
         await watcher.intercept(context, handler).toPromise();
-      } catch (e) {
+      } catch {
         // Expected
       }
 
@@ -774,6 +774,51 @@ describe('RequestWatcher', () => {
         }),
         expect.any(String),
       );
+    });
+
+    /**
+     * `maxBodySize: 0` is what the documentation offers as the way to switch
+     * body capture off (docs/advanced/performance.md). Read with `||` the zero
+     * was falsy, so it selected the 64KB default and captured the body in
+     * full — the opposite of what was asked for, on the setting people reach
+     * for to keep payloads out of storage.
+     */
+    it('captures nothing when the size limit is zero', async () => {
+      // Arrange
+      const module = await Test.createTestingModule({
+        providers: [
+          RequestWatcher,
+          { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
+          {
+            provide: NESTLENS_CONFIG,
+            useValue: {
+              path: '/nestlens',
+              watchers: {
+                request: { enabled: true, maxBodySize: 0 },
+              },
+            },
+          },
+        ],
+      }).compile();
+
+      const watcherWithoutBodies = module.get<RequestWatcher>(RequestWatcher);
+      const context = createMockContext({
+        request: { body: { email: 'user@example.com' } },
+      });
+
+      // Act
+      await watcherWithoutBodies.intercept(context, createMockHandler()).toPromise();
+
+      // Assert - the size is still reported, the content is not
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'request',
+        expect.objectContaining({
+          body: { _truncated: true, _size: expect.any(Number) },
+        }),
+        expect.any(String),
+      );
+      expect(JSON.stringify(mockCollector.collect.mock.calls)).not.toContain('user@example.com');
     });
 
     it('should handle non-serializable body', async () => {

@@ -405,7 +405,7 @@ These tokens exist internally but are not exported. They are used by NestLens wa
 interface RequestWatcherConfig {
   enabled?: boolean;
   ignorePaths?: string[];
-  maxBodySize?: number;           // bytes, default: 64 * 1024 (64KB)
+  maxBodySize?: number;           // bytes, default: 64 * 1024 (64KB); 0 captures none
   captureHeaders?: boolean;       // default: true
   captureBody?: boolean;          // default: true
   captureResponse?: boolean;      // default: true
@@ -450,7 +450,7 @@ interface LogWatcherConfig {
 ```typescript
 interface HttpClientWatcherConfig {
   enabled?: boolean;
-  maxBodySize?: number;              // bytes, default: 64 * 1024
+  maxBodySize?: number;              // bytes, default: 64 * 1024; 0 captures none
   captureRequestBody?: boolean;      // default: true
   captureResponseBody?: boolean;     // default: true
   ignoreHosts?: string[];
@@ -466,7 +466,7 @@ interface HttpClientWatcherConfig {
 interface RedisWatcherConfig {
   enabled?: boolean;
   ignoreCommands?: string[];
-  maxResultSize?: number;  // bytes, default: 1024
+  maxResultSize?: number;  // bytes, default: 1024; 0 captures none
 }
 ```
 
@@ -495,7 +495,7 @@ interface CommandWatcherConfig {
   enabled?: boolean;
   capturePayload?: boolean;  // default: true
   captureResult?: boolean;   // default: true
-  maxPayloadSize?: number;   // bytes, default: 64 * 1024
+  maxPayloadSize?: number;   // bytes, default: 64 * 1024; 0 captures none
 }
 ```
 

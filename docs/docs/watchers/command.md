@@ -39,7 +39,7 @@ NestLensModule.forRoot({
 | `enabled` | boolean | `false` | Enable/disable command tracking |
 | `capturePayload` | boolean | `true` | Capture command payload |
 | `captureResult` | boolean | `true` | Capture command result |
-| `maxPayloadSize` | number | `64 * 1024` | Max payload size (bytes) |
+| `maxPayloadSize` | number | `64 * 1024` | Max payload size (bytes). `0` records the size only, never the content |
 
 ## Payload Structure
 

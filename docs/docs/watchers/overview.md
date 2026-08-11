@@ -135,7 +135,7 @@ interface CommonWatcherConfig {
   // Data Capture
   captureData?: boolean;         // Capture payload/data
   captureBody?: boolean;         // Capture request/response bodies
-  maxBodySize?: number;          // Maximum body size to capture
+  maxBodySize?: number;          // Maximum body size to capture; 0 captures none
 
   // Sensitive Data
   sensitiveHeaders?: string[];   // Headers to mask

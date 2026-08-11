@@ -75,5 +75,11 @@ export default defineConfig({
     setupFiles: [resolve(__dirname, 'src/__tests__/setup.ts')],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     root: __dirname,
+    // Rendering a page into jsdom is fast until the machine is busy, and then
+    // it is not: under load, Layout's synchronous render measured 6.6s against
+    // the 5s default and reported a timeout — a failure about the runner, not
+    // about the component. CI has two shared cores. A genuinely stuck test
+    // still fails, fifteen seconds later.
+    testTimeout: 15_000,
   },
 });

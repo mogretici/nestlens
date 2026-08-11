@@ -581,6 +581,18 @@ describe('MemoryStorage', () => {
       expect(result.data.every((e) => e.id! > middleId)).toBe(true);
     });
 
+    /**
+     * Paired with the identical test in sqlite.storage.spec.ts: the backend is
+     * a configuration choice and must not change what a query returns.
+     */
+    it('treats a zero limit the same way the other backends do', async () => {
+      // Act
+      const result = await storage.findWithCursor('request', { limit: 0 });
+
+      // Assert
+      expect(result.data).toHaveLength(0);
+    });
+
     it('should return total count', async () => {
       // Act
       const result = await storage.findWithCursor('request', { limit: 3 });

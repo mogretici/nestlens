@@ -339,6 +339,17 @@ export type Entry =
   | DumpEntry
   | GraphQLEntry;
 
+/**
+ * An entry that has been through storage.
+ *
+ * `id` and `createdAt` are optional on {@link Entry} because a watcher has
+ * neither when it hands an entry over — storage assigns both. Every read path
+ * then knows they are there, which used to be written as a non-null assertion
+ * at each use. Saying it once in the type is the same claim, checked by the
+ * compiler instead of asserted by hand.
+ */
+export type StoredEntry = Entry & { id: number; createdAt: string };
+
 export interface EntryFilter {
   type?: EntryType;
   requestId?: string;

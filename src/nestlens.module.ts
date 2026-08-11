@@ -2,9 +2,7 @@ import {
   DynamicModule,
   Global,
   Logger,
-  MiddlewareConsumer,
   Module,
-  NestModule,
   OnModuleInit,
   Provider,
   VERSION_NEUTRAL,
@@ -160,7 +158,7 @@ class NestLensScheduleModule {
 }
 
 @Module({})
-export class NestLensModule implements NestModule, OnModuleInit {
+export class NestLensModule implements OnModuleInit {
   private static readonly logger = new Logger('NestLens');
 
   static forRoot(config: NestLensConfig = {}): DynamicModule {
@@ -364,10 +362,6 @@ export class NestLensModule implements NestModule, OnModuleInit {
         ...config.watchers,
       },
     };
-  }
-
-  configure(consumer: MiddlewareConsumer) {
-    // Middleware configuration if needed
   }
 
   async onModuleInit() {

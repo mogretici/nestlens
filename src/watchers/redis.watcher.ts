@@ -111,10 +111,11 @@ export class RedisWatcher implements OnModuleInit {
       }
 
       // Store original method
-      this.originalMethods.set(command, (existing as RedisCommand).bind(client));
+      const original = (existing as RedisCommand).bind(client);
+      this.originalMethods.set(command, original);
 
       // Wrap the command
-      client[command] = this.wrapCommand(command, this.originalMethods.get(command)!);
+      client[command] = this.wrapCommand(command, original);
     }
 
     this.logger.log('Redis interceptors installed');
@@ -209,7 +210,7 @@ export class RedisWatcher implements OnModuleInit {
     try {
       // Limit size to prevent huge arguments from bloating storage
       const json = JSON.stringify(args);
-      const maxSize = this.config.maxResultSize || 1024; // 1KB default
+      const maxSize = this.config.maxResultSize ?? 1024; // 1KB default; 0 captures nothing
       if (json.length > maxSize) {
         return [{ _truncated: true, _size: json.length }];
       }
@@ -232,7 +233,7 @@ export class RedisWatcher implements OnModuleInit {
     try {
       // Limit size to prevent huge results from bloating storage
       const json = JSON.stringify(result);
-      const maxSize = this.config.maxResultSize || 1024; // 1KB default
+      const maxSize = this.config.maxResultSize ?? 1024; // 1KB default; 0 captures nothing
       if (json.length > maxSize) {
         return { _truncated: true, _size: json.length };
       }

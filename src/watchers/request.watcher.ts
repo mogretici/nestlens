@@ -7,7 +7,7 @@ import { tap } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
 import { CollectorService } from '../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
-import { NestLensRequest, RequestEntry, RequestUser, GraphQLEntry } from '../types';
+import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -214,7 +214,7 @@ export class RequestWatcher implements NestInterceptor {
   private captureBody(body: unknown): unknown {
     if (!body) return undefined;
 
-    const maxSize = this.config.maxBodySize || 64 * 1024; // 64KB default
+    const maxSize = this.config.maxBodySize ?? 64 * 1024; // 64KB default; 0 captures nothing
 
     try {
       const json = JSON.stringify(body);

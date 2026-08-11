@@ -909,6 +909,35 @@ describe('SqliteStorage', () => {
       expect(result.meta.total).toBe(10);
     });
 
+    /**
+     * MemoryStorage and RedisStorage both read this as `?? 50`; SQLite alone
+     * used `||`, so the same call answered with 50 rows here and none there.
+     * The backend is a configuration choice — it must not change what a query
+     * returns.
+     */
+    it('treats a zero limit the same way the other backends do', async () => {
+      // Arrange
+      for (let i = 0; i < 3; i++) {
+        await storage.save({
+          type: 'request',
+          payload: {
+            method: 'GET',
+            url: `/zero-${i}`,
+            path: `/zero-${i}`,
+            statusCode: 200,
+            duration: 10,
+            memory: 1024,
+          },
+        } as Entry);
+      }
+
+      // Act
+      const result = await storage.findWithCursor('request', { limit: 0 });
+
+      // Assert
+      expect(result.data).toHaveLength(0);
+    });
+
     it('should get next page with cursor', async () => {
       // Arrange
       for (let i = 0; i < 10; i++) {

@@ -11,8 +11,8 @@ import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../../nestlens.config';
 import { ResolvedGraphQLConfig, resolveGraphQLConfig } from './types';
 import { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter';
-import { ApolloAdapter, createApolloAdapter } from './adapters/apollo.adapter';
-import { MercuriusAdapter, createMercuriusAdapter } from './adapters/mercurius.adapter';
+import { createApolloAdapter } from './adapters/apollo.adapter';
+import { createMercuriusAdapter } from './adapters/mercurius.adapter';
 import {
   SubscriptionTracker,
   createSubscriptionTracker,

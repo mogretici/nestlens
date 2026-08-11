@@ -623,6 +623,27 @@ describe('CommandWatcher', () => {
       expect((call?.[1] as any).result).toBeUndefined();
     });
 
+    /**
+     * `maxPayloadSize: 0` means "never store command payloads". `||` read the
+     * zero as absent and applied the 64KB default instead.
+     */
+    it('captures no payload when maxPayloadSize is zero', async () => {
+      // Arrange
+      mockConfig.watchers = { command: { enabled: true, maxPayloadSize: 0 } };
+      class SensitiveCommand {
+        cardNumber = '4111111111111111';
+      }
+      const bus = createCommandBus();
+      watcher = await createWatcher(mockConfig, bus);
+      watcher.onModuleInit();
+
+      // Act
+      await bus.execute(new SensitiveCommand());
+
+      // Assert
+      expect(JSON.stringify(mockCollector.collect.mock.calls)).not.toContain('4111111111111111');
+    });
+
     it('should truncate large payload', async () => {
       // Arrange
       mockConfig.watchers = { command: { enabled: true, maxPayloadSize: 100 } };

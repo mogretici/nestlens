@@ -7,13 +7,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '@nestjs/common';
 import { CollectorService } from '../../../core/collector.service';
-import { GraphQLPayload, ActiveSubscription } from '../../../types';
-import {
-  ResolvedGraphQLConfig,
-  ResolvedSubscriptionConfig,
-  SubscriptionTransportMode,
-} from '../types';
-import { hashQuery, truncateQuery, extractOperationName } from '../utils/query-parser';
+import { GraphQLPayload } from '../../../types';
+import { ResolvedGraphQLConfig, ResolvedSubscriptionConfig } from '../types';
+import { hashQuery, truncateQuery } from '../utils/query-parser';
 import { sanitizeVariables, sanitizeResponse } from '../utils/variable-sanitizer';
 import { ConnectionStore, createConnectionStore } from './connection.store';
 
@@ -146,7 +142,7 @@ export class SubscriptionTracker {
     this.metrics.totalConnections++;
 
     // Track by protocol
-    const proto = protocol || 'unknown';
+    const proto = protocol ?? 'unknown';
     if (proto in this.metrics.byProtocol) {
       this.metrics.byProtocol[proto as keyof typeof this.metrics.byProtocol]++;
     }
@@ -288,11 +284,8 @@ export class SubscriptionTracker {
     // Buffer message data if capturing
     if (this.config.captureMessageData && event.data) {
       const bufferKey = `${event.connectionId}:${event.subscriptionId}`;
-      if (!this.messageBuffer.has(bufferKey)) {
-        this.messageBuffer.set(bufferKey, []);
-      }
-
-      const buffer = this.messageBuffer.get(bufferKey)!;
+      const buffer = this.messageBuffer.get(bufferKey) ?? [];
+      this.messageBuffer.set(bufferKey, buffer);
       if (buffer.length < this.config.maxTrackedMessages) {
         buffer.push(
           sanitizeResponse(

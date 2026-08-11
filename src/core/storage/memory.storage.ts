@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import {
   Entry,
+  StoredEntry,
   EntryFilter,
   EntryStats,
   EntryType,
@@ -23,7 +24,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   private readonly logger = new Logger(MemoryStorage.name);
 
   // Main storage
-  private entries: Map<number, Entry> = new Map();
+  private entries: Map<number, StoredEntry> = new Map();
   private nextId = 1;
 
   // Tag storage
@@ -47,9 +48,9 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
   // ==================== Core CRUD Operations ====================
 
-  async save(entry: Entry): Promise<Entry> {
+  async save(entry: Entry): Promise<StoredEntry> {
     const id = this.nextId++;
-    const savedEntry: Entry = {
+    const savedEntry: StoredEntry = {
       ...entry,
       id,
       createdAt: new Date().toISOString(),
@@ -61,8 +62,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     return savedEntry;
   }
 
-  async saveBatch(entries: Entry[]): Promise<Entry[]> {
-    const savedEntries: Entry[] = [];
+  async saveBatch(entries: Entry[]): Promise<StoredEntry[]> {
+    const savedEntries: StoredEntry[] = [];
 
     for (const entry of entries) {
       const saved = await this.save(entry);
@@ -94,11 +95,11 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     }
     if (filter.from) {
       const fromTime = filter.from.getTime();
-      results = results.filter((e) => new Date(e.createdAt!).getTime() >= fromTime);
+      results = results.filter((e) => new Date(e.createdAt).getTime() >= fromTime);
     }
     if (filter.to) {
       const toTime = filter.to.getTime();
-      results = results.filter((e) => new Date(e.createdAt!).getTime() <= toTime);
+      results = results.filter((e) => new Date(e.createdAt).getTime() <= toTime);
     }
 
     // Sort by createdAt DESC (newest first), falling back to id so entries
@@ -106,8 +107,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     // Without the tie-break, ordering depends on how insertions happen to land
     // across the millisecond boundary, which makes paging skip or repeat rows.
     results.sort((a, b) => {
-      const byTime = new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime();
-      return byTime !== 0 ? byTime : b.id! - a.id!;
+      const byTime = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return byTime !== 0 ? byTime : b.id - a.id;
     });
 
     // Apply pagination
@@ -146,10 +147,12 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
     // Apply cursor pagination
     if (params.beforeSequence !== undefined) {
-      results = results.filter((e) => e.id! < params.beforeSequence!);
+      const beforeSequence = params.beforeSequence;
+      results = results.filter((e) => e.id < beforeSequence);
     }
     if (params.afterSequence !== undefined) {
-      results = results.filter((e) => e.id! > params.afterSequence!);
+      const afterSequence = params.afterSequence;
+      results = results.filter((e) => e.id > afterSequence);
     }
 
     // Apply advanced filters
@@ -159,9 +162,9 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
     // Sort
     if (params.afterSequence !== undefined) {
-      results.sort((a, b) => a.id! - b.id!);
+      results.sort((a, b) => a.id - b.id);
     } else {
-      results.sort((a, b) => b.id! - a.id!);
+      results.sort((a, b) => b.id - a.id);
     }
 
     // Check for more entries
@@ -183,8 +186,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       meta: {
         hasMore,
         oldestSequence:
-          hydratedResults.length > 0 ? hydratedResults[hydratedResults.length - 1].id! : null,
-        newestSequence: hydratedResults.length > 0 ? hydratedResults[0].id! : null,
+          hydratedResults.length > 0 ? hydratedResults[hydratedResults.length - 1].id : null,
+        newestSequence: hydratedResults.length > 0 ? hydratedResults[0].id : null,
         total,
       },
     };
@@ -232,12 +235,12 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   async getLatestSequence(type?: EntryType): Promise<number | null> {
     const entries = Array.from(this.entries.values()).filter((e) => !type || e.type === type);
     if (entries.length === 0) return null;
-    return Math.max(...entries.map((e) => e.id!));
+    return Math.max(...entries.map((e) => e.id));
   }
 
   async hasEntriesAfter(sequence: number, type?: EntryType): Promise<number> {
     return Array.from(this.entries.values()).filter(
-      (e) => e.id! > sequence && (!type || e.type === type),
+      (e) => e.id > sequence && (!type || e.type === type),
     ).length;
   }
 
@@ -286,7 +289,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       byType[entry.type] = (byType[entry.type] || 0) + 1;
     }
 
-    const sorted = [...entries].sort((a, b) => a.id! - b.id!);
+    const sorted = [...entries].sort((a, b) => a.id - b.id);
 
     return {
       total: entries.length,
@@ -304,7 +307,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     let deleted = 0;
 
     for (const [id, entry] of this.entries) {
-      if (new Date(entry.createdAt!).getTime() < beforeTime) {
+      if (new Date(entry.createdAt).getTime() < beforeTime) {
         this.entries.delete(id);
         this.removeEntryTagsInternal(id);
         deleted++;
@@ -323,7 +326,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     let deleted = 0;
 
     for (const [id, entry] of this.entries) {
-      if (entry.type === type && new Date(entry.createdAt!).getTime() < beforeTime) {
+      if (entry.type === type && new Date(entry.createdAt).getTime() < beforeTime) {
         this.entries.delete(id);
         this.removeEntryTagsInternal(id);
         deleted++;
@@ -336,20 +339,17 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   // ==================== Tag Methods ====================
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
-    if (!this.entryTags.has(entryId)) {
-      this.entryTags.set(entryId, new Set());
-    }
-    const entryTagSet = this.entryTags.get(entryId)!;
+    const entryTagSet = this.entryTags.get(entryId) ?? new Set<string>();
+    this.entryTags.set(entryId, entryTagSet);
 
     for (const rawTag of tags) {
       // Normalize tags to uppercase for consistent storage
       const tag = rawTag.toUpperCase();
       entryTagSet.add(tag);
 
-      if (!this.tagIndex.has(tag)) {
-        this.tagIndex.set(tag, new Set());
-      }
-      this.tagIndex.get(tag)!.add(entryId);
+      const taggedEntries = this.tagIndex.get(tag) ?? new Set<number>();
+      taggedEntries.add(entryId);
+      this.tagIndex.set(tag, taggedEntries);
     }
   }
 
@@ -405,7 +405,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       }
     } else {
       // AND logic - entries must have ALL specified tags
-      const tagSets = normalizedTags.map((tag) => this.tagIndex.get(tag) || new Set<number>());
+      const tagSets = normalizedTags.map((tag) => this.tagIndex.get(tag) ?? new Set<number>());
 
       if (tagSets.length === 0 || tagSets.some((set) => set.size === 0)) {
         return [];
@@ -419,8 +419,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
     const entries = Array.from(matchingIds)
       .map((id) => this.entries.get(id))
-      .filter((e): e is Entry => e !== undefined)
-      .sort((a, b) => b.id! - a.id!)
+      .filter((e): e is StoredEntry => e !== undefined)
+      .sort((a, b) => b.id - a.id)
       .slice(0, limit);
 
     return this.hydrateEntriesWithTags(entries);
@@ -480,7 +480,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   async findByFamilyHash(familyHash: string, limit = 50): Promise<Entry[]> {
     const entries = Array.from(this.entries.values())
       .filter((e) => e.familyHash === familyHash)
-      .sort((a, b) => b.id! - a.id!)
+      .sort((a, b) => b.id - a.id)
       .slice(0, limit);
 
     return this.hydrateEntriesWithTags(entries);
@@ -490,22 +490,21 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     type?: EntryType,
     limit = 50,
   ): Promise<{ familyHash: string; count: number; latestEntry: Entry }[]> {
-    const groups = new Map<string, Entry[]>();
+    const groups = new Map<string, StoredEntry[]>();
 
     for (const entry of this.entries.values()) {
       if (!entry.familyHash) continue;
       if (type && entry.type !== type) continue;
 
-      if (!groups.has(entry.familyHash)) {
-        groups.set(entry.familyHash, []);
-      }
-      groups.get(entry.familyHash)!.push(entry);
+      const group = groups.get(entry.familyHash) ?? [];
+      group.push(entry);
+      groups.set(entry.familyHash, group);
     }
 
-    const result: { familyHash: string; count: number; latestEntry: Entry }[] = [];
+    const result: { familyHash: string; count: number; latestEntry: StoredEntry }[] = [];
 
     for (const [familyHash, entries] of groups) {
-      entries.sort((a, b) => b.id! - a.id!);
+      entries.sort((a, b) => b.id - a.id);
       const [latestEntry] = this.hydrateEntriesWithTags([entries[0]]);
       result.push({
         familyHash,
@@ -515,7 +514,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     }
 
     return result
-      .sort((a, b) => b.count - a.count || b.latestEntry.id! - a.latestEntry.id!)
+      .sort((a, b) => b.count - a.count || b.latestEntry.id - a.latestEntry.id)
       .slice(0, limit);
   }
 
@@ -527,10 +526,10 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
   // ==================== Private Helpers ====================
 
-  private hydrateEntriesWithTags(entries: Entry[]): Entry[] {
+  private hydrateEntriesWithTags(entries: StoredEntry[]): StoredEntry[] {
     return entries.map((entry) => ({
       ...entry,
-      tags: Array.from(this.entryTags.get(entry.id!) || []),
+      tags: Array.from(this.entryTags.get(entry.id) ?? []),
     }));
   }
 
@@ -589,9 +588,9 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   }
 
   private applyAdvancedFilters(
-    entries: Entry[],
+    entries: StoredEntry[],
     filters: CursorPaginationParams['filters'],
-  ): Entry[] {
+  ): StoredEntry[] {
     if (!filters) return entries;
 
     return entries.filter((entry) => {
@@ -798,7 +797,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
       // Tag filter (case-insensitive)
       if (filters.tags?.length) {
-        const entryTagSet = this.entryTags.get(entry.id!);
+        const entryTagSet = this.entryTags.get(entry.id);
         // Normalize filter tags to uppercase for case-insensitive matching
         const normalizedFilterTags = filters.tags.map((t) => t.toUpperCase());
         if (!entryTagSet || !normalizedFilterTags.some((t) => entryTagSet.has(t))) return false;
@@ -808,7 +807,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
       if (filters.search) {
         const term = filters.search.toLowerCase();
         const payloadStr = JSON.stringify(payload).toLowerCase();
-        const entryTagSet = this.entryTags.get(entry.id!);
+        const entryTagSet = this.entryTags.get(entry.id);
         const tagMatch = entryTagSet
           ? [...entryTagSet].some((t) => t.toLowerCase().includes(term))
           : false;

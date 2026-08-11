@@ -269,7 +269,7 @@ export function buildWaterfall(
   const totalDurationMs = nsToMs(totalDurationNs);
 
   return traces.map((trace) => {
-    const depth = (trace.path.match(/\./g) || []).length;
+    const depth = (trace.path.match(/\./g) ?? []).length;
 
     return {
       path: trace.path,

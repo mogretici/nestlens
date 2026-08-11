@@ -7,14 +7,13 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLPayload } from '../../../types';
-import { ResolvedGraphQLConfig } from '../types';
 import {
   hashQuery,
   truncateQuery,
   extractOperationType,
   extractOperationName,
 } from '../utils/query-parser';
-import { sanitizeVariables, sanitizeResponse } from '../utils/variable-sanitizer';
+import { sanitizeVariables } from '../utils/variable-sanitizer';
 import { N1Detector } from '../utils/n1-detector';
 import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer, FieldTracer } from '../utils/field-tracer';
@@ -252,7 +251,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           : undefined;
 
         // Extract request info
-        const request = context.reply?.request || context.request;
+        const request = context.reply?.request ?? context.request;
         const ip = request?.ip;
         const userAgent = request?.headers?.['user-agent'];
         const user = adapter.extractUser({ user: request?.user });
@@ -285,7 +284,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           extensions?: Record<string, unknown>;
         }>;
         const hasErrors = errors.length > 0;
-        const statusCode = execution.reply?.statusCode || (hasErrors ? 400 : 200);
+        const statusCode = execution.reply?.statusCode ?? (hasErrors ? 400 : 200);
 
         // Build payload
         const payload: GraphQLPayload = {
@@ -463,9 +462,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
     }
 
     // Field tracing
-    if (tracking.fieldTracer?.isActive()) {
+    const fieldTracer = tracking.fieldTracer;
+    if (fieldTracer?.isActive()) {
       const path = this.buildFieldPath(event.info.path);
-      const traceId = tracking.fieldTracer.startField(
+      const traceId = fieldTracer.startField(
         path,
         event.info.parentType.name,
         event.info.fieldName,
@@ -478,7 +478,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
       if (traceId) {
         // Store for later cleanup
         (context as Record<string, unknown>)[`_trace_${traceId}`] = () => {
-          tracking.fieldTracer!.endField(traceId);
+          fieldTracer.endField(traceId);
         };
       }
     }

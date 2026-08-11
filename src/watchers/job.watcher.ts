@@ -274,7 +274,7 @@ export class JobWatcher implements OnModuleInit {
         queue: queueName,
         data: this.captureData(job.data),
         status: 'waiting',
-        attempts: job.attemptsMade || 0,
+        attempts: job.attemptsMade ?? 0,
       };
 
       this.collector.collect('job', payload);
@@ -293,7 +293,7 @@ export class JobWatcher implements OnModuleInit {
         queue: queueName,
         data: this.captureData(job.data),
         status: 'active',
-        attempts: job.attemptsMade || 0,
+        attempts: job.attemptsMade ?? 0,
       };
 
       this.collector.collect('job', payload);
@@ -314,7 +314,7 @@ export class JobWatcher implements OnModuleInit {
         queue: queueName,
         data: this.captureData(job.data),
         status: 'completed',
-        attempts: job.attemptsMade || 0,
+        attempts: job.attemptsMade ?? 0,
         duration,
         result: this.captureData(result),
       };
@@ -337,7 +337,7 @@ export class JobWatcher implements OnModuleInit {
         queue: queueName,
         data: this.captureData(job.data),
         status: 'failed',
-        attempts: job.attemptsMade || 0,
+        attempts: job.attemptsMade ?? 0,
         duration,
         error: error?.message || 'Unknown error',
       };
@@ -362,7 +362,7 @@ export class JobWatcher implements OnModuleInit {
         queue: queueName,
         data: this.captureData(job.data),
         status: 'delayed',
-        attempts: job.attemptsMade || 0,
+        attempts: job.attemptsMade ?? 0,
       };
 
       this.collector.collect('job', payload);

@@ -78,10 +78,11 @@ export class NotificationWatcher implements OnModuleInit {
       }
 
       // Store original method
-      this.originalMethods.set(name, (existing as NotificationMethod).bind(service));
+      const original = (existing as NotificationMethod).bind(service);
+      this.originalMethods.set(name, original);
 
       // Wrap the method
-      service[name] = this.wrapNotificationMethod(name, type, this.originalMethods.get(name)!);
+      service[name] = this.wrapNotificationMethod(name, type, original);
     }
 
     this.logger.log('Notification interceptors installed');
