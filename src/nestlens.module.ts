@@ -28,6 +28,7 @@ import {
   DashboardController,
   NestLensGuard,
   NestLensStreamController,
+  SpaRouteRegistrar,
   TagController,
 } from './api';
 import {
@@ -178,7 +179,9 @@ export class NestLensModule implements OnModuleInit {
       };
     }
 
-    const providers: Provider[] = [NestLensGuard];
+    // Settles the SPA catch-all's syntax against the adapter Nest was given;
+    // see spa-wildcard.ts for why that cannot be decided here.
+    const providers: Provider[] = [NestLensGuard, SpaRouteRegistrar];
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
     const controllers = [
       NestLensApiController,

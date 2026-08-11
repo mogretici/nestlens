@@ -554,10 +554,15 @@ describe('NestLensModule', () => {
           // Act
           const dynamicModule = NestLensModule.forRoot(config);
 
-          // Assert
-          expect(dynamicModule.providers).toBeDefined();
-          // Should only have NestLensGuard
-          expect(dynamicModule.providers!.length).toBe(1);
+          // Assert - what matters is that no watcher was registered, not how
+          // many providers the module happens to carry: counting them fails on
+          // every piece of infrastructure added, and says nothing about
+          // watchers either way.
+          const providerNames = (dynamicModule.providers ?? []).map((provider) =>
+            typeof provider === 'function' ? provider.name : String(provider),
+          );
+
+          expect(providerNames.filter((name) => name.endsWith('Watcher'))).toEqual([]);
         });
       });
     });
