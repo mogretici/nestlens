@@ -6,9 +6,21 @@ const run = promisify(execFile);
 
 const EXAMPLE_DIR = path.join(__dirname, '..', 'example');
 const APP_URL = 'http://localhost:3000';
-// Checked by type: the app records its own startup logs, so "any entries at
-// all" is always true and would skip seeding every time.
-const REQUESTS_URL = `${APP_URL}/nestlens/__nestlens__/api/entries?type=request&limit=1`;
+
+/**
+ * Asking for queries rather than requests is the whole point of this URL.
+ *
+ * Playwright waits for the application to answer before running anything, and
+ * that health check is itself an HTTP request the request watcher records. A
+ * check for "any request entry" is therefore true on a completely cold app,
+ * which skipped seeding every time and left the suite passing only because a
+ * long-lived dev server still held data from earlier runs. Restarting it turned
+ * green into "element(s) not found".
+ *
+ * Nothing the harness does on its way in produces a query, so this answers the
+ * question actually being asked: has the application done any real work yet?
+ */
+const QUERIES_URL = `${APP_URL}/nestlens/__nestlens__/api/entries?type=query&limit=1`;
 
 /**
  * Fills the example application with entries before the suite runs.
@@ -22,7 +34,7 @@ const REQUESTS_URL = `${APP_URL}/nestlens/__nestlens__/api/entries?type=request&
  * so the data here matches what a developer sees.
  */
 async function seedExampleApp(): Promise<void> {
-  const response = await fetch(REQUESTS_URL);
+  const response = await fetch(QUERIES_URL);
   if (!response.ok) {
     throw new Error(`Example app is not answering on ${APP_URL} (${response.status}).`);
   }
@@ -34,7 +46,9 @@ async function seedExampleApp(): Promise<void> {
     return;
   }
 
-  process.stdout.write('[e2e] seeding the example app\n');
+  // Reporters own stdout — the JSON one emits a single document there, and a
+  // progress line printed alongside it makes the report unparseable.
+  process.stderr.write('[e2e] seeding the example app\n');
 
   await run('bash', ['test-requests.sh', APP_URL], { cwd: EXAMPLE_DIR, timeout: 120_000 });
 }

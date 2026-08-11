@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TagService } from '../core/tag.service';
 import { STORAGE, StorageInterface } from '../core/storage/storage.interface';
 import {
-  Entry,
   RequestEntry,
   QueryEntry,
   ExceptionEntry,

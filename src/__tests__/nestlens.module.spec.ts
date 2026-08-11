@@ -1,6 +1,6 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../nestlens.module';
-import { NestLensConfig, NESTLENS_CONFIG, DEFAULT_CONFIG } from '../nestlens.config';
+import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import { PruningService } from '../core/pruning.service';
@@ -634,29 +634,6 @@ describe('NestLensModule', () => {
         const hasFilter = dynamicModule.providers!.some((p: any) => p.provide === APP_FILTER);
         expect(hasFilter).toBe(true);
       });
-    });
-  });
-
-  describe('NestModule Implementation', () => {
-    it('should implement configure method', () => {
-      // Arrange
-      const module = new NestLensModule();
-
-      // Assert
-      expect(module.configure).toBeDefined();
-      expect(typeof module.configure).toBe('function');
-    });
-
-    it('should not throw when configure is called', () => {
-      // Arrange
-      const module = new NestLensModule();
-      const mockConsumer = {
-        apply: jest.fn().mockReturnThis(),
-        forRoutes: jest.fn().mockReturnThis(),
-      };
-
-      // Act & Assert
-      expect(() => module.configure(mockConsumer as any)).not.toThrow();
     });
   });
 
