@@ -1,3 +1,10 @@
+## [0.8.1](https://github.com/mogretici/nestlens/compare/v0.8.0...v0.8.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* make the dev server reach the API, and the e2e suite mean something ([ac832ec](https://github.com/mogretici/nestlens/commit/ac832ec35024c555c0d4bed2afc5d936696ad3fb))
+
 # [0.8.0](https://github.com/mogretici/nestlens/compare/v0.7.0...v0.8.0) (2026-08-10)
 
 
