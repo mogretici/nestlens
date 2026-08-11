@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   Entry,
+  StoredEntry,
   EntryFilter,
   EntryStats,
   EntryType,
@@ -29,16 +30,6 @@ interface EntryRow {
 }
 
 /**
- * Tag row type
- */
-interface TagRow {
-  id: number;
-  entry_id: number;
-  tag: string;
-  created_at: string;
-}
-
-/**
  * Monitored tag row type
  */
 interface MonitoredTagRow {
@@ -57,10 +48,6 @@ interface CountRow {
 interface TypeCountRow {
   type: EntryType;
   count: number;
-}
-
-interface AvgRow {
-  avg: number | null;
 }
 
 @Injectable()
@@ -241,11 +228,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     const stmt = this.db.prepare(sql);
     const rows = stmt.all(...params) as EntryRow[];
 
-    const entries = rows.map((row) => this.rowToEntry(row)) as Entry[];
+    const entries = rows.map((row) => this.rowToEntry(row));
     return this.hydrateEntriesWithTags(entries);
   }
 
-  private rowToEntry(row: EntryRow): Entry {
+  private rowToEntry(row: EntryRow): StoredEntry {
     let payload: unknown;
     try {
       payload = JSON.parse(row.payload);
@@ -262,13 +249,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       createdAt: row.created_at,
       familyHash: row.family_hash || undefined,
       resolvedAt: row.resolved_at || undefined,
-    } as Entry;
+    } as StoredEntry;
   }
 
   /**
    * Hydrate entries with their tags (for batch efficiency)
    */
-  private hydrateEntriesWithTags(entries: Entry[]): Entry[] {
+  private hydrateEntriesWithTags(entries: StoredEntry[]): StoredEntry[] {
     if (entries.length === 0) return entries;
 
     const entryIds = entries.map((e) => e.id).filter((id): id is number => id !== undefined);
@@ -285,7 +272,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Group tags by entry ID
     const tagsByEntryId = new Map<number, string[]>();
     for (const row of tagRows) {
-      const existing = tagsByEntryId.get(row.entry_id) || [];
+      const existing = tagsByEntryId.get(row.entry_id) ?? [];
       existing.push(row.tag);
       tagsByEntryId.set(row.entry_id, existing);
     }
@@ -293,7 +280,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Assign tags to entries
     return entries.map((entry) => ({
       ...entry,
-      tags: entry.id ? tagsByEntryId.get(entry.id) || [] : [],
+      tags: entry.id ? (tagsByEntryId.get(entry.id) ?? []) : [],
     }));
   }
 
@@ -376,9 +363,9 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     );
 
     return {
-      total: aggregateRow.total || 0,
+      total: aggregateRow.total ?? 0,
       byType,
-      avgResponseTime: aggregateRow.avg_response_time || undefined,
+      avgResponseTime: aggregateRow.avg_response_time ?? undefined,
       slowQueries: aggregateRow.slow_queries,
       exceptions: byType.exception || 0,
       unresolvedExceptions: aggregateRow.unresolved_exceptions,
@@ -794,7 +781,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     type: EntryType | undefined,
     params: CursorPaginationParams,
   ): Promise<CursorPaginatedResponse<Entry>> {
-    const limit = params.limit || 50;
+    const limit = params.limit ?? 50;
     const sqlParams: unknown[] = [];
     const filters = params.filters;
 
@@ -862,8 +849,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       data: entries,
       meta: {
         hasMore,
-        oldestSequence: entries.length > 0 ? entries[entries.length - 1].id! : null,
-        newestSequence: entries.length > 0 ? entries[0].id! : null,
+        oldestSequence: entries.length > 0 ? entries[entries.length - 1].id : null,
+        newestSequence: entries.length > 0 ? entries[0].id : null,
         total,
       },
     };
