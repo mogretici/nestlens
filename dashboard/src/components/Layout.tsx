@@ -75,7 +75,7 @@ function RecordingToggle() {
         setStatus(response.data);
         toast.success('Recording paused');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to toggle recording');
     } finally {
       setLoading(false);

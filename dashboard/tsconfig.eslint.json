@@ -1,0 +1,9 @@
+{
+  // The build's tsconfig excludes tests — they are not shipped, so the build has
+  // no reason to compile them. Type-aware linting does: rules like
+  // prefer-nullish-coalescing need a type for every file they see, and without
+  // this the specs fail to parse and lint silently covers source only.
+  "extends": "./tsconfig.json",
+  "include": ["src", "vite.config.ts", "eslint.config.mjs"],
+  "exclude": []
+}

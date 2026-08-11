@@ -1,4 +1,3 @@
-import { MouseEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ListType, FilterType } from '../config/entryTypes';
 import { getFilterUrlKey, FilterCategory } from '../hooks/useEntryFilters';
@@ -96,12 +95,18 @@ const getUrlParam = (value: string, filterType?: FilterType): string => {
   return 'tags';
 };
 
+/**
+ * What activates a badge: a click, or Enter/Space while it holds focus. The
+ * handler only needs the two methods both events carry.
+ */
+type BadgeActivation = Pick<Event, 'preventDefault' | 'stopPropagation'>;
+
 interface ClickableBadgeProps {
   children: string | number;
   listType?: ListType;
   filterType?: FilterType;
   filterValue?: string;
-  onClick?: (e: MouseEvent) => void;
+  onClick?: (e: BadgeActivation) => void;
   clickable?: boolean;
   className?: string;
   ariaLabel?: string;
@@ -355,7 +360,7 @@ export default function ClickableBadge({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleClick = (e: MouseEvent) => {
+  const handleClick = (e: BadgeActivation) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -418,7 +423,7 @@ export default function ClickableBadge({
       onKeyDown={isClickable ? (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          handleClick(e as any);
+          handleClick(e);
         }
       } : undefined}
       title={displayText}

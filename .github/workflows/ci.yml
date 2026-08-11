@@ -37,6 +37,18 @@ jobs:
       - name: Run library tests
         run: npm test
 
+      # The dashboard is half of what ships and had no static analysis at all:
+      # the lint step above covers `src/**/*.ts`, and the type check runs
+      # against the library's tsconfig. A type error or a broken hook here
+      # reached a release with CI green.
+      - name: Lint dashboard
+        run: npm run lint
+        working-directory: dashboard
+
+      - name: Type check dashboard
+        run: npx tsc --noEmit
+        working-directory: dashboard
+
       - name: Run dashboard tests
         run: npx vitest run
         working-directory: dashboard
