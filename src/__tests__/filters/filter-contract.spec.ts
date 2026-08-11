@@ -1,341 +1,140 @@
 import 'reflect-metadata';
+import * as path from 'node:path';
+import * as ts from 'typescript';
 
 /**
- * Contract Tests for Filter Key Alignment
+ * The dashboard and the API have to agree on filter names.
  *
- * These tests verify that:
- * 1. Frontend CursorFilters keys exist in backend CursorPaginationParams
- * 2. All FilterType values from ClickableBadge are handled correctly
- * 3. getUrlParam function handles all FilterType values
+ * A badge in the dashboard turns a click into `?levels=error`, and the storage
+ * layer reads `filters.levels`. Nothing connects those two names: they live in
+ * separate packages, compiled separately, and a filter added on one side simply
+ * does nothing on the other — the request succeeds, the list comes back
+ * unfiltered, and no test notices.
+ *
+ * The previous version of this file listed both sides as hand-copied string
+ * arrays and then asserted things like `expect(KEYS).toContain(key)` for each
+ * `key` of `KEYS` — 34 tests that could not fail, and two constants that had
+ * drifted from the code they were transcribed from. It reported a contract it
+ * never read.
+ *
+ * These resolve both sides through the TypeScript checker instead. `FilterUrlKey`
+ * is a derived type (`ExtractUrlKeys<typeof ENTRY_TYPES[...]>`), so only the
+ * checker can say what it currently expands to — which is exactly the point:
+ * adding an entry type to the dashboard config changes this set silently.
  */
 
-// Backend filter keys from CursorPaginationParams.filters
-const BACKEND_FILTER_KEYS = [
-  // Log
-  'levels',
-  'contexts',
-  // Query
-  'queryTypes',
-  'sources',
-  'slow',
-  // Exception
-  'names',
-  'resolved',
-  // Request & Exception
-  'methods',
-  'paths',
-  // Request & HTTP Client
-  'statuses',
-  'hostnames',
-  'ips',
-  // Request
-  'controllers',
-  // Schedule
-  'scheduleStatuses',
-  // Job
-  'jobStatuses',
-  'queues',
-  // Cache
-  'cacheOperations',
-  // Mail
-  'mailStatuses',
-  // Redis
-  'redisStatuses',
-  'redisCommands',
-  // Model
-  'modelActions',
-  'entities',
-  'modelSources',
-  // Notification
-  'notificationTypes',
-  'notificationStatuses',
-  // View
-  'viewFormats',
-  'viewStatuses',
-  // Command
-  'commandStatuses',
-  'commandNames',
-  // Gate
-  'gateNames',
-  'gateResults',
-  // Batch
-  'batchStatuses',
-  'batchOperations',
-  // Dump
-  'dumpStatuses',
-  'dumpOperations',
-  'dumpFormats',
-  // Common
-  'tags',
-  'search',
-];
+const REPO_ROOT = path.join(__dirname, '..', '..', '..');
+const BACKEND_TYPES = path.join(REPO_ROOT, 'src', 'types', 'entry.types.ts');
+const DASHBOARD_CONFIG = path.join(REPO_ROOT, 'dashboard', 'src', 'config', 'entryTypes.ts');
+const DASHBOARD_API = path.join(REPO_ROOT, 'dashboard', 'src', 'api.ts');
 
-// Frontend CursorFilters keys from dashboard/src/api.ts
-const FRONTEND_CURSOR_FILTERS_KEYS = [
-  'levels',
-  'contexts',
-  'queryTypes',
-  'sources',
-  'slow',
-  'names',
-  'methods',
-  'paths',
-  'resolved',
-  'statuses',
-  'hostnames',
-  'controllers',
-  'ips',
-  'scheduleStatuses',
-  'jobStatuses',
-  'queues',
-  'cacheOperations',
-  'mailStatuses',
-  'redisStatuses',
-  'redisCommands',
-  'modelActions',
-  'entities',
-  'modelSources',
-  'notificationTypes',
-  'notificationStatuses',
-  'viewFormats',
-  'viewStatuses',
-  'commandStatuses',
-  'commandNames',
-  'gateNames',
-  'gateResults',
-  'batchStatuses',
-  'batchOperations',
-  'dumpStatuses',
-  'dumpOperations',
-  'dumpFormats',
-  'tags',
-  'search',
-];
+/** Building the program is the slow part, so both suites share one. */
+const program = ts.createProgram([BACKEND_TYPES, DASHBOARD_CONFIG, DASHBOARD_API], {
+  target: ts.ScriptTarget.ES2021,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  jsx: ts.JsxEmit.ReactJSX,
+  strict: true,
+  skipLibCheck: true,
+  noEmit: true,
+});
+const checker = program.getTypeChecker();
 
-// FilterType values from ClickableBadge.tsx
-const CLICKABLE_BADGE_FILTER_TYPES = [
-  'tag',
-  'path',
-  'requestId',
-  'names',
-  'methods',
-  'paths',
-  'types',
-  'levels',
-  'statuses',
-  'queues',
-  'operations',
-  'contexts',
-  'sources',
-  'hostnames',
-  'controllers',
-  'ips',
-  'commands',
-  'formats',
-  'actions',
-  'entities',
-  'results',
-  'gates',
-  'cacheOperations',
-  'redisCommands',
-  'redisStatuses',
-  'modelActions',
-  'modelSources',
-  'notificationTypes',
-  'notificationStatuses',
-  'viewFormats',
-  'viewStatuses',
-  'commandStatuses',
-  'commandNames',
-  'gateNames',
-  'gateResults',
-  'batchOperations',
-  'batchStatuses',
-  'dumpOperations',
-  'dumpFormats',
-  'dumpStatuses',
-];
+function sourceFile(filePath: string): ts.SourceFile {
+  const file = program.getSourceFile(filePath);
+  if (!file) {
+    throw new Error(`Could not load ${filePath} — the contract cannot be checked.`);
+  }
+  return file;
+}
 
-// All FilterType values that are handled by getUrlParam (after fix)
-const GET_URL_PARAM_ALL_MAPPINGS = [
-  // Original mappings
-  'path',
-  'requestId',
-  'names',
-  'methods',
-  'paths',
-  'types',
-  'levels',
-  'statuses',
-  'queues',
-  'operations',
-  'contexts',
-  'sources',
-  'hostnames',
-  'controllers',
-  'ips',
-  // Added mappings (previously missing)
-  'cacheOperations',
-  'redisCommands',
-  'redisStatuses',
-  'modelActions',
-  'modelSources',
-  'entities',
-  'notificationTypes',
-  'notificationStatuses',
-  'viewFormats',
-  'viewStatuses',
-  'commandStatuses',
-  'commandNames',
-  'gateNames',
-  'gateResults',
-  'batchOperations',
-  'batchStatuses',
-  'dumpOperations',
-  'dumpFormats',
-  'dumpStatuses',
-];
+/** Literal members of a string-union type alias, expanded by the checker. */
+function unionMembers(filePath: string, aliasName: string): string[] {
+  const members: string[] = [];
 
-describe('Filter Key Alignment - Contract Tests', () => {
-  describe('Frontend CursorFilters to Backend CursorPaginationParams', () => {
-    FRONTEND_CURSOR_FILTERS_KEYS.forEach((key) => {
-      it(`frontend key "${key}" exists in backend`, () => {
-        expect(BACKEND_FILTER_KEYS).toContain(key);
-      });
-    });
-  });
-
-  describe('Backend filter keys are all documented', () => {
-    it('backend has expected number of filter keys', () => {
-      expect(BACKEND_FILTER_KEYS).toHaveLength(38);
-    });
-  });
-
-  describe('ClickableBadge FilterType to API key mapping', () => {
-    describe('All FilterTypes are handled by getUrlParam', () => {
-      GET_URL_PARAM_ALL_MAPPINGS.forEach((filterType) => {
-        it(`filterType "${filterType}" is handled by getUrlParam`, () => {
-          expect(GET_URL_PARAM_ALL_MAPPINGS).toContain(filterType);
-        });
-      });
-
-      it('all 34 filterTypes are properly mapped', () => {
-        expect(GET_URL_PARAM_ALL_MAPPINGS).toHaveLength(34);
-      });
-    });
-  });
-
-  describe('Simulated getUrlParam behavior (after fix)', () => {
-    // Simulating the fixed getUrlParam behavior
-    const simulateGetUrlParam = (value: string, filterType?: string): string => {
-      // Direct mappings for all explicit filterTypes
-      const directMappings: Record<string, string> = {
-        // Common filters
-        path: 'path',
-        requestId: 'requestId',
-        names: 'names',
-        methods: 'methods',
-        paths: 'paths',
-        types: 'types',
-        levels: 'levels',
-        statuses: 'statuses',
-        queues: 'queues',
-        operations: 'operations',
-        contexts: 'contexts',
-        sources: 'sources',
-        hostnames: 'hostnames',
-        controllers: 'controllers',
-        ips: 'ips',
-        // Cache filters
-        cacheOperations: 'cacheOperations',
-        // Redis filters
-        redisCommands: 'redisCommands',
-        redisStatuses: 'redisStatuses',
-        // Model filters
-        modelActions: 'modelActions',
-        modelSources: 'modelSources',
-        entities: 'entities',
-        // Notification filters
-        notificationTypes: 'notificationTypes',
-        notificationStatuses: 'notificationStatuses',
-        // View filters
-        viewFormats: 'viewFormats',
-        viewStatuses: 'viewStatuses',
-        // Command filters
-        commandStatuses: 'commandStatuses',
-        commandNames: 'commandNames',
-        // Gate filters
-        gateNames: 'gateNames',
-        gateResults: 'gateResults',
-        // Batch filters
-        batchOperations: 'batchOperations',
-        batchStatuses: 'batchStatuses',
-        // Dump filters
-        dumpOperations: 'dumpOperations',
-        dumpFormats: 'dumpFormats',
-        dumpStatuses: 'dumpStatuses',
-      };
-
-      if (filterType && filterType in directMappings) {
-        return directMappings[filterType];
+  const visit = (node: ts.Node): void => {
+    if (ts.isTypeAliasDeclaration(node) && node.name.text === aliasName) {
+      const type = checker.getTypeAtLocation(node.name);
+      for (const part of type.isUnion() ? type.types : [type]) {
+        if (part.isStringLiteral()) {
+          members.push(part.value);
+        }
       }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile(filePath));
 
-      // Auto-detection fallback
-      return 'tags';
-    };
+  if (members.length === 0) {
+    throw new Error(`${aliasName} resolved to no string members — check the alias still exists.`);
+  }
+  return members;
+}
 
-    describe('All filterTypes are correctly handled', () => {
-      it('levels -> levels', () => {
-        expect(simulateGetUrlParam('error', 'levels')).toBe('levels');
-      });
+/** Property names of an interface, or of one of its object-typed properties. */
+function interfaceKeys(filePath: string, interfaceName: string, property?: string): string[] {
+  let keys: string[] = [];
 
-      it('statuses -> statuses', () => {
-        expect(simulateGetUrlParam('200', 'statuses')).toBe('statuses');
-      });
+  const visit = (node: ts.Node): void => {
+    if (ts.isInterfaceDeclaration(node) && node.name.text === interfaceName) {
+      const type = checker.getTypeAtLocation(node.name);
+      const target = property
+        ? checker.getTypeOfSymbolAtLocation(
+            checker.getPropertyOfType(type, property) as ts.Symbol,
+            node,
+          )
+        : type;
+      const nonNullable = target.getNonNullableType();
+      keys = nonNullable.getProperties().map((symbol) => symbol.getName());
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile(filePath));
 
-      it('contexts -> contexts', () => {
-        expect(simulateGetUrlParam('UserService', 'contexts')).toBe('contexts');
-      });
+  if (keys.length === 0) {
+    throw new Error(`${interfaceName}${property ? `.${property}` : ''} resolved to no keys.`);
+  }
+  return keys;
+}
 
-      it('modelSources -> modelSources', () => {
-        expect(simulateGetUrlParam('typeorm', 'modelSources')).toBe('modelSources');
-      });
+/**
+ * Keys the dashboard sends that the API deliberately handles outside the
+ * `filters` object: `tags` and `search` are top-level query parameters, and
+ * `path` / `requestId` address a single entry rather than filtering a list.
+ */
+const HANDLED_OUTSIDE_FILTERS = new Set(['tags', 'search', 'path', 'requestId']);
 
-      it('gateNames -> gateNames', () => {
-        expect(simulateGetUrlParam('admin', 'gateNames')).toBe('gateNames');
-      });
+describe('filter names agree across the dashboard and the API', () => {
+  const backendFilterKeys = interfaceKeys(BACKEND_TYPES, 'CursorPaginationParams', 'filters');
+  const dashboardFilterKeys = interfaceKeys(DASHBOARD_API, 'CursorFilters');
+  const badgeUrlKeys = unionMembers(DASHBOARD_CONFIG, 'FilterUrlKey');
 
-      it('redisCommands -> redisCommands', () => {
-        expect(simulateGetUrlParam('GET', 'redisCommands')).toBe('redisCommands');
-      });
+  it('resolves both sides from source rather than from a copied list', () => {
+    // Guards the guard: a resolution that silently returned little would make
+    // every assertion below pass by default.
+    expect(backendFilterKeys.length).toBeGreaterThan(20);
+    expect(dashboardFilterKeys.length).toBeGreaterThan(20);
+    expect(badgeUrlKeys.length).toBeGreaterThan(20);
+  });
 
-      it('commandNames -> commandNames', () => {
-        expect(simulateGetUrlParam('cache:clear', 'commandNames')).toBe('commandNames');
-      });
+  it.each(['levels', 'statuses', 'methods', 'queues'])(
+    'reads %s from the real backend type',
+    (key) => {
+      expect(backendFilterKeys).toContain(key);
+    },
+  );
 
-      it('viewFormats -> viewFormats', () => {
-        expect(simulateGetUrlParam('html', 'viewFormats')).toBe('viewFormats');
-      });
+  it('sends no filter the API would ignore', () => {
+    const unknown = dashboardFilterKeys.filter((key) => !backendFilterKeys.includes(key));
 
-      it('notificationTypes -> notificationTypes', () => {
-        expect(simulateGetUrlParam('email', 'notificationTypes')).toBe('notificationTypes');
-      });
+    expect(unknown).toEqual([]);
+  });
 
-      it('cacheOperations -> cacheOperations', () => {
-        expect(simulateGetUrlParam('get', 'cacheOperations')).toBe('cacheOperations');
-      });
+  it('offers no badge filter the API would ignore', () => {
+    const unknown = badgeUrlKeys.filter(
+      (key) => !backendFilterKeys.includes(key) && !HANDLED_OUTSIDE_FILTERS.has(key),
+    );
 
-      it('entities -> entities', () => {
-        expect(simulateGetUrlParam('User', 'entities')).toBe('entities');
-      });
-
-      it('batchOperations -> batchOperations', () => {
-        expect(simulateGetUrlParam('insert', 'batchOperations')).toBe('batchOperations');
-      });
-
-      it('dumpFormats -> dumpFormats', () => {
-        expect(simulateGetUrlParam('json', 'dumpFormats')).toBe('dumpFormats');
-      });
-    });
+    expect(unknown).toEqual([]);
   });
 });
