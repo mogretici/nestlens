@@ -24,12 +24,6 @@
     "test:e2e:headed": "npx playwright test --headed",
     "prepublishOnly": "npm run build",
     "sync-versions": "node -e \"const fs=require('fs');const pkg=require('./package.json');const dash=require('./dashboard/package.json');dash.version=pkg.version;fs.writeFileSync('./dashboard/package.json',JSON.stringify(dash,null,2)+'\\n')\"",
-    "release:patch": "standard-version --release-as patch",
-    "release:minor": "standard-version --release-as minor",
-    "release:major": "standard-version --release-as major",
-    "publish:patch": "npm run release:patch && git push --follow-tags && npm publish",
-    "publish:minor": "npm run release:minor && git push --follow-tags && npm publish",
-    "publish:major": "npm run release:major && git push --follow-tags && npm publish",
     "prepare": "husky"
   },
   "keywords": [
@@ -138,7 +132,6 @@
     "rimraf": "^6.0.1",
     "rxjs": "^7.8.1",
     "semantic-release": "^25.0.2",
-    "standard-version": "^9.5.0",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.6",
     "tsc-alias": "^1.8.16",
