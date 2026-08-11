@@ -56,7 +56,7 @@ export class TagController {
       .filter(Boolean);
     const entries = await this.tagService.findByTags(
       tags,
-      logic || 'OR',
+      logic ?? 'OR',
       limit ? parseInt(limit, 10) : 50,
     );
     return { data: entries };

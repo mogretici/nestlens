@@ -116,8 +116,12 @@ export class NestLensApiResponseInterceptor<T> implements NestInterceptor<T, und
     if (this.isControllerResponse(response)) {
       const { data, meta, ...rest } = response;
 
-      // Build the response with any additional properties (like 'related')
-      const responseData = data !== undefined ? data : (rest as T);
+      // Build the response with any additional properties (like 'related').
+      // Deliberately not a nullish check: a controller answering `data: null`
+      // — "no such entry" — has provided data, and must not be answered with
+      // the surrounding object instead.
+      const dataProvided = data !== undefined;
+      const responseData = dataProvided ? data : (rest as T);
 
       return {
         success: true,

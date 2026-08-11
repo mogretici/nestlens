@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Entry, EntryType, MonitoredTag, TagWithCount } from '../types';
+import { Entry, MonitoredTag, TagWithCount } from '../types';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
 
 /**
@@ -115,7 +115,7 @@ export class TagService {
 
     // Method tag - skip for GraphQL (shown in Method column as GRAPHQL)
     // Only add HTTP method tag for non-GraphQL requests
-    if (payload.method && !(payload.path && payload.path.toLowerCase().includes('/graphql'))) {
+    if (payload.method && !payload.path?.toLowerCase().includes('/graphql')) {
       tags.push(payload.method.toUpperCase());
     }
 
@@ -669,7 +669,7 @@ export class TagService {
 
     return monitoredTags.map((tag) => ({
       ...tag,
-      count: tagCountMap.get(tag.tag) || 0,
+      count: tagCountMap.get(tag.tag) ?? 0,
     }));
   }
 }

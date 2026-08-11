@@ -28,7 +28,7 @@ export class NestLensLogger extends ConsoleLogger {
         ? watcherConfig
         : { enabled: watcherConfig !== false, minLevel: 'log' };
 
-    this.minLevelPriority = LOG_LEVEL_PRIORITY[this.config.minLevel || 'log'];
+    this.minLevelPriority = LOG_LEVEL_PRIORITY[this.config.minLevel ?? 'log'];
   }
 
   verbose(message: string, context?: string): void;

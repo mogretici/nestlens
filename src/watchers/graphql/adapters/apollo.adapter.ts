@@ -7,7 +7,6 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GraphQLPayload } from '../../../types';
-import { ResolvedGraphQLConfig, OperationContext } from '../types';
 import {
   hashQuery,
   truncateQuery,
@@ -17,7 +16,7 @@ import {
 import { sanitizeVariables, sanitizeResponse } from '../utils/variable-sanitizer';
 import { N1Detector } from '../utils/n1-detector';
 import { calculateDepth } from '../utils/depth-calculator';
-import { createFieldTracer, FieldTracer } from '../utils/field-tracer';
+import { createFieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
 
 /**
@@ -221,7 +220,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
                 }
 
                 // Field tracing
-                if (fieldTracer && fieldTracer.isActive()) {
+                if (fieldTracer?.isActive()) {
                   const path = adapter.buildFieldPath(info.path);
                   const traceId = fieldTracer.startField(
                     path,
@@ -268,7 +267,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
               : undefined;
 
             // Get response errors
-            const responseErrors = ctx.response.body?.singleResult?.errors || errors;
+            const responseErrors = ctx.response.body?.singleResult?.errors ?? errors;
 
             // Calculate depth
             const depthResult = calculateDepth(query);
@@ -292,12 +291,11 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
                 : undefined;
 
             // Get field traces
-            const fieldTraces =
-              fieldTracer && fieldTracer.isActive() ? fieldTracer.getTraces() : undefined;
+            const fieldTraces = fieldTracer?.isActive() ? fieldTracer.getTraces() : undefined;
 
             // Determine status code
             const statusCode =
-              ctx.response.http?.status ||
+              ctx.response.http?.status ??
               (responseErrors && responseErrors.length > 0 ? 400 : 200);
 
             // Build payload

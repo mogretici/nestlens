@@ -1,5 +1,5 @@
-import { GraphQLWatcherConfig, GraphQLSubscriptionConfig } from '../../nestlens.config';
-import { GraphQLFieldTrace, GraphQLPayload, PotentialN1Warning } from '../../types';
+import { GraphQLWatcherConfig } from '../../nestlens.config';
+import { GraphQLFieldTrace, GraphQLPayload } from '../../types';
 
 /**
  * Resolved GraphQL watcher configuration with defaults applied

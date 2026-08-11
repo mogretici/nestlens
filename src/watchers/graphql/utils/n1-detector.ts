@@ -53,15 +53,14 @@ export class N1Detector {
     const key = `${call.parentType}.${call.fieldName}`;
 
     // Increment call count
-    const currentCount = this.resolverCalls.get(key) || 0;
+    const currentCount = this.resolverCalls.get(key) ?? 0;
     this.resolverCalls.set(key, currentCount + 1);
 
     // Track parent IDs if available
     if (call.parentId !== undefined) {
-      if (!this.parentIds.has(key)) {
-        this.parentIds.set(key, new Set());
-      }
-      this.parentIds.get(key)!.add(call.parentId);
+      const parents = this.parentIds.get(key) ?? new Set<string>();
+      parents.add(call.parentId);
+      this.parentIds.set(key, parents);
     }
   }
 
@@ -70,7 +69,7 @@ export class N1Detector {
    */
   getCount(parentType: string, fieldName: string): number {
     const key = `${parentType}.${fieldName}`;
-    return this.resolverCalls.get(key) || 0;
+    return this.resolverCalls.get(key) ?? 0;
   }
 
   /**

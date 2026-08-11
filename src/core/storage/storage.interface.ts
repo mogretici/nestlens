@@ -6,7 +6,6 @@ import {
   CursorPaginationParams,
   CursorPaginatedResponse,
   StorageStats,
-  Tag,
   MonitoredTag,
   TagWithCount,
 } from '../../types';
