@@ -1,3 +1,11 @@
+## [0.8.6](https://github.com/mogretici/nestlens/compare/v0.8.5...v0.8.6) (2026-08-11)
+
+
+### Bug Fixes
+
+* **storage:** keep booting when Redis cannot answer the rescore ([b439535](https://github.com/mogretici/nestlens/commit/b439535bec89da393f1af1091507c4a6e91f6ce9))
+* **storage:** page Redis by sequence, not by save time ([c1ee1d3](https://github.com/mogretici/nestlens/commit/c1ee1d310f989581b0ce4899d0873f9ad6310d9a))
+
 ## [0.8.5](https://github.com/mogretici/nestlens/compare/v0.8.4...v0.8.5) (2026-08-11)
 
 
