@@ -1,5 +1,13 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // The maps the base config turns on are useful locally and useless once
+    // published: they point at `../src/*.ts`, which `files` does not ship, and
+    // carry no inlined sources. 218 of them, 1.1 MB — a third of the package —
+    // that no debugger can resolve.
+    "sourceMap": false,
+    "declarationMap": false
+  },
   "exclude": [
     "node_modules",
     "dist",

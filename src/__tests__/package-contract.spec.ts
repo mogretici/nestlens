@@ -78,6 +78,35 @@ const collectStaticImports = (file: string): StaticImport[] => {
   return found;
 };
 
+/**
+ * Type-only imports are erased at runtime, so the guard above rightly ignores
+ * them — but they are not free. A type that reaches an exported declaration
+ * ends up in the published `.d.ts`, and a consumer compiling against it needs
+ * that package's types to resolve. `express` did: `NestLensRequest extends
+ * Request` put `import type { Request } from 'express'` into the shipped
+ * declarations, and any application without `@types/express` — every Fastify
+ * one — failed to compile with TS7016 unless it had `skipLibCheck` on.
+ */
+const collectTypeImports = (file: string): StaticImport[] => {
+  const source = readFileSync(file, 'utf8');
+  const pattern = /(?:^|\n)\s*import\s+type\s+(?:[^;'"]*?\sfrom\s+)?['"]([^'"]+)['"]/g;
+  const found: StaticImport[] = [];
+
+  for (const match of source.matchAll(pattern)) {
+    const [, specifier] = match;
+    if (!specifier || isRelative(specifier)) continue;
+    found.push({ packageName: toPackageName(specifier), file: relative(REPO_ROOT, file) });
+  }
+
+  return found;
+};
+
+/** `express` is typed by `@types/express`, `node` by `@types/node`, and so on. */
+const typesPackageFor = (packageName: string): string =>
+  packageName.startsWith('@')
+    ? `@types/${packageName.slice(1).replace('/', '__')}`
+    : `@types/${packageName}`;
+
 describe('package contract', () => {
   const sourceFiles = collectSourceFiles(SRC_ROOT);
 
@@ -94,6 +123,36 @@ describe('package contract', () => {
     const report = undeclared.map((i) => `${i.packageName} (imported by ${i.file})`).sort();
 
     expect(report).toEqual([]);
+  });
+
+  it('declares the types every published declaration depends on', () => {
+    const undeclared = collectSourceFiles(SRC_ROOT)
+      .flatMap(collectTypeImports)
+      .filter(({ packageName }) => !nodeBuiltins.has(packageName))
+      .filter(
+        ({ packageName }) =>
+          !declaredPackages.has(packageName) && !declaredPackages.has(typesPackageFor(packageName)),
+      );
+
+    const report = undeclared.map((i) => `${i.packageName} (typed by ${i.file})`).sort();
+
+    expect([...new Set(report)]).toEqual([]);
+  });
+
+  /**
+   * The build inherits `sourceMap` and `declarationMap` from the base config,
+   * which is right for working here and wrong for publishing: `files` ships
+   * `dist` alone, so the maps point at `../src/*.ts` that is not in the package
+   * and carry no inlined sources. 218 of them once shipped, 1.1 MB, resolvable
+   * by nothing.
+   */
+  it('publishes no source maps that resolve to nothing', () => {
+    const buildConfig = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'tsconfig.build.json'), 'utf8').replace(/^\s*\/\/.*$/gm, ''),
+    ) as { compilerOptions?: { sourceMap?: boolean; declarationMap?: boolean } };
+
+    expect(buildConfig.compilerOptions?.sourceMap).toBe(false);
+    expect(buildConfig.compilerOptions?.declarationMap).toBe(false);
   });
 
   it('keeps optional integrations out of module-scope imports', () => {
