@@ -1,3 +1,10 @@
+## [0.8.5](https://github.com/mogretici/nestlens/compare/v0.8.4...v0.8.5) (2026-08-11)
+
+
+### Bug Fixes
+
+* **dashboard:** match the SPA catch-all to the router in use ([a060d39](https://github.com/mogretici/nestlens/commit/a060d39ea3bf9670e6d8afd348f13032d3e04df2))
+
 ## [0.8.4](https://github.com/mogretici/nestlens/compare/v0.8.3...v0.8.4) (2026-08-11)
 
 
