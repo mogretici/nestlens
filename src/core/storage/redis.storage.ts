@@ -1,7 +1,8 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import type { Redis, ChainableCommander } from 'ioredis';
+import type { Redis } from 'ioredis';
 import {
   Entry,
+  StoredEntry,
   EntryFilter,
   EntryStats,
   EntryType,
@@ -73,8 +74,16 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         commandTimeout,
       });
     } catch (error) {
+      // The message only fits a missing package, but this catch also covers a
+      // failed connection or a bad option — reporting those as "install
+      // ioredis" sends people looking in the wrong place entirely.
+      const reason = error instanceof Error ? error.message : String(error);
+      const missingModule = reason.includes('Cannot find module');
+
       throw new Error(
-        'ioredis is required for Redis storage. Install it with: npm install ioredis',
+        missingModule
+          ? 'ioredis is required for Redis storage. Install it with: npm install ioredis'
+          : `Failed to initialize Redis storage: ${reason}`,
       );
     }
   }
@@ -221,11 +230,11 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     let filtered = entries;
     if (filter.from) {
       const fromTime = filter.from.getTime();
-      filtered = filtered.filter((e) => new Date(e.createdAt!).getTime() >= fromTime);
+      filtered = filtered.filter((e) => new Date(e.createdAt).getTime() >= fromTime);
     }
     if (filter.to) {
       const toTime = filter.to.getTime();
-      filtered = filtered.filter((e) => new Date(e.createdAt!).getTime() <= toTime);
+      filtered = filtered.filter((e) => new Date(e.createdAt).getTime() <= toTime);
     }
 
     return this.hydrateEntriesWithTags(filtered);
@@ -297,8 +306,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       meta: {
         hasMore,
         oldestSequence:
-          hydratedEntries.length > 0 ? hydratedEntries[hydratedEntries.length - 1].id! : null,
-        newestSequence: hydratedEntries.length > 0 ? hydratedEntries[0].id! : null,
+          hydratedEntries.length > 0 ? hydratedEntries[hydratedEntries.length - 1].id : null,
+        newestSequence: hydratedEntries.length > 0 ? hydratedEntries[0].id : null,
         total,
       },
     };
@@ -560,7 +569,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     if (ids.length === 0) return [];
 
     const entries = await this.fetchEntriesByIds(ids.slice(0, limit));
-    const sorted = entries.sort((a, b) => b.id! - a.id!);
+    const sorted = entries.sort((a, b) => b.id - a.id);
     return this.hydrateEntriesWithTags(sorted);
   }
 
@@ -627,7 +636,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     if (ids.length === 0) return [];
 
     const entries = await this.fetchEntriesByIds(ids);
-    const sorted = entries.sort((a, b) => b.id! - a.id!).slice(0, limit);
+    const sorted = entries.sort((a, b) => b.id - a.id).slice(0, limit);
     return this.hydrateEntriesWithTags(sorted);
   }
 
@@ -639,7 +648,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     // Get all family hash keys
     const familyKeys = await client.keys(this.key('family', '*'));
-    const groups: { familyHash: string; count: number; latestEntry: Entry }[] = [];
+    const groups: { familyHash: string; count: number; latestEntry: StoredEntry }[] = [];
 
     for (const key of familyKeys) {
       const familyHash = key.replace(this.key('family', ''), '');
@@ -654,7 +663,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       if (filtered.length === 0) continue;
 
       // Sort and get latest
-      filtered.sort((a, b) => b.id! - a.id!);
+      filtered.sort((a, b) => b.id - a.id);
       const [latestEntry] = await this.hydrateEntriesWithTags([filtered[0]]);
 
       groups.push({
@@ -665,7 +674,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     return groups
-      .sort((a, b) => b.count - a.count || b.latestEntry.id! - a.latestEntry.id!)
+      .sort((a, b) => b.count - a.count || b.latestEntry.id - a.latestEntry.id)
       .slice(0, limit);
   }
 
@@ -679,7 +688,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   // ==================== Private Helpers ====================
 
-  private async fetchEntriesByIds(ids: string[]): Promise<Entry[]> {
+  private async fetchEntriesByIds(ids: string[]): Promise<StoredEntry[]> {
     if (ids.length === 0) return [];
 
     const client = this.getClient();
@@ -690,7 +699,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     const results = await pipeline.exec();
-    const entries: Entry[] = [];
+    const entries: StoredEntry[] = [];
 
     for (const [err, data] of results ?? []) {
       if (err || !data || typeof data !== 'object') continue;
@@ -704,7 +713,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     return entries;
   }
 
-  private hashToEntry(hash: Record<string, string>): Entry | null {
+  private hashToEntry(hash: Record<string, string>): StoredEntry | null {
     try {
       return {
         id: parseInt(hash.id, 10),
@@ -714,15 +723,15 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         createdAt: hash.createdAt,
         familyHash: hash.familyHash || undefined,
         resolvedAt: hash.resolvedAt || undefined,
-      } as Entry;
+      } as StoredEntry;
     } catch {
       return null;
     }
   }
 
-  private async hydrateEntriesWithTags(entries: Entry[]): Promise<Entry[]> {
+  private async hydrateEntriesWithTags(entries: StoredEntry[]): Promise<StoredEntry[]> {
     const client = this.getClient();
-    const result: Entry[] = [];
+    const result: StoredEntry[] = [];
 
     for (const entry of entries) {
       const tags = await client.smembers(this.key('tags', String(entry.id)));
@@ -762,9 +771,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   private applyAdvancedFilters(
-    entries: Entry[],
+    entries: StoredEntry[],
     filters: CursorPaginationParams['filters'],
-  ): Entry[] {
+  ): StoredEntry[] {
     if (!filters) return entries;
 
     return entries.filter((entry) => {
@@ -777,7 +786,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       if (filters.search) {
         const term = filters.search.toLowerCase();
         const payloadStr = JSON.stringify(payload).toLowerCase();
-        const tagMatch = (entry.tags || []).some((t) => t.toLowerCase().includes(term));
+        const tagMatch = (entry.tags ?? []).some((t) => t.toLowerCase().includes(term));
         if (!payloadStr.includes(term) && !tagMatch) return false;
       }
       if (filters.resolved !== undefined) {

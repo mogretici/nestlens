@@ -79,12 +79,13 @@ export class MailWatcher implements OnModuleInit {
     // Try to wrap sendMail method (common for both @nestjs-modules/mailer and nodemailer)
     if (isMailer(mailer)) {
       this.originalSendMail = mailer.sendMail.bind(mailer);
+      const originalSendMail = this.originalSendMail;
 
       mailer.sendMail = async (mailOptions: MailOptionsLike): Promise<unknown> => {
         const startTime = Date.now();
 
         try {
-          const result = await this.originalSendMail!(mailOptions);
+          const result = await originalSendMail(mailOptions);
           const duration = Date.now() - startTime;
 
           // Track successful send

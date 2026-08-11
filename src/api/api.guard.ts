@@ -142,7 +142,7 @@ export class NestLensGuard implements CanActivate {
    * Merge legacy config options with new authorization config
    */
   private getMergedAuthConfig(): AuthorizationConfig {
-    const authConfig = this.config.authorization || {};
+    const authConfig = this.config.authorization ?? {};
 
     return {
       allowedEnvironments: authConfig.allowedEnvironments ?? ['development', 'local', 'test'],
@@ -201,10 +201,11 @@ export class NestLensGuard implements CanActivate {
    * Check if user has all required roles
    */
   private hasRequiredRoles(user: AuthUser, requiredRoles: string[]): boolean {
-    if (!user.roles || user.roles.length === 0) {
+    const roles = user.roles;
+    if (!roles || roles.length === 0) {
       return false;
     }
-    return requiredRoles.every((role) => user.roles!.includes(role));
+    return requiredRoles.every((role) => roles.includes(role));
   }
 
   /**
