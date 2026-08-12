@@ -214,3 +214,45 @@ describe('NestLensApiResponseInterceptor', () => {
     });
   });
 });
+
+/**
+ * Properties a controller sends alongside `data`.
+ *
+ * `getEntry` looks up the queries, logs and exceptions a request produced and
+ * returns them as `related` next to the entry. The envelope destructured them
+ * out and dropped them, so the dashboard — which reads `response.related` —
+ * always showed nothing, and the lookup ran on every request detail view for
+ * no one. The comment above the code said "any additional properties (like
+ * 'related')" the whole time.
+ */
+describe('NestLensResponseInterceptor extra properties', () => {
+  it('carries what the controller sent alongside data', async () => {
+    // Arrange
+    const { interceptor, written } = createInterceptor();
+    const related = [{ id: 2, type: 'query' }];
+
+    // Act
+    await run(interceptor, createContext(), { data: { id: 1, type: 'request' }, related });
+
+    // Assert
+    expect(written.body).toMatchObject({
+      success: true,
+      data: { id: 1, type: 'request' },
+      related,
+    });
+  });
+
+  it('still answers a bare object as the data itself', async () => {
+    // Arrange - no `data` key: the whole object is the payload
+    const { interceptor, written } = createInterceptor();
+
+    // Act
+    await run(interceptor, createContext(), { total: 3, byType: { request: 3 } });
+
+    // Assert
+    expect(written.body).toMatchObject({
+      success: true,
+      data: { total: 3, byType: { request: 3 } },
+    });
+  });
+});

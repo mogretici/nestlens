@@ -116,7 +116,6 @@ export class NestLensApiResponseInterceptor<T> implements NestInterceptor<T, und
     if (this.isControllerResponse(response)) {
       const { data, meta, ...rest } = response;
 
-      // Build the response with any additional properties (like 'related').
       // Deliberately not a nullish check: a controller answering `data: null`
       // — "no such entry" — has provided data, and must not be answered with
       // the surrounding object instead.
@@ -126,6 +125,12 @@ export class NestLensApiResponseInterceptor<T> implements NestInterceptor<T, und
       return {
         success: true,
         data: responseData,
+        // Anything the controller sent alongside `data` travels with it. The
+        // comment here always said "any additional properties (like
+        // 'related')", but they were destructured out and dropped: a request's
+        // detail page asked for the queries it ran, the controller looked them
+        // up, and the envelope threw them away before the dashboard saw them.
+        ...(dataProvided ? rest : {}),
         error: null,
         meta: {
           timestamp: new Date().toISOString(),
