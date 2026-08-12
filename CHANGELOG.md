@@ -1,3 +1,10 @@
+## [0.8.11](https://github.com/mogretici/nestlens/compare/v0.8.10...v0.8.11) (2026-08-12)
+
+
+### Bug Fixes
+
+* **watchers:** give back the methods they replaced ([3639108](https://github.com/mogretici/nestlens/commit/3639108daf85cd48ffea56540800c0300d758a3f))
+
 ## [0.8.10](https://github.com/mogretici/nestlens/compare/v0.8.9...v0.8.10) (2026-08-12)
 
 
