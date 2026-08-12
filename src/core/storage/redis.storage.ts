@@ -12,6 +12,7 @@ import {
   MonitoredTag,
   TagWithCount,
 } from '../../types';
+import { matchesEntryFilters } from './entry-filter';
 import { StorageInterface } from './storage.interface';
 import { RedisStorageConfig } from '../../nestlens.config';
 
@@ -870,55 +871,6 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     entries: StoredEntry[],
     filters: CursorPaginationParams['filters'],
   ): StoredEntry[] {
-    if (!filters) return entries;
-
-    return entries.filter((entry) => {
-      const payload = entry.payload as Record<string, unknown>;
-
-      // Apply the same filter logic as MemoryStorage
-      if (filters.levels?.length && entry.type === 'log') {
-        if (!filters.levels.includes(payload.level as string)) return false;
-      }
-      if (filters.search) {
-        const term = filters.search.toLowerCase();
-        const payloadStr = JSON.stringify(payload).toLowerCase();
-        const tagMatch = (entry.tags ?? []).some((t) => t.toLowerCase().includes(term));
-        if (!payloadStr.includes(term) && !tagMatch) return false;
-      }
-      if (filters.resolved !== undefined) {
-        const isResolved = !!entry.resolvedAt;
-        if (isResolved !== filters.resolved) return false;
-      }
-
-      // Event filters
-      if (filters.eventNames?.length && entry.type === 'event') {
-        const name = payload.name as string;
-        if (!filters.eventNames.some((n) => name?.includes(n))) return false;
-      }
-
-      // Schedule filters
-      if (filters.scheduleStatuses?.length && entry.type === 'schedule') {
-        if (!filters.scheduleStatuses.includes(payload.status as string)) return false;
-      }
-      if (filters.scheduleNames?.length && entry.type === 'schedule') {
-        const name = payload.name as string;
-        if (!filters.scheduleNames.some((n) => name?.includes(n))) return false;
-      }
-
-      // Job filters
-      if (filters.jobStatuses?.length && entry.type === 'job') {
-        if (!filters.jobStatuses.includes(payload.status as string)) return false;
-      }
-      if (filters.jobNames?.length && entry.type === 'job') {
-        const name = payload.name as string;
-        if (!filters.jobNames.some((n) => name?.includes(n))) return false;
-      }
-      if (filters.queues?.length && entry.type === 'job') {
-        if (!filters.queues.includes(payload.queue as string)) return false;
-      }
-
-      // Additional filters can be added as needed
-      return true;
-    });
+    return entries.filter((entry) => matchesEntryFilters(entry, filters));
   }
 }
