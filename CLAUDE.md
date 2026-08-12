@@ -172,7 +172,13 @@ it is no longer required for Apollo or Mercurius.
   not one existing test noticed.
 - Lint, type check, library tests and dashboard tests run on every push and
   pull request (`.github/workflows/ci.yml`) — about two minutes
-- E2E is **not** part of that. It drives three web servers and takes far longer
-  on a two-core runner than locally, so it runs on demand: Actions tab →
-  **E2E** → *Run workflow*, picking a browser. Run it before a release or after
-  dashboard changes.
+- E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
+  any pull request touching `src/api/`, `dashboard/`, `e2e/` or `example/`, and
+  on pushes to main. All three browsers run nightly at 03:00 UTC. Actions tab →
+  **E2E** → *Run workflow* still runs it on demand, with `all` as a browser
+  option.
+- It used to be manual only, on the grounds that it is slow on a two-core
+  runner. It has since caught a blank dashboard, a crash in the entry detail
+  page and a deep link that stopped resolving, none of which the unit tests saw
+  — so chromium and the built package are worth the wait, and firefox and webkit
+  earn their time overnight.
