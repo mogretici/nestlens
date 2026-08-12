@@ -1,3 +1,10 @@
+## [0.8.9](https://github.com/mogretici/nestlens/compare/v0.8.8...v0.8.9) (2026-08-12)
+
+
+### Bug Fixes
+
+* **storage:** apply dashboard filters on Redis, and share one implementation ([4ec1f4e](https://github.com/mogretici/nestlens/commit/4ec1f4e7a357e407c7a1543034d9601c88710c97))
+
 ## [0.8.8](https://github.com/mogretici/nestlens/compare/v0.8.7...v0.8.8) (2026-08-12)
 
 
