@@ -1,3 +1,10 @@
+## [0.8.12](https://github.com/mogretici/nestlens/compare/v0.8.11...v0.8.12) (2026-08-12)
+
+
+### Bug Fixes
+
+* **api:** answer a POST without a body properly ([e630ea1](https://github.com/mogretici/nestlens/commit/e630ea184b259e029064ca2ee54a4e02fed36f86))
+
 ## [0.8.11](https://github.com/mogretici/nestlens/compare/v0.8.10...v0.8.11) (2026-08-12)
 
 
