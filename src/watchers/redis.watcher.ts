@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
@@ -28,7 +35,7 @@ const SENSITIVE_KEY_PATTERNS = [
  * performance metrics, and results while masking sensitive data.
  */
 @Injectable()
-export class RedisWatcher implements OnModuleInit {
+export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisWatcher.name);
   private readonly config: RedisWatcherConfig;
   private originalMethods?: Map<string, RedisCommand>;
@@ -119,6 +126,27 @@ export class RedisWatcher implements OnModuleInit {
     }
 
     this.logger.log('Redis interceptors installed');
+  }
+
+  /**
+   * Puts back what it replaced.
+   *
+   * The wrappers live on an object the application owns and keeps, so closing
+   * the module has to give it back. Otherwise the host goes on calling through
+   * a watcher whose collector is gone — and where a process builds the module
+   * more than once against the same object, as tests and `nest start --hmr` do,
+   * each round wraps the last: one call, one entry per layer.
+   */
+  onModuleDestroy(): void {
+    const client = this.redisClient as Record<string, unknown> | undefined;
+    if (!client || !this.originalMethods) {
+      return;
+    }
+
+    for (const [command, original] of this.originalMethods) {
+      client[command] = original;
+    }
+    this.originalMethods = undefined;
   }
 
   private wrapCommand(command: string, originalMethod: RedisCommand): RedisCommand {

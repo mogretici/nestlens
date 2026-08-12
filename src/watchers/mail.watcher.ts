@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
@@ -37,7 +44,7 @@ function isMailer(value: unknown): value is MailerLike {
 export const NESTLENS_MAILER_SERVICE = Symbol('NESTLENS_MAILER_SERVICE');
 
 @Injectable()
-export class MailWatcher implements OnModuleInit {
+export class MailWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MailWatcher.name);
   private readonly config: MailWatcherConfig;
   private originalSendMail?: SendMail;
@@ -70,6 +77,23 @@ export class MailWatcher implements OnModuleInit {
     }
 
     this.setupInterceptors();
+  }
+
+  /**
+   * Puts `sendMail` back the way it was found.
+   *
+   * The wrappers live on an object the application owns and keeps, so closing
+   * the module has to give it back. Otherwise the host goes on calling through
+   * a watcher whose collector is gone — and where a process builds the module
+   * more than once against the same object, as tests and `nest start --hmr` do,
+   * each round wraps the last: one call, one entry per layer.
+   */
+  onModuleDestroy(): void {
+    const mailer = this.mailerService;
+    if (mailer && isMailer(mailer) && this.originalSendMail) {
+      mailer.sendMail = this.originalSendMail;
+      this.originalSendMail = undefined;
+    }
   }
 
   private setupInterceptors(): void {
