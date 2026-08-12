@@ -1,15 +1,5 @@
 import { ChevronDown, Bell, RefreshCw } from 'lucide-react';
 
-interface PaginationControlsProps {
-  newEntriesCount: number;
-  hasMore: boolean;
-  loading: boolean;
-  onLoadNew: () => void;
-  onLoadMore: () => void;
-  autoRefreshEnabled: boolean;
-  onAutoRefreshChange: (enabled: boolean) => void;
-}
-
 export function NewEntriesButton({
   count,
   onClick,
@@ -63,49 +53,5 @@ export function LoadMoreButton({
       )}
       <span>Load older entries</span>
     </button>
-  );
-}
-
-export function RefreshButton({
-  autoRefreshEnabled,
-  onToggleAutoRefresh,
-  refreshing,
-}: {
-  autoRefreshEnabled: boolean;
-  onToggleAutoRefresh: () => void;
-  refreshing: boolean;
-}) {
-  return (
-    <button
-      onClick={onToggleAutoRefresh}
-      className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center space-x-2 transition-all ${
-        autoRefreshEnabled
-          ? 'bg-primary-600 text-white hover:bg-primary-700'
-          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-      }`}
-      title={autoRefreshEnabled ? 'Auto-refresh active (click to stop)' : 'Click to enable auto-refresh'}
-    >
-      <RefreshCw className={`h-4 w-4 ${refreshing && !autoRefreshEnabled ? 'animate-spin' : ''}`} />
-      <span>{autoRefreshEnabled ? 'Auto Refresh' : 'Refresh'}</span>
-    </button>
-  );
-}
-
-export default function PaginationControls({
-  newEntriesCount,
-  hasMore,
-  loading,
-  onLoadNew,
-  onLoadMore,
-}: Omit<PaginationControlsProps, 'autoRefreshEnabled' | 'onAutoRefreshChange'>) {
-  return (
-    <div className="space-y-4">
-      <NewEntriesButton
-        count={newEntriesCount}
-        onClick={onLoadNew}
-        loading={loading}
-      />
-      <LoadMoreButton hasMore={hasMore} onClick={onLoadMore} loading={loading} />
-    </div>
   );
 }

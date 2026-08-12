@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { EntryTags, TagList } from '../../components/EntryTags';
+import { EntryTags } from '../../components/EntryTags';
 import { getBadgeColor as getTagColor } from '../../components/ClickableBadge';
 
 // Mock API
@@ -102,73 +102,6 @@ describe('getTagColor', () => {
   });
 });
 
-// ============================================================================
-// TagList Tests
-// ============================================================================
-
-describe('TagList', () => {
-  it('returns null for undefined tags', () => {
-    const { container } = render(<TagList />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('returns null for empty tags', () => {
-    const { container } = render(<TagList tags={[]} />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('renders all tags when under max', () => {
-    render(<TagList tags={['GET', 'SUCCESS']} />);
-
-    expect(screen.getByText('GET')).toBeInTheDocument();
-    expect(screen.getByText('SUCCESS')).toBeInTheDocument();
-  });
-
-  it('truncates tags at maxTags', () => {
-    render(<TagList tags={['GET', 'POST', 'PUT', 'DELETE']} maxTags={2} />);
-
-    expect(screen.getByText('GET')).toBeInTheDocument();
-    expect(screen.getByText('POST')).toBeInTheDocument();
-    expect(screen.queryByText('PUT')).not.toBeInTheDocument();
-    expect(screen.getByText('+2')).toBeInTheDocument();
-  });
-
-  it('shows remaining count', () => {
-    render(<TagList tags={['A', 'B', 'C', 'D', 'E']} maxTags={3} />);
-
-    expect(screen.getByText('+2')).toBeInTheDocument();
-  });
-
-  it('calls onTagClick when tag clicked', () => {
-    const handleClick = vi.fn();
-    render(<TagList tags={['GET']} onTagClick={handleClick} />);
-
-    fireEvent.click(screen.getByText('GET'));
-    expect(handleClick).toHaveBeenCalledWith('GET');
-  });
-
-  it('applies clickable styling when clickable', () => {
-    render(<TagList tags={['GET']} clickable />);
-
-    const tag = screen.getByText('GET');
-    expect(tag.className).toContain('cursor-pointer');
-  });
-
-  it('has aria-label when clickable', () => {
-    render(<TagList tags={['GET']} clickable />);
-
-    const tag = screen.getByRole('button', { name: 'Click to filter by GET' });
-    expect(tag).toBeInTheDocument();
-  });
-
-  it('has aria-label when onTagClick is provided', () => {
-    const handleClick = vi.fn();
-    render(<TagList tags={['ERROR']} onTagClick={handleClick} />);
-
-    const tag = screen.getByRole('button', { name: 'Click to filter by ERROR' });
-    expect(tag).toBeInTheDocument();
-  });
-});
 
 // ============================================================================
 // EntryTags Tests

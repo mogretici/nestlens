@@ -8,8 +8,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import DataTable, {
   TextCell,
-  NumberCell,
-  StatusBadge,
   TagsList,
   DurationCell,
   Column,
@@ -352,85 +350,7 @@ describe('TextCell', () => {
   });
 });
 
-// ============================================================================
-// NumberCell Tests
-// ============================================================================
 
-describe('NumberCell', () => {
-  it('renders number value', () => {
-    render(<NumberCell value={42} />);
-    expect(screen.getByText('42')).toBeInTheDocument();
-  });
-
-  it('renders with prefix', () => {
-    render(<NumberCell value={100} prefix="$" />);
-    expect(screen.getByText('$100')).toBeInTheDocument();
-  });
-
-  it('renders with suffix', () => {
-    render(<NumberCell value={50} suffix="%" />);
-    expect(screen.getByText('50%')).toBeInTheDocument();
-  });
-
-  it('applies success highlight', () => {
-    render(<NumberCell value={100} highlight="success" />);
-    const cell = screen.getByText('100');
-    expect(cell.className).toContain('text-green-600');
-  });
-
-  it('applies error highlight', () => {
-    render(<NumberCell value={100} highlight="error" />);
-    const cell = screen.getByText('100');
-    expect(cell.className).toContain('text-red-600');
-  });
-
-  it('applies warning highlight', () => {
-    render(<NumberCell value={100} highlight="warning" />);
-    const cell = screen.getByText('100');
-    expect(cell.className).toContain('text-yellow-600');
-  });
-});
-
-// ============================================================================
-// StatusBadge Tests
-// ============================================================================
-
-describe('StatusBadge', () => {
-  it('renders status text', () => {
-    render(<StatusBadge status="active" />);
-    expect(screen.getByText('active')).toBeInTheDocument();
-  });
-
-  it('applies success variant', () => {
-    render(<StatusBadge status="success" variant="success" />);
-    const badge = screen.getByText('success');
-    expect(badge.className).toContain('bg-green-100');
-  });
-
-  it('applies error variant', () => {
-    render(<StatusBadge status="error" variant="error" />);
-    const badge = screen.getByText('error');
-    expect(badge.className).toContain('bg-red-100');
-  });
-
-  it('applies warning variant', () => {
-    render(<StatusBadge status="warning" variant="warning" />);
-    const badge = screen.getByText('warning');
-    expect(badge.className).toContain('bg-yellow-100');
-  });
-
-  it('applies small size by default', () => {
-    render(<StatusBadge status="test" />);
-    const badge = screen.getByText('test');
-    expect(badge.className).toContain('text-xs');
-  });
-
-  it('applies medium size when specified', () => {
-    render(<StatusBadge status="test" size="md" />);
-    const badge = screen.getByText('test');
-    expect(badge.className).toContain('text-sm');
-  });
-});
 
 // ============================================================================
 // TagsList Tests

@@ -603,26 +603,6 @@ export function getEntryConfig(routeOrType: string): EntryTypeConfig | undefined
 }
 
 /**
- * Get filter config by route and category
- */
-export function getFilterConfig(route: string, category: string): FilterConfig | undefined {
-  const config = getEntryConfig(route);
-  return config?.filters[category];
-}
-
-/**
- * Get all URL keys for a specific entry type
- */
-export function getEntryUrlKeys(route: string): string[] {
-  const config = getEntryConfig(route);
-  if (!config) return ['tags'];
-
-  const keys = Object.values(config.filters).map(f => f.urlKey);
-  keys.push('tags', 'search');
-  return keys;
-}
-
-/**
  * Validate that all required configs exist - call in dev mode
  */
 export function validateConfig(): string[] {

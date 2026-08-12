@@ -111,18 +111,6 @@ export function isPrismaClient(obj: unknown): obj is PrismaClient {
 // Module loader helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Synchronous optional-peer-dependency loader. Returns null if the module
- * cannot be resolved.
- */
-export function tryRequire<T>(moduleName: string): T | null {
-  try {
-    return require(moduleName) as T;
-  } catch {
-    return null;
-  }
-}
-
 export function isModuleAvailable(moduleName: string): boolean {
   try {
     require.resolve(moduleName);

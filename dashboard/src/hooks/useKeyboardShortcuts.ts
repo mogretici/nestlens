@@ -13,58 +13,6 @@ interface ShortcutConfig {
 }
 
 /**
- * Hook for handling keyboard shortcuts
- */
-export function useKeyboardShortcut(config: ShortcutConfig) {
-  const { key, ctrl, meta, shift, alt, handler, preventDefault = true } = config;
-
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing in inputs
-      const target = event.target as HTMLElement;
-      const isInput = target.tagName === 'INPUT' ||
-                      target.tagName === 'TEXTAREA' ||
-                      target.isContentEditable;
-
-      // Allow Escape in inputs
-      if (isInput && key.toLowerCase() !== 'escape') {
-        return;
-      }
-
-      const keyMatches = event.key.toLowerCase() === key.toLowerCase();
-      const ctrlMatches = ctrl ? (event.ctrlKey || event.metaKey) : !event.ctrlKey;
-      const metaMatches = meta ? event.metaKey : true;
-      const shiftMatches = shift ? event.shiftKey : !event.shiftKey;
-      const altMatches = alt ? event.altKey : !event.altKey;
-
-      // For Cmd/Ctrl+K, check both ctrl and meta
-      if (ctrl && (event.ctrlKey || event.metaKey) && keyMatches && shiftMatches && altMatches) {
-        if (preventDefault) {
-          event.preventDefault();
-        }
-        handler(event);
-        return;
-      }
-
-      if (keyMatches && ctrlMatches && metaMatches && shiftMatches && altMatches) {
-        if (preventDefault) {
-          event.preventDefault();
-        }
-        handler(event);
-      }
-    },
-    [key, ctrl, meta, shift, alt, handler, preventDefault]
-  );
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [handleKeyDown]);
-}
-
-/**
  * Hook for multiple keyboard shortcuts
  */
 export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]) {
