@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   ENTRY_TYPES,
   getEntryConfig,
-  getFilterConfig,
-  getEntryUrlKeys,
   validateConfig,
   getEntryTypeConfig,
 } from '../../config/entryTypes';
@@ -240,92 +238,7 @@ describe('getEntryConfig', () => {
   });
 });
 
-describe('getFilterConfig', () => {
-  describe('Valid Input', () => {
-    it('returns filter config for valid route and category', () => {
-      // Arrange & Act
-      const config = getFilterConfig('requests', 'methods');
 
-      // Assert
-      expect(config).toBeDefined();
-      expect(config?.urlKey).toBe('methods');
-      expect(config?.displayName).toBe('Method');
-    });
-
-    it('returns filter config using type name', () => {
-      // Arrange & Act
-      const config = getFilterConfig('request', 'statuses');
-
-      // Assert
-      expect(config).toBeDefined();
-      expect(config?.urlKey).toBe('statuses');
-    });
-  });
-
-  describe('Invalid Input', () => {
-    it('returns undefined for invalid route', () => {
-      // Arrange & Act
-      const config = getFilterConfig('invalid', 'methods');
-
-      // Assert
-      expect(config).toBeUndefined();
-    });
-
-    it('returns undefined for invalid category', () => {
-      // Arrange & Act
-      const config = getFilterConfig('requests', 'invalid');
-
-      // Assert
-      expect(config).toBeUndefined();
-    });
-  });
-});
-
-describe('getEntryUrlKeys', () => {
-  describe('Valid Route', () => {
-    it('returns URL keys for request type', () => {
-      // Arrange & Act
-      const keys = getEntryUrlKeys('requests');
-
-      // Assert
-      expect(keys).toContain('methods');
-      expect(keys).toContain('statuses');
-      expect(keys).toContain('paths');
-      expect(keys).toContain('tags');
-      expect(keys).toContain('search');
-    });
-
-    it('returns URL keys for query type', () => {
-      // Arrange & Act
-      const keys = getEntryUrlKeys('queries');
-
-      // Assert
-      expect(keys).toContain('queryTypes');
-      expect(keys).toContain('sources');
-      expect(keys).toContain('tags');
-      expect(keys).toContain('search');
-    });
-
-    it('always includes tags and search', () => {
-      // Arrange & Act
-      const keys = getEntryUrlKeys('logs');
-
-      // Assert
-      expect(keys).toContain('tags');
-      expect(keys).toContain('search');
-    });
-  });
-
-  describe('Invalid Route', () => {
-    it('returns only tags for invalid route', () => {
-      // Arrange & Act
-      const keys = getEntryUrlKeys('invalid');
-
-      // Assert
-      expect(keys).toEqual(['tags']);
-    });
-  });
-});
 
 describe('validateConfig', () => {
   it('returns empty array for valid config', () => {

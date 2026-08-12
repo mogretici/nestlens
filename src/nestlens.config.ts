@@ -380,20 +380,6 @@ export interface SecurityConfig {
    * - 'full': Hide stack traces completely
    */
   stackTraceSanitization?: 'none' | 'partial' | 'full';
-
-  /**
-   * Input validation limits.
-   */
-  validation?: {
-    /** Maximum number of items in filter arrays. Default: 100 */
-    maxFilterArrayLength?: number;
-    /** Maximum length of search strings. Default: 500 */
-    maxSearchLength?: number;
-    /** Maximum length of tag names. Default: 100 */
-    maxTagLength?: number;
-    /** Maximum tags per entry. Default: 50 */
-    maxTagsPerEntry?: number;
-  };
 }
 
 /**

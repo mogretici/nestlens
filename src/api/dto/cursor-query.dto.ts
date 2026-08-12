@@ -1,4 +1,4 @@
-import { IsOptional, IsIn, IsString } from 'class-validator';
+import { IsOptional, IsIn, IsString, MaxLength } from 'class-validator';
 import {
   TransformLimit,
   TransformSequence,
@@ -8,6 +8,7 @@ import {
   IsCommaSeparatedStrings,
   IsCommaSeparatedList,
   IsBooleanLike,
+  MAX_SEARCH_LENGTH,
 } from './transformers';
 import { EntryType } from '@/types';
 
@@ -314,8 +315,14 @@ export class CursorQueryDto {
   @IsCommaSeparatedStrings()
   tags?: string[];
 
+  /**
+   * Capped for the same reason the filter arrays are: every entry's payload is
+   * stringified and searched, and `security.validation.maxSearchLength` was
+   * documented while nothing enforced it.
+   */
   @IsOptional()
   @IsString()
+  @MaxLength(MAX_SEARCH_LENGTH)
   search?: string;
 
   // ==================== Helper Methods ====================

@@ -76,13 +76,6 @@ export function TransformLimit() {
 }
 
 /**
- * Transforms offset query parameter
- */
-export function TransformOffset() {
-  return TransformToInt({ min: 0, default: 0 });
-}
-
-/**
  * Transforms sequence number for cursor pagination
  */
 export function TransformSequence() {

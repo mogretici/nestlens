@@ -116,8 +116,11 @@ Watcher → CollectorService.collect(entry) → DataMasker → Storage
 
 ### Storage Query Flow
 ```
-API Controller → InputValidator → Storage.getEntries(filter) → Response
+API Controller → NestLensValidationPipe (DTO) → Storage.getEntries(filter) → Response
 ```
+Query parameters are validated and transformed by the DTOs in `src/api/dto/`.
+The limits — 100 values per filter, 500 characters of search, 1000 entries per
+page — live with the validators the filters already run through.
 
 ### Configuration
 All config is in `nestlens.config.ts`. Main config interface: `NestLensConfig`.

@@ -186,17 +186,23 @@ NestLensModule.forRoot({
     // Stack trace handling: 'none' | 'partial' | 'full'
     // 'partial' is the default behavior in production
     stackTraceSanitization: 'partial',
-
-    // Input validation limits for the dashboard API
-    validation: {
-      maxFilterArrayLength: 100, // default
-      maxSearchLength: 500,      // default
-      maxTagLength: 100,         // default
-      maxTagsPerEntry: 50,       // default
-    },
   },
 })
 ```
+
+### Input limits on the dashboard API
+
+The API caps what a query may ask for. These are fixed rather than configurable
+— they are safety rails, not a knob:
+
+| limit | value |
+|---|---|
+| values per filter (`methods`, `statuses`, `tags`, …) | 100 |
+| search term length | 500 characters |
+| tag name length | 100 characters |
+| entries per page (`limit`) | 1000 |
+
+Exceeding one is answered with `400` naming the parameter.
 
 ### How a Field Name Is Matched
 

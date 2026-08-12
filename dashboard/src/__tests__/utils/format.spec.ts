@@ -7,10 +7,8 @@ import { describe, it, expect } from 'vitest';
 import {
   formatMs,
   formatMsHuman,
-  formatInterval,
   normalizeFilterForUrl,
   formatFilterForDisplay,
-  filterMatches,
   filtersInclude,
   formatFilterForServer,
   formatFiltersForServer,
@@ -138,31 +136,6 @@ describe('formatMsHuman', () => {
   });
 });
 
-// ============================================================================
-// formatInterval Tests
-// ============================================================================
-
-describe('formatInterval', () => {
-  it('formats 1 second interval', () => {
-    expect(formatInterval(1000)).toBe('Every 1s');
-  });
-
-  it('formats 1 minute interval', () => {
-    expect(formatInterval(60000)).toBe('Every 1m');
-  });
-
-  it('formats 30 minute interval', () => {
-    expect(formatInterval(1800000)).toBe('Every 30m');
-  });
-
-  it('formats 1 hour interval', () => {
-    expect(formatInterval(3600000)).toBe('Every 1h');
-  });
-
-  it('formats complex interval', () => {
-    expect(formatInterval(5400000)).toBe('Every 1h 30m');
-  });
-});
 
 // ============================================================================
 // normalizeFilterForUrl Tests
@@ -305,37 +278,6 @@ describe('formatFilterForDisplay', () => {
   });
 });
 
-// ============================================================================
-// filterMatches Tests
-// ============================================================================
-
-describe('filterMatches', () => {
-  it('matches identical strings', () => {
-    expect(filterMatches('GET', 'GET')).toBe(true);
-  });
-
-  it('matches case-insensitively', () => {
-    expect(filterMatches('GET', 'get')).toBe(true);
-    expect(filterMatches('get', 'GET')).toBe(true);
-  });
-
-  it('matches mixed case', () => {
-    expect(filterMatches('Get', 'gET')).toBe(true);
-  });
-
-  it('does not match different strings', () => {
-    expect(filterMatches('GET', 'POST')).toBe(false);
-  });
-
-  it('handles empty strings', () => {
-    expect(filterMatches('', '')).toBe(true);
-    expect(filterMatches('GET', '')).toBe(false);
-  });
-
-  it('handles special characters', () => {
-    expect(filterMatches('user@test.com', 'USER@TEST.COM')).toBe(true);
-  });
-});
 
 // ============================================================================
 // filtersInclude Tests

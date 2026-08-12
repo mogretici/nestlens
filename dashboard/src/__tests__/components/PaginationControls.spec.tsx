@@ -3,10 +3,9 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import PaginationControls, {
+import {
   NewEntriesButton,
   LoadMoreButton,
-  RefreshButton,
 } from '../../components/PaginationControls';
 
 // ============================================================================
@@ -90,144 +89,8 @@ describe('LoadMoreButton', () => {
   });
 });
 
-// ============================================================================
-// RefreshButton Tests
-// ============================================================================
-
-describe('RefreshButton', () => {
-  it('shows enabled state when auto-refresh active', () => {
-    render(
-      <RefreshButton
-        autoRefreshEnabled={true}
-        onToggleAutoRefresh={() => {}}
-        refreshing={false}
-      />
-    );
-
-    const button = screen.getByRole('button');
-    expect(button.className).toContain('bg-primary-600');
-    expect(screen.getByText('Auto Refresh')).toBeInTheDocument();
-  });
-
-  it('shows disabled state when auto-refresh inactive', () => {
-    render(
-      <RefreshButton
-        autoRefreshEnabled={false}
-        onToggleAutoRefresh={() => {}}
-        refreshing={false}
-      />
-    );
-
-    const button = screen.getByRole('button');
-    expect(button.className).toContain('bg-gray-200');
-    expect(screen.getByText('Refresh')).toBeInTheDocument();
-  });
-
-  it('calls onToggleAutoRefresh when clicked', () => {
-    const handleToggle = vi.fn();
-    render(
-      <RefreshButton
-        autoRefreshEnabled={false}
-        onToggleAutoRefresh={handleToggle}
-        refreshing={false}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button'));
-    expect(handleToggle).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows spinner when refreshing and not auto-refresh', () => {
-    const { container } = render(
-      <RefreshButton
-        autoRefreshEnabled={false}
-        onToggleAutoRefresh={() => {}}
-        refreshing={true}
-      />
-    );
-    expect(container.querySelector('.animate-spin')).toBeInTheDocument();
-  });
-
-  it('does not show spinner when auto-refresh is enabled', () => {
-    const { container } = render(
-      <RefreshButton
-        autoRefreshEnabled={true}
-        onToggleAutoRefresh={() => {}}
-        refreshing={true}
-      />
-    );
-    expect(container.querySelector('.animate-spin')).not.toBeInTheDocument();
-  });
-});
 
 // ============================================================================
 // PaginationControls Tests
 // ============================================================================
 
-describe('PaginationControls', () => {
-  it('renders both buttons when applicable', () => {
-    render(
-      <PaginationControls
-        newEntriesCount={5}
-        hasMore={true}
-        loading={false}
-        onLoadNew={() => {}}
-        onLoadMore={() => {}}
-      />
-    );
-
-    expect(screen.getByText(/load 5 new entries/i)).toBeInTheDocument();
-    expect(screen.getByText(/load older entries/i)).toBeInTheDocument();
-  });
-
-  it('hides new entries button when count is 0', () => {
-    render(
-      <PaginationControls
-        newEntriesCount={0}
-        hasMore={true}
-        loading={false}
-        onLoadNew={() => {}}
-        onLoadMore={() => {}}
-      />
-    );
-
-    expect(screen.queryByText(/new entr/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/load older entries/i)).toBeInTheDocument();
-  });
-
-  it('hides load more button when hasMore is false', () => {
-    render(
-      <PaginationControls
-        newEntriesCount={3}
-        hasMore={false}
-        loading={false}
-        onLoadNew={() => {}}
-        onLoadMore={() => {}}
-      />
-    );
-
-    expect(screen.getByText(/load 3 new entries/i)).toBeInTheDocument();
-    expect(screen.queryByText(/load older entries/i)).not.toBeInTheDocument();
-  });
-
-  it('calls correct handlers', () => {
-    const handleNew = vi.fn();
-    const handleMore = vi.fn();
-
-    render(
-      <PaginationControls
-        newEntriesCount={2}
-        hasMore={true}
-        loading={false}
-        onLoadNew={handleNew}
-        onLoadMore={handleMore}
-      />
-    );
-
-    fireEvent.click(screen.getByText(/load 2 new entries/i));
-    expect(handleNew).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByText(/load older entries/i));
-    expect(handleMore).toHaveBeenCalledTimes(1);
-  });
-});

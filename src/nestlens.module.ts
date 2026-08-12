@@ -25,6 +25,7 @@ import { TagService } from './core/tag.service';
 import { FamilyHashService } from './core/family-hash.service';
 import { STORAGE } from './core/storage';
 import { RequestContextMiddleware } from './core/request-context.middleware';
+import { DataMaskerService } from './core/data-masker.service';
 import { createStorage } from './core/storage/storage.factory';
 import {
   NestLensApiController,
@@ -80,6 +81,18 @@ class NestLensCoreModule {
           return createStorage(config.storage ?? {});
         },
       },
+      {
+        // The documented flow is Watcher → collect() → DataMasker → Storage
+        // (CLAUDE.md) and `security.dataMasking` is documented as configuring
+        // "the global DataMaskerService … across watchers". The service existed
+        // and was never provided, so neither happened.
+        provide: DataMaskerService,
+        useFactory: () =>
+          new DataMaskerService({
+            ...config.security?.dataMasking,
+            stackTraceSanitization: config.security?.stackTraceSanitization,
+          }),
+      },
       TagService,
       FamilyHashService,
       CollectorService,
@@ -89,6 +102,7 @@ class NestLensCoreModule {
     const exports: (
       | Provider
       | symbol
+      | typeof DataMaskerService
       | typeof TagService
       | typeof FamilyHashService
       | typeof CollectorService
@@ -97,6 +111,7 @@ class NestLensCoreModule {
     )[] = [
       NESTLENS_CONFIG,
       STORAGE,
+      DataMaskerService,
       TagService,
       FamilyHashService,
       CollectorService,

@@ -21,17 +21,36 @@ import { buildMessage, ValidateBy, ValidationOptions } from 'class-validator';
  * Accepts a comma-separated string (raw query param) or an array of strings
  * (after TransformCommaSeparatedArray has run).
  */
+/**
+ * How many values one filter may carry.
+ *
+ * Documented under `security.validation.maxFilterArrayLength` and enforced
+ * nowhere: a request asking for two thousand statuses was answered, and every
+ * value becomes another `IN` placeholder or another comparison per entry. The
+ * limit lives with the validators the filters already run through, so it covers
+ * every filter field at once rather than one decorator at a time.
+ */
+export const MAX_FILTER_VALUES = 100;
+
+/** How long a search term may be, for the same reason. */
+export const MAX_SEARCH_LENGTH = 500;
+
+const withinFilterLimit = (value: unknown): boolean =>
+  !Array.isArray(value) || value.length <= MAX_FILTER_VALUES;
+
 export function IsCommaSeparatedStrings(validationOptions?: ValidationOptions) {
   return ValidateBy(
     {
       name: 'isCommaSeparatedStrings',
       validator: {
         validate: (value: unknown): boolean =>
-          typeof value === 'string' ||
-          (Array.isArray(value) && value.every((item) => typeof item === 'string')),
+          withinFilterLimit(value) &&
+          (typeof value === 'string' ||
+            (Array.isArray(value) && value.every((item) => typeof item === 'string'))),
         defaultMessage: buildMessage(
           (eachPrefix) =>
-            `${eachPrefix}$property must be a comma-separated string or an array of strings`,
+            `${eachPrefix}$property must be a comma-separated string or an array of strings, ` +
+            `with at most ${MAX_FILTER_VALUES} values`,
           validationOptions,
         ),
       },
@@ -49,9 +68,12 @@ export function IsCommaSeparatedList(validationOptions?: ValidationOptions) {
     {
       name: 'isCommaSeparatedList',
       validator: {
-        validate: (value: unknown): boolean => typeof value === 'string' || Array.isArray(value),
+        validate: (value: unknown): boolean =>
+          withinFilterLimit(value) && (typeof value === 'string' || Array.isArray(value)),
         defaultMessage: buildMessage(
-          (eachPrefix) => `${eachPrefix}$property must be a comma-separated string or an array`,
+          (eachPrefix) =>
+            `${eachPrefix}$property must be a comma-separated string or an array, ` +
+            `with at most ${MAX_FILTER_VALUES} values`,
           validationOptions,
         ),
       },

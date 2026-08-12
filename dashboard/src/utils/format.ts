@@ -54,17 +54,6 @@ export function formatMsHuman(ms: number): string | null {
 }
 
 /**
- * Format interval for schedule display
- * Examples:
- *   1000 -> "Every 1s"
- *   60000 -> "Every 1m"
- *   1800000 -> "Every 30m"
- */
-export function formatInterval(ms: number): string {
-  return `Every ${formatMs(ms)}`;
-}
-
-/**
  * Filter value normalization utilities
  * URL format: always lowercase for consistency
  * Display format: category-specific (uppercase for methods, etc.)
@@ -123,11 +112,6 @@ export function formatFilterForDisplay(value: string, category: string): string 
     default:
       return value;
   }
-}
-
-// Check if a filter value matches (case-insensitive)
-export function filterMatches(filterValue: string, targetValue: string): boolean {
-  return filterValue.toLowerCase() === targetValue.toLowerCase();
 }
 
 // Check if filter array includes a value (case-insensitive)

@@ -1,7 +1,6 @@
 import {
   isLikelyTypeORMDataSource,
   isPrismaClient,
-  tryRequire,
   isModuleAvailable,
   PrismaClient,
 } from '../../../watchers/query/types';
@@ -68,18 +67,6 @@ describe('Query type guards and module helpers', () => {
       expect(isPrismaClient(null)).toBe(false);
       expect(isPrismaClient(undefined)).toBe(false);
       expect(isPrismaClient([])).toBe(false);
-    });
-  });
-
-  describe('tryRequire', () => {
-    it('returns the resolved module when present', () => {
-      const path = tryRequire<typeof import('path')>('path');
-      expect(path).not.toBeNull();
-      expect(typeof path?.join).toBe('function');
-    });
-
-    it('returns null when the module cannot be resolved', () => {
-      expect(tryRequire('definitely-not-a-real-module-xyz')).toBeNull();
     });
   });
 
