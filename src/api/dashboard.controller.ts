@@ -15,9 +15,11 @@ import { ApplicationConfig, HttpAdapterHost } from '@nestjs/core';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NestLensGuard } from './api.guard';
 import { toBaseHref, toForwardedPrefix } from './route-path';
+import { compress, ContentEncoding, isCompressible, negotiateEncoding } from './content-encoding';
 
 /** Set by reverse proxies that serve the application under a stripped path. */
 const FORWARDED_PREFIX_HEADER = 'x-forwarded-prefix';
+const ACCEPT_ENCODING_HEADER = 'accept-encoding';
 
 /**
  * Cache policies for the bundled dashboard.
@@ -67,6 +69,15 @@ const MIME_TYPES: Record<string, string> = {
 export class DashboardController {
   private readonly dashboardPath: string;
   private readonly fileCache = new Map<string, Buffer>();
+  /**
+   * Compressed asset bodies, keyed by file and encoding.
+   *
+   * Only files read off disk are cached here. `index.html` is rebuilt per
+   * request with the mount point injected, and under `trustProxy` that mount
+   * point comes from a header — caching by its value would let a caller grow
+   * this map without limit. It stays below the compression threshold anyway.
+   */
+  private readonly compressedCache = new Map<string, Buffer>();
 
   constructor(
     @Inject(NESTLENS_CONFIG)
@@ -79,19 +90,37 @@ export class DashboardController {
   }
 
   @Get('assets/:filename')
-  serveAssets(@Param('filename') filename: string, @Res() res: unknown): void {
-    this.sendFile(res, join('assets', filename), 'Asset not found', IMMUTABLE);
+  serveAssets(
+    @Param('filename') filename: string,
+    @Res() res: unknown,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendFile(
+      res,
+      join('assets', filename),
+      'Asset not found',
+      IMMUTABLE,
+      acceptEncoding,
+    );
   }
 
   // Favicon and other root-level static files.
   @Get(':filename.svg')
-  serveStaticFile(@Param('filename') filename: string, @Res() res: unknown): void {
-    this.sendFile(res, `${filename}.svg`, 'File not found', NO_CACHE);
+  serveStaticFile(
+    @Param('filename') filename: string,
+    @Res() res: unknown,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendFile(res, `${filename}.svg`, 'File not found', NO_CACHE, acceptEncoding);
   }
 
   @Get()
-  serveDashboard(@Res() res: unknown, @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string): void {
-    this.sendIndexHtml(res, forwarded);
+  serveDashboard(
+    @Res() res: unknown,
+    @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendIndexHtml(res, forwarded, acceptEncoding);
   }
 
   /**
@@ -106,8 +135,12 @@ export class DashboardController {
    * actually wants, before Nest resolves routes.
    */
   @Get('*')
-  serveSpaRoute(@Res() res: unknown, @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string): void {
-    this.sendIndexHtml(res, forwarded);
+  serveSpaRoute(
+    @Res() res: unknown,
+    @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendIndexHtml(res, forwarded, acceptEncoding);
   }
 
   /**
@@ -116,14 +149,18 @@ export class DashboardController {
    * the bundle's relative asset URLs, and `window.__NESTLENS_BASE__` tells the
    * SPA where to put its router basename and API calls.
    */
-  private sendIndexHtml(res: unknown, forwardedPrefix?: string): void {
+  private sendIndexHtml(
+    res: unknown,
+    forwardedPrefix?: string,
+    acceptEncoding?: string,
+  ): Promise<void> {
     const absolutePath = this.resolveDashboardFile('index.html', 'Dashboard not found');
     const html = this.injectBasePath(
       this.readCached(absolutePath).toString('utf8'),
       forwardedPrefix,
     );
 
-    this.send(res, html, MIME_TYPES['.html'] as string, NO_CACHE);
+    return this.send(res, html, MIME_TYPES['.html'] as string, NO_CACHE, acceptEncoding);
   }
 
   private sendFile(
@@ -131,10 +168,18 @@ export class DashboardController {
     relativePath: string,
     notFoundMessage: string,
     cacheControl: string,
-  ): void {
+    acceptEncoding?: string,
+  ): Promise<void> {
     const absolutePath = this.resolveDashboardFile(relativePath, notFoundMessage);
 
-    this.send(res, this.readCached(absolutePath), this.contentTypeFor(absolutePath), cacheControl);
+    return this.send(
+      res,
+      this.readCached(absolutePath),
+      this.contentTypeFor(absolutePath),
+      cacheControl,
+      acceptEncoding,
+      absolutePath,
+    );
   }
 
   /**
@@ -167,22 +212,50 @@ export class DashboardController {
    * this HTML into JSON — the dashboard then loads nothing. Taking over the
    * response keeps NestLens's own surface out of that pipeline.
    */
-  private send(
+  private async send(
     res: unknown,
     body: string | Buffer,
     contentType: string,
     cacheControl: string,
-  ): void {
+    acceptEncoding?: string,
+    cacheKey?: string,
+  ): Promise<void> {
     const adapter = this.httpAdapterHost.httpAdapter;
-    const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+    const raw = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+    const encoding = isCompressible(contentType, raw.length)
+      ? negotiateEncoding(acceptEncoding)
+      : undefined;
+    const payload = encoding ? await this.compressed(raw, encoding, cacheKey) : raw;
 
     adapter.setHeader(res, 'Content-Type', contentType);
     adapter.setHeader(res, 'Cache-Control', cacheControl);
+    // Set whether or not this particular response was compressed: the body a
+    // shared cache stores depends on the request's Accept-Encoding either way,
+    // and `immutable` tells that cache to keep it for a year.
+    adapter.setHeader(res, 'Vary', 'Accept-Encoding');
+    if (encoding) adapter.setHeader(res, 'Content-Encoding', encoding);
     // A raw Buffer cannot go through `reply()`: Express treats any object as
     // JSON and serialises it to `{"type":"Buffer","data":[...]}`, which turns
     // every script and font into garbage. StreamableFile is the shape both
     // adapters special-case for binary payloads.
     adapter.reply(res, new StreamableFile(payload, { length: payload.length }), 200);
+  }
+
+  private async compressed(
+    raw: Buffer,
+    encoding: ContentEncoding,
+    cacheKey?: string,
+  ): Promise<Buffer> {
+    if (!cacheKey) return compress(raw, encoding);
+
+    const key = `${cacheKey}|${encoding}`;
+    const cached = this.compressedCache.get(key);
+    if (cached) return cached;
+
+    const compressedBody = await compress(raw, encoding);
+    this.compressedCache.set(key, compressedBody);
+
+    return compressedBody;
   }
 
   /**

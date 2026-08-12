@@ -29,6 +29,27 @@ knowing what it costs the application hosting it:
 - `index.html` is sent with `Cache-Control: no-cache`. It carries the mount
   point injected per request and points at the current bundle, so it is
   revalidated every time — that is what makes the immutable assets safe.
+- Scripts, stylesheets and other text assets are **compressed on the way out**,
+  in brotli or gzip depending on what the browser asked for. NestLens writes its
+  own responses so that your global interceptors cannot rewrite them, which also
+  means nothing else in your pipeline compresses them — this does not depend on
+  your application having compression middleware installed.
+
+  Measured on the shipped bundle:
+
+  | | uncompressed | brotli |
+  |---|---|---|
+  | First load (`index.html` + vendor + app + CSS) | 287 KB | **79 KB** |
+  | Largest chunk (entry detail view) | 452 KB | **96 KB** |
+
+  Each file is compressed once per process and then reused, and the work runs on
+  zlib's thread pool rather than the event loop. Already-compressed formats
+  (PNG, WOFF2, ICO) and bodies under 1 KB are sent as they are — compressing
+  them costs CPU and produces the same size or slightly larger.
+
+  Responses carry `Vary: Accept-Encoding`, so a shared cache in front of your
+  application stores one entry per encoding instead of serving a brotli body to
+  a client that cannot read it.
 
 None of this applies when the dashboard is disabled: no files are read and
 nothing is cached.
