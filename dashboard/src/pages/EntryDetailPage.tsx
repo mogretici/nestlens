@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { parseDate } from '../utils/date';
@@ -27,28 +27,50 @@ import {
   isDumpEntry,
   isGraphQLEntry,
 } from '../types';
-import RequestDetailView from '../components/RequestDetailView';
-import QueryDetailView from '../components/QueryDetailView';
-import ExceptionDetailView from '../components/ExceptionDetailView';
-import LogDetailView from '../components/LogDetailView';
-import EventDetailView from '../components/EventDetailView';
-import JobDetailView from '../components/JobDetailView';
-import CacheDetailView from '../components/CacheDetailView';
-import MailDetailView from '../components/MailDetailView';
-import ScheduleDetailView from '../components/ScheduleDetailView';
-import HttpClientDetailView from '../components/HttpClientDetailView';
-import RedisDetailView from '../components/RedisDetailView';
-import ModelDetailView from '../components/ModelDetailView';
-import NotificationDetailView from '../components/NotificationDetailView';
-import ViewDetailView from '../components/ViewDetailView';
-import CommandDetailView from '../components/CommandDetailView';
-import GateDetailView from '../components/GateDetailView';
-import BatchDetailView from '../components/BatchDetailView';
-import DumpDetailView from '../components/DumpDetailView';
-import GraphQLDetailView from '../components/GraphQLDetailView';
 import Tabs from '../components/Tabs';
 import { useJsonToolbar, ControlledInlineJson } from '../components/JsonViewerWithToolbar';
 import ClickableBadge from '../components/ClickableBadge';
+
+/**
+ * One chunk per detail view, fetched when an entry of that type is opened.
+ *
+ * These were imported statically, so opening a log entry downloaded the GraphQL,
+ * mail, batch and model views along with it — the whole page came to 452 KB, the
+ * largest thing the dashboard loads by a wide margin. Nineteen of the twenty are
+ * always the wrong one.
+ */
+/**
+ * Holds the page's height while a detail view arrives, so the layout does not
+ * jump. The chunks are small and same-origin, so this is usually a single frame.
+ */
+function DetailViewSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3" aria-hidden="true">
+      <div className="h-8 rounded bg-gray-100 dark:bg-gray-800" />
+      <div className="h-40 rounded bg-gray-100 dark:bg-gray-800" />
+    </div>
+  );
+}
+
+const RequestDetailView = lazy(() => import('../components/RequestDetailView'));
+const QueryDetailView = lazy(() => import('../components/QueryDetailView'));
+const ExceptionDetailView = lazy(() => import('../components/ExceptionDetailView'));
+const LogDetailView = lazy(() => import('../components/LogDetailView'));
+const EventDetailView = lazy(() => import('../components/EventDetailView'));
+const JobDetailView = lazy(() => import('../components/JobDetailView'));
+const CacheDetailView = lazy(() => import('../components/CacheDetailView'));
+const MailDetailView = lazy(() => import('../components/MailDetailView'));
+const ScheduleDetailView = lazy(() => import('../components/ScheduleDetailView'));
+const HttpClientDetailView = lazy(() => import('../components/HttpClientDetailView'));
+const RedisDetailView = lazy(() => import('../components/RedisDetailView'));
+const ModelDetailView = lazy(() => import('../components/ModelDetailView'));
+const NotificationDetailView = lazy(() => import('../components/NotificationDetailView'));
+const ViewDetailView = lazy(() => import('../components/ViewDetailView'));
+const CommandDetailView = lazy(() => import('../components/CommandDetailView'));
+const GateDetailView = lazy(() => import('../components/GateDetailView'));
+const BatchDetailView = lazy(() => import('../components/BatchDetailView'));
+const DumpDetailView = lazy(() => import('../components/DumpDetailView'));
+const GraphQLDetailView = lazy(() => import('../components/GraphQLDetailView'));
 
 // Get display method - GRAPHQL for GraphQL endpoints, otherwise HTTP method
 function getDisplayMethod(path: string, method: string): string {
@@ -445,7 +467,7 @@ export default function EntryDetailPage() {
       <div className="pt-16 space-y-6">
 
       {/* Type-specific Detail View */}
-      {renderDetailView()}
+      <Suspense fallback={<DetailViewSkeleton />}>{renderDetailView()}</Suspense>
 
       {/* Related Entries */}
       {related.length > 0 && (
