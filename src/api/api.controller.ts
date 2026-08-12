@@ -22,7 +22,7 @@ import { CollectorService } from '@/core';
 import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '@/nestlens.config';
 import { EntryType, CursorPaginatedResponse, Entry } from '@/types';
 import { NestLensGuard } from './api.guard';
-import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT } from './dto';
+import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT, PauseRecordingDto } from './dto';
 import { NestLensApiExceptionFilter } from '@/api/filters';
 import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
@@ -376,7 +376,7 @@ export class NestLensApiController {
    * Pause recording
    */
   @Post('recording/pause')
-  async pauseRecording(@Body() body: { reason?: string }, @Res() _res?: unknown) {
+  async pauseRecording(@Body() body: PauseRecordingDto, @Res() _res?: unknown) {
     this.collectorService.pause(body.reason);
     const status = this.collectorService.getRecordingStatus();
     return { success: true, data: status };

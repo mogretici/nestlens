@@ -11,12 +11,15 @@ import {
   UseFilters,
   UseGuards,
   UseInterceptors,
+  UsePipes,
 } from '@nestjs/common';
 import { TagService } from '../core/tag.service';
 import { NESTLENS_API_PREFIX } from '../nestlens.config';
+import { EntryTagsDto, MonitoredTagDto } from './dto';
 import { NestLensGuard } from './api.guard';
 import { NestLensApiExceptionFilter } from './filters/api-exception.filter';
 import { NestLensApiResponseInterceptor } from './interceptors/api-response.interceptor';
+import { NestLensValidationPipe } from './pipes';
 
 /**
  * Every handler here takes an unused `@Res() _res` parameter — see
@@ -25,6 +28,7 @@ import { NestLensApiResponseInterceptor } from './interceptors/api-response.inte
  * replying a second time on Nest 9/10 with Express.
  */
 @Controller(`${NESTLENS_API_PREFIX}/api/tags`)
+@UsePipes(new NestLensValidationPipe())
 @UseGuards(NestLensGuard)
 @UseFilters(NestLensApiExceptionFilter)
 @UseInterceptors(NestLensApiResponseInterceptor)
@@ -77,7 +81,7 @@ export class TagController {
   @Post('entry/:id')
   async addTagsToEntry(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { tags: string[] },
+    @Body() body: EntryTagsDto,
     @Res() _res?: unknown,
   ) {
     await this.tagService.addTags(id, body.tags);
@@ -91,7 +95,7 @@ export class TagController {
   @Delete('entry/:id')
   async removeTagsFromEntry(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { tags: string[] },
+    @Body() body: EntryTagsDto,
     @Res() _res?: unknown,
   ) {
     await this.tagService.removeTags(id, body.tags);
@@ -114,7 +118,7 @@ export class TagController {
    * Add a monitored tag
    */
   @Post('monitored')
-  async addMonitoredTag(@Body() body: { tag: string }, @Res() _res?: unknown) {
+  async addMonitoredTag(@Body() body: MonitoredTagDto, @Res() _res?: unknown) {
     const tag = await this.tagService.addMonitoredTag(body.tag);
     return { success: true, data: tag };
   }
