@@ -1,4 +1,6 @@
 import {
+  MiddlewareConsumer,
+  NestModule,
   DynamicModule,
   Global,
   Logger,
@@ -22,6 +24,7 @@ import { PruningService } from './core/pruning.service';
 import { TagService } from './core/tag.service';
 import { FamilyHashService } from './core/family-hash.service';
 import { STORAGE } from './core/storage';
+import { RequestContextMiddleware } from './core/request-context.middleware';
 import { createStorage } from './core/storage/storage.factory';
 import {
   NestLensApiController,
@@ -159,7 +162,18 @@ class NestLensScheduleModule {
 }
 
 @Module({})
-export class NestLensModule implements OnModuleInit {
+export class NestLensModule implements NestModule, OnModuleInit {
+  /**
+   * Opens a request context around every request.
+   *
+   * Middleware rather than an interceptor: it calls into the rest of the
+   * request synchronously, so a query or cache read recorded deep inside the
+   * handler still knows which request it belongs to. See request-context.ts.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestContextMiddleware).forRoutes('*');
+  }
+
   private static readonly logger = new Logger('NestLens');
 
   static forRoot(config: NestLensConfig = {}): DynamicModule {

@@ -7,6 +7,7 @@ import { tap } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
 import { CollectorService } from '../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
+import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
@@ -79,7 +80,9 @@ export class RequestWatcher implements NestInterceptor {
       return next.handle();
     }
 
-    const requestId = uuidv4();
+    // The context middleware has already opened one for this request; falling
+    // back keeps the watcher usable where the middleware did not run.
+    const requestId = request.nestlensRequestId ?? currentRequestId() ?? uuidv4();
     const startTime = Date.now();
     const startMemory = process.memoryUsage().heapUsed;
 

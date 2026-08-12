@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { currentRequestId, runInRequestContext } from '../../core/request-context';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { STORAGE, StorageInterface } from '../../core/storage/storage.interface';
@@ -750,6 +751,104 @@ describe('CollectorService when storage is unavailable', () => {
     expect(storage.saveBatch).toHaveBeenLastCalledWith(
       expect.arrayContaining([expect.objectContaining({ type: 'log' })]),
     );
+
+    await collector.onModuleDestroy();
+  });
+});
+
+/**
+ * Which request an entry belongs to.
+ *
+ * Watchers outside the HTTP layer are never handed a request: the query watcher
+ * is given a statement by TypeORM's logger, the cache watcher by a wrapped
+ * method. Of the twenty-one places that record an entry, two passed a request
+ * id — so a request's detail page could show the exceptions it raised and never
+ * the queries it ran, while the documentation offered "request correlation ID"
+ * and "group related entries by request".
+ *
+ * The id now travels in the ambient async context, which is why this is a
+ * property of the collector rather than of each watcher.
+ */
+describe('CollectorService request correlation', () => {
+  const workingStorage = (): jest.Mocked<StorageInterface> =>
+    ({
+      save: jest.fn().mockImplementation(async (e) => e),
+      saveBatch: jest.fn().mockImplementation(async (entries) => entries),
+      updateFamilyHash: jest.fn(),
+    }) as unknown as jest.Mocked<StorageInterface>;
+
+  const collectAndFlush = async (
+    collector: CollectorService,
+    explicitId?: string,
+  ): Promise<Entry> => {
+    await collector.collect('log', { message: 'x', level: 'log' } as never, explicitId);
+    await collector.flush();
+    return (collector as unknown as { storage: jest.Mocked<StorageInterface> }).storage.saveBatch
+      .mock.calls[0][0][0] as Entry;
+  };
+
+  it('attributes an entry to the request it was recorded inside', async () => {
+    // Arrange
+    const collector = new CollectorService(workingStorage(), { enabled: true } as NestLensConfig);
+
+    // Act - what a query watcher does, deep inside a request
+    const entry = await runInRequestContext('req-42', () => collectAndFlush(collector));
+
+    // Assert
+    expect(entry.requestId).toBe('req-42');
+
+    await collector.onModuleDestroy();
+  });
+
+  it('leaves an entry recorded outside a request unattributed', async () => {
+    // Arrange - a startup log, a scheduled task
+    const collector = new CollectorService(workingStorage(), { enabled: true } as NestLensConfig);
+
+    // Act
+    const entry = await collectAndFlush(collector);
+
+    // Assert
+    expect(entry.requestId).toBeUndefined();
+
+    await collector.onModuleDestroy();
+  });
+
+  it('lets a watcher that knows the request say so', async () => {
+    // Arrange
+    const collector = new CollectorService(workingStorage(), { enabled: true } as NestLensConfig);
+
+    // Act - an explicit id is not overridden by the surrounding context
+    const entry = await runInRequestContext('ambient', () =>
+      collectAndFlush(collector, 'explicit'),
+    );
+
+    // Assert
+    expect(entry.requestId).toBe('explicit');
+
+    await collector.onModuleDestroy();
+  });
+
+  /**
+   * The point of using the async context rather than a field: two requests in
+   * flight at once must not borrow each other's id.
+   */
+  it('keeps concurrent requests apart', async () => {
+    // Arrange
+    const collector = new CollectorService(workingStorage(), { enabled: true } as NestLensConfig);
+    const recorded: Array<string | undefined> = [];
+
+    const handle = (id: string, delayMs: number): Promise<void> =>
+      runInRequestContext(id, async () => {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await collector.collect('log', { message: id, level: 'log' } as never);
+        recorded.push(currentRequestId());
+      });
+
+    // Act - the slower request records last
+    await Promise.all([handle('slow', 20), handle('fast', 1)]);
+
+    // Assert
+    expect(recorded).toEqual(['fast', 'slow']);
 
     await collector.onModuleDestroy();
   });

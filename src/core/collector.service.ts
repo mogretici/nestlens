@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { Observable, Subject } from 'rxjs';
 import { Entry, EntryType } from '../types';
+import { currentRequestId } from './request-context';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
 import { TagService } from './tag.service';
 import { FamilyHashService } from './family-hash.service';
@@ -133,7 +134,10 @@ export class CollectorService implements OnModuleDestroy {
     const entry = {
       type,
       payload,
-      requestId,
+      // A watcher that knows the request says so; the rest are attributed from
+      // the ambient context, which is how a query recorded by TypeORM's logger
+      // ends up on the detail page of the request that ran it.
+      requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
 
     // Apply filter
@@ -170,7 +174,7 @@ export class CollectorService implements OnModuleDestroy {
     const entry = {
       type,
       payload,
-      requestId,
+      requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
 
     // Apply filter
