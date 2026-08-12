@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { createStorage } from '../../../core/storage/storage.factory';
 import { MemoryStorage } from '../../../core/storage/memory.storage';
 
@@ -128,6 +129,51 @@ describe('createStorage', () => {
       expect(typeof storage.findByFamilyHash).toBe('function');
       expect(typeof storage.getGroupedByFamilyHash).toBe('function');
 
+      await storage.close();
+    });
+  });
+
+  /**
+   * The default driver keeps entries in the process that recorded them, so in a
+   * clustered application the dashboard shows whichever worker answered the
+   * request and entries appear to come and go between refreshes. Nothing is
+   * broken, which is exactly why it needs saying out loud.
+   */
+  describe('in a clustered process', () => {
+    const originalInstance = process.env.NODE_APP_INSTANCE;
+
+    afterEach(() => {
+      if (originalInstance === undefined) delete process.env.NODE_APP_INSTANCE;
+      else process.env.NODE_APP_INSTANCE = originalInstance;
+    });
+
+    it('warns that memory storage cannot be shared between workers', async () => {
+      // Arrange
+      process.env.NODE_APP_INSTANCE = '2';
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      // Act
+      const storage = await createStorage({ driver: 'memory' });
+
+      // Assert
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('clustered process'));
+
+      warn.mockRestore();
+      await storage.close();
+    });
+
+    it('stays quiet in a single process', async () => {
+      // Arrange
+      delete process.env.NODE_APP_INSTANCE;
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      // Act
+      const storage = await createStorage({ driver: 'memory' });
+
+      // Assert
+      expect(warn).not.toHaveBeenCalled();
+
+      warn.mockRestore();
       await storage.close();
     });
   });

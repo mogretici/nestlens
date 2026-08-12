@@ -107,6 +107,37 @@ interface SqliteStorageConfig {
 { filename: `nestlens-${process.env.NODE_ENV}.db` }
 ```
 
+## Running more than one process
+
+Entries are recorded by the process that handled the request, and read back by
+the process that serves the dashboard. When those are not the same process, the
+driver decides what you see.
+
+| Topology | `memory` | `sqlite` | `redis` |
+| --- | --- | --- | --- |
+| One process (`nest start`, a single container) | ✅ | ✅ | ✅ |
+| PM2 or Node `cluster`, several workers on one host | ❌ each worker sees only itself | ✅ shared file | ✅ |
+| Several replicas of a container | ❌ | ❌ unless the file is on shared storage | ✅ |
+| Serverless / short-lived processes | ❌ nothing survives the process | ⚠️ needs a writable, persistent path | ✅ |
+
+With the default in-memory driver in a clustered application, the dashboard
+shows whichever worker answered the request: entries appear, a refresh shows a
+different set, and live-tail follows one worker only. Nothing is broken — the
+entries are real, they are simply spread across processes that cannot see each
+other.
+
+NestLens warns at startup when it can tell this is happening:
+
+```
+[StorageFactory] In-memory storage in a clustered process: each worker keeps its
+own entries, so the dashboard shows only the worker that answered the request.
+Use the sqlite or redis driver for one shared view.
+```
+
+It can only tell on the same host — several replicas of a container look exactly
+like a single process from the inside. If you run more than one, choose `redis`,
+or `sqlite` on a volume every replica mounts.
+
 ### Upgrading NestLens with an existing database
 
 The database file outlives the version that wrote it, so NestLens migrates it in
