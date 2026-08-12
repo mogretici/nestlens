@@ -1,28 +1,91 @@
 name: E2E
 
-# Deliberately manual. The suite drives three web servers across 126 tests and
-# takes far longer on a two-core runner than it does locally, so it is not worth
-# gating every pull request on. Trigger it from the Actions tab before a release
-# or when touching the dashboard.
+# The suite drives three web servers and takes far longer on a two-core runner
+# than it does locally, which is why it used to run only when someone
+# remembered to press the button. It has since caught a blank dashboard, a
+# crash in the entry detail page and a deep link that stopped resolving — none
+# of which the unit tests saw — so leaving it to memory was the wrong trade.
+#
+# What runs when:
+#
+#   pull request touching what it covers   chromium + the built package
+#   push to main                           chromium + the built package
+#   nightly                                all three browsers
+#   manual                                 whichever browser you pick
+#
+# Chromium carries the functional coverage; the production project is the only
+# thing that exercises the bytes the package ships. Firefox and WebKit earn
+# their time overnight — the races they catch are real, but they are also the
+# slowest way to learn about a broken selector.
 on:
+  pull_request:
+    paths:
+      - 'src/api/**'
+      - 'dashboard/**'
+      - 'e2e/**'
+      - 'example/**'
+      - 'playwright.config.ts'
+      - '.github/workflows/e2e.yml'
+  push:
+    branches: [main]
+    # Same list as above: GitHub Actions does not resolve YAML anchors.
+    paths:
+      - 'src/api/**'
+      - 'dashboard/**'
+      - 'e2e/**'
+      - 'example/**'
+      - 'playwright.config.ts'
+      - '.github/workflows/e2e.yml'
+  schedule:
+    # 03:00 UTC, after the day's merges have settled.
+    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       browser:
         description: Browser to run
         type: choice
         default: chromium
-        options: [chromium, firefox, webkit]
-      production:
-        description: >-
-          Also run the production project, which serves the dashboard from the
-          built package instead of the Vite dev server
-        type: boolean
-        default: true
+        options: [chromium, firefox, webkit, all]
+
+concurrency:
+  # A newer push to the same branch makes the previous run's answer irrelevant.
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  e2e:
-    name: E2E (${{ inputs.browser }})
+  plan:
+    name: Plan
     runs-on: ubuntu-latest
+    outputs:
+      browsers: ${{ steps.pick.outputs.browsers }}
+    steps:
+      # A script rather than a nested expression in the matrix: the rule is
+      # readable here, and wrong answers are visible in the log.
+      - name: Pick browsers
+        id: pick
+        run: |
+          case "${{ github.event_name }}" in
+            schedule) browsers='["chromium","firefox","webkit"]' ;;
+            workflow_dispatch)
+              if [ "${{ inputs.browser }}" = "all" ]; then
+                browsers='["chromium","firefox","webkit"]'
+              else
+                browsers='["${{ inputs.browser }}"]'
+              fi
+              ;;
+            *) browsers='["chromium"]' ;;
+          esac
+          echo "browsers=$browsers" >> "$GITHUB_OUTPUT"
+          echo "Running: $browsers"
+
+  e2e:
+    name: E2E (${{ matrix.browser }})
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ fromJSON(needs.plan.outputs.browsers) }}
 
     steps:
       - name: Checkout
@@ -51,22 +114,62 @@ jobs:
         working-directory: example
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps ${{ inputs.browser }}
+        run: npx playwright install --with-deps ${{ matrix.browser }}
 
       - name: Run E2E tests
-        run: npm run test:e2e -- --project=${{ inputs.browser }}
+        run: npm run test:e2e -- --project=${{ matrix.browser }}
 
-      # Covers what the package actually ships — static file serving, the
-      # injected <base href>, the SPA wildcard and cache headers — none of
-      # which the dev-server projects touch.
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: playwright-report/
+          retention-days: 7
+
+  production:
+    # What the package actually serves: static files off disk, the injected
+    # <base href>, the SPA wildcard and the cache headers. The dev-server
+    # projects proxy around all of it, and 0.8.0 shipped a regression that
+    # served every script as `{"type":"Buffer","data":[…]}` with every other
+    # test still green.
+    name: E2E (built package)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install dashboard dependencies
+        run: npm ci
+        working-directory: dashboard
+
+      - name: Build library and dashboard
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: example
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
       - name: Run E2E tests against the built package
-        if: ${{ inputs.production }}
         run: npm run test:e2e -- --project=production
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ inputs.browser }}
+          name: playwright-report-production
           path: playwright-report/
           retention-days: 7
