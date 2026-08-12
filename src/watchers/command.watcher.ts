@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
@@ -19,10 +26,18 @@ export const NESTLENS_COMMAND_BUS = Symbol('NESTLENS_COMMAND_BUS');
  * capturing name, handler, status, duration, and results.
  */
 @Injectable()
-export class CommandWatcher implements OnModuleInit {
+export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CommandWatcher.name);
   private readonly config: CommandWatcherConfig;
   private originalExecute?: (command: unknown) => Promise<unknown>;
+  /**
+   * The property exactly as it was found, for putting back.
+   *
+   * `originalExecute` is bound to the bus so the wrapper can call it; assigning
+   * that back would hand the application a different function object than the
+   * one it had.
+   */
+  private executeBeforeWrapping?: unknown;
   private readonly commandTracking = new Map<string, number>(); // commandId -> startTime
 
   constructor(
@@ -59,6 +74,7 @@ export class CommandWatcher implements OnModuleInit {
     if (!this.commandBus) return;
 
     // Store original execute method
+    this.executeBeforeWrapping = this.commandBus.execute;
     const originalExecute = this.commandBus.execute?.bind(this.commandBus);
     this.originalExecute = originalExecute;
 
@@ -106,6 +122,23 @@ export class CommandWatcher implements OnModuleInit {
     };
 
     this.logger.log('Command interceptors installed');
+  }
+
+  /**
+   * Puts back what it replaced.
+   *
+   * The wrappers live on an object the application owns and keeps, so closing
+   * the module has to give it back. Otherwise the host goes on calling through
+   * a watcher whose collector is gone — and where a process builds the module
+   * more than once against the same object, as tests and `nest start --hmr` do,
+   * each round wraps the last: one call, one entry per layer.
+   */
+  onModuleDestroy(): void {
+    if (this.commandBus && this.executeBeforeWrapping !== undefined) {
+      (this.commandBus as Record<string, unknown>).execute = this.executeBeforeWrapping;
+      this.executeBeforeWrapping = undefined;
+      this.originalExecute = undefined;
+    }
   }
 
   private getCommandName(command: unknown): string {

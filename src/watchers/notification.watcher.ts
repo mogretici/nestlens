@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
@@ -15,7 +22,7 @@ export const NESTLENS_NOTIFICATION_SERVICE = Symbol('NESTLENS_NOTIFICATION_SERVI
  * (email, sms, push, socket, webhook) while masking sensitive recipient information.
  */
 @Injectable()
-export class NotificationWatcher implements OnModuleInit {
+export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationWatcher.name);
   private readonly config: NotificationWatcherConfig;
   private originalMethods?: Map<string, NotificationMethod>;
@@ -86,6 +93,27 @@ export class NotificationWatcher implements OnModuleInit {
     }
 
     this.logger.log('Notification interceptors installed');
+  }
+
+  /**
+   * Puts back what it replaced.
+   *
+   * The wrappers live on an object the application owns and keeps, so closing
+   * the module has to give it back. Otherwise the host goes on calling through
+   * a watcher whose collector is gone — and where a process builds the module
+   * more than once against the same object, as tests and `nest start --hmr` do,
+   * each round wraps the last: one call, one entry per layer.
+   */
+  onModuleDestroy(): void {
+    const service = this.notificationService as Record<string, unknown> | undefined;
+    if (!service || !this.originalMethods) {
+      return;
+    }
+
+    for (const [name, original] of this.originalMethods) {
+      service[name] = original;
+    }
+    this.originalMethods = undefined;
   }
 
   private wrapNotificationMethod(
