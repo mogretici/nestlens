@@ -93,12 +93,22 @@ your application less per load. See
 
 Every release is tested against this matrix in CI:
 
-| | Node 18 | Node 20 | Node 22 |
+| | Node 20 | Node 22 | Node 24 |
 | --- | --- | --- | --- |
 | **NestJS 9** | ✅ | ✅ | ✅ |
 | **NestJS 10** | ✅ | ✅ | ✅ |
-| **NestJS 11** | — | ✅ | ✅ |
-
-NestJS 11 requires Node 20 or newer, which is why that one cell is empty.
+| **NestJS 11** | ✅ | ✅ | ✅ |
 
 Both the Express and Fastify adapters are covered.
+
+### Node 18 is no longer supported
+
+`engines` now asks for **Node 20 or newer**. Node 18 reached end-of-life in
+April 2025 and stopped receiving security updates; the matrix above covers the
+versions that still do, including Node 24, which has been LTS since October 2025
+and was previously untested.
+
+Nothing in NestLens requires a Node 20 feature today, so an application still on
+Node 18 will most likely keep working — but it is no longer tested, and a future
+release may use something Node 18 does not have. If `npm install` now warns
+about the engine, the fix is to upgrade Node rather than to pin NestLens.

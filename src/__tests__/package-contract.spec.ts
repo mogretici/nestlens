@@ -31,6 +31,7 @@ const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'ut
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  engines?: { node?: string };
 };
 
 const declaredPackages = new Set([
@@ -259,6 +260,37 @@ describe('package contract', () => {
       .map((i) => `${typesPackageFor(i.packageName)} (needed by ${i.file})`);
 
     expect([...new Set(missing)].sort()).toEqual([]);
+  });
+
+  /**
+   * `engines` is a promise about which runtimes are supported, and the CI
+   * matrix is the evidence for it. They drifted once already: the matrix tested
+   * Node 18 and 20 long after both went end-of-life while Node 24, the current
+   * LTS, was never run at all.
+   *
+   * A version in `engines` that the matrix never exercises is untested, and a
+   * version the matrix exercises that `engines` excludes is a job proving
+   * something the package refuses to install on.
+   */
+  it('tests every Node version it claims to support, and claims every one it tests', () => {
+    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+    const matrix = workflow.match(/^\s*node:\s*\[([^\]]+)\]/m)?.[1];
+    expect(matrix).toBeDefined();
+
+    const tested = (matrix as string)
+      .split(',')
+      .map((value) => Number.parseInt(value.trim(), 10))
+      .sort((a, b) => a - b);
+    const minimum = Number.parseInt(
+      (packageJson.engines?.node ?? '').replace(/[^\d.]/g, '').split('.')[0] as string,
+      10,
+    );
+
+    expect(tested.length).toBeGreaterThan(0);
+    expect(Number.isNaN(minimum)).toBe(false);
+    // The floor of the matrix is what `engines` may promise: anything lower is
+    // a claim nothing backs.
+    expect(tested[0]).toBe(minimum);
   });
 
   it('keeps optional integrations out of module-scope imports', () => {

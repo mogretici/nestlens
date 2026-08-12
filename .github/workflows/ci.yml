@@ -65,7 +65,11 @@ jobs:
       fail-fast: false
       matrix:
         nestjs: [9, 10, 11]
-        node: [18, 20, 22]
+        # The Node versions still receiving security updates. 18 was dropped
+        # once it went end-of-life: testing a runtime nobody should be running
+        # costs a third of this matrix and proves nothing about the ones people
+        # are. 24 has been LTS since October 2025 and was untested until now.
+        node: [20, 22, 24]
         include:
           # Companion packages have their own peer ranges, so each NestJS
           # version is paired with the release an application on that version
@@ -76,10 +80,6 @@ jobs:
             schedule: 4
           - nestjs: 11
             schedule: 6
-        exclude:
-          # NestJS 11 requires Node >= 20.
-          - nestjs: 11
-            node: 18
 
     steps:
       - name: Checkout
