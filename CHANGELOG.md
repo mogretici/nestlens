@@ -1,3 +1,12 @@
+## [0.8.13](https://github.com/mogretici/nestlens/compare/v0.8.12...v0.8.13) (2026-08-12)
+
+
+### Bug Fixes
+
+* **api:** enforce the input limits that were only ever documented ([b7b3f89](https://github.com/mogretici/nestlens/commit/b7b3f8918892d50e5b81f8c98e6ae47fd73a890a))
+* **docs:** fail the build on a broken link instead of warning ([3d3a97b](https://github.com/mogretici/nestlens/commit/3d3a97b217843caa0beb452729612c1abcf64ef6))
+* **security:** mask entry payloads, as the architecture always described ([fc60e7c](https://github.com/mogretici/nestlens/commit/fc60e7c4656cf80dc3446121c4fe80c0333628dd))
+
 ## [0.8.12](https://github.com/mogretici/nestlens/compare/v0.8.11...v0.8.12) (2026-08-12)
 
 
