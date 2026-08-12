@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { STORAGE, StorageInterface } from '../../core/storage/storage.interface';
@@ -649,5 +650,107 @@ describe('CollectorService', () => {
       // Assert - fail-open behavior
       expect(service['buffer']).toHaveLength(1);
     });
+  });
+});
+
+/**
+ * What happens to the application when storage stops answering.
+ *
+ * NestLens runs inside someone else's process. Failed entries used to go back
+ * into a buffer with nothing bounding it, and every entry arriving after that
+ * started its own flush — three attempts with backoff, awaited on the caller's
+ * path. Measured against a storage that always throws: 300 entries took 60
+ * seconds and left all 300 in memory, growing. A tool that explains outages was
+ * amplifying them.
+ */
+describe('CollectorService when storage is unavailable', () => {
+  const brokenStorage = (): jest.Mocked<StorageInterface> =>
+    ({
+      save: jest.fn().mockRejectedValue(new Error('storage unavailable')),
+      saveBatch: jest.fn().mockRejectedValue(new Error('storage unavailable')),
+      updateFamilyHash: jest.fn(),
+    }) as unknown as jest.Mocked<StorageInterface>;
+
+  const bufferOf = (collector: CollectorService): Entry[] =>
+    (collector as unknown as { buffer: Entry[] }).buffer;
+
+  const collectMany = async (collector: CollectorService, count: number): Promise<void> => {
+    for (let index = 0; index < count; index++) {
+      await collector.collect('log', {
+        message: `entry ${index}`,
+        level: 'log',
+      } as never);
+    }
+  };
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps the buffer bounded instead of growing with every entry', async () => {
+    // Arrange
+    const collector = new CollectorService(brokenStorage(), { enabled: true } as NestLensConfig);
+
+    // Act - well past the limit
+    await collectMany(collector, 2500);
+
+    // Assert
+    expect(bufferOf(collector).length).toBeLessThanOrEqual(1000);
+
+    await collector.onModuleDestroy();
+  });
+
+  it('stops retrying on the caller path once storage is failing', async () => {
+    // Arrange
+    const storage = brokenStorage();
+    const collector = new CollectorService(storage, { enabled: true } as NestLensConfig);
+
+    // Act
+    await collectMany(collector, 500);
+
+    // Assert - one flush's worth of attempts, not one per entry. Counting the
+    // calls rather than timing them: the cost was three awaited attempts with
+    // backoff for every entry after the first hundred.
+    expect(storage.saveBatch.mock.calls.length).toBeLessThanOrEqual(3);
+
+    await collector.onModuleDestroy();
+  });
+
+  it('reports the outage once rather than once per attempt', async () => {
+    // Arrange
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const collector = new CollectorService(brokenStorage(), { enabled: true } as NestLensConfig);
+
+    // Act
+    await collectMany(collector, 500);
+    await collector.flush();
+
+    // Assert
+    const outageReports = error.mock.calls.filter((call) =>
+      String(call[0]).includes('Failed to flush entries'),
+    );
+    expect(outageReports).toHaveLength(1);
+
+    await collector.onModuleDestroy();
+  });
+
+  it('saves what it kept once storage answers again', async () => {
+    // Arrange
+    const storage = brokenStorage();
+    const collector = new CollectorService(storage, { enabled: true } as NestLensConfig);
+    await collectMany(collector, 150);
+    expect(bufferOf(collector).length).toBeGreaterThan(0);
+
+    // Act - storage recovers
+    storage.saveBatch.mockImplementation(async (entries) => entries as Entry[]);
+    await collector.flush();
+
+    // Assert
+    expect(bufferOf(collector)).toHaveLength(0);
+    expect(storage.saveBatch).toHaveBeenLastCalledWith(
+      expect.arrayContaining([expect.objectContaining({ type: 'log' })]),
+    );
+
+    await collector.onModuleDestroy();
   });
 });

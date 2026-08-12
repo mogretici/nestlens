@@ -41,9 +41,23 @@ The collector uses buffering to minimize database writes.
 
 ```typescript
 // In CollectorService (hard-coded constants)
-private readonly BUFFER_SIZE = 100;      // Entries before flush
-private readonly FLUSH_INTERVAL = 1000;  // 1 second
+private readonly BUFFER_SIZE = 100;           // Entries before flush
+private readonly FLUSH_INTERVAL = 1000;       // 1 second
+private readonly MAX_BUFFERED_ENTRIES = 1000; // Ceiling while storage is down
 ```
+
+### When storage stops answering
+
+Entries that could not be written are kept and retried, but only up to
+`MAX_BUFFERED_ENTRIES` — past that the oldest are dropped and counted. NestLens
+runs inside your process, and its data is disposable in a way your memory is
+not.
+
+While storage is failing, flushing moves entirely to the interval timer: an
+entry arriving during an outage is buffered and returns immediately rather than
+waiting on a write that is going to fail. One error is logged when the outage
+starts, and one line when storage answers again, reporting how many entries
+were dropped in between.
 
 :::note Not configurable
 `BUFFER_SIZE` and `FLUSH_INTERVAL` are `private readonly` constants on `CollectorService`. They are **not** exposed through `NestLensModule.forRoot(...)` and cannot be set via configuration. There is no config option for them today.

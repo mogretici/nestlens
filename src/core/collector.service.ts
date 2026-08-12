@@ -13,6 +13,26 @@ export class CollectorService implements OnModuleDestroy {
   private flushTimer: NodeJS.Timeout | null = null;
   private readonly BUFFER_SIZE = 100;
   private readonly FLUSH_INTERVAL = 1000; // 1 second
+  /**
+   * How many entries may wait for a storage that is not answering.
+   *
+   * Failed entries used to go back into the buffer with nothing bounding it, so
+   * an unreachable database turned into unbounded growth inside the application
+   * being watched — a debugging tool causing the outage it is there to explain.
+   * Ten flushes' worth is enough to ride out a blip; past that the oldest go,
+   * because NestLens's data is disposable and the application's memory is not.
+   */
+  private readonly MAX_BUFFERED_ENTRIES = 1000;
+  /**
+   * Set while storage is failing, so `collect()` stops flushing inline.
+   *
+   * Every entry arriving past the buffer threshold used to start its own flush,
+   * three attempts with backoff, awaited on the caller's path: ~200ms added to
+   * each monitored operation for as long as storage was down. The timer keeps
+   * retrying once a second instead.
+   */
+  private storageIsFailing = false;
+  private droppedEntries = 0;
   private isPaused = false;
   private pausedAt?: Date;
   private pauseReason?: string;
@@ -123,9 +143,11 @@ export class CollectorService implements OnModuleDestroy {
     }
 
     this.buffer.push(entry);
+    this.enforceBufferLimit();
 
-    // Flush if buffer is full
-    if (this.buffer.length >= this.BUFFER_SIZE) {
+    // Flush if buffer is full — unless storage is already failing, in which
+    // case the periodic timer retries and the caller is not made to wait.
+    if (this.buffer.length >= this.BUFFER_SIZE && !this.storageIsFailing) {
       await this.flush();
     }
   }
@@ -249,11 +271,41 @@ export class CollectorService implements OnModuleDestroy {
 
       // Notify real-time subscribers (SSE, alerting) after persistence
       savedEntries.forEach((entry) => this.emit(entry));
+
+      if (this.storageIsFailing) {
+        this.storageIsFailing = false;
+        this.logger.log(
+          this.droppedEntries > 0
+            ? `Storage is answering again (${this.droppedEntries} entries were dropped meanwhile)`
+            : 'Storage is answering again',
+        );
+        this.droppedEntries = 0;
+      }
     } catch (error) {
-      this.logger.error(`Failed to flush entries: ${error}`);
-      // Put entries back in buffer
+      // Reported once per outage rather than once per second.
+      if (!this.storageIsFailing) {
+        this.logger.error(`Failed to flush entries, will keep retrying: ${error}`);
+        this.storageIsFailing = true;
+      }
+
+      // Put entries back in buffer, oldest first, and let the limit decide what
+      // survives if storage stays down.
       this.buffer = [...entries, ...this.buffer];
+      this.enforceBufferLimit();
     }
+  }
+
+  /**
+   * Keeps the buffer within its bound, dropping the oldest entries first.
+   */
+  private enforceBufferLimit(): void {
+    const overflow = this.buffer.length - this.MAX_BUFFERED_ENTRIES;
+    if (overflow <= 0) {
+      return;
+    }
+
+    this.buffer.splice(0, overflow);
+    this.droppedEntries += overflow;
   }
 
   /**
