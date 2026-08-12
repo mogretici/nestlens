@@ -89,6 +89,36 @@ fingerprinted assets are served with a long-lived `Cache-Control` while
 your application less per load. See
 [performance](../advanced/performance.md#serving-the-dashboard).
 
+## The package now declares what it publishes
+
+NestLens ships an `exports` map. Two entry points are public:
+
+```ts
+import { NestLensModule } from 'nestlens';
+import { SqliteStorage } from 'nestlens/storage/sqlite';
+import { RedisStorage } from 'nestlens/storage/redis';
+```
+
+Everything else under `dist/` is internal and no longer importable. If you were
+reaching into the build layout — `nestlens/dist/core/storage/sqlite.storage` was
+the one this documentation suggested — switch to the entry point above; it is
+the same class.
+
+```diff
+- import { SqliteStorage } from 'nestlens/dist/core/storage/sqlite.storage';
++ import { SqliteStorage } from 'nestlens/storage/sqlite';
+```
+
+This is deliberately a pre-1.0 change. Without a map, every internal file was
+importable, and `1.0`'s promise to freeze the API would have frozen the folder
+structure with it — moving a service between directories would have become a
+breaking change.
+
+NestLens is published as **CommonJS** and stays that way. It loads correctly in
+an ESM application through Node's interop (`import { NestLensModule } from
+'nestlens'` works), and NestJS itself is CommonJS, so a dual build would add a
+second copy of the decorators and their metadata for no gain.
+
 ## Verified NestJS and Node versions
 
 Every release is tested against this matrix in CI:

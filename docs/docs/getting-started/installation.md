@@ -10,6 +10,27 @@ sidebar_position: 1
 - NestJS >= 9.0.0 (supports 9, 10, 11)
 - TypeScript >= 4.7
 
+Every release is tested against Node 20, 22 and 24 on each of those NestJS
+versions, with both the Express and Fastify adapters.
+
+## Entry points
+
+The package publishes three:
+
+```ts
+import { NestLensModule } from 'nestlens';
+import { SqliteStorage } from 'nestlens/storage/sqlite';
+import { RedisStorage } from 'nestlens/storage/redis';
+```
+
+The two storage classes have their own entry points so that importing NestLens
+never loads `better-sqlite3` or `ioredis` — you only pay for the driver you use.
+Most applications never need them directly; `storage.driver` in the
+configuration is enough.
+
+NestLens is published as CommonJS. An ESM application can import it normally;
+Node's interop handles it.
+
 ## Install via npm
 
 ```bash npm2yarn

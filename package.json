@@ -4,6 +4,32 @@
   "description": "Laravel Telescope-like debugging and monitoring tool for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./storage/sqlite": {
+      "types": "./dist/core/storage/sqlite.storage.d.ts",
+      "default": "./dist/core/storage/sqlite.storage.js"
+    },
+    "./storage/redis": {
+      "types": "./dist/core/storage/redis.storage.d.ts",
+      "default": "./dist/core/storage/redis.storage.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "storage/sqlite": [
+        "dist/core/storage/sqlite.storage.d.ts"
+      ],
+      "storage/redis": [
+        "dist/core/storage/redis.storage.d.ts"
+      ]
+    }
+  },
+  "type": "commonjs",
   "files": [
     "dist",
     "README.md",

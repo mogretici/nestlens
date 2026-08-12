@@ -32,6 +32,10 @@ const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'ut
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   engines?: { node?: string };
+  main?: string;
+  types?: string;
+  exports?: Record<string, string | Record<string, string>>;
+  typesVersions?: Record<string, Record<string, string[]>>;
 };
 
 const declaredPackages = new Set([
@@ -291,6 +295,67 @@ describe('package contract', () => {
     // The floor of the matrix is what `engines` may promise: anything lower is
     // a claim nothing backs.
     expect(tested[0]).toBe(minimum);
+  });
+
+  /**
+   * The `exports` map is the published surface. Before it existed, every file
+   * under `dist/` was importable, which meant 1.0's "the API is frozen" would
+   * have frozen the build layout too — every internal service, reachable and
+   * therefore promised.
+   *
+   * Now that the map decides, it has to stay true: an entry pointing at a file
+   * that no longer exists is a consumer's `ERR_PACKAGE_PATH_NOT_EXPORTED` at
+   * install time, and this repo cannot notice on its own because it never
+   * imports itself by name.
+   */
+  describe('published entry points', () => {
+    const exportsMap = packageJson.exports ?? {};
+
+    /** `./dist/core/storage/redis.storage.js` → `src/core/storage/redis.storage.ts` */
+    const sourceFor = (distPath: string): string =>
+      join(REPO_ROOT, distPath.replace(/^\.\//, '').replace(/^dist\//, 'src/')).replace(
+        /\.(js|d\.ts)$/,
+        '.ts',
+      );
+
+    const subpathTargets = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json',
+    );
+
+    it('publishes a root entry point that matches main and types', () => {
+      const root = exportsMap['.'];
+
+      expect(typeof root).toBe('object');
+      expect((root as Record<string, string>).default).toBe(`./${packageJson.main}`);
+      expect((root as Record<string, string>).types).toBe(`./${packageJson.types}`);
+    });
+
+    it('has at least one subpath beyond the root, so the map is doing something', () => {
+      expect(subpathTargets.length).toBeGreaterThan(1);
+    });
+
+    it.each(subpathTargets)('%s resolves to a file that exists', (_subpath, target) => {
+      const paths = typeof target === 'string' ? [target] : Object.values(target);
+
+      for (const path of paths) {
+        expect({ path, exists: existsSync(sourceFor(path)) }).toEqual({ path, exists: true });
+      }
+    });
+
+    /**
+     * TypeScript ignores `exports` under the `node`/`node10` resolution that
+     * NestJS's own tsconfig still uses, so a subpath without a `typesVersions`
+     * entry resolves at runtime and fails to type-check — the worst of the two.
+     */
+    it('mirrors every subpath in typesVersions, for node10 type resolution', () => {
+      const declared = Object.keys(packageJson.typesVersions?.['*'] ?? {}).sort();
+      const expected = subpathTargets
+        .map(([subpath]) => subpath.replace(/^\.\//, ''))
+        .filter((subpath) => subpath !== '.')
+        .sort();
+
+      expect(declared).toEqual(expected);
+    });
   });
 
   it('keeps optional integrations out of module-scope imports', () => {

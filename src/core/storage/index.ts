@@ -12,6 +12,7 @@ export { MemoryStorage } from './memory.storage';
 //   import { createStorage } from 'nestlens';
 //   const storage = await createStorage({ driver: 'sqlite' });
 //
-// Or import directly if you need the class:
-//   import { SqliteStorage } from 'nestlens/dist/core/storage/sqlite.storage';
-//   import { RedisStorage } from 'nestlens/dist/core/storage/redis.storage';
+// Or import the class from its own entry point, which is what the package's
+// `exports` map publishes it as:
+//   import { SqliteStorage } from 'nestlens/storage/sqlite';
+//   import { RedisStorage } from 'nestlens/storage/redis';
