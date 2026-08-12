@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { Observable, Subject } from 'rxjs';
 import { Entry, EntryType } from '../types';
+import { DataMaskerService } from './data-masker.service';
 import { currentRequestId } from './request-context';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
 import { TagService } from './tag.service';
@@ -59,6 +60,8 @@ export class CollectorService implements OnModuleDestroy {
     private readonly storage: StorageInterface,
     @Inject(NESTLENS_CONFIG)
     private readonly config: NestLensConfig,
+    @Optional()
+    private readonly dataMasker?: DataMaskerService,
     @Optional()
     private readonly tagService?: TagService,
     @Optional()
@@ -140,13 +143,15 @@ export class CollectorService implements OnModuleDestroy {
       requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
 
-    // Apply filter
+    // The filter callback runs in the application's own process against its own
+    // data, so it sees the entry as recorded; what gets buffered — and from
+    // there stored, streamed and posted to webhooks — is masked.
     const shouldCollect = await this.applyFilter(entry);
     if (!shouldCollect) {
       return;
     }
 
-    this.buffer.push(entry);
+    this.buffer.push(this.mask(entry));
     this.enforceBufferLimit();
 
     // Flush if buffer is full — unless storage is already failing, in which
@@ -184,7 +189,7 @@ export class CollectorService implements OnModuleDestroy {
     }
 
     try {
-      const savedEntry = await this.storage.save(entry);
+      const savedEntry = await this.storage.save(this.mask(entry));
 
       // Apply auto-tagging and family hash after saving
       await this.applyAutoTagging(savedEntry);
@@ -242,6 +247,30 @@ export class CollectorService implements OnModuleDestroy {
     }
     // This should never be reached, but TypeScript needs it
     throw new Error('Unreachable code');
+  }
+
+  /**
+   * Masks an entry's payload on its way in.
+   *
+   * Here rather than in each watcher: this is the one place every entry passes
+   * through, so a payload cannot reach storage — or the live tail, or a webhook
+   * — unmasked because a watcher forgot. It is also the flow the architecture
+   * note has always described: watcher → collect() → DataMasker → storage.
+   */
+  private mask<E extends Entry>(entry: E): E {
+    if (!this.dataMasker) {
+      return entry;
+    }
+
+    const masked = this.dataMasker.maskBody(entry.payload) as Record<string, unknown>;
+
+    // An exception's stack is part of its payload and is the one field the
+    // masker treats by shape rather than by name.
+    if (masked && typeof masked === 'object' && typeof masked.stack === 'string') {
+      masked.stack = this.dataMasker.sanitizeStackTrace(masked.stack);
+    }
+
+    return { ...entry, payload: masked } as E;
   }
 
   /**

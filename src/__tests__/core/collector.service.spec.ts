@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { DataMaskerService } from '../../core/data-masker.service';
 import { currentRequestId, runInRequestContext } from '../../core/request-context';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -849,6 +850,97 @@ describe('CollectorService request correlation', () => {
 
     // Assert
     expect(recorded).toEqual(['fast', 'slow']);
+
+    await collector.onModuleDestroy();
+  });
+});
+
+/**
+ * Masking on the way in.
+ *
+ * The architecture note describes the flow as watcher → collect() → DataMasker
+ * → storage, and the documentation says `security.dataMasking` configures "the
+ * global DataMaskerService … across watchers". Neither was true: the service was
+ * never provided to anything, no watcher called it, and a request body went to
+ * storage exactly as it arrived. Measured against the example application, a
+ * POST carrying `{"password":"hunter2"}` was stored with the password readable.
+ *
+ * Doing it here rather than in each watcher is the point: an entry cannot reach
+ * storage, the live tail or a webhook unmasked because a watcher forgot.
+ */
+describe('CollectorService masking', () => {
+  const savingStorage = (): jest.Mocked<StorageInterface> =>
+    ({
+      save: jest.fn().mockImplementation(async (e) => e),
+      saveBatch: jest.fn().mockImplementation(async (entries) => entries),
+      updateFamilyHash: jest.fn(),
+    }) as unknown as jest.Mocked<StorageInterface>;
+
+  const collectorWithMasker = (storage: jest.Mocked<StorageInterface>): CollectorService =>
+    new CollectorService(storage, { enabled: true } as NestLensConfig, new DataMaskerService());
+
+  it('masks a payload before it reaches storage', async () => {
+    // Arrange
+    const storage = savingStorage();
+    const collector = collectorWithMasker(storage);
+
+    // Act
+    await collector.collect('request', {
+      method: 'POST',
+      url: '/users',
+      path: '/users',
+      statusCode: 201,
+      duration: 5,
+      memory: 1,
+      body: { email: 'a@b.com', password: 'hunter2', accessToken: 'tok_live_1' },
+    } as never);
+    await collector.flush();
+
+    // Assert
+    const [saved] = storage.saveBatch.mock.calls[0][0] as unknown as [
+      { payload: { body: unknown } },
+    ];
+    expect(saved.payload.body).toEqual({
+      email: 'a@b.com',
+      password: '***REDACTED***',
+      accessToken: '***REDACTED***',
+    });
+
+    await collector.onModuleDestroy();
+  });
+
+  it('masks the immediate path too, which is where exceptions go', async () => {
+    // Arrange
+    const storage = savingStorage();
+    const collector = collectorWithMasker(storage);
+
+    // Act
+    await collector.collectImmediate('exception', {
+      name: 'Error',
+      message: 'boom',
+      context: { password: 'hunter2' },
+    } as never);
+
+    // Assert
+    expect(JSON.stringify(storage.save.mock.calls[0][0])).not.toContain('hunter2');
+
+    await collector.onModuleDestroy();
+  });
+
+  it('leaves the payload alone when no masker is configured', async () => {
+    // Arrange - the service is optional; without it nothing should throw
+    const storage = savingStorage();
+    const collector = new CollectorService(storage, { enabled: true } as NestLensConfig);
+
+    // Act
+    await collector.collect('log', { message: 'plain', level: 'log' } as never);
+    await collector.flush();
+
+    // Assert
+    const [saved] = storage.saveBatch.mock.calls[0][0] as unknown as [
+      { payload: { message: string } },
+    ];
+    expect(saved.payload.message).toBe('plain');
 
     await collector.onModuleDestroy();
   });

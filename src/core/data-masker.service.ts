@@ -14,6 +14,14 @@ export interface DataMaskerConfig {
   maskReplacement?: string;
   /** Whether to sanitize stack traces in production */
   sanitizeStackTraces?: boolean;
+  /**
+   * How much of a stack trace to keep, as documented under
+   * `security.stackTraceSanitization`.
+   *
+   * `none` keeps it whole, `partial` drops absolute paths and keeps the first
+   * frames, `full` removes it. Overrides `sanitizeStackTraces` when given.
+   */
+  stackTraceSanitization?: StackTraceSanitization;
 }
 
 /**
@@ -70,6 +78,8 @@ const DEFAULT_SENSITIVE_USER_FIELDS = [
   'secret',
 ];
 
+export type StackTraceSanitization = 'none' | 'partial' | 'full';
+
 const DEFAULT_MASK = '***REDACTED***';
 
 /**
@@ -112,6 +122,7 @@ export class DataMaskerService {
   private readonly sensitiveUserFields: readonly string[];
   private readonly maskReplacement: string;
   private readonly sanitizeStackTraces: boolean;
+  private readonly stackTraceSanitization: StackTraceSanitization;
   private readonly isProduction: boolean;
 
   constructor(config?: DataMaskerConfig) {
@@ -124,6 +135,8 @@ export class DataMaskerService {
     this.sensitiveUserFields = userFields.map(normalizeFieldName);
     this.maskReplacement = config?.maskReplacement ?? DEFAULT_MASK;
     this.sanitizeStackTraces = config?.sanitizeStackTraces ?? true;
+    this.stackTraceSanitization =
+      config?.stackTraceSanitization ?? (this.sanitizeStackTraces ? 'partial' : 'none');
     this.isProduction = process.env.NODE_ENV === 'production';
   }
 
@@ -237,7 +250,13 @@ export class DataMaskerService {
       return undefined;
     }
 
-    if (!this.sanitizeStackTraces || !this.isProduction) {
+    if (this.stackTraceSanitization === 'full') {
+      return undefined;
+    }
+
+    // `partial` is about what leaves a production machine; in development the
+    // paths are the useful part.
+    if (this.stackTraceSanitization === 'none' || !this.isProduction) {
       return stack;
     }
 
