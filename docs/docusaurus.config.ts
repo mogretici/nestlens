@@ -46,8 +46,15 @@ const config: Config = {
   organizationName: 'mogretici',
   projectName: 'nestlens',
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  // A warning is not a check: the site deploys either way, so a link that stops
+  // resolving ships and nobody hears about it until a reader finds it.
+  onBrokenLinks: 'throw',
+  markdown: {
+    hooks: {
+      // Moved out of the top level, which Docusaurus v4 removes.
+      onBrokenMarkdownLinks: 'throw',
+    },
+  },
   trailingSlash: false,
 
   i18n: {
