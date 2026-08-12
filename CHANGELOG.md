@@ -1,3 +1,10 @@
+## [0.8.10](https://github.com/mogretici/nestlens/compare/v0.8.9...v0.8.10) (2026-08-12)
+
+
+### Bug Fixes
+
+* attribute entries to the request that caused them ([b6e1d40](https://github.com/mogretici/nestlens/commit/b6e1d40e09e9dbb9cbd470c09d0c834adb066ed2))
+
 ## [0.8.9](https://github.com/mogretici/nestlens/compare/v0.8.8...v0.8.9) (2026-08-12)
 
 
