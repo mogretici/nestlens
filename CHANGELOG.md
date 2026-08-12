@@ -1,3 +1,11 @@
+## [0.8.8](https://github.com/mogretici/nestlens/compare/v0.8.7...v0.8.8) (2026-08-12)
+
+
+### Bug Fixes
+
+* **core:** stop amplifying a storage outage inside the host application ([eebb021](https://github.com/mogretici/nestlens/commit/eebb02160ec30fbf4c58fe9d6ba80b831d5df3cb))
+* **security:** mask fields whose names contain a sensitive term ([f5f66fe](https://github.com/mogretici/nestlens/commit/f5f66fe6193e9d9e457007e53dba482eee0b79e8))
+
 ## [0.8.7](https://github.com/mogretici/nestlens/compare/v0.8.6...v0.8.7) (2026-08-11)
 
 
