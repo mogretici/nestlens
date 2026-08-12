@@ -112,6 +112,30 @@ time you bump your API version.
 See [Basic Configuration](/docs/configuration/basic-config) for excluding
 NestLens from the prefix.
 
+### Can NestLens be loaded lazily?
+
+No — import it in a module that Nest loads at startup.
+
+NestLens contributes controllers (the dashboard and its API) and global
+enhancers (the request interceptor and the exception filter). Nest registers
+neither for a module loaded through `LazyModuleLoader`: the module instantiates
+without error, and then the dashboard answers 404 while the watchers record
+nothing.
+
+```typescript
+// Does not work — no error, no dashboard.
+const ref = await lazyModuleLoader.load(() => NestLensModule.forRoot({}));
+
+// Works.
+@Module({ imports: [NestLensModule.forRoot({})] })
+export class AppModule {}
+```
+
+If the reason for loading it lazily is to keep it out of production, use
+`enabled` or the environment gating in
+[authorization](/docs/configuration/authorization.md) instead — both leave the
+module in the graph and cost nothing when off.
+
 ### Does NestLens record its own requests?
 
 No. The dashboard, its REST API and the event stream are all skipped, so
