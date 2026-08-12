@@ -118,9 +118,10 @@ No — import it in a module that Nest loads at startup.
 
 NestLens contributes controllers (the dashboard and its API) and global
 enhancers (the request interceptor and the exception filter). Nest registers
-neither for a module loaded through `LazyModuleLoader`: the module instantiates
-without error, and then the dashboard answers 404 while the watchers record
-nothing.
+neither for a module loaded through `LazyModuleLoader`. On NestJS 11 the module
+instantiates without complaint and the dashboard then answers 404 while the
+watchers record nothing; on NestJS 9 the load is refused outright with a
+dependency-resolution error. Either way there is no dashboard.
 
 ```typescript
 // Does not work — no error, no dashboard.

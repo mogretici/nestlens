@@ -23,23 +23,30 @@ import { NestLensModule } from '../../nestlens.module';
 class HostModule {}
 
 describe('NestLens loaded through LazyModuleLoader', () => {
-  it('loads without throwing, but its routes are never registered', async () => {
+  /**
+   * How it fails depends on the NestJS version — 9 refuses the load outright
+   * with a dependency-resolution error, 11 loads the module happily — but the
+   * end state is the same on all of them, and it is the end state that matters
+   * to somebody trying this. Asserting on the exception would pin one version's
+   * behaviour and call the others a regression.
+   */
+  it('never ends up serving the dashboard', async () => {
     // Arrange
     const app = await NestFactory.create(HostModule, { logger: false });
     await app.init();
-
-    // Act
     const loader = app.get(LazyModuleLoader);
-    const lazyRef = await loader.load(() => NestLensModule.forRoot({ watchers: {} }));
 
-    // Assert — the module instantiates, so its services are reachable through
-    // the returned reference…
-    expect(lazyRef).toBeDefined();
+    // Act — the rejection on NestJS 9 is swallowed on purpose: both outcomes
+    // are "not supported", and the assertion below is what distinguishes a
+    // working installation from this one.
+    await loader.load(() => NestLensModule.forRoot({ watchers: {} })).catch(() => undefined);
 
-    // …but nothing was routed: Nest does not register controllers of a lazily
-    // loaded module, so the dashboard is not there.
+    // Assert
     const response = await request(app.getHttpServer()).get('/nestlens');
-    expect(response.status).toBe(404);
+    expect({ dashboard: response.status, everRouted: response.status !== 404 }).toEqual({
+      dashboard: 404,
+      everRouted: false,
+    });
 
     await app.close();
   });
