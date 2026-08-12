@@ -107,6 +107,26 @@ interface SqliteStorageConfig {
 { filename: `nestlens-${process.env.NODE_ENV}.db` }
 ```
 
+### Upgrading NestLens with an existing database
+
+The database file outlives the version that wrote it, so NestLens migrates it in
+place on startup: missing columns are added, missing indexes are created, and
+the file is stamped with the schema version it now holds (`PRAGMA user_version`).
+Nothing is dropped and nothing is rewritten, so entries recorded by an older
+release stay readable.
+
+Going the other way — opening a file with an **older** NestLens than the one
+that wrote it — logs a warning:
+
+```
+[SqliteStorage] .cache/nestlens.db was written by a newer NestLens
+(schema 3, this version reads 2).
+```
+
+It still opens and still reads, as far as that version understands the file, but
+anything a newer schema added is invisible to it. If you have deliberately
+downgraded, point `filename` at a new file instead.
+
 ### WAL Mode
 
 SQLite is automatically configured with Write-Ahead Logging (WAL) mode for:
