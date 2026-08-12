@@ -89,6 +89,24 @@ fingerprinted assets are served with a long-lived `Cache-Control` while
 your application less per load. See
 [performance](../advanced/performance.md#serving-the-dashboard).
 
+## Two storage fixes worth knowing about
+
+**Pruning on SQLite deleted more than it was asked to.** SQLite writes
+`created_at` as `2026-08-12 21:55:45` while a JavaScript `Date` arrives as
+`2026-08-12T21:25:45.292Z`, and the two were compared as text: the eleventh
+character decides, a space sorts before a `T`, and so every entry recorded on
+the cutoff's date or earlier read as older than the cutoff whatever its time.
+Automatic pruning therefore emptied the day's entries, and the same comparison
+made date-range filtering in the dashboard wrong. Both now compare through
+SQLite's `datetime()`. No action needed; entries already deleted are gone.
+
+**Monitored tags are normalised.** Entry tags have always been stored upper-cased
+so that `slow` and `SLOW` are one tag; monitored tags were stored exactly as
+typed, and the dashboard looks a monitored tag up among the entry tags to count
+it. Monitoring `checkout` therefore always showed **0 entries**, on every
+backend. Monitored tags now go through the same normalisation, and the count
+matches on both sides regardless of what is already stored.
+
 ## The package now declares what it publishes
 
 NestLens ships an `exports` map. Two entry points are public:

@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Entry, MonitoredTag, TagWithCount } from '../types';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
+import { normalizeTag } from './storage/tag-normalization';
 
 /**
  * Service for managing tags and auto-tagging entries
@@ -665,11 +666,13 @@ export class TagService {
     const monitoredTags = await this.storage.getMonitoredTags();
     const allTags = await this.storage.getAllTags();
 
-    const tagCountMap = new Map(allTags.map((t) => [t.tag, t.count]));
+    // Both sides are normalised here as well as on the way in, so a tag stored
+    // before monitored tags were normalised still finds its count.
+    const tagCountMap = new Map(allTags.map((t) => [normalizeTag(t.tag), t.count]));
 
     return monitoredTags.map((tag) => ({
       ...tag,
-      count: tagCountMap.get(tag.tag) ?? 0,
+      count: tagCountMap.get(normalizeTag(tag.tag)) ?? 0,
     }));
   }
 }

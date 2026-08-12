@@ -480,7 +480,8 @@ describe('RedisStorage', () => {
 
       // Assert
       expect(monitored.id).toBe(1);
-      expect(monitored.tag).toBe('critical');
+      // Normalised on the way in, like entry tags.
+      expect(monitored.tag).toBe('CRITICAL');
       expect(monitored.createdAt).toBeDefined();
 
       await storage.close();

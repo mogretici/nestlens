@@ -1234,7 +1234,8 @@ describe('SqliteStorage', () => {
 
       // Assert
       expect(result.id).toBeDefined();
-      expect(result.tag).toBe('important');
+      // Normalised on the way in, like entry tags.
+      expect(result.tag).toBe('IMPORTANT');
       expect(result.createdAt).toBeDefined();
     });
 
@@ -1248,8 +1249,8 @@ describe('SqliteStorage', () => {
 
       // Assert
       expect(result).toHaveLength(2);
-      expect(result.map((t) => t.tag)).toContain('alpha');
-      expect(result.map((t) => t.tag)).toContain('beta');
+      expect(result.map((t) => t.tag)).toContain('ALPHA');
+      expect(result.map((t) => t.tag)).toContain('BETA');
     });
 
     it('should remove monitored tag', async () => {
@@ -1263,7 +1264,7 @@ describe('SqliteStorage', () => {
 
       // Assert
       expect(result).toHaveLength(1);
-      expect(result[0].tag).toBe('keep');
+      expect(result[0].tag).toBe('KEEP');
     });
 
     it('should handle duplicate monitored tags', async () => {

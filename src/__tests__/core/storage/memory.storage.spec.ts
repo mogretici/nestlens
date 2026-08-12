@@ -289,8 +289,9 @@ describe('MemoryStorage', () => {
       const monitored = await storage.addMonitoredTag('important');
       const all = await storage.getMonitoredTags();
 
-      // Assert
-      expect(monitored.tag).toBe('important');
+      // Assert — normalised on the way in, like entry tags, so a monitored tag
+      // and the entries carrying it are the same string.
+      expect(monitored.tag).toBe('IMPORTANT');
       expect(monitored.id).toBeDefined();
       expect(all).toHaveLength(1);
     });

@@ -14,6 +14,7 @@ import {
 } from '../../types';
 import { matchesEntryFilters } from './entry-filter';
 import { StorageInterface } from './storage.interface';
+import { normalizeTag } from './tag-normalization';
 import { RedisStorageConfig } from '../../nestlens.config';
 
 /**
@@ -671,7 +672,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   // ==================== Monitored Tags ====================
 
-  async addMonitoredTag(tag: string): Promise<MonitoredTag> {
+  async addMonitoredTag(rawTag: string): Promise<MonitoredTag> {
+    const tag = normalizeTag(rawTag);
     const client = this.getClient();
     const existing = await client.hget(this.key('monitored'), tag);
 
@@ -690,9 +692,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     return monitored;
   }
 
-  async removeMonitoredTag(tag: string): Promise<void> {
+  async removeMonitoredTag(rawTag: string): Promise<void> {
     const client = this.getClient();
-    await client.hdel(this.key('monitored'), tag);
+    await client.hdel(this.key('monitored'), normalizeTag(rawTag));
   }
 
   async getMonitoredTags(): Promise<MonitoredTag[]> {

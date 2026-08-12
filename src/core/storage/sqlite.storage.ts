@@ -15,6 +15,7 @@ import {
   TagWithCount,
 } from '../../types';
 import { StorageInterface } from './storage.interface';
+import { normalizeTag } from './tag-normalization';
 
 /**
  * Database row type for nestlens_entries table
@@ -246,13 +247,17 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       params.push(filter.requestId);
     }
 
+    // `datetime()` on both sides: SQLite writes CURRENT_TIMESTAMP as
+    // "2026-08-12 21:55:45" and a Date arrives as "2026-08-12T21:25:45.292Z",
+    // so comparing them as text compares a space against a "T" — every row
+    // from today or earlier reads as older than any cutoff today. See prune().
     if (filter.from) {
-      sql += ' AND created_at >= ?';
+      sql += ' AND datetime(created_at) >= datetime(?)';
       params.push(filter.from.toISOString());
     }
 
     if (filter.to) {
-      sql += ' AND created_at <= ?';
+      sql += ' AND datetime(created_at) <= datetime(?)';
       params.push(filter.to.toISOString());
     }
 
@@ -416,14 +421,28 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     };
   }
 
+  /**
+   * Both sides go through `datetime()` before they are compared.
+   *
+   * SQLite stores `CURRENT_TIMESTAMP` as `2026-08-12 21:55:45` and a JavaScript
+   * Date arrives as `2026-08-12T21:25:45.292Z`. Compared as text — which is
+   * what `created_at < ?` does — the eleventh character decides: a space sorts
+   * before a "T", so every row whose date is the cutoff's date or earlier reads
+   * as older than the cutoff whatever its time. Pruning anything therefore
+   * pruned everything recorded that day, including entries seconds old.
+   */
   async prune(before: Date): Promise<number> {
-    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE created_at < ?');
+    const stmt = this.db.prepare(
+      'DELETE FROM nestlens_entries WHERE datetime(created_at) < datetime(?)',
+    );
     const result = stmt.run(before.toISOString());
     return result.changes;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
-    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE type = ? AND created_at < ?');
+    const stmt = this.db.prepare(
+      'DELETE FROM nestlens_entries WHERE type = ? AND datetime(created_at) < datetime(?)',
+    );
     const result = stmt.run(type, before.toISOString());
     return result.changes;
   }
@@ -1137,7 +1156,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
   // ==================== Monitored Tags ====================
 
-  async addMonitoredTag(tag: string): Promise<MonitoredTag> {
+  async addMonitoredTag(rawTag: string): Promise<MonitoredTag> {
+    const tag = normalizeTag(rawTag);
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO nestlens_monitored_tags (tag)
       VALUES (?)
@@ -1156,11 +1176,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     };
   }
 
-  async removeMonitoredTag(tag: string): Promise<void> {
+  async removeMonitoredTag(rawTag: string): Promise<void> {
     const stmt = this.db.prepare(`
       DELETE FROM nestlens_monitored_tags WHERE tag = ?
     `);
-    stmt.run(tag);
+    stmt.run(normalizeTag(rawTag));
   }
 
   async getMonitoredTags(): Promise<MonitoredTag[]> {

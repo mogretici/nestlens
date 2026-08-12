@@ -13,6 +13,7 @@ import {
 } from '../../types';
 import { matchesEntryFilters } from './entry-filter';
 import { StorageInterface } from './storage.interface';
+import { normalizeTag } from './tag-normalization';
 import { MemoryStorageConfig } from '../../nestlens.config';
 
 /**
@@ -430,7 +431,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
   // ==================== Monitored Tags ====================
 
-  async addMonitoredTag(tag: string): Promise<MonitoredTag> {
+  async addMonitoredTag(rawTag: string): Promise<MonitoredTag> {
+    const tag = normalizeTag(rawTag);
     const existing = this.monitoredTags.get(tag);
     if (existing) {
       return existing;
@@ -446,8 +448,8 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     return monitored;
   }
 
-  async removeMonitoredTag(tag: string): Promise<void> {
-    this.monitoredTags.delete(tag);
+  async removeMonitoredTag(rawTag: string): Promise<void> {
+    this.monitoredTags.delete(normalizeTag(rawTag));
   }
 
   async getMonitoredTags(): Promise<MonitoredTag[]> {
