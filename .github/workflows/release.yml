@@ -16,6 +16,8 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Checkout
@@ -45,6 +47,35 @@ jobs:
         run: npm run build
 
       - name: Release
+        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
+
+      # semantic-release writes the released version into package.json before
+      # publishing, so this is the version that just went out — or, when nothing
+      # was released, the one already on npm, which is still worth checking.
+      - name: Read the released version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+  # Everything above tests the source tree. This installs what npm actually
+  # serves into an empty project and opens it — the check that was done by hand
+  # after 0.8.0 shipped a dashboard that was blank in a browser while every
+  # suite passed.
+  smoke:
+    name: Smoke test the published package
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ${{ needs.release.outputs.version }} from npm and boot it
+        run: node scripts/smoke-published-package.mjs ${{ needs.release.outputs.version }}

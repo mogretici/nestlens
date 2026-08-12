@@ -97,7 +97,7 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
 
 ### Dashboard (`dashboard/src/`)
 - React 18 with React Router for navigation
-- Fetches data from `/nestlens/__nestlens__/entries` API
+- Fetches data from `/nestlens/__nestlens__/api/*` (the mount point, then the API prefix, then `api`)
 - Components in `components/`, pages in `pages/`
 - Types mirror backend Entry types in `types.ts`
 
@@ -173,6 +173,13 @@ it is no longer required for Apollo or Mercurius.
   production project can check is that the bytes leaving the package are
   correct — 0.8.0 served every script as `{"type":"Buffer","data":[…]}` and
   not one existing test noticed.
+- `npm run test:smoke` installs the **published** package into a throwaway
+  project, boots a real NestJS application against it and checks the dashboard,
+  an asset and the API. `--tarball <path>` runs it against a local
+  `npm pack` output before publishing. It runs automatically after every
+  release (`.github/workflows/release.yml`); nothing else in the repository
+  tests what npm actually serves, which is how 0.8.0 shipped a dashboard that
+  was blank in a browser with every suite green.
 - Lint, type check, library tests and dashboard tests run on every push and
   pull request (`.github/workflows/ci.yml`) — about two minutes
 - E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
