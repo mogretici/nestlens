@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/mogretici/nestlens/compare/v0.9.0...v0.9.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **docs:** build the documentation site in CI, where it can fail usefully ([9d416dc](https://github.com/mogretici/nestlens/commit/9d416dce047d620a068a4d9f2a398e385c2a5d74))
+
 # [0.9.0](https://github.com/mogretici/nestlens/compare/v0.8.13...v0.9.0) (2026-08-13)
 
 
