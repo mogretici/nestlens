@@ -129,3 +129,31 @@ jobs:
 
       - name: Run library tests
         run: npm test
+
+  # The documentation site is part of what ships — every change is supposed to
+  # arrive with its docs — and nothing here built it: a broken build surfaced as
+  # a failed Vercel deployment after the fact. It also fails on a broken link,
+  # which is how a moved page gets caught.
+  docs:
+    name: Documentation site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install documentation dependencies
+        run: npm ci
+        working-directory: docs
+
+      - name: Build
+        run: npm run build
+        working-directory: docs

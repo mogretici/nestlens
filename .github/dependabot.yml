@@ -22,9 +22,10 @@ updates:
       # noise, together they are one review with one CI run.
       routine:
         update-types: [minor, patch]
-      # Majors arrive on their own — each needs its own read of the changelog.
-      major:
-        update-types: [major]
+    # Majors are deliberately ungrouped: one per pull request. The first run
+    # batched twenty-three of them, and a single unresolvable pair — ioredis 6
+    # against the version its test double supports — failed the whole batch.
+    # One changelog, one review, one merge.
     ignore:
       # The peer range is deliberately wide; the version installed here is a
       # test fixture, and bumping it would narrow what CI proves.
