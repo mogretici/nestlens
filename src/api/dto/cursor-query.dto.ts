@@ -34,9 +34,6 @@ const ENTRY_TYPES: EntryType[] = [
   'graphql',
 ];
 
-/** Names that reach an object's prototype rather than its own properties. */
-const UNSAFE_KEYS = ['__proto__', 'constructor', 'prototype'];
-
 /**
  * Complete cursor query DTO that combines pagination with all filter types.
  * Replaces 50+ individual @Query parameters with a single typed DTO.
@@ -336,24 +333,75 @@ export class CursorQueryDto {
   private static readonly PAGINATION_KEYS = ['type', 'limit', 'beforeSequence', 'afterSequence'];
 
   /**
+   * The filters that may be read off a request, named one by one.
+   *
+   * The alternative — copying every own property of this object — puts a key
+   * that came from a query string into an object write, and no amount of
+   * refusing `__proto__` afterwards makes that shape safe to read. Naming them
+   * is also what lets `filter-key-coverage.spec.ts` prove the list matches the
+   * properties this DTO declares, so a filter added later cannot go missing.
+   */
+  private static readonly FILTER_KEYS = [
+    'levels',
+    'contexts',
+    'queryTypes',
+    'sources',
+    'slow',
+    'methods',
+    'paths',
+    'statuses',
+    'controllers',
+    'hostnames',
+    'ips',
+    'names',
+    'resolved',
+    'eventNames',
+    'scheduleStatuses',
+    'scheduleNames',
+    'jobStatuses',
+    'jobNames',
+    'queues',
+    'cacheOperations',
+    'mailStatuses',
+    'redisStatuses',
+    'redisCommands',
+    'modelActions',
+    'entities',
+    'modelSources',
+    'notificationTypes',
+    'notificationStatuses',
+    'viewFormats',
+    'viewStatuses',
+    'commandStatuses',
+    'commandNames',
+    'gateNames',
+    'gateResults',
+    'batchStatuses',
+    'batchOperations',
+    'dumpStatuses',
+    'dumpOperations',
+    'dumpFormats',
+    'operationTypes',
+    'operationNames',
+    'hasErrors',
+    'hasN1',
+    'tags',
+    'search',
+  ] as const;
+
+  /**
    * Convert DTO to the filters object expected by storage
    * Returns undefined if no filters are set
    */
   toFilters(): Record<string, unknown> | undefined {
-    // Built without a prototype, and with the three names that reach one
-    // refused outright. The validation pipe runs with `whitelist: true`, so a
-    // query parameter the DTO does not declare is stripped before this runs —
-    // but that is a setting in another file, and a key taken from a request and
-    // written to an object should not depend on it.
+    // Read by name from a fixed list, so nothing a request carries decides
+    // which property is written. Built without a prototype as the second line.
+    const self = this as unknown as Record<string, unknown>;
     const filters = Object.create(null) as Record<string, unknown>;
 
-    for (const [key, value] of Object.entries(this)) {
-      if (
-        !CursorQueryDto.PAGINATION_KEYS.includes(key) &&
-        !UNSAFE_KEYS.includes(key) &&
-        value !== undefined &&
-        typeof value !== 'function'
-      ) {
+    for (const key of CursorQueryDto.FILTER_KEYS) {
+      const value = self[key];
+      if (value !== undefined && typeof value !== 'function') {
         filters[key] = value;
       }
     }
