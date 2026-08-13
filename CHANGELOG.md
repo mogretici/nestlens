@@ -1,3 +1,10 @@
+## [0.9.4](https://github.com/mogretici/nestlens/compare/v0.9.3...v0.9.4) (2026-08-13)
+
+
+### Bug Fixes
+
+* **api:** read the filters by name, not by whatever the request produced ([3c6dadb](https://github.com/mogretici/nestlens/commit/3c6dadb576b8a477a1f734b18e635ead3441c13f))
+
 ## [0.9.3](https://github.com/mogretici/nestlens/compare/v0.9.2...v0.9.3) (2026-08-13)
 
 
