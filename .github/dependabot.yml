@@ -1,8 +1,14 @@
-# Dependency updates, grouped so the noise stays proportional to the risk.
+# Dependency updates, sized so the noise stays proportional to the risk — and
+# to the account's Actions minutes.
 #
 # NestLens installs into other people's request paths, so a vulnerable
 # transitive dependency is their problem as much as ours. Left to a human,
 # nobody looks until an advisory forces it.
+#
+# Every pull request here costs three workflow runs, and there are three
+# directories. Ungrouping majors for the sake of one changelog per review put
+# eight of them on the board in seven minutes; grouping is what keeps this
+# affordable.
 version: 2
 
 updates:
@@ -16,16 +22,21 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    # Three at most, ever. The limit is the backstop: whatever the grouping
+    # rules do, the board cannot fill up.
+    open-pull-requests-limit: 3
     groups:
-      # Patch and minor bumps in one PR per directory: individually they are
-      # noise, together they are one review with one CI run.
+      # Patch and minor bumps in one pull request per directory: individually
+      # they are noise, together they are one review and one CI run.
       routine:
         update-types: [minor, patch]
-    # Majors are deliberately ungrouped: one per pull request. The first run
-    # batched twenty-three of them, and a single unresolvable pair — ioredis 6
-    # against the version its test double supports — failed the whole batch.
-    # One changelog, one review, one merge.
+      # Majors in one as well. A batch can contain a pair that cannot resolve
+      # together — ioredis 6 against the version its test double supports —
+      # which fails the whole thing, and that is fine: the batch is a monthly
+      # prompt to look, not something to merge unread. Take what belongs in it
+      # by hand and close the rest.
+      major:
+        update-types: [major]
     ignore:
       # The peer range is deliberately wide; the version installed here is a
       # test fixture, and bumping it would narrow what CI proves.
@@ -36,6 +47,7 @@ updates:
     directory: '/'
     schedule:
       interval: monthly
+    open-pull-requests-limit: 1
     groups:
       actions:
         patterns: ['*']
