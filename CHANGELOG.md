@@ -1,3 +1,30 @@
+# [0.9.0](https://github.com/mogretici/nestlens/compare/v0.8.13...v0.9.0) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ci:** pin the test-time sqlite driver to a version typeorm accepts ([68ea09b](https://github.com/mogretici/nestlens/commit/68ea09b733a98b21f085a62c7797360954377799))
+* **ci:** stop Node 24 aborting in better-sqlite3's teardown ([b107377](https://github.com/mogretici/nestlens/commit/b10737725d3ccba3fabda788196d3828885baa92))
+* **ci:** test the Node versions people actually run ([9bfaac7](https://github.com/mogretici/nestlens/commit/9bfaac78a9540cc077c2278b938b28fea8f7845d))
+* **dashboard:** resolve the theme during render, not after it ([d116385](https://github.com/mogretici/nestlens/commit/d116385acd024b7e41f0f92b44e13867f2fa50da))
+* **security:** close what CodeQL found on its first run ([205197a](https://github.com/mogretici/nestlens/commit/205197a01a545b9b865ee9723ca019bb9ab3738d)), closes [hi#severity](https://github.com/hi/issues/severity)
+* **security:** serve from the listing, not from a path the caller wrote ([43b2385](https://github.com/mogretici/nestlens/commit/43b2385698c116329950888b1c8175813ab0020c))
+* stop NestLens holding the process open ([8d5605d](https://github.com/mogretici/nestlens/commit/8d5605dbb45bfe3d84da166434ce95c5f261efa1))
+* **storage:** hold every backend to one behaviour contract ([c6baae4](https://github.com/mogretici/nestlens/commit/c6baae42519c3aea637f1fac886c5eadcd83ad20))
+
+
+### Features
+
+* **dashboard:** compress the bundle on the way out ([dd2a322](https://github.com/mogretici/nestlens/commit/dd2a32253596ac7b76be7965785698c93119ac71))
+* **package:** declare what the package publishes ([3dab3fa](https://github.com/mogretici/nestlens/commit/3dab3fa9098c282476469246006eff5ef710d290))
+* **sqlite:** version the schema on disk ([e557f86](https://github.com/mogretici/nestlens/commit/e557f863371e74488107ec7c295cf257f5651fef))
+* **storage:** say when in-memory entries cannot be shared ([5b6489b](https://github.com/mogretici/nestlens/commit/5b6489bf6f9771d0e2d788516173a5784cb39e00))
+
+
+### Performance Improvements
+
+* **dashboard:** one chunk per detail view, and real numbers for the rest ([58fbc09](https://github.com/mogretici/nestlens/commit/58fbc091c0122927ab23982f035a78c503636bdc))
+
 ## [0.8.13](https://github.com/mogretici/nestlens/compare/v0.8.12...v0.8.13) (2026-08-12)
 
 
