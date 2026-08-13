@@ -45,12 +45,36 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           echo "Update type: ${{ steps.metadata.outputs.update-type }}"
           echo "Dependencies: ${{ steps.metadata.outputs.dependency-names }}"
 
-          # Blocks until every check has reported, and exits non-zero if any of
-          # them failed — which fails this job and leaves the pull request open.
-          gh pr checks "$PR_URL" --watch --fail-fast --interval 30
+          # Polled rather than `gh pr checks --watch`, which waits on every check
+          # including this job — so it waited for itself and timed out forty-five
+          # minutes later. This one skips its own name.
+          for attempt in $(seq 1 60); do
+            runs=$(gh api "repos/${{ github.repository }}/commits/$HEAD_SHA/check-runs" \
+              --jq '[.check_runs[] | select(.name != "Enable auto-merge")]')
 
-          gh pr merge --merge "$PR_URL"
+            total=$(echo "$runs" | jq 'length')
+            done_count=$(echo "$runs" | jq '[.[] | select(.status == "completed")] | length')
+            failed=$(echo "$runs" | jq -r '[.[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral") | .name] | join(", ")')
+
+            if [ -n "$failed" ]; then
+              echo "Not merging — failed: $failed"
+              exit 1
+            fi
+
+            if [ "$total" -gt 0 ] && [ "$total" = "$done_count" ]; then
+              echo "All $total checks passed."
+              gh pr merge --merge "$PR_URL"
+              exit 0
+            fi
+
+            echo "$done_count/$total complete, waiting ($attempt/60)"
+            sleep 30
+          done
+
+          echo "Checks did not finish in thirty minutes; leaving the pull request open."
+          exit 1
