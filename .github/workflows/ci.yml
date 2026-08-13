@@ -50,6 +50,17 @@ jobs:
       - name: Run library tests
         run: npm test
 
+      # The dependencies a consumer actually receives, and only those.
+      #
+      # GitHub's alert count mixes everything in the repository together —
+      # Docusaurus's build graph, semantic-release's tree, the demo application
+      # — so it can read in the dozens while the published package is clean, and
+      # a real advisory in `class-validator` would arrive looking exactly like
+      # the rest. `--omit=dev` asks the only question that affects somebody
+      # installing NestLens: is anything in what they receive vulnerable?
+      - name: Audit what the package ships
+        run: npm audit --omit=dev --audit-level=high
+
       # The dashboard is half of what ships and had no static analysis at all:
       # the lint step above covers `src/**/*.ts`, and the type check runs
       # against the library's tsconfig. A type error or a broken hook here
