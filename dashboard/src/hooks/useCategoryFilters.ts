@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { normalizeFilterForUrl, filtersInclude, formatFilterForDisplay, formatFiltersForServer } from '../utils/format';
 
@@ -108,22 +108,22 @@ export function useCategoryFilters<T extends string>(
     return result;
   }, [searchParams, singleValueFilters]);
 
-  // State
-  const [filters, setFilters] = useState<Record<T, string[]>>(parseFiltersFromUrl);
-  const [singleFilters, setSingleFilters] = useState<Record<string, string | null>>(parseSingleFiltersFromUrl);
-
-  // Sync filters with URL changes
-  useEffect(() => {
-    const newFilters = parseFiltersFromUrl();
-    const newSingleFilters = parseSingleFiltersFromUrl();
-
-    if (JSON.stringify(newFilters) !== JSON.stringify(filters)) {
-      setFilters(newFilters);
-    }
-    if (JSON.stringify(newSingleFilters) !== JSON.stringify(singleFilters)) {
-      setSingleFilters(newSingleFilters);
-    }
-  }, [searchParams]);
+  /**
+   * The URL is the state.
+   *
+   * These used to be `useState` as well, so every change wrote the same
+   * information twice — into local state and into the query string — and an
+   * effect read the URL back and reconciled the two by comparing JSON. Two
+   * sources of truth with a repair loop between them: a back button, a link
+   * pasted into the address bar, or anything else that moved the URL without
+   * going through this hook left the two disagreeing until that effect caught
+   * up, a render later.
+   *
+   * Derived, there is one source and nothing to reconcile. Every mutation below
+   * writes the query string, and the values here follow.
+   */
+  const filters = useMemo(() => parseFiltersFromUrl(), [parseFiltersFromUrl]);
+  const singleFilters = useMemo(() => parseSingleFiltersFromUrl(), [parseSingleFiltersFromUrl]);
 
   // Update URL when filters change
   const syncUrl = useCallback((
@@ -162,7 +162,6 @@ export function useCategoryFilters<T extends string>(
       ...filters,
       [category]: [...filters[category], normalizedValue],
     };
-    setFilters(newFilters);
     syncUrl(newFilters, singleFilters);
   }, [filters, singleFilters, getCategory, syncUrl]);
 
@@ -176,7 +175,6 @@ export function useCategoryFilters<T extends string>(
       ...filters,
       [category]: [...filters[category], normalizedValue],
     };
-    setFilters(newFilters);
     syncUrl(newFilters, singleFilters);
   }, [filters, singleFilters, syncUrl]);
 
@@ -186,32 +184,19 @@ export function useCategoryFilters<T extends string>(
       ...filters,
       [category]: filters[category].filter(f => f !== value),
     };
-    setFilters(newFilters);
     syncUrl(newFilters, singleFilters);
   }, [filters, singleFilters, syncUrl]);
 
   // Set single value filter
   const setSingleFilter = useCallback((key: string, value: string | null) => {
     const newSingleFilters = { ...singleFilters, [key]: value };
-    setSingleFilters(newSingleFilters);
     syncUrl(filters, newSingleFilters);
   }, [filters, singleFilters, syncUrl]);
 
   // Clear all filters
   const clearAll = useCallback(() => {
-    const emptyFilters = {} as Record<T, string[]>;
-    for (const key of categoryKeys) {
-      emptyFilters[key] = [];
-    }
-    const emptySingleFilters: Record<string, string | null> = {};
-    for (const key of singleValueFilters) {
-      emptySingleFilters[key] = null;
-    }
-
-    setFilters(emptyFilters);
-    setSingleFilters(emptySingleFilters);
     setSearchParams({});
-  }, [categoryKeys, singleValueFilters, setSearchParams]);
+  }, [setSearchParams]);
 
   // Build server filters
   const serverFilters = useMemo(() => {

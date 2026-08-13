@@ -1,5 +1,5 @@
 import { useGraphQLToolbar } from './useGraphQLToolbar';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 
 interface GraphQLViewerProps {
@@ -253,6 +253,7 @@ function GraphQLNodeView({
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [autoExpandedFor, setAutoExpandedFor] = useState<string | undefined>(undefined);
   const hasChildren = node.children && node.children.length > 0;
   const indent = depth * 16;
 
@@ -273,12 +274,18 @@ function GraphQLNodeView({
     return checkNode(node);
   }, [node, searchTerm]);
 
-  // Auto-expand if matches search
-  useEffect(() => {
-    if (matchesSearch && searchTerm) {
-      setExpanded(true);
-    }
-  }, [matchesSearch, searchTerm]);
+  /**
+   * Open a matching node once per search term, during render.
+   *
+   * As an effect this ran after the paint, so a node that matched appeared
+   * collapsed for a frame and then opened. Keying on the term rather than on a
+   * boolean keeps the other half of the behaviour: collapsing a node by hand
+   * during a search stays collapsed, and the next search opens it again.
+   */
+  if (searchTerm && matchesSearch && autoExpandedFor !== searchTerm) {
+    setAutoExpandedFor(searchTerm);
+    setExpanded(true);
+  }
 
   const highlight = (text: string) => {
     if (!searchTerm) return text;
