@@ -8,8 +8,10 @@ import ClickableBadge, { BadgeList } from './ClickableBadge';
 import { GraphQLErrorBadge, N1WarningBadge } from './DataTable';
 import Tabs from './Tabs';
 import UserCard from './UserCard';
-import { useJsonToolbar, ControlledInlineJson } from './JsonViewerWithToolbar';
-import { useGraphQLToolbar, InlineGraphQLViewer } from './GraphQLViewer';
+import { ControlledInlineJson } from './JsonViewerWithToolbar';
+import { useJsonToolbar } from './useJsonToolbar';
+import { InlineGraphQLViewer } from './GraphQLViewer';
+import { useGraphQLToolbar } from './useGraphQLToolbar';
 import { AlertTriangle, Clock, Layers, Zap, Send, ServerIcon } from 'lucide-react';
 
 interface GraphQLDetailViewProps {
@@ -43,7 +45,7 @@ function TimingBreakdown({
     { label: 'Execution', value: execution, color: 'bg-green-400' },
   ].filter((s) => s.value !== undefined && s.value > 0);
 
-  const measured = segments.reduce((sum, s) => sum + (s.value || 0), 0);
+  const measured = segments.reduce((sum, s) => sum + (s.value ?? 0), 0);
   const unmeasured = total - measured;
 
   return (
@@ -54,8 +56,8 @@ function TimingBreakdown({
           <div
             key={i}
             className={`${segment.color} transition-all`}
-            style={{ width: `${((segment.value || 0) / total) * 100}%` }}
-            title={`${segment.label}: ${formatDuration(segment.value || 0)}`}
+            style={{ width: `${((segment.value ?? 0) / total) * 100}%` }}
+            title={`${segment.label}: ${formatDuration(segment.value ?? 0)}`}
           />
         ))}
         {unmeasured > 0 && (
@@ -72,7 +74,7 @@ function TimingBreakdown({
         {segments.map((segment, i) => (
           <div key={i} className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded ${segment.color}`} />
-            <span>{segment.label}: {formatDuration(segment.value || 0)}</span>
+            <span>{segment.label}: {formatDuration(segment.value ?? 0)}</span>
           </div>
         ))}
         {unmeasured > 0 && (
@@ -195,7 +197,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   const { payload, createdAt } = entry;
 
   // Filter out operation type from tags
-  const tags = (entry.tags || []).filter(
+  const tags = (entry.tags ?? []).filter(
     (t) => !['query', 'mutation', 'subscription'].includes(t.toLowerCase())
   );
 
@@ -224,7 +226,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   // Variables tab content
   const variablesContent = (
     <ControlledInlineJson
-      data={(payload.variables || {}) as JsonValue}
+      data={(payload.variables ?? {}) as JsonValue}
       toolbarState={variablesToolbar.state}
       searchBar={variablesToolbar.SearchBar}
       maxHeight={400}
@@ -232,10 +234,10 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   );
 
   // Headers tab content
-  const headersCount = Object.keys(payload.headers || {}).length;
+  const headersCount = Object.keys(payload.headers ?? {}).length;
   const headersContent = headersCount > 0 ? (
     <ControlledInlineJson
-      data={(payload.headers || {}) as JsonValue}
+      data={(payload.headers ?? {}) as JsonValue}
       toolbarState={headersToolbar.state}
       searchBar={headersToolbar.SearchBar}
       maxHeight={400}
@@ -305,9 +307,9 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
       case 'query':
         return <queryToolbar.Toolbar code={payload.query} />;
       case 'variables':
-        return <variablesToolbar.Toolbar data={(payload.variables || {}) as JsonValue} />;
+        return <variablesToolbar.Toolbar data={(payload.variables ?? {}) as JsonValue} />;
       case 'headers':
-        return headersCount > 0 ? <headersToolbar.Toolbar data={(payload.headers || {}) as JsonValue} /> : null;
+        return headersCount > 0 ? <headersToolbar.Toolbar data={(payload.headers ?? {}) as JsonValue} /> : null;
       default:
         return null;
     }
@@ -447,7 +449,9 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
       </div>
 
       {/* Timing Breakdown */}
-      {(payload.parsingDuration || payload.validationDuration || payload.executionDuration) && (
+      {(payload.parsingDuration !== undefined ||
+        payload.validationDuration !== undefined ||
+        payload.executionDuration !== undefined) && (
         <div className="card">
           <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">

@@ -7,7 +7,8 @@ import ClickableBadge, { BadgeList } from './ClickableBadge';
 import Tabs from './Tabs';
 import UserCard from './UserCard';
 import RelatedEntries from './RelatedEntries';
-import { useJsonToolbar, ControlledInlineJson } from './JsonViewerWithToolbar';
+import { ControlledInlineJson } from './JsonViewerWithToolbar';
+import { useJsonToolbar } from './useJsonToolbar';
 
 interface RequestDetailViewProps {
   entry: RequestEntry;
@@ -56,7 +57,7 @@ export default function RequestDetailView({ entry, related = [] }: RequestDetail
   const displayMethod = getDisplayMethod(payload.path, payload.method);
 
   // Filter out method from tags (already shown in header)
-  const tags = (entry.tags || []).filter(t => t.toUpperCase() !== displayMethod);
+  const tags = (entry.tags ?? []).filter(t => t.toUpperCase() !== displayMethod);
 
   // Toolbar states for request and response tabs
   const requestToolbar = useJsonToolbar();
@@ -86,7 +87,7 @@ export default function RequestDetailView({ entry, related = [] }: RequestDetail
 
   const responseData = {
     response: (payload.responseBody || {}) as JsonValue,
-    'response-headers': (payload.responseHeaders || {}) as JsonValue,
+    'response-headers': (payload.responseHeaders ?? {}) as JsonValue,
     session: (payload.session && Object.keys(payload.session).length > 0 ? payload.session : {}) as JsonValue,
   };
 

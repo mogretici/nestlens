@@ -4,7 +4,8 @@ import { parseDate } from '../utils/date';
 import DetailRow from './DetailRow';
 import ClickableBadge from './ClickableBadge';
 import Tabs from './Tabs';
-import { useJsonToolbar, ControlledInlineJson } from './JsonViewerWithToolbar';
+import { ControlledInlineJson } from './JsonViewerWithToolbar';
+import { useJsonToolbar } from './useJsonToolbar';
 import StackTraceViewer from './StackTraceViewer';
 
 interface ExceptionDetailViewProps {

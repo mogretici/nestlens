@@ -52,22 +52,58 @@ describe('createStorage', () => {
     });
   });
 
+  /**
+   * This used to build a real client against localhost:6379 inside a
+   * `try`/`catch` whose `catch` only ran when ioredis was missing — and ioredis
+   * is a devDependency here, so it never was. The test asserted nothing, and it
+   * left a client behind reconnecting forever, which is why jest stopped
+   * exiting after this file.
+   *
+   * The behaviour worth testing is the one a consumer hits: they picked the
+   * redis driver without installing ioredis, and the message has to tell them
+   * what to do. That is reproduced by making the module unresolvable.
+   */
   describe('redis driver', () => {
-    // Note: These tests would require a Redis instance or mock
-    // For now, we just test that the error is thrown when ioredis is not available
+    /**
+     * Isolated rather than reset afterwards: a bare `jest.resetModules()` gives
+     * the rest of the file a second copy of every module, and `toBeInstanceOf`
+     * then fails with "Expected MemoryStorage, received MemoryStorage".
+     */
+    const withMockedRedisStorage = async (
+      factory: () => unknown,
+      assert: (attempt: Promise<unknown>) => Promise<void>,
+    ): Promise<void> =>
+      jest.isolateModulesAsync(async () => {
+        jest.doMock('../../../core/storage/redis.storage', factory);
+        const { createStorage: isolated } = await import('../../../core/storage/storage.factory');
 
-    it('should throw helpful error when ioredis is not installed', async () => {
-      // This test will pass if ioredis is not installed in test environment
-      // In real usage, if ioredis is installed, it would try to connect
-      try {
-        await createStorage({
-          driver: 'redis',
-          redis: { host: 'localhost', port: 6379 },
-        });
-        // If it gets here, ioredis is installed - skip the assertion
-      } catch (error) {
-        expect((error as Error).message).toContain('ioredis');
-      }
+        await assert(isolated({ driver: 'redis', redis: { host: 'localhost' } }));
+      });
+
+    it('explains how to install ioredis when it is missing', async () => {
+      await withMockedRedisStorage(
+        () => {
+          const error = new Error("Cannot find module 'ioredis'") as NodeJS.ErrnoException;
+          error.code = 'MODULE_NOT_FOUND';
+          throw error;
+        },
+        (attempt) => expect(attempt).rejects.toThrow(/npm install ioredis/),
+      );
+    });
+
+    it('passes other failures through rather than blaming the install', async () => {
+      await withMockedRedisStorage(
+        () => ({
+          RedisStorage: class {
+            async initialize(): Promise<void> {
+              throw new Error('WRONGPASS invalid username-password pair');
+            }
+          },
+        }),
+        // A bad password is not a missing package, and saying so would send the
+        // reader off installing something they already have.
+        (attempt) => expect(attempt).rejects.toThrow(/WRONGPASS/),
+      );
     });
   });
 

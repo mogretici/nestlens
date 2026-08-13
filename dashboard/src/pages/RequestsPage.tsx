@@ -90,7 +90,7 @@ export default function RequestsPage() {
       align: 'center',
       render: (entry) => (
         <ClickableBadge listType="requests" filterType="statuses">
-          {entry.payload.statusCode || 0}
+          {entry.payload.statusCode ?? 0}
         </ClickableBadge>
       ),
     },
@@ -100,7 +100,7 @@ export default function RequestsPage() {
       width: '100px',
       align: 'right',
       render: (entry) => (
-        <DurationCell ms={entry.payload.duration || 0} />
+        <DurationCell ms={entry.payload.duration ?? 0} />
       ),
     },
     {
@@ -109,7 +109,7 @@ export default function RequestsPage() {
       minWidth: '150px',
       render: (entry) => (
         <TagsList
-          tags={(entry.tags || []).filter(t => !httpMethods.includes(t.toUpperCase()))}
+          tags={(entry.tags ?? []).filter(t => !httpMethods.includes(t.toUpperCase()))}
           max={3}
           onTagClick={(tag, e) => { e.stopPropagation(); addFilter('tags', tag); }}
         />

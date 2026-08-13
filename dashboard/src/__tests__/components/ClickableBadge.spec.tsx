@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import ClickableBadge, { getBadgeColor, FilterBadge, BadgeList } from '../../components/ClickableBadge';
+import ClickableBadge, { FilterBadge, BadgeList } from '../../components/ClickableBadge';
+import { getBadgeColor } from '../../components/badgeColors';
 
 // Wrapper for components that use router
 const RouterWrapper = ({ children }: { children: React.ReactNode }) => (

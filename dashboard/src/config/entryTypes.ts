@@ -630,7 +630,7 @@ export function validateConfig(): string[] {
 export const getEntryTypeConfig = getEntryConfig;
 
 // Run validation in development (Vite provides import.meta.env)
-if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+if (import.meta.env?.DEV) {
   const errors = validateConfig();
   if (errors.length > 0) {
     console.error('[entryTypes] Configuration errors:', errors);

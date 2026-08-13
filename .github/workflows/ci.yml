@@ -35,7 +35,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run library tests
-        run: npm test
+        run: npm test -- --maxWorkers=2 --workerIdleMemoryLimit=512MB
 
       # The dashboard is half of what ships and had no static analysis at all:
       # the lint step above covers `src/**/*.ts`, and the type check runs
@@ -113,5 +113,9 @@ jobs:
             if (major !== '${{ matrix.nestjs }}') { \
               console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
 
+      # A GitHub runner has two cores and 7 GB, and jest's workers grow as they
+      # run. On Node 24 they were killed mid-suite with SIGABRT — no test
+      # failed, the process was simply taken away. Recycling a worker once it
+      # passes half a gigabyte costs seconds and removes the whole class.
       - name: Run library tests
-        run: npm test
+        run: npm test -- --maxWorkers=2 --workerIdleMemoryLimit=512MB

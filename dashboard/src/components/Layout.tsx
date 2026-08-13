@@ -41,7 +41,7 @@ import {
   RecordingStatus,
 } from '../api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { useStats } from '../contexts/StatsContext';
+import { useStats } from '../contexts/useStats';
 
 // Minimal Recording Toggle Component
 function RecordingToggle() {

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Zap, Users, Clock, Database } from 'lucide-react';
 import { EventEntry, JsonValue } from '../types';
 import Tabs from './Tabs';
-import { useJsonToolbar, ControlledInlineJson } from './JsonViewerWithToolbar';
+import { ControlledInlineJson } from './JsonViewerWithToolbar';
+import { useJsonToolbar } from './useJsonToolbar';
 import CopyButton from './CopyButton';
 import ClickableBadge from './ClickableBadge';
 

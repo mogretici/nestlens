@@ -5,7 +5,8 @@ import { parseDate } from '../utils/date';
 import DetailRow from './DetailRow';
 import ClickableBadge, { BadgeList } from './ClickableBadge';
 import Tabs from './Tabs';
-import { useJsonToolbar, ControlledInlineJson } from './JsonViewerWithToolbar';
+import { ControlledInlineJson } from './JsonViewerWithToolbar';
+import { useJsonToolbar } from './useJsonToolbar';
 import { HTTP_METHODS, STATUS_PATTERNS } from '../constants/http';
 
 interface HttpClientDetailViewProps {
@@ -21,7 +22,10 @@ export default function HttpClientDetailView({ entry }: HttpClientDetailViewProp
   const { payload, createdAt } = entry;
 
   // Filter out method, status, and hostname tags (already shown in details)
-  const tags = (entry.tags || []).filter(tag => {
+  // 0 is what a request that never got a response records, and "ERR" is the
+  // label for it — worth saying rather than leaning on 0 being falsy.
+  const statusCode = payload.statusCode ?? 0;
+  const tags = (entry.tags ?? []).filter(tag => {
     const upper = tag.toUpperCase();
     return !(HTTP_METHODS as readonly string[]).includes(upper) &&
            !(STATUS_PATTERNS as readonly string[]).includes(upper) &&
@@ -39,12 +43,12 @@ export default function HttpClientDetailView({ entry }: HttpClientDetailViewProp
   // Data for each tab
   const requestData = {
     payload: (payload.requestBody || {}) as JsonValue,
-    headers: (payload.requestHeaders || {}) as JsonValue,
+    headers: (payload.requestHeaders ?? {}) as JsonValue,
   };
 
   const responseData = {
     response: (payload.responseBody || {}) as JsonValue,
-    headers: (payload.responseHeaders || {}) as JsonValue,
+    headers: (payload.responseHeaders ?? {}) as JsonValue,
   };
 
   // Request tabs
@@ -169,7 +173,7 @@ export default function HttpClientDetailView({ entry }: HttpClientDetailViewProp
                   filterType="statuses"
                   filterValue={payload.statusCode ? String(payload.statusCode) : 'ERR'}
                 >
-                  {payload.statusCode || 'ERR'}
+                  {statusCode > 0 ? statusCode : 'ERR'}
                 </ClickableBadge>
               }
             />

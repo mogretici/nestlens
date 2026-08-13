@@ -104,7 +104,7 @@ export default function QueriesPage() {
       minWidth: '150px',
       render: (entry) => {
         const source = (entry.payload.source || 'unknown').toLowerCase();
-        const filteredTags = (entry.tags || []).filter((tag) => tag.toLowerCase() !== source);
+        const filteredTags = (entry.tags ?? []).filter((tag) => tag.toLowerCase() !== source);
         return (
           <TagsList
             tags={filteredTags}

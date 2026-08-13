@@ -1,0 +1,40 @@
+# Dependency updates, grouped so the noise stays proportional to the risk.
+#
+# NestLens installs into other people's request paths, so a vulnerable
+# transitive dependency is their problem as much as ours. Left to a human,
+# nobody looks until an advisory forces it.
+version: 2
+
+updates:
+  # The three package.json files in the repository. The dashboard and the docs
+  # site are build-time only; the library's are what consumers inherit.
+  - package-ecosystem: npm
+    directories:
+      - '/'
+      - '/dashboard'
+      - '/docs'
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patch and minor bumps in one PR per directory: individually they are
+      # noise, together they are one review with one CI run.
+      routine:
+        update-types: [minor, patch]
+      # Majors arrive on their own — each needs its own read of the changelog.
+      major:
+        update-types: [major]
+    ignore:
+      # The peer range is deliberately wide; the version installed here is a
+      # test fixture, and bumping it would narrow what CI proves.
+      - dependency-name: '@nestjs/*'
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']

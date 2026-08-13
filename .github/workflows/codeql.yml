@@ -1,0 +1,46 @@
+name: CodeQL
+
+# Static analysis for the code that ends up inside other people's applications.
+#
+# The audit rounds behind 0.8.x found an IP whitelist that a header could
+# bypass and request bodies that were never masked — both the kind of thing a
+# reviewer sees only if they are looking. This looks on every change, and
+# weekly, in case a new rule lands for code nobody is touching.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Monday 04:00 UTC, an hour after the nightly E2E has finished.
+    - cron: '0 4 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # The security-focused suite rather than the default: this is a
+          # debugging tool with a dashboard, so the questions worth asking are
+          # about what escapes it.
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'

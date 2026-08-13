@@ -1,15 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { StatsContext } from './useStats';
 import toast from 'react-hot-toast';
 import { getStats } from '../api';
 import { Stats } from '../types';
-
-interface StatsContextType {
-  stats: Stats | null;
-  error: Error | null;
-  refreshStats: () => Promise<void>;
-}
-
-const StatsContext = createContext<StatsContextType | undefined>(undefined);
 
 export function StatsProvider({ children }: { children: ReactNode }) {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -48,10 +41,3 @@ export function StatsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useStats() {
-  const context = useContext(StatsContext);
-  if (context === undefined) {
-    throw new Error('useStats must be used within a StatsProvider');
-  }
-  return context;
-}

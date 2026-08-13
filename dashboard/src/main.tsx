@@ -9,7 +9,12 @@ import { getBasePath } from './basePath';
 import './index.css';
 
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const container = document.getElementById('root');
+if (!container) {
+  throw new Error('NestLens dashboard: no #root element in the served index.html');
+}
+
+ReactDOM.createRoot(container).render(
   <React.StrictMode>
     <ErrorBoundary>
       <BrowserRouter basename={getBasePath()}>

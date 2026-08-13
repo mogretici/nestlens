@@ -5,16 +5,9 @@ import { parseDate } from '../utils/date';
 import { Box } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
-import {
-  NewEntriesButton,
-  LoadMoreButton,
-} from '../components/PaginationControls';
+import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader from '../components/PageHeader';
-import DataTable, {
-  Column,
-  TextCell,
-  DurationCell,
-} from '../components/DataTable';
+import DataTable, { Column, TextCell, DurationCell } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { ModelEntry, isModelEntry } from '../types';
 
@@ -22,13 +15,8 @@ export default function ModelsPage() {
   const navigate = useNavigate();
 
   // Use centralized filter hook - all config comes from entryTypes.ts
-  const {
-    addFilter,
-    clearAll,
-    serverFilters,
-    headerFilters,
-    hasFilters,
-  } = useEntryFilters('models');
+  const { addFilter, clearAll, serverFilters, headerFilters, hasFilters } =
+    useEntryFilters('models');
 
   const {
     entries: allEntries,
@@ -49,79 +37,93 @@ export default function ModelsPage() {
   const entries = allEntries.filter((entry): entry is ModelEntry => isModelEntry(entry));
 
   // Table columns definition
-  const tableColumns: Column<ModelEntry>[] = useMemo(() => [
-    {
-      key: 'action',
-      header: 'Action',
-      width: '120px',
-      render: (entry) => (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('actions', entry.payload.action); }}
-        >
-          {entry.payload.action.toUpperCase()}
-        </ClickableBadge>
-      ),
-    },
-    {
-      key: 'entity',
-      header: 'Entity',
-      width: '150px',
-      render: (entry) => (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('entities', entry.payload.entity); }}
-          className="font-mono"
-        >
-          {entry.payload.entity}
-        </ClickableBadge>
-      ),
-    },
-    {
-      key: 'source',
-      header: 'Source',
-      width: '150px',
-      render: (entry) => entry.payload.source ? (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('sources', entry.payload.source!); }}
-          className="font-mono text-xs"
-        >
-          {entry.payload.source}
-        </ClickableBadge>
-      ) : (
-        <TextCell secondary>-</TextCell>
-      ),
-    },
-    {
-      key: 'duration',
-      header: 'Duration',
-      width: '100px',
-      align: 'right',
-      render: (entry) => (
-        <DurationCell ms={entry.payload.duration || 0} />
-      ),
-    },
-    {
-      key: 'records',
-      header: 'Records',
-      width: '80px',
-      align: 'center',
-      render: (entry) => entry.payload.recordCount !== undefined ? (
-        <TextCell>{entry.payload.recordCount}</TextCell>
-      ) : (
-        <TextCell secondary>-</TextCell>
-      ),
-    },
-    {
-      key: 'time',
-      header: 'Time',
-      width: '170px',
-      align: 'right',
-      render: (entry) => (
-        <TextCell secondary className="text-xs">
-          {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
-        </TextCell>
-      ),
-    },
-  ], [addFilter]);
+  const tableColumns: Column<ModelEntry>[] = useMemo(
+    () => [
+      {
+        key: 'action',
+        header: 'Action',
+        width: '120px',
+        render: (entry) => (
+          <ClickableBadge
+            onClick={(e) => {
+              e.stopPropagation();
+              addFilter('actions', entry.payload.action);
+            }}
+          >
+            {entry.payload.action.toUpperCase()}
+          </ClickableBadge>
+        ),
+      },
+      {
+        key: 'entity',
+        header: 'Entity',
+        width: '150px',
+        render: (entry) => (
+          <ClickableBadge
+            onClick={(e) => {
+              e.stopPropagation();
+              addFilter('entities', entry.payload.entity);
+            }}
+            className="font-mono"
+          >
+            {entry.payload.entity}
+          </ClickableBadge>
+        ),
+      },
+      {
+        key: 'source',
+        header: 'Source',
+        width: '150px',
+        render: (entry) => {
+          const source = entry.payload.source;
+          return source ? (
+            <ClickableBadge
+              onClick={(e) => {
+                e.stopPropagation();
+                addFilter('sources', source);
+              }}
+              className="font-mono text-xs"
+            >
+              {source}
+            </ClickableBadge>
+          ) : (
+            <TextCell secondary>-</TextCell>
+          );
+        },
+      },
+      {
+        key: 'duration',
+        header: 'Duration',
+        width: '100px',
+        align: 'right',
+        render: (entry) => <DurationCell ms={entry.payload.duration || 0} />,
+      },
+      {
+        key: 'records',
+        header: 'Records',
+        width: '80px',
+        align: 'center',
+        render: (entry) =>
+          entry.payload.recordCount !== undefined ? (
+            <TextCell>{entry.payload.recordCount}</TextCell>
+          ) : (
+            <TextCell secondary>-</TextCell>
+          ),
+      },
+      {
+        key: 'time',
+        header: 'Time',
+        width: '170px',
+        align: 'right',
+        render: (entry) => (
+          <TextCell secondary className="text-xs">
+            {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
+          </TextCell>
+        ),
+      },
+    ],
+    [addFilter],
+  );
 
   // Only show full-page spinner on initial load when no data exists
   if (loading && entries.length === 0) {
@@ -155,28 +157,20 @@ export default function ModelsPage() {
       {/* Content */}
       <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
         {/* New entries button */}
-        <NewEntriesButton
-          count={newEntriesCount}
-          onClick={loadNew}
-          loading={refreshing}
-        />
+        <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
 
         <DataTable
           columns={tableColumns}
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/models/${entry.id}`)}
-          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
+          rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No model events recorded yet"
           emptyIcon={<Box className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 
         {/* Load more button */}
-        <LoadMoreButton
-          hasMore={hasMore}
-          onClick={loadMore}
-          loading={refreshing}
-        />
+        <LoadMoreButton hasMore={hasMore} onClick={loadMore} loading={refreshing} />
       </div>
     </div>
   );

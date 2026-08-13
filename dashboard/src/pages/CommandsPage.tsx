@@ -93,7 +93,7 @@ export default function CommandsPage() {
       width: '100px',
       align: 'right',
       render: (entry) => (
-        <DurationCell ms={entry.payload.duration || 0} />
+        <DurationCell ms={entry.payload.duration ?? 0} />
       ),
     },
     {

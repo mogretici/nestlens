@@ -36,6 +36,7 @@ const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'ut
   types?: string;
   exports?: Record<string, string | Record<string, string>>;
   typesVersions?: Record<string, Record<string, string[]>>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
 const declaredPackages = new Set([
@@ -368,5 +369,33 @@ describe('package contract', () => {
       .map((i) => `${i.packageName} (imported by ${i.file})`);
 
     expect(leaked).toEqual([]);
+  });
+
+  /**
+   * A package reached for at runtime but never declared is invisible: nothing
+   * installs it, nothing warns when the installed version is one NestLens does
+   * not work with, and the only symptom is a `MODULE_NOT_FOUND` in production.
+   * `@nestjs/cache-manager` and `bullmq` sat in this gap — required by two
+   * watchers, mentioned in the documentation, declared nowhere.
+   *
+   * Declaring them as optional peers is what makes `peerDependenciesMeta` mean
+   * anything: npm ignores an entry there that is not also a peer dependency.
+   */
+  it('declares every lazily required package as an optional peer', () => {
+    const optionalPeers = new Set(Object.keys(packageJson.peerDependenciesMeta ?? {}));
+    const declaredPeers = new Set(Object.keys(packageJson.peerDependencies ?? {}));
+
+    const undeclared = sourceFiles
+      .flatMap(collectDeferredImports)
+      .filter(({ packageName }) => !nodeBuiltins.has(packageName))
+      // Reached through a package that is already a hard dependency of the
+      // adapter, not something a consumer installs on purpose.
+      .filter(({ packageName }) => packageName !== 'express')
+      .filter(
+        ({ packageName }) => !declaredPeers.has(packageName) || !optionalPeers.has(packageName),
+      )
+      .map((i) => `${i.packageName} (required by ${i.file})`);
+
+    expect([...new Set(undeclared)].sort()).toEqual([]);
   });
 });

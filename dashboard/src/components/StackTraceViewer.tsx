@@ -22,7 +22,7 @@ interface StackTraceViewerProps {
  */
 function parseStackFrame(frameLine: string): StackFrame | null {
   const trimmed = frameLine.trim();
-  if (!trimmed || !trimmed.startsWith('at ')) {
+  if (!trimmed?.startsWith('at ')) {
     return null;
   }
 

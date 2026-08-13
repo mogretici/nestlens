@@ -1,6 +1,6 @@
 import { ReactNode, useState, useCallback, useRef, useEffect } from 'react';
 import { ChevronRight, Inbox } from 'lucide-react';
-import { getBadgeColor } from './ClickableBadge';
+import { getBadgeColor } from './badgeColors';
 
 // Column definition
 export interface Column<T> {

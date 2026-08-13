@@ -28,7 +28,8 @@ import {
   isGraphQLEntry,
 } from '../types';
 import Tabs from '../components/Tabs';
-import { useJsonToolbar, ControlledInlineJson } from '../components/JsonViewerWithToolbar';
+import { ControlledInlineJson } from '../components/JsonViewerWithToolbar';
+import { useJsonToolbar } from '../components/useJsonToolbar';
 import ClickableBadge from '../components/ClickableBadge';
 
 /**
@@ -110,7 +111,7 @@ export default function EntryDetailPage() {
       try {
         const response = await getEntry(parseInt(id));
         setEntry(response.data);
-        setRelated(response.related || []);
+        setRelated(response.related ?? []);
       } catch (error) {
         console.error('Failed to fetch entry:', error);
       } finally {

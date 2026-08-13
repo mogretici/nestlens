@@ -94,7 +94,7 @@ export function useCategoryFilters<T extends string>(
     const result = {} as Record<T, string[]>;
     for (const key of categoryKeys) {
       const urlKey = categories[key].urlKey;
-      result[key] = searchParams.get(urlKey)?.split(',').filter(Boolean) || [];
+      result[key] = searchParams.get(urlKey)?.split(',').filter(Boolean) ?? [];
     }
     return result;
   }, [searchParams, categoryKeys, categories]);

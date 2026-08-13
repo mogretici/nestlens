@@ -48,7 +48,7 @@ function matchesSearch(value: JsonValue, searchTerm: string, key?: string): bool
   if (!searchTerm) return false;
   const lower = searchTerm.toLowerCase();
 
-  if (key && key.toLowerCase().includes(lower)) return true;
+  if (key?.toLowerCase().includes(lower)) return true;
   if (value === null) return 'null'.includes(lower);
   if (typeof value === 'string') return value.toLowerCase().includes(lower);
   if (typeof value === 'number') return String(value).includes(lower);
@@ -91,7 +91,8 @@ const JsonNode = memo(function JsonNode({
   const itemCount = countItems(value, type);
   const isEmpty = itemCount === 0;
 
-  const isKeyMatch = searchTerm && keyName && keyName.toLowerCase().includes(searchTerm.toLowerCase());
+  const isKeyMatch =
+    Boolean(searchTerm) && (keyName?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
   const isValueMatch = matchesSearch(value, searchTerm);
   const hasMatch = isKeyMatch || isValueMatch;
 
@@ -270,7 +271,7 @@ export default function JsonViewer({
   const [showSearch, setShowSearch] = useState(false);
 
   // Use external search term if provided, otherwise use internal state
-  const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : internalSearchTerm;
+  const searchTerm = externalSearchTerm ?? internalSearchTerm;
   const setSearchTerm = setInternalSearchTerm;
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
     // Initialize with paths expanded up to maxInitialDepth

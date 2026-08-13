@@ -80,6 +80,11 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   // Serialize filters for dependency comparison using stable stringify
   const filtersKey = stableStringify(filters);
 
+  // `filters` arrives memoised from `useCategoryFilters`, so it can be depended
+  // on directly: its identity changes when the filters change and not before.
+  // `filtersKey` remains for the one place that has to compare the previous
+  // filters with the current ones.
+
   const [entries, setEntries] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -129,7 +134,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       setLoading(false);
       setRefreshing(false);
     }
-  }, [type, limit, filtersKey]);
+  }, [type, limit, filters, filtersKey]);
 
   // Load older entries
   const loadMore = useCallback(async () => {
@@ -152,7 +157,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, meta, filtersKey]);
+  }, [type, limit, meta, filters]);
 
   // Load new entries (manual button click)
   const loadNew = useCallback(async () => {
@@ -184,7 +189,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, newEntriesCount, filtersKey]);
+  }, [type, limit, newEntriesCount, filters]);
 
   // Refresh all data
   const refresh = useCallback(async () => {
@@ -204,7 +209,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, filtersKey]);
+  }, [type, limit, filters]);
 
   // Check for new entries
   const checkForNew = useCallback(async () => {
@@ -305,7 +310,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } catch {
       // Ignore errors
     }
-  }, [type, filtersKey]);
+  }, [type, filters]);
 
   // Set up auto-refresh interval
   useEffect(() => {
