@@ -1,0 +1,30 @@
+# Security updates only, and only where they mean something.
+#
+# `open-pull-requests-limit: 0` is how Dependabot is told to skip version
+# updates while leaving security updates on: no weekly chase after releases
+# nothing is waiting for, but a pull request when an advisory is published
+# against something here. NestLens installs into other people's request paths,
+# so those are worth acting on quickly.
+#
+# `example/` is deliberately absent. It is a demo application that depends on
+# the library through `file:..`, which Dependabot cannot resolve — every update
+# job it started there failed, on repeat, for a directory whose dependencies
+# reach no one. Listing the three real manifests is what keeps it out.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directories:
+      - '/'
+      - '/dashboard'
+      - '/docs'
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
