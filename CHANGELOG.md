@@ -1,3 +1,10 @@
+## [0.9.6](https://github.com/mogretici/nestlens/compare/v0.9.5...v0.9.6) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ci:** stop the auto-merge job waiting for itself ([df66e0d](https://github.com/mogretici/nestlens/commit/df66e0d20eb2806bac9dae5fc5a237d3fb221e10))
+
 ## [0.9.5](https://github.com/mogretici/nestlens/compare/v0.9.4...v0.9.5) (2026-08-13)
 
 
