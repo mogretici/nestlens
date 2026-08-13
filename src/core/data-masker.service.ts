@@ -115,6 +115,34 @@ const matchesSensitiveTerm = (fieldName: string, terms: readonly string[]): bool
   return terms.some((term) => term.length > 0 && normalized.includes(term));
 };
 
+/**
+ * Replaces `(/absolute/path/to/file.js:1:2)` with `(...)`.
+ *
+ * Scanned rather than matched. The regex this replaces —
+ * `/\(\/[^)]+\)/g` — backtracks from every `(/` in a line with no closing
+ * parenthesis, which is quadratic in the length of a line that arrives inside
+ * an exception NestLens did not throw. A stack frame is attacker-influenced
+ * often enough — a thrown string, a message echoed back from a request — and
+ * this runs on every entry that carries one.
+ */
+function replaceParenthesisedPaths(line: string): string {
+  let result = '';
+  let index = 0;
+
+  while (index < line.length) {
+    const open = line.indexOf('(/', index);
+    if (open === -1) break;
+
+    const close = line.indexOf(')', open + 2);
+    if (close === -1) break;
+
+    result += line.slice(index, open) + '(...)';
+    index = close + 1;
+  }
+
+  return result + line.slice(index);
+}
+
 @Injectable()
 export class DataMaskerService {
   private readonly sensitiveHeaders: readonly string[];
@@ -263,11 +291,8 @@ export class DataMaskerService {
     // In production, simplify the stack trace
     return stack
       .split('\n')
-      .map((line) => {
-        // Remove absolute file paths, keep only relative paths
-        return line.replace(/\(\/[^)]+\)/g, '(...)');
-      })
-      .slice(0, 10) // Limit to first 10 lines
+      .slice(0, 10) // Only the first ten lines are kept, so only they are scanned
+      .map((line) => replaceParenthesisedPaths(line))
       .join('\n');
   }
 
