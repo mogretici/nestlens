@@ -1,3 +1,15 @@
+## [0.9.3](https://github.com/mogretici/nestlens/compare/v0.9.2...v0.9.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **security:** close what code scanning found in the shipped code ([9babf3b](https://github.com/mogretici/nestlens/commit/9babf3b48aefed7abc8a0f0757a0a2ad555a9d85))
+
+
+### Reverts
+
+* **example:** keep the lockfile CI can install ([1bc4a14](https://github.com/mogretici/nestlens/commit/1bc4a14038c05752651bf4195e5a8677c46f84bb))
+
 ## [0.9.2](https://github.com/mogretici/nestlens/compare/v0.9.1...v0.9.2) (2026-08-13)
 
 
