@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/quick-start',
         'getting-started/first-steps',
         'getting-started/upgrading',
+        'getting-started/versioning-and-support',
       ],
     },
     {

@@ -4,6 +4,15 @@ sidebar_position: 1
 
 # Watchers Overview
 
+:::info What each watcher guarantees
+
+Five watchers read from NestJS itself and are covered by the 1.0 guarantee; the
+rest attach to a third-party library and can break when that library moves. Which
+is which, and what that means when it happens, is in
+[versioning and support](../getting-started/versioning-and-support.md#watcher-maturity).
+
+:::
+
 Watchers are the core of NestLens monitoring capabilities. They automatically intercept and track various operations in your NestJS application, collecting detailed telemetry data for analysis in the dashboard.
 
 ## What are Watchers?

@@ -10,6 +10,21 @@ NestLens is pre-1.0, so a minor version may carry a breaking change
 ([SemVer §4](https://semver.org/#spec-item-4)). Every one of them is listed here
 with the exact edit it requires.
 
+From `1.0` that stops: breaking changes will arrive only in a major release,
+after a deprecation that lasts at least two minors. See
+[versioning and support](./versioning-and-support.md) for what is covered and
+for how long.
+
+## Coming from any `0.x` to `1.0`
+
+If you are on the latest `0.9.x`, there is nothing to do — `1.0` is the same
+code with a promise attached. If you are coming from further back, take the
+sections below in order; they are cumulative, and the ones that need an edit are
+`0.8.0` (configuration keys, entry points) and `0.6.0` (the `path` option).
+
+The quickest way to find out where you stand is to install and boot: every
+removed configuration key fails loudly at startup rather than being ignored.
+
 ## 0.7.x → 0.8.0
 
 Two changes need your attention. Both are quick, and the second one usually
