@@ -113,9 +113,10 @@ jobs:
             if (major !== '${{ matrix.nestjs }}') { \
               console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
 
-      # A GitHub runner has two cores and 7 GB, and jest's workers grow as they
-      # run. On Node 24 they were killed mid-suite with SIGABRT — no test
-      # failed, the process was simply taken away. Recycling a worker once it
-      # passes half a gigabyte costs seconds and removes the whole class.
+      # In band, deliberately. On Node 24 jest's workers were killed mid-suite
+      # with SIGABRT — no test failed, the process was simply taken away, and it
+      # struck a different matrix row each run. Capping worker memory did not
+      # stop it; having no workers does. A runner has two cores, so the parallel
+      # version was not buying much anyway.
       - name: Run library tests
-        run: npm test -- --maxWorkers=2 --workerIdleMemoryLimit=512MB
+        run: npm test -- --runInBand

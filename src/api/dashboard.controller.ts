@@ -89,12 +89,24 @@ export class DashboardController {
     this.dashboardPath = join(__dirname, '..', 'dashboard', 'public');
   }
 
+  /**
+   * What a bundled file may be called.
+   *
+   * Vite emits `index-Bu05f2IL.js`, `nestlens-icon.svg` and nothing stranger.
+   * Checking the name before it reaches `resolve()` means a traversal attempt
+   * never becomes a path at all — the containment check below stays as the
+   * second line, not the only one.
+   */
+  private static readonly SAFE_FILENAME = /^[A-Za-z0-9._-]+$/;
+
   @Get('assets/:filename')
   serveAssets(
     @Param('filename') filename: string,
     @Res() res: unknown,
     @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
   ): Promise<void> {
+    this.assertSafeFilename(filename, 'Asset not found');
+
     return this.sendFile(
       res,
       join('assets', filename),
@@ -111,6 +123,8 @@ export class DashboardController {
     @Res() res: unknown,
     @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
   ): Promise<void> {
+    this.assertSafeFilename(filename, 'File not found');
+
     return this.sendFile(res, `${filename}.svg`, 'File not found', NO_CACHE, acceptEncoding);
   }
 
@@ -299,6 +313,12 @@ export class DashboardController {
       `<script>window.__NESTLENS_BASE__=${JSON.stringify(baseHref)}</script>`;
 
     return html.replace('<head>', `<head>${injection}`);
+  }
+
+  private assertSafeFilename(filename: string, notFoundMessage: string): void {
+    if (!DashboardController.SAFE_FILENAME.test(filename) || filename.includes('..')) {
+      throw new NotFoundException(notFoundMessage);
+    }
   }
 
   /**

@@ -331,4 +331,26 @@ describe('DashboardController', () => {
       );
     });
   });
+
+  /**
+   * The containment check on the resolved path has always been there; this is
+   * the layer in front of it, so a traversal attempt never becomes a path.
+   * Static analysis reads the flow the same way a reader does: reject at the
+   * boundary, not after building the thing you did not want.
+   */
+  describe('rejects a filename that is not a filename', () => {
+    it.each([
+      ['..%2f..%2fetc%2fpasswd', 'an encoded traversal'],
+      ['../../package.json', 'a plain traversal'],
+      ['sub/dir/file.js', 'a nested path'],
+      ['file\u0000.js', 'a null byte'],
+      ['', 'nothing at all'],
+    ])('%s (%s)', (filename) => {
+      const res = {} as unknown;
+
+      // Thrown synchronously, before any path is built — Nest turns it into the
+      // 404 either way.
+      expect(() => controller.serveAssets(filename, res)).toThrow(NotFoundException);
+    });
+  });
 });
