@@ -1,3 +1,10 @@
+## [0.9.5](https://github.com/mogretici/nestlens/compare/v0.9.4...v0.9.5) (2026-08-13)
+
+
+### Bug Fixes
+
+* **example:** update the demo application's dependencies ([d3ad336](https://github.com/mogretici/nestlens/commit/d3ad336cafa9e82ceb225e8897e465759a23a5b6))
+
 ## [0.9.4](https://github.com/mogretici/nestlens/compare/v0.9.3...v0.9.4) (2026-08-13)
 
 
