@@ -113,10 +113,10 @@ jobs:
             if (major !== '${{ matrix.nestjs }}') { \
               console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
 
-      # In band, deliberately. On Node 24 jest's workers were killed mid-suite
-      # with SIGABRT — no test failed, the process was simply taken away, and it
-      # struck a different matrix row each run. Capping worker memory did not
-      # stop it; having no workers does. A runner has two cores, so the parallel
-      # version was not buying much anyway.
+      # In band, deliberately. The SIGABRT that struck a different Node 24 row
+      # each run came from better-sqlite3's native teardown
+      # (`RemoveEnvironmentCleanupHook … Assertion failed: (env) != nullptr`),
+      # after every suite had passed. v13 does not do it, and one process makes
+      # what remains legible rather than "a worker went away".
       - name: Run library tests
         run: npm test -- --runInBand
