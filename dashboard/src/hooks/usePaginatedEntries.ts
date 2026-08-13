@@ -79,6 +79,8 @@ export function usePaginatedEntries<T extends Entry = Entry>(
 
   // Serialize filters for dependency comparison using stable stringify
   const filtersKey = stableStringify(filters);
+  /** Everything that decides what a fetch returns, in one comparable value. */
+  const requestKey = `${type}|${limit}|${filtersKey}`;
 
   // `filters` arrives memoised from `useCategoryFilters`, so it can be depended
   // on directly: its identity changes when the filters change and not before.
@@ -86,8 +88,20 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   // filters with the current ones.
 
   const [entries, setEntries] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  /**
+   * Which request the entries on screen came from, or `null` before the first
+   * one lands.
+   *
+   * The two flags below are read from it rather than stored. They used to be
+   * set at the top of the fetch — synchronously, from an effect — which is a
+   * render pass before the browser paints, and left `loading` and the data able
+   * to disagree if a fetch was ever interrupted. Derived, they cannot: the
+   * spinner is showing exactly when what is on screen is not what was asked
+   * for.
+   */
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  /** Refreshes the reader asked for: load more, manual refresh, new entries. */
+  const [refreshingOnDemand, setRefreshing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [meta, setMeta] = useState<CursorPaginationMeta | null>(null);
   const [newEntriesCount, setNewEntriesCount] = useState(0);
@@ -99,6 +113,12 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Track if this is the initial load (no data yet)
   const isInitialLoadRef = useRef(true);
+
+  // Nothing has arrived yet and nothing has failed: the full-page spinner.
+  const loading = loadedKey === null && error === null;
+  // Something is on screen but it is not what is being asked for: the quiet
+  // one, so a filter change does not blank the table.
+  const refreshing = refreshingOnDemand || (loadedKey !== null && loadedKey !== requestKey);
   // Track previous filtersKey to detect filter changes
   const prevFiltersKeyRef = useRef(filtersKey);
   // Track highlighted (new) entries with their added timestamps (entry.id -> timestamp)
@@ -106,35 +126,43 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   const [, forceUpdate] = useState(0); // Force re-render for highlight updates
   const HIGHLIGHT_DURATION = 10000; // 10 seconds
 
-  // Fetch initial data or refetch on filter change
-  const fetchInitial = useCallback(async () => {
-    // Only show full loading spinner on initial load (no existing data)
-    // For filter changes, use refreshing state to avoid flicker
-    if (isInitialLoadRef.current) {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
-
-    try {
-      setError(null);
-      const response = await getEntriesWithCursor({ type, limit, filters });
+  /**
+   * Fetching and applying are separated on purpose.
+   *
+   * Every state write below happens as a continuation of a request that has
+   * already left, so the effect that starts the first one schedules work rather
+   * than rendering again before the browser paints. Written as one async
+   * function it reads the same way, but neither a reader nor a static analyser
+   * can see where the synchronous part ends.
+   */
+  const applyPage = useCallback(
+    (response: Awaited<ReturnType<typeof getEntriesWithCursor>>) => {
       setEntries(response.data as T[]);
       setMeta(response.meta);
       newestSequenceRef.current = response.meta.newestSequence;
       setNewEntriesCount(0);
+      setError(null);
       isInitialLoadRef.current = false;
       prevFiltersKeyRef.current = filtersKey;
-    } catch (err) {
+      setLoadedKey(requestKey);
+    },
+    [filtersKey, requestKey],
+  );
+
+  const applyFailure = useCallback(
+    (err: unknown) => {
       const errorObj = err instanceof Error ? err : new Error('Failed to fetch entries');
       setError(errorObj);
       console.error('Failed to fetch entries:', err);
       toast.error('Failed to load entries');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [type, limit, filters, filtersKey]);
+      // Settled even so: the spinner has to stop, and the error is what the
+      // page shows instead.
+      setLoadedKey(requestKey);
+    },
+    [requestKey],
+  );
+
+
 
   // Load older entries
   const loadMore = useCallback(async () => {
@@ -249,10 +277,11 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     );
   }, []);
 
-  // Initial fetch
+  // The first page, and every page after a filter or page-size change. The
+  // request leaves here; what it produces is written by the continuations above.
   useEffect(() => {
-    fetchInitial();
-  }, [fetchInitial]);
+    getEntriesWithCursor({ type, limit, filters }).then(applyPage, applyFailure);
+  }, [type, limit, filters, applyPage, applyFailure]);
 
   // Check if an entry is highlighted (new)
   const isHighlighted = useCallback((id: number): boolean => {
