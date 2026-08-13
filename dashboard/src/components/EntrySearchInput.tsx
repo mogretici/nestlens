@@ -16,8 +16,17 @@ interface EntrySearchInputProps {
  */
 export default function EntrySearchInput({ placeholder = 'Search...' }: EntrySearchInputProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const urlSearch = searchParams.get('search') || '';
+  const urlSearch = searchParams.get('search') ?? '';
   const [searchInput, setSearchInput] = useState(urlSearch);
+  const [lastUrlSearch, setLastUrlSearch] = useState(urlSearch);
+
+  // The URL can change without the field: a filter chip removed, "clear all",
+  // plain navigation. Adjusting during render rather than in an effect keeps the
+  // field and the URL in the same frame.
+  if (urlSearch !== lastUrlSearch) {
+    setLastUrlSearch(urlSearch);
+    setSearchInput(urlSearch);
+  }
 
   // Debounce: push input value to URL
   useEffect(() => {
@@ -37,13 +46,7 @@ export default function EntrySearchInput({ placeholder = 'Search...' }: EntrySea
       );
     }, 350);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInput]);
-
-  // Sync input when the URL changes externally (chip removed, clear all, navigation)
-  useEffect(() => {
-    setSearchInput(urlSearch);
-  }, [urlSearch]);
+  }, [searchInput, setSearchParams]);
 
   return (
     <div className="relative">

@@ -47,7 +47,7 @@ const last = (): MockEventSource => MockEventSource.instances[MockEventSource.in
 
 beforeEach(() => {
   MockEventSource.instances = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   vi.stubGlobal('EventSource', MockEventSource as any);
 });
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { addTagsToEntry, removeTagsFromEntry } from '../api';
-import { getBadgeColor } from './ClickableBadge';
+import { getBadgeColor } from './badgeColors';
 
 interface EntryTagsProps {
   entryId: number;

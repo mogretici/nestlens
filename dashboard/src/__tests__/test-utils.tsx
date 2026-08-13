@@ -85,7 +85,7 @@ export function createMockEntry(overrides: Partial<{
 export function createMockApiResponse<T>(data: T, meta?: Record<string, unknown>) {
   return {
     data,
-    meta: meta || { total: Array.isArray(data) ? data.length : 1 },
+    meta: meta ?? { total: Array.isArray(data) ? data.length : 1 },
   };
 }
 

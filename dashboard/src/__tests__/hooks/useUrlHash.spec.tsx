@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useUrlHash, useUrlHashState } from '../../hooks/useUrlHash';
+import { useUrlHash } from '../../hooks/useUrlHash';
 
 // ============================================================================
 // TEST SETUP

@@ -36,19 +36,17 @@ function createWrapper(initialEntries: string[] = ['/']) {
   };
 }
 
-function createMockEntry(id: number, type: string, payload: Record<string, unknown> = {}) {
-  return {
-    id,
-    sequence: id,
-    type,
-    requestId: `req-${id}`,
-    payload,
-    tags: [],
-    createdAt: new Date().toISOString(),
-  };
+interface MockEntry {
+  id: number;
+  sequence: number;
+  type: string;
+  requestId: string;
+  payload: Record<string, unknown>;
+  tags: string[];
+  createdAt: string;
 }
 
-function createMockResponse(entries: ReturnType<typeof createMockEntry>[]) {
+function createMockResponse(entries: MockEntry[]) {
   return {
     data: entries,
     meta: {

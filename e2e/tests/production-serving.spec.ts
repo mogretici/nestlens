@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 
 /**
  * What the published package actually serves.
@@ -34,6 +34,9 @@ const FIRST_PAINT = { timeout: 20_000 };
  * dashboard happens to use.
  */
 const appShell = (page: Page) => page.getByRole('navigation').first();
+
+/** Mirrors `MIN_COMPRESSED_BYTES` in `src/api/content-encoding.ts`. */
+const MIN_COMPRESSED_BYTES = 1024;
 
 test.describe('serving the built dashboard', () => {
   test('serves index.html, not a wrapped or serialised value', async ({ page }) => {
@@ -87,6 +90,47 @@ test.describe('serving the built dashboard', () => {
 
     const html = await page.request.get(`${MOUNT}`);
     expect(html.headers()['cache-control']).toContain('no-cache');
+  });
+
+  /**
+   * NestLens writes its own responses, so nothing else in the host application's
+   * pipeline compresses them. A real browser is the only place to confirm the
+   * negotiation works end to end: the bundle arrives encoded, and it still runs.
+   */
+  test('sends the bundle compressed to a browser that accepts it', async ({ page }) => {
+    const scripts: Response[] = [];
+    page.on('response', (response) => {
+      if (response.url().includes('/assets/') && response.url().endsWith('.js')) {
+        scripts.push(response);
+      }
+    });
+
+    await page.goto(MOUNT);
+    await expect(appShell(page)).toBeVisible(FIRST_PAINT);
+    expect(scripts.length).toBeGreaterThan(0);
+
+    let compressedChunks = 0;
+    for (const response of scripts) {
+      // Bytes on the wire against bytes after decoding. Chromium strips
+      // `Content-Encoding` from the headers it reports once it has decompressed
+      // the body, so the transfer size is the honest measure — and it is also
+      // the thing being promised.
+      const { responseBodySize } = await response.request().sizes();
+      const decoded = (await response.body()).length;
+
+      if (decoded >= MIN_COMPRESSED_BYTES) {
+        expect(responseBodySize, `${response.url()} was served uncompressed`).toBeLessThan(decoded);
+        compressedChunks += 1;
+      } else {
+        // Below the threshold compression is a loss, so these must arrive as
+        // they are rather than slightly larger.
+        expect(responseBodySize, `${response.url()} was compressed needlessly`).toBe(decoded);
+      }
+
+      expect((await response.allHeaders())['vary']).toContain('Accept-Encoding');
+    }
+
+    expect(compressedChunks, 'no chunk was large enough to prove anything').toBeGreaterThan(0);
   });
 
   /**

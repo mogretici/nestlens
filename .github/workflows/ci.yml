@@ -6,10 +6,23 @@ on:
       - main
   pull_request:
 
+concurrency:
+  # A newer push to the same branch makes the previous run's answer irrelevant,
+  # and on a shared runner pool the superseded run is what the new one queues
+  # behind. Cancelling it is the difference between minutes and half an hour.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Every job below carries a timeout. Without one GitHub allows six hours, so a
+  # `npm test` that hangs bills 360 minutes rather than failing: seventeen such
+  # jobs took 6,120 of this account's 6,855 Actions minutes in one month and
+  # queued every other repository behind them. The suites take two to three
+  # minutes; fifteen is room to spare and still fails fast.
   test:
     name: Unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -60,12 +73,17 @@ jobs:
   compatibility:
     name: NestJS ${{ matrix.nestjs }} on Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
       matrix:
         nestjs: [9, 10, 11]
-        node: [18, 20, 22]
+        # The Node versions still receiving security updates. 18 was dropped
+        # once it went end-of-life: testing a runtime nobody should be running
+        # costs a third of this matrix and proves nothing about the ones people
+        # are. 24 has been LTS since October 2025 and was untested until now.
+        node: [20, 22, 24]
         include:
           # Companion packages have their own peer ranges, so each NestJS
           # version is paired with the release an application on that version
@@ -76,10 +94,6 @@ jobs:
             schedule: 4
           - nestjs: 11
             schedule: 6
-        exclude:
-          # NestJS 11 requires Node >= 20.
-          - nestjs: 11
-            node: 18
 
     steps:
       - name: Checkout

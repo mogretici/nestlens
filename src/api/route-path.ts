@@ -34,6 +34,16 @@ export const toBaseHref = (path: string | undefined): string => {
 const SAFE_FORWARDED_PREFIX = /^\/[A-Za-z0-9\-._~/]*$/;
 
 /**
+ * Longest header value worth examining.
+ *
+ * A mount prefix is a path segment or two; nothing legitimate approaches this.
+ * The cap exists because everything below runs on a value anyone can send, and
+ * a header can carry kilobytes: trimming and stripping trailing slashes on
+ * megabytes of input is work done on behalf of the sender.
+ */
+const MAX_FORWARDED_PREFIX_LENGTH = 256;
+
+/**
  * Normalizes an `X-Forwarded-Prefix` header into `/tools` form, or `''` when it
  * is absent or unusable.
  *
@@ -53,8 +63,15 @@ export const toForwardedPrefix = (header: string | string[] | undefined): string
   // Duplicated headers arrive as an array; a proxy chain disagreeing with
   // itself is not something to guess about.
   if (typeof header !== 'string') return '';
+  if (header.length > MAX_FORWARDED_PREFIX_LENGTH) return '';
 
-  const candidate = header.trim().replace(/\/+$/, '');
+  // Trailing slashes are stripped by index rather than by regex: `/\/+$/` walks
+  // backwards from every position on a value made of slashes, which is quadratic
+  // in the length of a header the caller chooses.
+  const trimmed = header.trim();
+  let end = trimmed.length;
+  while (end > 0 && trimmed[end - 1] === '/') end -= 1;
+  const candidate = trimmed.slice(0, end);
 
   if (candidate.length === 0) return '';
   if (!SAFE_FORWARDED_PREFIX.test(candidate)) return '';

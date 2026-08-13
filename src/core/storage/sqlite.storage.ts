@@ -15,6 +15,7 @@ import {
   TagWithCount,
 } from '../../types';
 import { StorageInterface } from './storage.interface';
+import { normalizeTag } from './tag-normalization';
 
 /**
  * Database row type for nestlens_entries table
@@ -50,6 +51,18 @@ interface TypeCountRow {
   count: number;
 }
 
+/**
+ * The on-disk schema this version writes, recorded in `PRAGMA user_version`.
+ *
+ *   1  the original table: id, type, request_id, payload, created_at
+ *   2  adds family_hash and resolved_at
+ *
+ * Bump it whenever the schema changes, alongside the migration that performs
+ * the change. Files written before versioning read as 0 and are migrated the
+ * same way — the column probing below has always been idempotent.
+ */
+const SCHEMA_VERSION = 2;
+
 @Injectable()
 export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SqliteStorage.name);
@@ -72,7 +85,33 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Already initialized in constructor
   }
 
+  /**
+   * Reads the schema version, and says so when the file is from the future.
+   *
+   * A SQLite file outlives the package that wrote it: it sits on disk across
+   * upgrades, and across downgrades. Migrating forward is handled by probing
+   * for missing columns, which is idempotent and needs no version — but that
+   * only ever adds. Nothing could tell that a file had been written by a newer
+   * NestLens, where a column this version has never heard of may be carrying
+   * meaning, and the entries would simply read back short.
+   */
+  private readSchemaVersion(): number {
+    const version = this.db.pragma('user_version', { simple: true });
+    const parsed = typeof version === 'number' ? version : Number(version);
+
+    if (parsed > SCHEMA_VERSION) {
+      this.logger.warn(
+        `${this.filename} was written by a newer NestLens (schema ${parsed}, this version reads ${SCHEMA_VERSION}). ` +
+          'It will be read as far as this version understands it; upgrade NestLens, or point `storage.sqlite.filename` at a new file.',
+      );
+    }
+
+    return parsed;
+  }
+
   private initializeDatabase(): void {
+    const version = this.readSchemaVersion();
+
     // Create main entries table (base schema without new columns)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS nestlens_entries (
@@ -113,6 +152,12 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Stamped last, so a run that dies midway through leaves the file marked
+    // with the version it still is rather than the one it was becoming.
+    if (version < SCHEMA_VERSION) {
+      this.db.pragma(`user_version = ${SCHEMA_VERSION}`);
+    }
 
     this.logger.log(`Database initialized: ${this.filename}`);
   }
@@ -202,13 +247,17 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       params.push(filter.requestId);
     }
 
+    // `datetime()` on both sides: SQLite writes CURRENT_TIMESTAMP as
+    // "2026-08-12 21:55:45" and a Date arrives as "2026-08-12T21:25:45.292Z",
+    // so comparing them as text compares a space against a "T" — every row
+    // from today or earlier reads as older than any cutoff today. See prune().
     if (filter.from) {
-      sql += ' AND created_at >= ?';
+      sql += ' AND datetime(created_at) >= datetime(?)';
       params.push(filter.from.toISOString());
     }
 
     if (filter.to) {
-      sql += ' AND created_at <= ?';
+      sql += ' AND datetime(created_at) <= datetime(?)';
       params.push(filter.to.toISOString());
     }
 
@@ -372,14 +421,28 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     };
   }
 
+  /**
+   * Both sides go through `datetime()` before they are compared.
+   *
+   * SQLite stores `CURRENT_TIMESTAMP` as `2026-08-12 21:55:45` and a JavaScript
+   * Date arrives as `2026-08-12T21:25:45.292Z`. Compared as text — which is
+   * what `created_at < ?` does — the eleventh character decides: a space sorts
+   * before a "T", so every row whose date is the cutoff's date or earlier reads
+   * as older than the cutoff whatever its time. Pruning anything therefore
+   * pruned everything recorded that day, including entries seconds old.
+   */
   async prune(before: Date): Promise<number> {
-    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE created_at < ?');
+    const stmt = this.db.prepare(
+      'DELETE FROM nestlens_entries WHERE datetime(created_at) < datetime(?)',
+    );
     const result = stmt.run(before.toISOString());
     return result.changes;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
-    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE type = ? AND created_at < ?');
+    const stmt = this.db.prepare(
+      'DELETE FROM nestlens_entries WHERE type = ? AND datetime(created_at) < datetime(?)',
+    );
     const result = stmt.run(type, before.toISOString());
     return result.changes;
   }
@@ -1093,7 +1156,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
   // ==================== Monitored Tags ====================
 
-  async addMonitoredTag(tag: string): Promise<MonitoredTag> {
+  async addMonitoredTag(rawTag: string): Promise<MonitoredTag> {
+    const tag = normalizeTag(rawTag);
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO nestlens_monitored_tags (tag)
       VALUES (?)
@@ -1112,11 +1176,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     };
   }
 
-  async removeMonitoredTag(tag: string): Promise<void> {
+  async removeMonitoredTag(rawTag: string): Promise<void> {
     const stmt = this.db.prepare(`
       DELETE FROM nestlens_monitored_tags WHERE tag = ?
     `);
-    stmt.run(tag);
+    stmt.run(normalizeTag(rawTag));
   }
 
   async getMonitoredTags(): Promise<MonitoredTag[]> {

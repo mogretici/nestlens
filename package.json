@@ -4,6 +4,32 @@
   "description": "Laravel Telescope-like debugging and monitoring tool for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./storage/sqlite": {
+      "types": "./dist/core/storage/sqlite.storage.d.ts",
+      "default": "./dist/core/storage/sqlite.storage.js"
+    },
+    "./storage/redis": {
+      "types": "./dist/core/storage/redis.storage.d.ts",
+      "default": "./dist/core/storage/redis.storage.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "storage/sqlite": [
+        "dist/core/storage/sqlite.storage.d.ts"
+      ],
+      "storage/redis": [
+        "dist/core/storage/redis.storage.d.ts"
+      ]
+    }
+  },
+  "type": "commonjs",
   "files": [
     "dist",
     "README.md",
@@ -22,6 +48,8 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "test:e2e:headed": "npx playwright test --headed",
+    "test:smoke": "node scripts/smoke-published-package.mjs",
+    "benchmark": "node --expose-gc scripts/benchmark.mjs",
     "prepublishOnly": "npm run build",
     "sync-versions": "node -e \"const fs=require('fs');const pkg=require('./package.json');const dash=require('./dashboard/package.json');dash.version=pkg.version;fs.writeFileSync('./dashboard/package.json',JSON.stringify(dash,null,2)+'\\n')\"",
     "prepare": "husky"
@@ -62,33 +90,46 @@
     "url": "git+https://github.com/mogretici/nestlens.git"
   },
   "peerDependencies": {
+    "@apollo/server": "^4.0.0 || ^5.0.0",
+    "@nestjs/apollo": "^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0",
+    "@nestjs/cache-manager": "^1.0.0 || ^2.0.0 || ^3.0.0",
     "@nestjs/common": "^9.0.0 || ^10.0.0 || ^11.0.0",
     "@nestjs/core": "^9.0.0 || ^10.0.0 || ^11.0.0",
-    "better-sqlite3": "^11.0.0",
+    "@nestjs/graphql": "^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0",
+    "@nestjs/mercurius": "^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0",
+    "better-sqlite3": "^11.0.0 || ^12.0.0 || ^13.0.0",
+    "bullmq": "^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0",
     "ioredis": "^5.0.0",
+    "mercurius": "^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0",
     "reflect-metadata": "^0.1.13 || ^0.2.0",
     "rxjs": "^7.0.0"
   },
   "peerDependenciesMeta": {
-    "better-sqlite3": {
-      "optional": true
-    },
-    "ioredis": {
+    "@apollo/server": {
       "optional": true
     },
     "@nestjs/apollo": {
       "optional": true
     },
-    "@nestjs/mercurius": {
-      "optional": true
-    },
-    "@apollo/server": {
-      "optional": true
-    },
-    "mercurius": {
+    "@nestjs/cache-manager": {
       "optional": true
     },
     "@nestjs/graphql": {
+      "optional": true
+    },
+    "@nestjs/mercurius": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    },
+    "bullmq": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "mercurius": {
       "optional": true
     }
   },
@@ -122,7 +163,7 @@
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
-    "better-sqlite3": "^11.6.0",
+    "better-sqlite3": "^12.11.1",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
@@ -142,7 +183,7 @@
     "typescript": "^5.7.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "lint-staged": {
     "src/**/*.ts": [

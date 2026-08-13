@@ -8,12 +8,28 @@ Learn how to optimize NestLens for minimal performance impact on your applicatio
 
 ## Performance Overview
 
-NestLens is designed for minimal overhead:
+These numbers come from `npm run benchmark`, which is in the repository — run it
+on your own hardware rather than trusting the table. The figures below were
+measured on Node 25, Apple Silicon, with the request and exception watchers
+enabled and the default in-memory storage.
 
-- **Request Tracking**: ~0.5-1ms per request
-- **Query Tracking**: ~0.1-0.5ms per query
-- **Memory Usage**: Less than 50MB typical (with buffering)
-- **CPU Impact**: Less than 2% in most applications
+| | measured |
+| --- | --- |
+| Added request latency (empty endpoint) | **p50 0.025 ms**, p99 0.18 ms |
+| 10,000 entries held in memory | **2.3 MB** |
+| Write throughput, memory storage | ~1,500,000 entries/second |
+| Write throughput, SQLite storage | ~23,000 entries/second |
+
+The latency figure is the difference between the same application with and
+without NestLens, over 2,000 requests after a warm-up. Watchers that wrap a
+library — queries, cache, mail — cost in proportion to how often that library is
+called, so an application making twenty queries per request pays twenty times
+the per-entry cost rather than the per-request one.
+
+Two things dominate in practice and neither is on this table: the storage driver
+you choose (SQLite is roughly sixty times slower to write than memory, and Redis
+depends on your network) and how much payload you record. `maxBodySize` and the
+`filter` hook are the levers.
 
 ### Serving the dashboard
 
@@ -29,6 +45,36 @@ knowing what it costs the application hosting it:
 - `index.html` is sent with `Cache-Control: no-cache`. It carries the mount
   point injected per request and points at the current bundle, so it is
   revalidated every time — that is what makes the immutable assets safe.
+- Scripts, stylesheets and other text assets are **compressed on the way out**,
+  in brotli or gzip depending on what the browser asked for. NestLens writes its
+  own responses so that your global interceptors cannot rewrite them, which also
+  means nothing else in your pipeline compresses them — this does not depend on
+  your application having compression middleware installed.
+
+  Measured on the shipped bundle:
+
+  | | uncompressed | brotli |
+  |---|---|---|
+  | First load (`index.html` + vendor + app + CSS) | 287 KB | **79 KB** |
+  | Opening a log, job, cache or similar entry | 95 KB | **26 KB** |
+  | Opening a query entry (includes the SQL formatter) | 344 KB | **90 KB** |
+
+  Each file is compressed once per process and then reused, and the work runs on
+  zlib's thread pool rather than the event loop. Already-compressed formats
+  (PNG, WOFF2, ICO) and bodies under 1 KB are sent as they are — compressing
+  them costs CPU and produces the same size or slightly larger.
+
+  Responses carry `Vary: Accept-Encoding`, so a shared cache in front of your
+  application stores one entry per encoding instead of serving a brotli body to
+  a client that cannot read it.
+- Each page and each entry detail view is a separate chunk, fetched when it is
+  first needed. Opening a log entry no longer downloads the views for GraphQL,
+  mail, models and the other seventeen types you did not open.
+
+  The SQL formatter is the one large exception: it is 230 KB of the query
+  detail view, and it runs on first render because that view opens formatted.
+  It is downloaded only when you open a query entry, and then cached like every
+  other fingerprinted asset.
 
 None of this applies when the dashboard is disabled: no files are read and
 nothing is cached.

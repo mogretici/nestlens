@@ -15,6 +15,21 @@ import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 // not-found paths.
 jest.mock('fs', () => ({
   existsSync: jest.fn(),
+  // The controller serves what the directory listing contains, so the mock has
+  // to answer with the names the tests ask for.
+  readdirSync: jest.fn(() => [
+    'main.js',
+    'styles.css',
+    'font.woff2',
+    'data.json',
+    'mystery.xyz',
+    'index-Bu05f2IL.js',
+    'index.html',
+    'nestlens-icon.svg',
+    'favicon.svg',
+    'icon.svg',
+    'logo.svg',
+  ]),
   readFileSync: jest.fn(() => Buffer.from('<html><head></head><body></body></html>')),
 }));
 
@@ -268,11 +283,18 @@ describe('DashboardController', () => {
       expect(written.status).toBe(200);
     });
 
-    it('still checks existence on every request', () => {
-      controller.serveAssets('main.js', RES);
-      (existsSync as jest.Mock).mockReturnValue(false);
+    /**
+     * The bundle ships inside the package and cannot change while the process
+     * runs, which is why the directory is listed once. A file that disappears
+     * anyway — an upgrade replacing the directory underneath a running process
+     * — is a 404 rather than the ENOENT it would otherwise become.
+     */
+    it('turns a file that vanished into a 404', () => {
+      (readFileSync as jest.Mock).mockImplementationOnce(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
 
-      expect(() => controller.serveAssets('main.js', RES)).toThrow(NotFoundException);
+      expect(() => controller.serveAssets('styles.css', RES)).toThrow(NotFoundException);
     });
   });
 
@@ -329,6 +351,28 @@ describe('DashboardController', () => {
       expect(() => controller.serveStaticFile('../../../etc/passwd', RES)).toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  /**
+   * The containment check on the resolved path has always been there; this is
+   * the layer in front of it, so a traversal attempt never becomes a path.
+   * Static analysis reads the flow the same way a reader does: reject at the
+   * boundary, not after building the thing you did not want.
+   */
+  describe('rejects a filename that is not a filename', () => {
+    it.each([
+      ['..%2f..%2fetc%2fpasswd', 'an encoded traversal'],
+      ['../../package.json', 'a plain traversal'],
+      ['sub/dir/file.js', 'a nested path'],
+      ['file\u0000.js', 'a null byte'],
+      ['', 'nothing at all'],
+    ])('%s (%s)', (filename) => {
+      const res = {} as unknown;
+
+      // Thrown synchronously, before any path is built — Nest turns it into the
+      // 404 either way.
+      expect(() => controller.serveAssets(filename, res)).toThrow(NotFoundException);
     });
   });
 });

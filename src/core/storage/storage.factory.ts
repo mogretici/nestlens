@@ -26,7 +26,36 @@ async function createMemoryStorage(config: StorageConfig): Promise<StorageInterf
   const storage = new MemoryStorage(config.memory);
   await storage.initialize();
   logger.log('Using in-memory storage');
+  warnIfClustered();
   return storage;
+}
+
+/**
+ * Says so when in-memory storage is running in one of several processes.
+ *
+ * The default storage lives in the process that recorded the entry, and a
+ * clustered application answers each request from whichever worker was free.
+ * The dashboard then shows one worker's entries, a refresh shows another's, and
+ * entries appear to come and go at random — a confusing thing to debug with a
+ * debugging tool. Nothing is broken; the driver simply cannot see across
+ * processes.
+ *
+ * Only same-host clustering is detectable from inside the process. Several
+ * replicas of a container have exactly the same problem and no way to know it,
+ * which is why the documentation covers the topology rather than this warning.
+ *
+ * Read from the environment rather than from `node:cluster`: `isWorker` is
+ * defined as `NODE_UNIQUE_ID !== undefined`, and loading the cluster module to
+ * ask leaves a handle open that outlives the process's work. `NODE_APP_INSTANCE`
+ * covers PM2, which sets it in fork mode as well as in cluster mode.
+ */
+function warnIfClustered(): void {
+  if (!process.env.NODE_UNIQUE_ID && !process.env.NODE_APP_INSTANCE) return;
+
+  logger.warn(
+    'In-memory storage in a clustered process: each worker keeps its own entries, so the dashboard ' +
+      'shows only the worker that answered the request. Use the sqlite or redis driver for one shared view.',
+  );
 }
 
 /**

@@ -31,6 +31,12 @@ const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'ut
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  engines?: { node?: string };
+  main?: string;
+  types?: string;
+  exports?: Record<string, string | Record<string, string>>;
+  typesVersions?: Record<string, Record<string, string[]>>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
 const declaredPackages = new Set([
@@ -261,6 +267,98 @@ describe('package contract', () => {
     expect([...new Set(missing)].sort()).toEqual([]);
   });
 
+  /**
+   * `engines` is a promise about which runtimes are supported, and the CI
+   * matrix is the evidence for it. They drifted once already: the matrix tested
+   * Node 18 and 20 long after both went end-of-life while Node 24, the current
+   * LTS, was never run at all.
+   *
+   * A version in `engines` that the matrix never exercises is untested, and a
+   * version the matrix exercises that `engines` excludes is a job proving
+   * something the package refuses to install on.
+   */
+  it('tests every Node version it claims to support, and claims every one it tests', () => {
+    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+    const matrix = workflow.match(/^\s*node:\s*\[([^\]]+)\]/m)?.[1];
+    expect(matrix).toBeDefined();
+
+    const tested = (matrix as string)
+      .split(',')
+      .map((value) => Number.parseInt(value.trim(), 10))
+      .sort((a, b) => a - b);
+    const minimum = Number.parseInt(
+      (packageJson.engines?.node ?? '').replace(/[^\d.]/g, '').split('.')[0] as string,
+      10,
+    );
+
+    expect(tested.length).toBeGreaterThan(0);
+    expect(Number.isNaN(minimum)).toBe(false);
+    // The floor of the matrix is what `engines` may promise: anything lower is
+    // a claim nothing backs.
+    expect(tested[0]).toBe(minimum);
+  });
+
+  /**
+   * The `exports` map is the published surface. Before it existed, every file
+   * under `dist/` was importable, which meant 1.0's "the API is frozen" would
+   * have frozen the build layout too — every internal service, reachable and
+   * therefore promised.
+   *
+   * Now that the map decides, it has to stay true: an entry pointing at a file
+   * that no longer exists is a consumer's `ERR_PACKAGE_PATH_NOT_EXPORTED` at
+   * install time, and this repo cannot notice on its own because it never
+   * imports itself by name.
+   */
+  describe('published entry points', () => {
+    const exportsMap = packageJson.exports ?? {};
+
+    /** `./dist/core/storage/redis.storage.js` → `src/core/storage/redis.storage.ts` */
+    const sourceFor = (distPath: string): string =>
+      join(REPO_ROOT, distPath.replace(/^\.\//, '').replace(/^dist\//, 'src/')).replace(
+        /\.(js|d\.ts)$/,
+        '.ts',
+      );
+
+    const subpathTargets = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json',
+    );
+
+    it('publishes a root entry point that matches main and types', () => {
+      const root = exportsMap['.'];
+
+      expect(typeof root).toBe('object');
+      expect((root as Record<string, string>).default).toBe(`./${packageJson.main}`);
+      expect((root as Record<string, string>).types).toBe(`./${packageJson.types}`);
+    });
+
+    it('has at least one subpath beyond the root, so the map is doing something', () => {
+      expect(subpathTargets.length).toBeGreaterThan(1);
+    });
+
+    it.each(subpathTargets)('%s resolves to a file that exists', (_subpath, target) => {
+      const paths = typeof target === 'string' ? [target] : Object.values(target);
+
+      for (const path of paths) {
+        expect({ path, exists: existsSync(sourceFor(path)) }).toEqual({ path, exists: true });
+      }
+    });
+
+    /**
+     * TypeScript ignores `exports` under the `node`/`node10` resolution that
+     * NestJS's own tsconfig still uses, so a subpath without a `typesVersions`
+     * entry resolves at runtime and fails to type-check — the worst of the two.
+     */
+    it('mirrors every subpath in typesVersions, for node10 type resolution', () => {
+      const declared = Object.keys(packageJson.typesVersions?.['*'] ?? {}).sort();
+      const expected = subpathTargets
+        .map(([subpath]) => subpath.replace(/^\.\//, ''))
+        .filter((subpath) => subpath !== '.')
+        .sort();
+
+      expect(declared).toEqual(expected);
+    });
+  });
+
   it('keeps optional integrations out of module-scope imports', () => {
     // These must stay lazily required so consumers without them can boot.
     const optionalOnly = ['@nestjs/swagger', '@nestjs/cache-manager', 'bullmq', '@nestjs/graphql'];
@@ -271,5 +369,33 @@ describe('package contract', () => {
       .map((i) => `${i.packageName} (imported by ${i.file})`);
 
     expect(leaked).toEqual([]);
+  });
+
+  /**
+   * A package reached for at runtime but never declared is invisible: nothing
+   * installs it, nothing warns when the installed version is one NestLens does
+   * not work with, and the only symptom is a `MODULE_NOT_FOUND` in production.
+   * `@nestjs/cache-manager` and `bullmq` sat in this gap — required by two
+   * watchers, mentioned in the documentation, declared nowhere.
+   *
+   * Declaring them as optional peers is what makes `peerDependenciesMeta` mean
+   * anything: npm ignores an entry there that is not also a peer dependency.
+   */
+  it('declares every lazily required package as an optional peer', () => {
+    const optionalPeers = new Set(Object.keys(packageJson.peerDependenciesMeta ?? {}));
+    const declaredPeers = new Set(Object.keys(packageJson.peerDependencies ?? {}));
+
+    const undeclared = sourceFiles
+      .flatMap(collectDeferredImports)
+      .filter(({ packageName }) => !nodeBuiltins.has(packageName))
+      // Reached through a package that is already a hard dependency of the
+      // adapter, not something a consumer installs on purpose.
+      .filter(({ packageName }) => packageName !== 'express')
+      .filter(
+        ({ packageName }) => !declaredPeers.has(packageName) || !optionalPeers.has(packageName),
+      )
+      .map((i) => `${i.packageName} (required by ${i.file})`);
+
+    expect([...new Set(undeclared)].sort()).toEqual([]);
   });
 });

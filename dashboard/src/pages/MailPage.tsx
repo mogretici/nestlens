@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { parseDate } from '../utils/date';
@@ -53,11 +53,11 @@ export default function MailPage() {
   const entries = allEntries.filter((entry): entry is MailEntry => isMailEntry(entry));
 
   // Format recipients
-  const formatRecipients = (to: string | string[]) => {
+  const formatRecipients = useCallback((to: string | string[]) => {
     const recipients = Array.isArray(to) ? to : [to];
     if (recipients.length === 1) return recipients[0];
     return `${recipients[0]} +${recipients.length - 1}`;
-  };
+  }, []);
 
   // Table columns definition
   const tableColumns: Column<MailEntry>[] = useMemo(() => [
@@ -107,7 +107,7 @@ export default function MailPage() {
       header: 'Tags',
       minWidth: '150px',
       render: (entry) => {
-        const filteredTags = (entry.tags || []).filter(tag => !mailStatuses.includes(tag.toLowerCase()));
+        const filteredTags = (entry.tags ?? []).filter(tag => !mailStatuses.includes(tag.toLowerCase()));
         return (
           <TagsList
             tags={filteredTags}

@@ -5,16 +5,9 @@ import { parseDate } from '../utils/date';
 import { Layers } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
-import {
-  NewEntriesButton,
-  LoadMoreButton,
-} from '../components/PaginationControls';
+import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader from '../components/PageHeader';
-import DataTable, {
-  Column,
-  TextCell,
-  DurationCell,
-} from '../components/DataTable';
+import DataTable, { Column, TextCell, DurationCell } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { BatchEntry, isBatchEntry } from '../types';
 
@@ -22,13 +15,8 @@ export default function BatchesPage() {
   const navigate = useNavigate();
 
   // Use centralized filter hook - all config comes from entryTypes.ts
-  const {
-    addFilter,
-    clearAll,
-    serverFilters,
-    headerFilters,
-    hasFilters,
-  } = useEntryFilters('batches');
+  const { addFilter, clearAll, serverFilters, headerFilters, hasFilters } =
+    useEntryFilters('batches');
 
   const {
     entries: allEntries,
@@ -49,83 +37,94 @@ export default function BatchesPage() {
   const entries = allEntries.filter((entry): entry is BatchEntry => isBatchEntry(entry));
 
   // Table columns definition
-  const tableColumns: Column<BatchEntry>[] = useMemo(() => [
-    {
-      key: 'name',
-      header: 'Name',
-      minWidth: '200px',
-      render: (entry) => (
-        <TextCell mono truncate maxWidth="250px">
-          {entry.payload.name}
-        </TextCell>
-      ),
-    },
-    {
-      key: 'operation',
-      header: 'Operation',
-      width: '150px',
-      render: (entry) => entry.payload.operation ? (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('operations', entry.payload.operation!); }}
-        >
-          {entry.payload.operation}
-        </ClickableBadge>
-      ) : (
-        <TextCell secondary>-</TextCell>
-      ),
-    },
-    {
-      key: 'progress',
-      header: 'Progress',
-      width: '150px',
-      render: (entry) => {
-        const { processedItems, totalItems } = entry.payload;
-        const percentage = totalItems > 0 ? Math.round((processedItems / totalItems) * 100) : 0;
-        return (
-          <div className="flex items-center space-x-2">
-            <TextCell>{`${processedItems}/${totalItems}`}</TextCell>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              ({percentage}%)
-            </span>
-          </div>
-        );
+  const tableColumns: Column<BatchEntry>[] = useMemo(
+    () => [
+      {
+        key: 'name',
+        header: 'Name',
+        minWidth: '200px',
+        render: (entry) => (
+          <TextCell mono truncate maxWidth="250px">
+            {entry.payload.name}
+          </TextCell>
+        ),
       },
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      width: '120px',
-      render: (entry) => (
-        <ClickableBadge
-          onClick={(e) => { e.stopPropagation(); addFilter('statuses', entry.payload.status); }}
-        >
-          {entry.payload.status.toUpperCase()}
-        </ClickableBadge>
-      ),
-    },
-    {
-      key: 'duration',
-      header: 'Duration',
-      width: '100px',
-      align: 'right',
-      render: (entry) => entry.payload.duration ? (
-        <DurationCell ms={entry.payload.duration} />
-      ) : (
-        <TextCell secondary>-</TextCell>
-      ),
-    },
-    {
-      key: 'time',
-      header: 'Time',
-      width: '170px',
-      align: 'right',
-      render: (entry) => (
-        <TextCell secondary className="text-xs">
-          {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
-        </TextCell>
-      ),
-    },
-  ], [addFilter]);
+      {
+        key: 'operation',
+        header: 'Operation',
+        width: '150px',
+        render: (entry) => {
+          const operation = entry.payload.operation;
+          return operation ? (
+            <ClickableBadge
+              onClick={(e) => {
+                e.stopPropagation();
+                addFilter('operations', operation);
+              }}
+            >
+              {operation}
+            </ClickableBadge>
+          ) : (
+            <TextCell secondary>-</TextCell>
+          );
+        },
+      },
+      {
+        key: 'progress',
+        header: 'Progress',
+        width: '150px',
+        render: (entry) => {
+          const { processedItems, totalItems } = entry.payload;
+          const percentage = totalItems > 0 ? Math.round((processedItems / totalItems) * 100) : 0;
+          return (
+            <div className="flex items-center space-x-2">
+              <TextCell>{`${processedItems}/${totalItems}`}</TextCell>
+              <span className="text-xs text-gray-500 dark:text-gray-400">({percentage}%)</span>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        width: '120px',
+        render: (entry) => (
+          <ClickableBadge
+            onClick={(e) => {
+              e.stopPropagation();
+              addFilter('statuses', entry.payload.status);
+            }}
+          >
+            {entry.payload.status.toUpperCase()}
+          </ClickableBadge>
+        ),
+      },
+      {
+        key: 'duration',
+        header: 'Duration',
+        width: '100px',
+        align: 'right',
+        render: (entry) =>
+          entry.payload.duration ? (
+            <DurationCell ms={entry.payload.duration} />
+          ) : (
+            <TextCell secondary>-</TextCell>
+          ),
+      },
+      {
+        key: 'time',
+        header: 'Time',
+        width: '170px',
+        align: 'right',
+        render: (entry) => (
+          <TextCell secondary className="text-xs">
+            {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
+          </TextCell>
+        ),
+      },
+    ],
+    [addFilter],
+  );
 
   // Only show full-page spinner on initial load when no data exists
   if (loading && entries.length === 0) {
@@ -159,28 +158,20 @@ export default function BatchesPage() {
       {/* Content */}
       <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
         {/* New entries button */}
-        <NewEntriesButton
-          count={newEntriesCount}
-          onClick={loadNew}
-          loading={refreshing}
-        />
+        <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
 
         <DataTable
           columns={tableColumns}
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/batches/${entry.id}`)}
-          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
+          rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No batch operations recorded yet"
           emptyIcon={<Layers className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 
         {/* Load more button */}
-        <LoadMoreButton
-          hasMore={hasMore}
-          onClick={loadMore}
-          loading={refreshing}
-        />
+        <LoadMoreButton hasMore={hasMore} onClick={loadMore} loading={refreshing} />
       </div>
     </div>
   );

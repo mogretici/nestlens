@@ -344,7 +344,7 @@ describe('Badge Filter Navigation', () => {
 
     it('does not navigate when clickable=false', async () => {
       // Arrange
-      const user = userEvent.setup();
+      userEvent.setup();
 
       // Act
       render(

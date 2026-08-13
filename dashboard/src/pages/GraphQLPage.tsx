@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { parseDate } from '../utils/date';
@@ -6,10 +6,7 @@ import { Hexagon } from 'lucide-react';
 import EntrySearchInput from '../components/EntrySearchInput';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters, HeaderFilter } from '../hooks/useEntryFilters';
-import {
-  NewEntriesButton,
-  LoadMoreButton,
-} from '../components/PaginationControls';
+import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader from '../components/PageHeader';
 import DataTable, {
   Column,
@@ -79,19 +76,25 @@ export default function GraphQLPage() {
   };
 
   // Handlers for boolean filter badges
-  const handleFilterByErrors = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('hasErrors', 'true');
-    setSearchParams(newParams, { replace: true });
-  };
+  const handleFilterByErrors = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('hasErrors', 'true');
+      setSearchParams(newParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
-  const handleFilterByN1 = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set('hasN1', 'true');
-    setSearchParams(newParams, { replace: true });
-  };
+  const handleFilterByN1 = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('hasN1', 'true');
+      setSearchParams(newParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const {
     entries: allEntries,
@@ -112,92 +115,94 @@ export default function GraphQLPage() {
   const entries = allEntries.filter((entry): entry is GraphQLEntry => isGraphQLEntry(entry));
 
   // Table columns definition
-  const tableColumns: Column<GraphQLEntry>[] = useMemo(() => [
-    {
-      key: 'type',
-      header: 'Type',
-      width: '110px',
-      render: (entry) => (
-        <ClickableBadge listType="graphql" filterType="operationTypes">
-          {entry.payload.operationType}
-        </ClickableBadge>
-      ),
-    },
-    {
-      key: 'operation',
-      header: 'Operation',
-      minWidth: '150px',
-      render: (entry) => (
-        <TextCell mono truncate maxWidth="280px">
-          {entry.payload.operationName || '(anonymous)'}
-        </TextCell>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      width: '180px',
-      align: 'center',
-      render: (entry) => (
-        <div className="flex items-center gap-1.5 justify-center">
-          <ClickableBadge listType="graphql" filterType="statuses">
-            {entry.payload.statusCode}
+  const tableColumns: Column<GraphQLEntry>[] = useMemo(
+    () => [
+      {
+        key: 'type',
+        header: 'Type',
+        width: '110px',
+        render: (entry) => (
+          <ClickableBadge listType="graphql" filterType="operationTypes">
+            {entry.payload.operationType}
           </ClickableBadge>
-          {entry.payload.hasErrors && (
-            <GraphQLErrorBadge onClick={handleFilterByErrors} />
-          )}
-          {entry.payload.potentialN1 && entry.payload.potentialN1.length > 0 && (
-            <N1WarningBadge count={entry.payload.potentialN1.length} onClick={handleFilterByN1} />
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'resolvers',
-      header: 'Resolvers',
-      width: '90px',
-      align: 'center',
-      render: (entry) => (
-        <TextCell secondary className="text-xs tabular-nums">
-          {entry.payload.resolverCount ?? '-'}
-        </TextCell>
-      ),
-    },
-    {
-      key: 'duration',
-      header: 'Duration',
-      width: '100px',
-      align: 'right',
-      render: (entry) => (
-        <DurationCell ms={entry.payload.duration} />
-      ),
-    },
-    {
-      key: 'tags',
-      header: 'Tags',
-      minWidth: '150px',
-      render: (entry) => (
-        <TagsList
-          tags={(entry.tags || []).filter(
-            (t) => !['query', 'mutation', 'subscription'].includes(t.toLowerCase())
-          )}
-          max={3}
-          onTagClick={(tag, e) => { e.stopPropagation(); addFilter('tags', tag); }}
-        />
-      ),
-    },
-    {
-      key: 'time',
-      header: 'Time',
-      width: '180px',
-      align: 'right',
-      render: (entry) => (
-        <TextCell secondary className="text-xs whitespace-nowrap">
-          {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
-        </TextCell>
-      ),
-    },
-  ], [handleFilterByErrors, handleFilterByN1, addFilter]);
+        ),
+      },
+      {
+        key: 'operation',
+        header: 'Operation',
+        minWidth: '150px',
+        render: (entry) => (
+          <TextCell mono truncate maxWidth="280px">
+            {entry.payload.operationName || '(anonymous)'}
+          </TextCell>
+        ),
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        width: '180px',
+        align: 'center',
+        render: (entry) => (
+          <div className="flex items-center gap-1.5 justify-center">
+            <ClickableBadge listType="graphql" filterType="statuses">
+              {entry.payload.statusCode}
+            </ClickableBadge>
+            {entry.payload.hasErrors && <GraphQLErrorBadge onClick={handleFilterByErrors} />}
+            {entry.payload.potentialN1 && entry.payload.potentialN1.length > 0 && (
+              <N1WarningBadge count={entry.payload.potentialN1.length} onClick={handleFilterByN1} />
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'resolvers',
+        header: 'Resolvers',
+        width: '90px',
+        align: 'center',
+        render: (entry) => (
+          <TextCell secondary className="text-xs tabular-nums">
+            {entry.payload.resolverCount ?? '-'}
+          </TextCell>
+        ),
+      },
+      {
+        key: 'duration',
+        header: 'Duration',
+        width: '100px',
+        align: 'right',
+        render: (entry) => <DurationCell ms={entry.payload.duration} />,
+      },
+      {
+        key: 'tags',
+        header: 'Tags',
+        minWidth: '150px',
+        render: (entry) => (
+          <TagsList
+            tags={(entry.tags ?? []).filter(
+              (t) => !['query', 'mutation', 'subscription'].includes(t.toLowerCase()),
+            )}
+            max={3}
+            onTagClick={(tag, e) => {
+              e.stopPropagation();
+              addFilter('tags', tag);
+            }}
+          />
+        ),
+      },
+      {
+        key: 'time',
+        header: 'Time',
+        width: '180px',
+        align: 'right',
+        render: (entry) => (
+          <TextCell secondary className="text-xs whitespace-nowrap">
+            {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
+          </TextCell>
+        ),
+      },
+    ],
+    [handleFilterByErrors, handleFilterByN1, addFilter],
+  );
 
   // Loading spinner
   if (loading && entries.length === 0) {
@@ -229,27 +234,19 @@ export default function GraphQLPage() {
       <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
         <EntrySearchInput placeholder="Search by operation, type, tag, or query content..." />
 
-        <NewEntriesButton
-          count={newEntriesCount}
-          onClick={loadNew}
-          loading={refreshing}
-        />
+        <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
 
         <DataTable
           columns={tableColumns}
           data={entries}
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/graphql/${entry.id}`)}
-          rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
+          rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No GraphQL operations recorded yet"
           emptyIcon={<Hexagon className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 
-        <LoadMoreButton
-          hasMore={hasMore}
-          onClick={loadMore}
-          loading={refreshing}
-        />
+        <LoadMoreButton hasMore={hasMore} onClick={loadMore} loading={refreshing} />
       </div>
     </div>
   );

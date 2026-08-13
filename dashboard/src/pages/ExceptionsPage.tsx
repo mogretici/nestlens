@@ -1,24 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { parseDate } from '../utils/date';
 import { AlertTriangle, CheckCircle, Circle, RefreshCw } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
-import {
-  NewEntriesButton,
-  LoadMoreButton,
-} from '../components/PaginationControls';
+import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader, { FilterTabs } from '../components/PageHeader';
 import EntrySearchInput from '../components/EntrySearchInput';
-import DataTable, {
-  Column,
-  TextCell,
-} from '../components/DataTable';
+import DataTable, { Column, TextCell } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { ExceptionEntry, isExceptionEntry } from '../types';
 import { resolveEntry, unresolveEntry } from '../api';
-import { useStats } from '../contexts/StatsContext';
+import { useStats } from '../contexts/useStats';
 
 type FilterStatus = 'all' | 'unresolved' | 'resolved';
 
@@ -77,121 +71,127 @@ export default function ExceptionsPage() {
     { id: 'resolved', label: 'Resolved' },
   ];
 
-  const handleToggleResolved = async (e: React.MouseEvent, entry: ExceptionEntry) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleToggleResolved = useCallback(
+    async (e: React.MouseEvent, entry: ExceptionEntry) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    setResolvingId(entry.id);
-    try {
-      if (entry.resolvedAt) {
-        const result = await unresolveEntry(entry.id);
-        updateEntry(result.data);
-      } else {
-        const result = await resolveEntry(entry.id);
-        updateEntry(result.data);
+      setResolvingId(entry.id);
+      try {
+        if (entry.resolvedAt) {
+          const result = await unresolveEntry(entry.id);
+          updateEntry(result.data);
+        } else {
+          const result = await resolveEntry(entry.id);
+          updateEntry(result.data);
+        }
+        // Refresh stats to update sidebar badge count
+        await refreshStats();
+      } catch (error) {
+        console.error('Failed to toggle resolution:', error);
+      } finally {
+        setResolvingId(null);
       }
-      // Refresh stats to update sidebar badge count
-      await refreshStats();
-    } catch (error) {
-      console.error('Failed to toggle resolution:', error);
-    } finally {
-      setResolvingId(null);
-    }
-  };
+    },
+    [updateEntry, refreshStats],
+  );
 
   // Table columns definition
-  const tableColumns: Column<ExceptionEntry>[] = useMemo(() => [
-    {
-      key: 'exception',
-      header: 'Exception',
-      minWidth: '180px',
-      render: (entry) => {
-        const displayName = getDisplayName(entry);
-        return (
-          <ClickableBadge listType="exceptions" filterType="names">
-            {displayName}
-          </ClickableBadge>
-        );
+  const tableColumns: Column<ExceptionEntry>[] = useMemo(
+    () => [
+      {
+        key: 'exception',
+        header: 'Exception',
+        minWidth: '180px',
+        render: (entry) => {
+          const displayName = getDisplayName(entry);
+          return (
+            <ClickableBadge listType="exceptions" filterType="names">
+              {displayName}
+            </ClickableBadge>
+          );
+        },
       },
-    },
-    {
-      key: 'message',
-      header: 'Message',
-      minWidth: '200px',
-      render: (entry) => (
-        <TextCell truncate maxWidth="300px">
-          {entry.payload.message}
-        </TextCell>
-      ),
-    },
-    {
-      key: 'method',
-      header: 'Method',
-      width: '100px',
-      render: (entry) => {
-        const requestMethod = entry.payload.request?.method || '-';
-        return requestMethod !== '-' ? (
-          <ClickableBadge listType="exceptions" filterType="methods">
-            {requestMethod}
-          </ClickableBadge>
-        ) : (
-          <TextCell secondary>—</TextCell>
-        );
+      {
+        key: 'message',
+        header: 'Message',
+        minWidth: '200px',
+        render: (entry) => (
+          <TextCell truncate maxWidth="300px">
+            {entry.payload.message}
+          </TextCell>
+        ),
       },
-    },
-    {
-      key: 'path',
-      header: 'Path',
-      minWidth: '150px',
-      render: (entry) => {
-        const requestPath = entry.payload.request?.url || '-';
-        return requestPath !== '-' ? (
-          <ClickableBadge listType="exceptions" filterType="paths" className="font-mono">
-            {requestPath.length > 40 ? requestPath.substring(0, 40) + '...' : requestPath}
-          </ClickableBadge>
-        ) : (
-          <TextCell secondary>—</TextCell>
-        );
-      },
-    },
-    {
-      key: 'time',
-      header: 'Time',
-      width: '170px',
-      align: 'right',
-      render: (entry) => (
-        <TextCell secondary className="text-xs">
-          {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
-        </TextCell>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      width: '80px',
-      align: 'center',
-      render: (entry) => (
-        <button
-          onClick={(e) => handleToggleResolved(e, entry)}
-          disabled={resolvingId === entry.id}
-          className={`p-1 transition-colors ${
-            entry.resolvedAt
-              ? 'text-green-500 hover:text-green-600'
-              : 'text-gray-400 hover:text-green-500'
-          }`}
-          title={entry.resolvedAt ? 'Mark as unresolved' : 'Mark as resolved'}
-        >
-          {resolvingId === entry.id ? (
-            <RefreshCw className="h-5 w-5 animate-spin" />
-          ) : entry.resolvedAt ? (
-            <CheckCircle className="h-5 w-5" />
+      {
+        key: 'method',
+        header: 'Method',
+        width: '100px',
+        render: (entry) => {
+          const requestMethod = entry.payload.request?.method || '-';
+          return requestMethod !== '-' ? (
+            <ClickableBadge listType="exceptions" filterType="methods">
+              {requestMethod}
+            </ClickableBadge>
           ) : (
-            <Circle className="h-5 w-5" />
-          )}
-        </button>
-      ),
-    },
-  ], [resolvingId, handleToggleResolved]);
+            <TextCell secondary>—</TextCell>
+          );
+        },
+      },
+      {
+        key: 'path',
+        header: 'Path',
+        minWidth: '150px',
+        render: (entry) => {
+          const requestPath = entry.payload.request?.url || '-';
+          return requestPath !== '-' ? (
+            <ClickableBadge listType="exceptions" filterType="paths" className="font-mono">
+              {requestPath.length > 40 ? requestPath.substring(0, 40) + '...' : requestPath}
+            </ClickableBadge>
+          ) : (
+            <TextCell secondary>—</TextCell>
+          );
+        },
+      },
+      {
+        key: 'time',
+        header: 'Time',
+        width: '170px',
+        align: 'right',
+        render: (entry) => (
+          <TextCell secondary className="text-xs">
+            {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
+          </TextCell>
+        ),
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        width: '80px',
+        align: 'center',
+        render: (entry) => (
+          <button
+            onClick={(e) => handleToggleResolved(e, entry)}
+            disabled={resolvingId === entry.id}
+            className={`p-1 transition-colors ${
+              entry.resolvedAt
+                ? 'text-green-500 hover:text-green-600'
+                : 'text-gray-400 hover:text-green-500'
+            }`}
+            title={entry.resolvedAt ? 'Mark as unresolved' : 'Mark as resolved'}
+          >
+            {resolvingId === entry.id ? (
+              <RefreshCw className="h-5 w-5 animate-spin" />
+            ) : entry.resolvedAt ? (
+              <CheckCircle className="h-5 w-5" />
+            ) : (
+              <Circle className="h-5 w-5" />
+            )}
+          </button>
+        ),
+      },
+    ],
+    [resolvingId, handleToggleResolved],
+  );
 
   // Only show full-page spinner on initial load when no data exists
   // This prevents flicker when filters change
@@ -235,11 +235,7 @@ export default function ExceptionsPage() {
         <EntrySearchInput placeholder="Search by exception name, message, tag, or content..." />
 
         {/* New entries button */}
-        <NewEntriesButton
-          count={newEntriesCount}
-          onClick={loadNew}
-          loading={refreshing}
-        />
+        <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
 
         <DataTable
           columns={tableColumns}
@@ -257,11 +253,7 @@ export default function ExceptionsPage() {
         />
 
         {/* Load more button */}
-        <LoadMoreButton
-          hasMore={hasMore}
-          onClick={loadMore}
-          loading={refreshing}
-        />
+        <LoadMoreButton hasMore={hasMore} onClick={loadMore} loading={refreshing} />
       </div>
     </div>
   );

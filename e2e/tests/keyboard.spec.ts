@@ -38,17 +38,26 @@ test.describe('Keyboard Shortcuts', () => {
     await expect.poll(() => asked).toMatch(/clear/i);
   });
 
+  /**
+   * Asked on a page that lists something.
+   *
+   * This used to run on the dashboard root, which has no table at all: it
+   * counted zero rows, dismissed the dialog and asserted there were still zero.
+   * True whatever the shortcut did — including clearing every entry.
+   */
   test('dismissing the Ctrl+K confirmation keeps entries', async ({ page }) => {
-    const dashboard = new DashboardPage(page);
-    await dashboard.goto();
+    const entries = new EntriesPage(page);
+    await entries.goto('requests');
+    await entries.waitForLoad();
+
+    await expect.poll(() => entries.rows.count(), { timeout: 15_000 }).toBeGreaterThan(0);
+    const before = await entries.rows.count();
 
     page.once('dialog', (dialog) => dialog.dismiss());
-    const before = await page.locator('table tbody tr').count();
-
     await page.locator('body').click();
     await page.keyboard.press('ControlOrMeta+k');
 
-    await expect(page.locator('table tbody tr')).toHaveCount(before);
+    await expect(entries.rows).toHaveCount(before);
   });
 });
 

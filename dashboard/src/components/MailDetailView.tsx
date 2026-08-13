@@ -29,7 +29,7 @@ export default function MailDetailView({ entry }: MailDetailViewProps) {
   const { payload, createdAt, tags } = entry;
 
   // Filter out status tags from display
-  const filteredTags = (tags || []).filter(tag => !mailStatuses.includes(tag.toLowerCase()));
+  const filteredTags = (tags ?? []).filter(tag => !mailStatuses.includes(tag.toLowerCase()));
 
   const config = statusConfig[payload.status] || statusConfig.sent;
   const StatusIcon = config.icon;

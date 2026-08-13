@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { StatsProvider, useStats } from '../../contexts/StatsContext';
+import {StatsProvider} from '../../contexts/StatsContext';
+import { useStats } from '../../contexts/useStats';
 import * as api from '../../api';
 
 // Mock the API module

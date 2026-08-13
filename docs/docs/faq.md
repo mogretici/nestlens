@@ -23,13 +23,17 @@ See [Production Usage](/docs/security/production-usage.md) for detailed guidance
 
 ### How much does NestLens impact performance?
 
-Typical overhead:
-- **Request tracking**: 0.5-1ms per request
-- **Query tracking**: 0.1-0.5ms per query
-- **Memory**: Less than 50MB with default buffering
-- **CPU**: Less than 2% in most applications
+Measured with `npm run benchmark` on Node 25 and Apple Silicon, with the request
+and exception watchers and the default in-memory storage:
 
-The impact is minimal in development but should be monitored in production. See [Performance Optimization](/docs/advanced/performance.md).
+- **Request tracking**: 0.025 ms added at p50, 0.18 ms at p99
+- **Memory**: 2.3 MB for 10,000 recorded entries
+- **Writes**: ~1,500,000 entries/second in memory, ~23,000 with SQLite
+
+The benchmark is in the repository, so you can run it on your own hardware
+instead of taking the table's word for it. What dominates in a real application
+is the storage driver and how much payload you record, not the per-request cost.
+See [Performance Optimization](/docs/advanced/performance.md).
 
 ### Is my data secure?
 
@@ -107,6 +111,31 @@ time you bump your API version.
 
 See [Basic Configuration](/docs/configuration/basic-config) for excluding
 NestLens from the prefix.
+
+### Can NestLens be loaded lazily?
+
+No — import it in a module that Nest loads at startup.
+
+NestLens contributes controllers (the dashboard and its API) and global
+enhancers (the request interceptor and the exception filter). Nest registers
+neither for a module loaded through `LazyModuleLoader`. On NestJS 11 the module
+instantiates without complaint and the dashboard then answers 404 while the
+watchers record nothing; on NestJS 9 the load is refused outright with a
+dependency-resolution error. Either way there is no dashboard.
+
+```typescript
+// Does not work — no error, no dashboard.
+const ref = await lazyModuleLoader.load(() => NestLensModule.forRoot({}));
+
+// Works.
+@Module({ imports: [NestLensModule.forRoot({})] })
+export class AppModule {}
+```
+
+If the reason for loading it lazily is to keep it out of production, use
+`enabled` or the environment gating in
+[authorization](/docs/configuration/authorization.md) instead — both leave the
+module in the graph and cost nothing when off.
 
 ### Does NestLens record its own requests?
 

@@ -32,8 +32,8 @@ import {
 } from 'lucide-react';
 import { getEntriesWithCursor, getStorageStats, getPruningStatus, runPruning } from '../api';
 import { Entry, StorageStats, PruningStatus } from '../types';
-import { getBadgeColor } from '../components/ClickableBadge';
-import { useStats } from '../contexts/StatsContext';
+import { getBadgeColor } from '../components/badgeColors';
+import { useStats } from '../contexts/useStats';
 
 // Entry type configurations with categories
 const entryTypeCategories = [
@@ -396,11 +396,11 @@ export default function DashboardPage() {
   }
 
   // Calculate metrics
-  const totalRequests = stats?.byType.request || 0;
-  const totalExceptions = stats?.byType.exception || 0;
+  const totalRequests = stats?.byType.request ?? 0;
+  const totalExceptions = stats?.byType.exception ?? 0;
   const unresolvedExceptions = stats?.unresolvedExceptions ?? totalExceptions;
-  const avgLatency = stats?.avgResponseTime || 0;
-  const slowQueries = stats?.slowQueries || 0;
+  const avgLatency = stats?.avgResponseTime ?? 0;
+  const slowQueries = stats?.slowQueries ?? 0;
 
   // Determine health status
   const isLatencyGood = avgLatency < 200;
@@ -408,7 +408,7 @@ export default function DashboardPage() {
   // Get entry type icon component
   const getTypeIcon = (type: string) => {
     const config = allEntryTypes.find(t => t.key === type);
-    return config?.icon || Activity;
+    return config?.icon ?? Activity;
   };
 
   // Get entry type route
@@ -423,7 +423,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Entries"
-          value={stats?.total || 0}
+          value={stats?.total ?? 0}
           subtext="total recorded"
           icon={Database}
           status="neutral"
@@ -470,7 +470,7 @@ export default function DashboardPage() {
                 // For exceptions, show unresolved count instead of total
                 const count = type.key === 'exception'
                   ? (stats?.unresolvedExceptions ?? 0)
-                  : (stats?.byType[type.key as keyof typeof stats.byType] || 0);
+                  : (stats?.byType[type.key as keyof typeof stats.byType] ?? 0);
                 const Icon = type.icon;
                 const hasData = count > 0;
 
@@ -652,7 +652,7 @@ export default function DashboardPage() {
                   <span className="text-sm">Retention</span>
                 </div>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {pruningStatus?.maxAge || 24}h
+                  {pruningStatus?.maxAge ?? 24}h
                 </span>
               </div>
 

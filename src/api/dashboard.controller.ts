@@ -9,15 +9,17 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { extname, join, resolve, sep } from 'path';
 import { ApplicationConfig, HttpAdapterHost } from '@nestjs/core';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NestLensGuard } from './api.guard';
 import { toBaseHref, toForwardedPrefix } from './route-path';
+import { compress, ContentEncoding, isCompressible, negotiateEncoding } from './content-encoding';
 
 /** Set by reverse proxies that serve the application under a stripped path. */
 const FORWARDED_PREFIX_HEADER = 'x-forwarded-prefix';
+const ACCEPT_ENCODING_HEADER = 'accept-encoding';
 
 /**
  * Cache policies for the bundled dashboard.
@@ -67,6 +69,17 @@ const MIME_TYPES: Record<string, string> = {
 export class DashboardController {
   private readonly dashboardPath: string;
   private readonly fileCache = new Map<string, Buffer>();
+  /**
+   * Compressed asset bodies, keyed by file and encoding.
+   *
+   * Only files read off disk are cached here. `index.html` is rebuilt per
+   * request with the mount point injected, and under `trustProxy` that mount
+   * point comes from a header — caching by its value would let a caller grow
+   * this map without limit. It stays below the compression threshold anyway.
+   */
+  private readonly compressedCache = new Map<string, Buffer>();
+  /** Bundled directories, listed once: the bundle cannot change while the process runs. */
+  private readonly directoryListings = new Map<string, Map<string, string>>();
 
   constructor(
     @Inject(NESTLENS_CONFIG)
@@ -78,20 +91,52 @@ export class DashboardController {
     this.dashboardPath = join(__dirname, '..', 'dashboard', 'public');
   }
 
+  /**
+   * What a bundled file may be called.
+   *
+   * Vite emits `index-Bu05f2IL.js`, `nestlens-icon.svg` and nothing stranger.
+   * Checking the name before it reaches `resolve()` means a traversal attempt
+   * never becomes a path at all — the containment check below stays as the
+   * second line, not the only one.
+   */
+  private static readonly SAFE_FILENAME = /^[A-Za-z0-9._-]+$/;
+
   @Get('assets/:filename')
-  serveAssets(@Param('filename') filename: string, @Res() res: unknown): void {
-    this.sendFile(res, join('assets', filename), 'Asset not found', IMMUTABLE);
+  serveAssets(
+    @Param('filename') filename: string,
+    @Res() res: unknown,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendResolvedFile(
+      res,
+      this.bundledFile('assets', filename, 'Asset not found'),
+      IMMUTABLE,
+      acceptEncoding,
+    );
   }
 
   // Favicon and other root-level static files.
   @Get(':filename.svg')
-  serveStaticFile(@Param('filename') filename: string, @Res() res: unknown): void {
-    this.sendFile(res, `${filename}.svg`, 'File not found', NO_CACHE);
+  serveStaticFile(
+    @Param('filename') filename: string,
+    @Res() res: unknown,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendResolvedFile(
+      res,
+      this.bundledFile('', `${filename}.svg`, 'File not found'),
+      NO_CACHE,
+      acceptEncoding,
+    );
   }
 
   @Get()
-  serveDashboard(@Res() res: unknown, @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string): void {
-    this.sendIndexHtml(res, forwarded);
+  serveDashboard(
+    @Res() res: unknown,
+    @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendIndexHtml(res, forwarded, acceptEncoding);
   }
 
   /**
@@ -106,8 +151,12 @@ export class DashboardController {
    * actually wants, before Nest resolves routes.
    */
   @Get('*')
-  serveSpaRoute(@Res() res: unknown, @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string): void {
-    this.sendIndexHtml(res, forwarded);
+  serveSpaRoute(
+    @Res() res: unknown,
+    @Headers(FORWARDED_PREFIX_HEADER) forwarded?: string,
+    @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
+  ): Promise<void> {
+    return this.sendIndexHtml(res, forwarded, acceptEncoding);
   }
 
   /**
@@ -116,25 +165,34 @@ export class DashboardController {
    * the bundle's relative asset URLs, and `window.__NESTLENS_BASE__` tells the
    * SPA where to put its router basename and API calls.
    */
-  private sendIndexHtml(res: unknown, forwardedPrefix?: string): void {
+  private sendIndexHtml(
+    res: unknown,
+    forwardedPrefix?: string,
+    acceptEncoding?: string,
+  ): Promise<void> {
     const absolutePath = this.resolveDashboardFile('index.html', 'Dashboard not found');
     const html = this.injectBasePath(
       this.readCached(absolutePath).toString('utf8'),
       forwardedPrefix,
     );
 
-    this.send(res, html, MIME_TYPES['.html'] as string, NO_CACHE);
+    return this.send(res, html, MIME_TYPES['.html'] as string, NO_CACHE, acceptEncoding);
   }
 
-  private sendFile(
+  private sendResolvedFile(
     res: unknown,
-    relativePath: string,
-    notFoundMessage: string,
+    absolutePath: string,
     cacheControl: string,
-  ): void {
-    const absolutePath = this.resolveDashboardFile(relativePath, notFoundMessage);
-
-    this.send(res, this.readCached(absolutePath), this.contentTypeFor(absolutePath), cacheControl);
+    acceptEncoding?: string,
+  ): Promise<void> {
+    return this.send(
+      res,
+      this.readCached(absolutePath),
+      this.contentTypeFor(absolutePath),
+      cacheControl,
+      acceptEncoding,
+      absolutePath,
+    );
   }
 
   /**
@@ -153,10 +211,18 @@ export class DashboardController {
     const cached = this.fileCache.get(absolutePath);
     if (cached) return cached;
 
-    const contents = readFileSync(absolutePath);
-    this.fileCache.set(absolutePath, contents);
+    // A file that vanished after the listing was taken is a 404, not a 500:
+    // the bundle ships inside the package and is not supposed to move, but an
+    // upgrade that replaces it under a running process should not surface as a
+    // server error.
+    try {
+      const contents = readFileSync(absolutePath);
+      this.fileCache.set(absolutePath, contents);
 
-    return contents;
+      return contents;
+    } catch {
+      throw new NotFoundException('File not found');
+    }
   }
 
   /**
@@ -167,22 +233,50 @@ export class DashboardController {
    * this HTML into JSON — the dashboard then loads nothing. Taking over the
    * response keeps NestLens's own surface out of that pipeline.
    */
-  private send(
+  private async send(
     res: unknown,
     body: string | Buffer,
     contentType: string,
     cacheControl: string,
-  ): void {
+    acceptEncoding?: string,
+    cacheKey?: string,
+  ): Promise<void> {
     const adapter = this.httpAdapterHost.httpAdapter;
-    const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+    const raw = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+    const encoding = isCompressible(contentType, raw.length)
+      ? negotiateEncoding(acceptEncoding)
+      : undefined;
+    const payload = encoding ? await this.compressed(raw, encoding, cacheKey) : raw;
 
     adapter.setHeader(res, 'Content-Type', contentType);
     adapter.setHeader(res, 'Cache-Control', cacheControl);
+    // Set whether or not this particular response was compressed: the body a
+    // shared cache stores depends on the request's Accept-Encoding either way,
+    // and `immutable` tells that cache to keep it for a year.
+    adapter.setHeader(res, 'Vary', 'Accept-Encoding');
+    if (encoding) adapter.setHeader(res, 'Content-Encoding', encoding);
     // A raw Buffer cannot go through `reply()`: Express treats any object as
     // JSON and serialises it to `{"type":"Buffer","data":[...]}`, which turns
     // every script and font into garbage. StreamableFile is the shape both
     // adapters special-case for binary payloads.
     adapter.reply(res, new StreamableFile(payload, { length: payload.length }), 200);
+  }
+
+  private async compressed(
+    raw: Buffer,
+    encoding: ContentEncoding,
+    cacheKey?: string,
+  ): Promise<Buffer> {
+    if (!cacheKey) return compress(raw, encoding);
+
+    const key = `${cacheKey}|${encoding}`;
+    const cached = this.compressedCache.get(key);
+    if (cached) return cached;
+
+    const compressedBody = await compress(raw, encoding);
+    this.compressedCache.set(key, compressedBody);
+
+    return compressedBody;
   }
 
   /**
@@ -226,6 +320,42 @@ export class DashboardController {
       `<script>window.__NESTLENS_BASE__=${JSON.stringify(baseHref)}</script>`;
 
     return html.replace('<head>', `<head>${injection}`);
+  }
+
+  /**
+   * The name of a bundled file, or a 404.
+   *
+   * The request selects from what is on disk rather than describing a path: the
+   * directory is listed once, and the value returned here is the entry from
+   * that listing, not the string the caller sent. A traversal cannot be
+   * expressed, because nothing the caller writes is ever joined to a directory.
+   *
+   * The containment check below stays as the second line — this is the first.
+   */
+  private bundledFile(directory: string, filename: string, notFoundMessage: string): string {
+    if (!DashboardController.SAFE_FILENAME.test(filename) || filename.includes('..')) {
+      throw new NotFoundException(notFoundMessage);
+    }
+
+    let listing = this.directoryListings.get(directory);
+    if (!listing) {
+      const root = resolve(this.dashboardPath);
+      const absoluteDirectory = directory === '' ? root : join(root, directory);
+      listing = new Map(
+        (existsSync(absoluteDirectory) ? readdirSync(absoluteDirectory) : []).map((name) => [
+          name,
+          join(absoluteDirectory, name),
+        ]),
+      );
+      this.directoryListings.set(directory, listing);
+    }
+
+    const found = listing.get(filename);
+    if (!found) {
+      throw new NotFoundException(notFoundMessage);
+    }
+
+    return found;
   }
 
   /**

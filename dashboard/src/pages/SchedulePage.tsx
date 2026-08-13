@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import cronstrue from 'cronstrue';
@@ -64,11 +64,11 @@ export default function SchedulePage() {
   const entries = allEntries.filter((entry): entry is ScheduleEntry => isScheduleEntry(entry));
 
   // Format schedule info (cron or interval)
-  const formatSchedule = (entry: ScheduleEntry) => {
+  const formatSchedule = useCallback((entry: ScheduleEntry) => {
     if (entry.payload.cron) return entry.payload.cron;
     if (entry.payload.interval) return `${entry.payload.interval}ms`;
     return '-';
-  };
+  }, []);
 
   // Table columns definition
   const tableColumns: Column<ScheduleEntry>[] = useMemo(() => [
@@ -128,7 +128,7 @@ export default function SchedulePage() {
       header: 'Tags',
       minWidth: '150px',
       render: (entry) => {
-        const filteredTags = (entry.tags || []).filter(tag => !scheduleStatuses.includes(tag.toLowerCase()));
+        const filteredTags = (entry.tags ?? []).filter(tag => !scheduleStatuses.includes(tag.toLowerCase()));
         return (
           <TagsList
             tags={filteredTags}

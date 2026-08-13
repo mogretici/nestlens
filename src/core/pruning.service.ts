@@ -52,8 +52,11 @@ export class PruningService implements OnModuleInit, OnModuleDestroy {
     // Run immediately on startup
     this.prune();
 
-    // Then run on interval
+    // Then run on interval. Unreferenced for the same reason as the collector's
+    // flush timer: pruning is maintenance, and maintenance must not hold a
+    // process open.
     this.intervalId = setInterval(() => this.prune(), intervalMinutes * 60 * 1000);
+    this.intervalId.unref?.();
   }
 
   private async prune(): Promise<void> {

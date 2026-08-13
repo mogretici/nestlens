@@ -89,16 +89,74 @@ fingerprinted assets are served with a long-lived `Cache-Control` while
 your application less per load. See
 [performance](../advanced/performance.md#serving-the-dashboard).
 
+## Two storage fixes worth knowing about
+
+**Pruning on SQLite deleted more than it was asked to.** SQLite writes
+`created_at` as `2026-08-12 21:55:45` while a JavaScript `Date` arrives as
+`2026-08-12T21:25:45.292Z`, and the two were compared as text: the eleventh
+character decides, a space sorts before a `T`, and so every entry recorded on
+the cutoff's date or earlier read as older than the cutoff whatever its time.
+Automatic pruning therefore emptied the day's entries, and the same comparison
+made date-range filtering in the dashboard wrong. Both now compare through
+SQLite's `datetime()`. No action needed; entries already deleted are gone.
+
+**Monitored tags are normalised.** Entry tags have always been stored upper-cased
+so that `slow` and `SLOW` are one tag; monitored tags were stored exactly as
+typed, and the dashboard looks a monitored tag up among the entry tags to count
+it. Monitoring `checkout` therefore always showed **0 entries**, on every
+backend. Monitored tags now go through the same normalisation, and the count
+matches on both sides regardless of what is already stored.
+
+## The package now declares what it publishes
+
+NestLens ships an `exports` map. Two entry points are public:
+
+```ts
+import { NestLensModule } from 'nestlens';
+import { SqliteStorage } from 'nestlens/storage/sqlite';
+import { RedisStorage } from 'nestlens/storage/redis';
+```
+
+Everything else under `dist/` is internal and no longer importable. If you were
+reaching into the build layout — `nestlens/dist/core/storage/sqlite.storage` was
+the one this documentation suggested — switch to the entry point above; it is
+the same class.
+
+```diff
+- import { SqliteStorage } from 'nestlens/dist/core/storage/sqlite.storage';
++ import { SqliteStorage } from 'nestlens/storage/sqlite';
+```
+
+This is deliberately a pre-1.0 change. Without a map, every internal file was
+importable, and `1.0`'s promise to freeze the API would have frozen the folder
+structure with it — moving a service between directories would have become a
+breaking change.
+
+NestLens is published as **CommonJS** and stays that way. It loads correctly in
+an ESM application through Node's interop (`import { NestLensModule } from
+'nestlens'` works), and NestJS itself is CommonJS, so a dual build would add a
+second copy of the decorators and their metadata for no gain.
+
 ## Verified NestJS and Node versions
 
 Every release is tested against this matrix in CI:
 
-| | Node 18 | Node 20 | Node 22 |
+| | Node 20 | Node 22 | Node 24 |
 | --- | --- | --- | --- |
 | **NestJS 9** | ✅ | ✅ | ✅ |
 | **NestJS 10** | ✅ | ✅ | ✅ |
-| **NestJS 11** | — | ✅ | ✅ |
-
-NestJS 11 requires Node 20 or newer, which is why that one cell is empty.
+| **NestJS 11** | ✅ | ✅ | ✅ |
 
 Both the Express and Fastify adapters are covered.
+
+### Node 18 is no longer supported
+
+`engines` now asks for **Node 20 or newer**. Node 18 reached end-of-life in
+April 2025 and stopped receiving security updates; the matrix above covers the
+versions that still do, including Node 24, which has been LTS since October 2025
+and was previously untested.
+
+Nothing in NestLens requires a Node 20 feature today, so an application still on
+Node 18 will most likely keep working — but it is no longer tested, and a future
+release may use something Node 18 does not have. If `npm install` now warns
+about the engine, the fix is to upgrade Node rather than to pin NestLens.

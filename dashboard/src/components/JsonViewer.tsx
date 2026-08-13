@@ -1,4 +1,4 @@
-import { useState, useCallback, memo, useEffect } from 'react';
+import { useState, useCallback, memo, useMemo } from 'react';
 import { ChevronRight, ChevronDown, Copy, Check, Search, X, Maximize2, Minimize2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { JsonValue } from '../types';
@@ -48,7 +48,7 @@ function matchesSearch(value: JsonValue, searchTerm: string, key?: string): bool
   if (!searchTerm) return false;
   const lower = searchTerm.toLowerCase();
 
-  if (key && key.toLowerCase().includes(lower)) return true;
+  if (key?.toLowerCase().includes(lower)) return true;
   if (value === null) return 'null'.includes(lower);
   if (typeof value === 'string') return value.toLowerCase().includes(lower);
   if (typeof value === 'number') return String(value).includes(lower);
@@ -91,7 +91,8 @@ const JsonNode = memo(function JsonNode({
   const itemCount = countItems(value, type);
   const isEmpty = itemCount === 0;
 
-  const isKeyMatch = searchTerm && keyName && keyName.toLowerCase().includes(searchTerm.toLowerCase());
+  const isKeyMatch =
+    Boolean(searchTerm) && (keyName?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
   const isValueMatch = matchesSearch(value, searchTerm);
   const hasMatch = isKeyMatch || isValueMatch;
 
@@ -270,7 +271,7 @@ export default function JsonViewer({
   const [showSearch, setShowSearch] = useState(false);
 
   // Use external search term if provided, otherwise use internal state
-  const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : internalSearchTerm;
+  const searchTerm = externalSearchTerm ?? internalSearchTerm;
   const setSearchTerm = setInternalSearchTerm;
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
     // Initialize with paths expanded up to maxInitialDepth
@@ -290,24 +291,39 @@ export default function JsonViewer({
     return paths;
   });
 
-  // Auto-expand paths when searching
-  useEffect(() => {
-    if (searchTerm) {
-      const pathsToExpand = new Set<string>(expandedPaths);
-      const findPaths = (value: JsonValue, path: string) => {
-        if (hasMatchingDescendant(value, searchTerm)) {
-          pathsToExpand.add(path);
-        }
-        if (Array.isArray(value)) {
-          value.forEach((v, i) => findPaths(v, `${path}.${i}`));
-        } else if (typeof value === 'object' && value !== null) {
-          Object.entries(value).forEach(([k, v]) => findPaths(v, `${path}.${k}`));
-        }
-      };
-      findPaths(data, 'root');
-      setExpandedPaths(pathsToExpand);
-    }
+  /**
+   * The paths a search opens, derived rather than merged into state.
+   *
+   * This used to be an effect that read `expandedPaths`, added the matches and
+   * wrote it back — so every search permanently expanded whatever it had
+   * matched, and clearing the search left the tree sprawled open. Deriving it
+   * means the search's expansion lasts exactly as long as the search, while a
+   * node the reader opened by hand stays open either way.
+   */
+  const searchExpandedPaths = useMemo(() => {
+    const paths = new Set<string>();
+    if (!searchTerm) return paths;
+
+    const findPaths = (value: JsonValue, path: string) => {
+      if (hasMatchingDescendant(value, searchTerm)) {
+        paths.add(path);
+      }
+      if (Array.isArray(value)) {
+        value.forEach((v, i) => findPaths(v, `${path}.${i}`));
+      } else if (typeof value === 'object' && value !== null) {
+        Object.entries(value).forEach(([k, v]) => findPaths(v, `${path}.${k}`));
+      }
+    };
+    findPaths(data, 'root');
+
+    return paths;
   }, [searchTerm, data]);
+
+  const visiblePaths = useMemo(() => {
+    if (searchExpandedPaths.size === 0) return expandedPaths;
+
+    return new Set([...expandedPaths, ...searchExpandedPaths]);
+  }, [expandedPaths, searchExpandedPaths]);
 
   const handleToggle = useCallback((path: string) => {
     setExpandedPaths(prev => {
@@ -366,7 +382,7 @@ export default function JsonViewer({
         keyName={null}
         value={data}
         depth={0}
-        expandedPaths={expandedPaths}
+        expandedPaths={visiblePaths}
         onToggle={handleToggle}
         searchTerm={searchTerm}
         path="root"

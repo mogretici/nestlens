@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { EntryTags } from '../../components/EntryTags';
-import { getBadgeColor as getTagColor } from '../../components/ClickableBadge';
+import { getBadgeColor as getTagColor } from '../../components/badgeColors';
 
 // Mock API
 vi.mock('../../api', () => ({
