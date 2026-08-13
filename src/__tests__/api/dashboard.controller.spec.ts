@@ -15,6 +15,21 @@ import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 // not-found paths.
 jest.mock('fs', () => ({
   existsSync: jest.fn(),
+  // The controller serves what the directory listing contains, so the mock has
+  // to answer with the names the tests ask for.
+  readdirSync: jest.fn(() => [
+    'main.js',
+    'styles.css',
+    'font.woff2',
+    'data.json',
+    'mystery.xyz',
+    'index-Bu05f2IL.js',
+    'index.html',
+    'nestlens-icon.svg',
+    'favicon.svg',
+    'icon.svg',
+    'logo.svg',
+  ]),
   readFileSync: jest.fn(() => Buffer.from('<html><head></head><body></body></html>')),
 }));
 
@@ -268,11 +283,18 @@ describe('DashboardController', () => {
       expect(written.status).toBe(200);
     });
 
-    it('still checks existence on every request', () => {
-      controller.serveAssets('main.js', RES);
-      (existsSync as jest.Mock).mockReturnValue(false);
+    /**
+     * The bundle ships inside the package and cannot change while the process
+     * runs, which is why the directory is listed once. A file that disappears
+     * anyway — an upgrade replacing the directory underneath a running process
+     * — is a 404 rather than the ENOENT it would otherwise become.
+     */
+    it('turns a file that vanished into a 404', () => {
+      (readFileSync as jest.Mock).mockImplementationOnce(() => {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      });
 
-      expect(() => controller.serveAssets('main.js', RES)).toThrow(NotFoundException);
+      expect(() => controller.serveAssets('styles.css', RES)).toThrow(NotFoundException);
     });
   });
 

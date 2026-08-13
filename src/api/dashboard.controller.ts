@@ -9,7 +9,7 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { extname, join, resolve, sep } from 'path';
 import { ApplicationConfig, HttpAdapterHost } from '@nestjs/core';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
@@ -78,6 +78,8 @@ export class DashboardController {
    * this map without limit. It stays below the compression threshold anyway.
    */
   private readonly compressedCache = new Map<string, Buffer>();
+  /** Bundled directories, listed once: the bundle cannot change while the process runs. */
+  private readonly directoryListings = new Map<string, Map<string, string>>();
 
   constructor(
     @Inject(NESTLENS_CONFIG)
@@ -105,12 +107,9 @@ export class DashboardController {
     @Res() res: unknown,
     @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
   ): Promise<void> {
-    this.assertSafeFilename(filename, 'Asset not found');
-
-    return this.sendFile(
+    return this.sendResolvedFile(
       res,
-      join('assets', filename),
-      'Asset not found',
+      this.bundledFile('assets', filename, 'Asset not found'),
       IMMUTABLE,
       acceptEncoding,
     );
@@ -123,9 +122,12 @@ export class DashboardController {
     @Res() res: unknown,
     @Headers(ACCEPT_ENCODING_HEADER) acceptEncoding?: string,
   ): Promise<void> {
-    this.assertSafeFilename(filename, 'File not found');
-
-    return this.sendFile(res, `${filename}.svg`, 'File not found', NO_CACHE, acceptEncoding);
+    return this.sendResolvedFile(
+      res,
+      this.bundledFile('', `${filename}.svg`, 'File not found'),
+      NO_CACHE,
+      acceptEncoding,
+    );
   }
 
   @Get()
@@ -177,15 +179,12 @@ export class DashboardController {
     return this.send(res, html, MIME_TYPES['.html'] as string, NO_CACHE, acceptEncoding);
   }
 
-  private sendFile(
+  private sendResolvedFile(
     res: unknown,
-    relativePath: string,
-    notFoundMessage: string,
+    absolutePath: string,
     cacheControl: string,
     acceptEncoding?: string,
   ): Promise<void> {
-    const absolutePath = this.resolveDashboardFile(relativePath, notFoundMessage);
-
     return this.send(
       res,
       this.readCached(absolutePath),
@@ -212,10 +211,18 @@ export class DashboardController {
     const cached = this.fileCache.get(absolutePath);
     if (cached) return cached;
 
-    const contents = readFileSync(absolutePath);
-    this.fileCache.set(absolutePath, contents);
+    // A file that vanished after the listing was taken is a 404, not a 500:
+    // the bundle ships inside the package and is not supposed to move, but an
+    // upgrade that replaces it under a running process should not surface as a
+    // server error.
+    try {
+      const contents = readFileSync(absolutePath);
+      this.fileCache.set(absolutePath, contents);
 
-    return contents;
+      return contents;
+    } catch {
+      throw new NotFoundException('File not found');
+    }
   }
 
   /**
@@ -315,10 +322,40 @@ export class DashboardController {
     return html.replace('<head>', `<head>${injection}`);
   }
 
-  private assertSafeFilename(filename: string, notFoundMessage: string): void {
+  /**
+   * The name of a bundled file, or a 404.
+   *
+   * The request selects from what is on disk rather than describing a path: the
+   * directory is listed once, and the value returned here is the entry from
+   * that listing, not the string the caller sent. A traversal cannot be
+   * expressed, because nothing the caller writes is ever joined to a directory.
+   *
+   * The containment check below stays as the second line — this is the first.
+   */
+  private bundledFile(directory: string, filename: string, notFoundMessage: string): string {
     if (!DashboardController.SAFE_FILENAME.test(filename) || filename.includes('..')) {
       throw new NotFoundException(notFoundMessage);
     }
+
+    let listing = this.directoryListings.get(directory);
+    if (!listing) {
+      const root = resolve(this.dashboardPath);
+      const absoluteDirectory = directory === '' ? root : join(root, directory);
+      listing = new Map(
+        (existsSync(absoluteDirectory) ? readdirSync(absoluteDirectory) : []).map((name) => [
+          name,
+          join(absoluteDirectory, name),
+        ]),
+      );
+      this.directoryListings.set(directory, listing);
+    }
+
+    const found = listing.get(filename);
+    if (!found) {
+      throw new NotFoundException(notFoundMessage);
+    }
+
+    return found;
   }
 
   /**
