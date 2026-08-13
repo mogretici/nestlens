@@ -14,9 +14,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every job below carries a timeout. Without one GitHub allows six hours, so a
+  # `npm test` that hangs bills 360 minutes rather than failing: seventeen such
+  # jobs took 6,120 of this account's 6,855 Actions minutes in one month and
+  # queued every other repository behind them. The suites take two to three
+  # minutes; fifteen is room to spare and still fails fast.
   test:
     name: Unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -42,7 +48,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run library tests
-        run: npm test -- --maxWorkers=2 --workerIdleMemoryLimit=512MB
+        run: npm test
 
       # The dashboard is half of what ships and had no static analysis at all:
       # the lint step above covers `src/**/*.ts`, and the type check runs
@@ -67,6 +73,7 @@ jobs:
   compatibility:
     name: NestJS ${{ matrix.nestjs }} on Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -120,10 +127,5 @@ jobs:
             if (major !== '${{ matrix.nestjs }}') { \
               console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
 
-      # In band, deliberately. The SIGABRT that struck a different Node 24 row
-      # each run came from better-sqlite3's native teardown
-      # (`RemoveEnvironmentCleanupHook … Assertion failed: (env) != nullptr`),
-      # after every suite had passed. v12 does not do it, and one process makes
-      # what remains legible rather than "a worker went away".
       - name: Run library tests
-        run: npm test -- --runInBand
+        run: npm test

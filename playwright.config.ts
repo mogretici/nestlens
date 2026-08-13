@@ -14,7 +14,12 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   // GitHub runners give two cores; a single worker leaves one idle and turns a
   // three-minute local run into a twenty-minute one.
-  workers: process.env.CI ? 2 : undefined,
+  // Capped rather than left to the machine. Locally this suite drives three
+  // browsers against one example application, and an unbounded worker count on
+  // a laptop that is also building something turns browser-level timing into
+  // failures that say nothing about the code — every one of them passing on its
+  // own afterwards. Four is enough to keep the suite under two minutes.
+  workers: process.env.CI ? 2 : 4,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'html',
 
   use: {

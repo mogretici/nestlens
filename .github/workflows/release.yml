@@ -11,10 +11,17 @@ permissions:
   pull-requests: write
   id-token: write
 
+concurrency:
+  # Never cancelled: a run that is part-way through publishing must finish. Two
+  # pushes to main queue instead, which is the correct order for a release.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -67,6 +74,7 @@ jobs:
     name: Smoke test the published package
     needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout

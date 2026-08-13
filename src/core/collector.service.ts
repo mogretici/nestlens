@@ -350,6 +350,13 @@ export class CollectorService implements OnModuleDestroy {
         this.logger.error(`Flush timer error: ${err}`);
       });
     }, this.FLUSH_INTERVAL);
+
+    // A debugging tool must never be the reason a process stays alive. Without
+    // this the flush timer keeps Node's event loop open for as long as NestLens
+    // is loaded: an application that finishes its work waits forever, and so
+    // did the test suite — which is how a hung CI job billed six hours instead
+    // of failing.
+    this.flushTimer.unref?.();
   }
 
   /**
