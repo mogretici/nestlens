@@ -9,11 +9,16 @@ name: Dependabot auto-merge
 # button is the slowest part of shipping the fix.
 #
 # What makes it safe is not that Dependabot is trustworthy — a security fix can
-# arrive as a major version with breaking changes — but that `--auto` hands the
-# merge to GitHub, which performs it only after every required check on `main`
-# has passed: the unit suite, the NestJS 9/10/11 × Node 20/22/24 matrix, the
-# documentation build and CodeQL. A bump that breaks any of them sits in the
-# pull request instead, waiting to be looked at.
+# arrive as a major version with breaking changes — but that this waits for the
+# checks and merges nothing until they are green: the unit suite, the NestJS
+# 9/10/11 × Node 20/22/24 matrix, the documentation build and CodeQL. A bump
+# that breaks any of them stays in the pull request, waiting to be looked at.
+#
+# The waiting is done here rather than by branch protection on purpose. Required
+# checks on `main` apply to direct pushes too, and semantic-release pushes the
+# release commit itself — protecting the branch blocked the release instead of
+# the bot. On a personal repository there is no way to grant Actions a bypass,
+# so the gate lives where only pull requests pass through.
 on: pull_request_target
 
 permissions:
@@ -24,7 +29,7 @@ jobs:
   auto-merge:
     name: Enable auto-merge
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 45
     if: github.actor == 'dependabot[bot]'
 
     steps:
@@ -36,11 +41,16 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge
+      - name: Wait for the checks, then merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           echo "Update type: ${{ steps.metadata.outputs.update-type }}"
           echo "Dependencies: ${{ steps.metadata.outputs.dependency-names }}"
-          gh pr merge --auto --merge "$PR_URL"
+
+          # Blocks until every check has reported, and exits non-zero if any of
+          # them failed — which fails this job and leaves the pull request open.
+          gh pr checks "$PR_URL" --watch --fail-fast --interval 30
+
+          gh pr merge --merge "$PR_URL"
