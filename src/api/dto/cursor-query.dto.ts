@@ -34,6 +34,9 @@ const ENTRY_TYPES: EntryType[] = [
   'graphql',
 ];
 
+/** Names that reach an object's prototype rather than its own properties. */
+const UNSAFE_KEYS = ['__proto__', 'constructor', 'prototype'];
+
 /**
  * Complete cursor query DTO that combines pagination with all filter types.
  * Replaces 50+ individual @Query parameters with a single typed DTO.
@@ -337,11 +340,17 @@ export class CursorQueryDto {
    * Returns undefined if no filters are set
    */
   toFilters(): Record<string, unknown> | undefined {
-    const filters: Record<string, unknown> = {};
+    // Built without a prototype, and with the three names that reach one
+    // refused outright. The validation pipe runs with `whitelist: true`, so a
+    // query parameter the DTO does not declare is stripped before this runs —
+    // but that is a setting in another file, and a key taken from a request and
+    // written to an object should not depend on it.
+    const filters = Object.create(null) as Record<string, unknown>;
 
     for (const [key, value] of Object.entries(this)) {
       if (
         !CursorQueryDto.PAGINATION_KEYS.includes(key) &&
+        !UNSAFE_KEYS.includes(key) &&
         value !== undefined &&
         typeof value !== 'function'
       ) {
