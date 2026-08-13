@@ -1,0 +1,46 @@
+name: Dependabot auto-merge
+
+# Security updates merge themselves, once the tests say they can.
+#
+# Only security updates reach this workflow: version updates were switched off
+# (there is no dependabot.yml), so Dependabot opens a pull request when an
+# advisory is published against something this package depends on and at no
+# other time. Those are rare, they matter, and waiting for a human to press a
+# button is the slowest part of shipping the fix.
+#
+# What makes it safe is not that Dependabot is trustworthy — a security fix can
+# arrive as a major version with breaking changes — but that `--auto` hands the
+# merge to GitHub, which performs it only after every required check on `main`
+# has passed: the unit suite, the NestJS 9/10/11 × Node 20/22/24 matrix, the
+# documentation build and CodeQL. A bump that breaks any of them sits in the
+# pull request instead, waiting to be looked at.
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      # Says what kind of update this is, so the log explains any future
+      # decision to treat some of them differently.
+      - name: Read the update
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          echo "Update type: ${{ steps.metadata.outputs.update-type }}"
+          echo "Dependencies: ${{ steps.metadata.outputs.dependency-names }}"
+          gh pr merge --auto --merge "$PR_URL"
