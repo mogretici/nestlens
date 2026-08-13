@@ -39,25 +39,36 @@ test.describe('Keyboard Shortcuts', () => {
   });
 
   /**
-   * Asked on a page that lists something.
+   * Asked of the request, not of the table.
    *
-   * This used to run on the dashboard root, which has no table at all: it
-   * counted zero rows, dismissed the dialog and asserted there were still zero.
-   * True whatever the shortcut did — including clearing every entry.
+   * Two earlier versions of this got it wrong. The first ran on the dashboard
+   * root, which has no table: it counted zero rows and asserted there were
+   * still zero — true whatever the shortcut did, including clearing everything.
+   * The second counted a real list, and then failed because the suite shares
+   * one example application: another test clearing entries made this one look
+   * like the shortcut had.
+   *
+   * What the shortcut promises is narrower and does not depend on anyone else:
+   * dismissing the confirmation must not send the delete.
    */
-  test('dismissing the Ctrl+K confirmation keeps entries', async ({ page }) => {
+  test('dismissing the Ctrl+K confirmation sends no delete', async ({ page }) => {
     const entries = new EntriesPage(page);
     await entries.goto('requests');
     await entries.waitForLoad();
 
-    await expect.poll(() => entries.rows.count(), { timeout: 15_000 }).toBeGreaterThan(0);
-    const before = await entries.rows.count();
+    const deletes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'DELETE') deletes.push(request.url());
+    });
 
     page.once('dialog', (dialog) => dialog.dismiss());
     await page.locator('body').click();
     await page.keyboard.press('ControlOrMeta+k');
 
-    await expect(entries.rows).toHaveCount(before);
+    // Long enough for the request to have been made had the dismissal been
+    // ignored; the shortcut fires it synchronously on confirmation.
+    await page.waitForTimeout(500);
+    expect(deletes).toEqual([]);
   });
 });
 

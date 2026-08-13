@@ -53,3 +53,11 @@ docs/api/
 .claude/tsc-cache/
 .tldr/
 .tldrignore
+
+# claude-mem writes a CLAUDE.md into each directory it has something to say
+# about. They are session memory, not source, and one of them reached the
+# documentation site as a published page — internal notes on a public site, and
+# a build failure once MDX stopped accepting HTML comments. The project's own
+# instructions at the root stay.
+**/CLAUDE.md
+!/CLAUDE.md
