@@ -116,7 +116,7 @@ jobs:
       # In band, deliberately. The SIGABRT that struck a different Node 24 row
       # each run came from better-sqlite3's native teardown
       # (`RemoveEnvironmentCleanupHook … Assertion failed: (env) != nullptr`),
-      # after every suite had passed. v13 does not do it, and one process makes
+      # after every suite had passed. v12 does not do it, and one process makes
       # what remains legible rather than "a worker went away".
       - name: Run library tests
         run: npm test -- --runInBand
