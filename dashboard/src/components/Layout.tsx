@@ -185,6 +185,19 @@ const navigationGroups = [
 
 type BadgeKey = 'exceptions';
 
+/**
+ * What the preference resolves to right now.
+ *
+ * Pure, so the first render can seed the state with it instead of an effect
+ * setting it afterwards — the theme used to arrive one render late, which is a
+ * visible flash on a dark-themed dashboard.
+ */
+function resolveDark(preference: 'system' | 'light' | 'dark'): boolean {
+  if (preference !== 'system') return preference === 'dark';
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 export default function Layout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -241,14 +254,7 @@ export default function Layout() {
   );
 
   const applyTheme = useCallback((preference: 'system' | 'light' | 'dark') => {
-    let shouldBeDark = false;
-
-    if (preference === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      shouldBeDark = mediaQuery.matches;
-    } else {
-      shouldBeDark = preference === 'dark';
-    }
+    const shouldBeDark = resolveDark(preference);
 
     if (shouldBeDark) {
       document.documentElement.classList.add('dark');
@@ -276,24 +282,20 @@ export default function Layout() {
 
   // Apply theme on mount and when system preference changes
   useEffect(() => {
-    applyTheme(themePreference);
+    const shouldBeDark = resolveDark(themePreference);
+    document.documentElement.classList.toggle('dark', shouldBeDark);
 
     if (themePreference === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const handler = (e: MediaQueryListEvent) => {
-        const shouldBeDark = e.matches;
-        if (shouldBeDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-        setDarkMode(shouldBeDark);
+        document.documentElement.classList.toggle('dark', e.matches);
+        setDarkMode(e.matches);
       };
 
       mediaQuery.addEventListener('change', handler);
       return () => mediaQuery.removeEventListener('change', handler);
     }
-  }, [themePreference, applyTheme]);
+  }, [themePreference]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
