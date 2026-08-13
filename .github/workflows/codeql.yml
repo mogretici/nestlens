@@ -15,6 +15,13 @@ on:
     # Monday 04:00 UTC, an hour after the nightly E2E has finished.
     - cron: '0 4 * * 1'
 
+concurrency:
+  # A newer push to the same branch makes the previous run's answer irrelevant,
+  # and on a shared runner pool the superseded run is what the new one queues
+  # behind. Cancelling it is the difference between minutes and half an hour.
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze
