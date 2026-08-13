@@ -1,3 +1,11 @@
+## [0.9.2](https://github.com/mogretici/nestlens/compare/v0.9.1...v0.9.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ci:** let the release reach main again ([37cf306](https://github.com/mogretici/nestlens/commit/37cf306d22f171bb7be16aa8b3c6e8e29b651932))
+* **dashboard:** keep the application alive when a page throws ([ccd2aef](https://github.com/mogretici/nestlens/commit/ccd2aefab722338dc82f349ecad2b0766f4cc74d))
+
 ## [0.9.1](https://github.com/mogretici/nestlens/compare/v0.9.0...v0.9.1) (2026-08-13)
 
 
