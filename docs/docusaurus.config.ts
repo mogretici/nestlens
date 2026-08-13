@@ -101,6 +101,11 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/mogretici/nestlens/tree/main/docs/',
+          // Anything a tool drops in here is not documentation. One such file —
+          // a per-directory memory note — was published as a page on this site
+          // and later stopped the build outright when MDX tightened up. The
+          // default exclusions are Docusaurus's; CLAUDE.md is ours.
+          exclude: ['**/_*.{js,jsx,ts,tsx,md,mdx}', '**/*.test.{js,jsx,ts,tsx}', '**/CLAUDE.md'],
           remarkPlugins: [
             [require('@docusaurus/remark-plugin-npm2yarn'), { sync: true }],
           ],

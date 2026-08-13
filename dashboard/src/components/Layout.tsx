@@ -41,6 +41,7 @@ import {
   RecordingStatus,
 } from '../api';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { ErrorBoundary } from './ErrorBoundary';
 import { useStats } from '../contexts/useStats';
 
 // Minimal Recording Toggle Component
@@ -584,7 +585,16 @@ export default function Layout() {
           </Link>
         </header>
         <main className="p-4 lg:p-6">
-          <Outlet />
+          {/*
+            A page that throws takes down the page, not the application. The
+            only boundary used to be at the root, so one detail view meeting a
+            payload it could not render left a white screen with no navigation
+            and no way back except a reload. Keyed by path so that going
+            somewhere else clears the error rather than carrying it along.
+          */}
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
