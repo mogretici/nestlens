@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   getEntriesWithCursor,
@@ -74,18 +74,29 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     limit = 50,
     autoRefresh: initialAutoRefresh,
     autoRefreshInterval = 5000,
-    filters,
+    filters: filtersOption,
   } = options;
 
   // Serialize filters for dependency comparison using stable stringify
-  const filtersKey = stableStringify(filters);
+  const filtersKey = stableStringify(filtersOption);
   /** Everything that decides what a fetch returns, in one comparable value. */
   const requestKey = `${type}|${limit}|${filtersKey}`;
 
-  // `filters` arrives memoised from `useCategoryFilters`, so it can be depended
-  // on directly: its identity changes when the filters change and not before.
-  // `filtersKey` remains for the one place that has to compare the previous
-  // filters with the current ones.
+  // Identity re-derived from CONTENT, so the effects below can depend on
+  // `filters` directly.
+  //
+  // Depending on the caller's object instead assumes every caller memoises it.
+  // A page that adds one flag of its own silently breaks that — QueriesPage and
+  // ExceptionsPage both spread the memoised filters into a fresh literal — and
+  // the fetch effect then sees a new dependency on every render: fetch,
+  // setState, re-render, fetch, for as long as the page is open.
+  //
+  // `filtersKey` is already that object's content, so keying the memo on it
+  // makes the reference change when the filters change and not before. It is
+  // also why exhaustive-deps is silenced here: depending on the object itself
+  // would restore the churn this absorbs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filters = useMemo(() => filtersOption, [filtersKey]);
 
   const [entries, setEntries] = useState<T[]>([]);
   /**
