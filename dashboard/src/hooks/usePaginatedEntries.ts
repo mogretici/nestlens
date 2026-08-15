@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import {
   getEntriesWithCursor,
@@ -82,21 +82,32 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   /** Everything that decides what a fetch returns, in one comparable value. */
   const requestKey = `${type}|${limit}|${filtersKey}`;
 
-  // Identity re-derived from CONTENT, so the effects below can depend on
-  // `filters` directly.
-  //
-  // Depending on the caller's object instead assumes every caller memoises it.
-  // A page that adds one flag of its own silently breaks that — QueriesPage and
-  // ExceptionsPage both spread the memoised filters into a fresh literal — and
-  // the fetch effect then sees a new dependency on every render: fetch,
-  // setState, re-render, fetch, for as long as the page is open.
-  //
-  // `filtersKey` is already that object's content, so keying the memo on it
-  // makes the reference change when the filters change and not before. It is
-  // also why exhaustive-deps is silenced here: depending on the object itself
-  // would restore the churn this absorbs.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const filters = useMemo(() => filtersOption, [filtersKey]);
+  /**
+   * The filters, re-identified from their content.
+   *
+   * The effects below depend on this object, so its identity decides when they
+   * re-run. Depending on the caller's object assumes every caller memoises it —
+   * and three pages do not: QueriesPage, ExceptionsPage and GraphQLPage each
+   * spread the memoised filters into a fresh literal to add a flag of their
+   * own. The fetch effect then saw a new dependency on every render: fetch,
+   * setState, re-render, fetch, for as long as the page stayed open. Measured
+   * on /queries before the fix: 1055 requests in ten seconds.
+   *
+   * `filtersKey` is already the content of that object, so carrying the value
+   * alongside the key it was taken from makes the reference change when the
+   * filters change and not before. Written as an adjustment during render — the
+   * pattern this codebase already uses in EntrySearchInput and GraphQLViewer —
+   * rather than a memo with the dependency rule switched off, because the rule
+   * would be right: this does not depend on `filtersOption`, it records it.
+   */
+  const [identifiedFilters, setIdentifiedFilters] = useState({
+    key: filtersKey,
+    value: filtersOption,
+  });
+  if (identifiedFilters.key !== filtersKey) {
+    setIdentifiedFilters({ key: filtersKey, value: filtersOption });
+  }
+  const filters = identifiedFilters.value;
 
   const [entries, setEntries] = useState<T[]>([]);
   /**
