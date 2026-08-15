@@ -50,7 +50,10 @@ on:
 concurrency:
   # A newer push to the same branch makes the previous run's answer irrelevant.
   group: e2e-${{ github.ref }}
-  cancel-in-progress: true
+  # Off for forks: the run that starts last cancels the one already going, and
+  # for a fork the start order is the order a maintainer approved them in, not
+  # commit order. See the longer note in ci.yml.
+  cancel-in-progress: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
 jobs:
   plan:

@@ -85,6 +85,11 @@ npm run build
 
 5. Push and create a Pull Request
 
+6. Expect the checks to wait. On a pull request from a fork, GitHub holds every
+   workflow run until a maintainer approves it, and holds it again after each
+   push. Checks that sit idle on a fresh commit are waiting for that approval,
+   not failing.
+
 ## Coding Standards
 
 - **TypeScript**: Use strict types, avoid `any`
