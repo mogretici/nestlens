@@ -2,10 +2,10 @@ name: Dependabot auto-merge
 
 # Security updates merge themselves, once the tests say they can.
 #
-# Only security updates reach this workflow: version updates were switched off
-# (there is no dependabot.yml), so Dependabot opens a pull request when an
-# advisory is published against something this package depends on and at no
-# other time. Those are rare, they matter, and waiting for a human to press a
+# Only security updates reach this workflow: `dependabot.yml` sets
+# `open-pull-requests-limit: 0`, which switches version updates off and leaves
+# security updates on, so Dependabot opens a pull request when an advisory is
+# published against something this package depends on and at no other time. Those are rare, they matter, and waiting for a human to press a
 # button is the slowest part of shipping the fix.
 #
 # What makes it safe is not that Dependabot is trustworthy — a security fix can

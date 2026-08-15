@@ -11,7 +11,21 @@ concurrency:
   # and on a shared runner pool the superseded run is what the new one queues
   # behind. Cancelling it is the difference between minutes and half an hour.
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Off for pull requests from forks, because there the ordering this depends on
+  # does not hold. GitHub cancels whichever run is *already going* when another
+  # one starts — which matches commit order only while runs start in the order
+  # they were created. Runs from a fork wait for a maintainer to approve them,
+  # and approval sets the start order instead: on #62 the run for the older
+  # commit was approved after the newer commit's run had begun, started twelve
+  # seconds later, and cancelled it. Both ended cancelled and the checks had to
+  # be started by hand.
+  #
+  # Nothing unsafe came of it — checks belong to the commit they ran on, so a
+  # stale run can never show green against the head — but the way out is to stop
+  # cancelling exactly where the assumption fails. Two pushes to a fork branch
+  # can now cost two matrices; two pushes to a branch here still cost one, which
+  # is where the pushes actually are.
+  cancel-in-progress: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
 jobs:
   # Every job below carries a timeout. Without one GitHub allows six hours, so a
