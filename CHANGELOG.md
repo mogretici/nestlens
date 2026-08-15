@@ -1,3 +1,10 @@
+## [0.9.7](https://github.com/mogretici/nestlens/compare/v0.9.6...v0.9.7) (2026-08-15)
+
+
+### Bug Fixes
+
+* **dashboard:** stop cursor refetch loop on Queries and Exceptions pages ([ed8066a](https://github.com/mogretici/nestlens/commit/ed8066afba22b22ed1ea2b520bb96b719203e63e))
+
 ## [0.9.6](https://github.com/mogretici/nestlens/compare/v0.9.5...v0.9.6) (2026-08-13)
 
 
