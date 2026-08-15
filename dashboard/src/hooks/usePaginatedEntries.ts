@@ -74,18 +74,40 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     limit = 50,
     autoRefresh: initialAutoRefresh,
     autoRefreshInterval = 5000,
-    filters,
+    filters: filtersOption,
   } = options;
 
   // Serialize filters for dependency comparison using stable stringify
-  const filtersKey = stableStringify(filters);
+  const filtersKey = stableStringify(filtersOption);
   /** Everything that decides what a fetch returns, in one comparable value. */
   const requestKey = `${type}|${limit}|${filtersKey}`;
 
-  // `filters` arrives memoised from `useCategoryFilters`, so it can be depended
-  // on directly: its identity changes when the filters change and not before.
-  // `filtersKey` remains for the one place that has to compare the previous
-  // filters with the current ones.
+  /**
+   * The filters, re-identified from their content.
+   *
+   * The effects below depend on this object, so its identity decides when they
+   * re-run. Depending on the caller's object assumes every caller memoises it —
+   * and three pages do not: QueriesPage, ExceptionsPage and GraphQLPage each
+   * spread the memoised filters into a fresh literal to add a flag of their
+   * own. The fetch effect then saw a new dependency on every render: fetch,
+   * setState, re-render, fetch, for as long as the page stayed open. Measured
+   * on /queries before the fix: 1055 requests in ten seconds.
+   *
+   * `filtersKey` is already the content of that object, so carrying the value
+   * alongside the key it was taken from makes the reference change when the
+   * filters change and not before. Written as an adjustment during render — the
+   * pattern this codebase already uses in EntrySearchInput and GraphQLViewer —
+   * rather than a memo with the dependency rule switched off, because the rule
+   * would be right: this does not depend on `filtersOption`, it records it.
+   */
+  const [identifiedFilters, setIdentifiedFilters] = useState({
+    key: filtersKey,
+    value: filtersOption,
+  });
+  if (identifiedFilters.key !== filtersKey) {
+    setIdentifiedFilters({ key: filtersKey, value: filtersOption });
+  }
+  const filters = identifiedFilters.value;
 
   const [entries, setEntries] = useState<T[]>([]);
   /**
