@@ -262,7 +262,33 @@ export interface GraphQLWatcherConfig {
   // Response capture
   /** Capture response data. Default: false */
   captureResponse?: boolean;
-  /** Maximum response size in bytes before truncation. Default: 64KB */
+  /**
+   * Maximum response size in bytes before truncation. Default: 64KB (65536)
+   *
+   * Read this before raising it. A captured response is serialized and walked
+   * key by key on the event loop of the application being watched, so this
+   * option buys detail with latency added to every operation that returns a
+   * response near the limit:
+   *
+   * | response | cost per operation |
+   * |---------:|-------------------:|
+   * |    70 KB |             ~0.3ms |
+   * |   280 KB |             ~1.2ms |
+   * |   980 KB |             ~3.7ms |
+   * |  4900 KB |              ~27ms |
+   *
+   * It is linear, and it is time the request is not doing its own work. 64KB
+   * is enough to read a response on the dashboard; someone once set this to
+   * 5MB in production because nothing here said what that meant.
+   *
+   * Responses over the limit are cheap — around 0.2ms, whatever their size,
+   * because they are rejected without being serialized. So the table is the
+   * cost of the responses you choose to keep, and raising the limit is what
+   * moves a response into it.
+   *
+   * Measured by `npm run benchmark:sanitizer`; run it rather than trusting
+   * these figures on hardware that is not the one they came from.
+   */
   maxResponseSize?: number;
 
   // Custom tagging

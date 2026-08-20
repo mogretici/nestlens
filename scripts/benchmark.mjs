@@ -17,6 +17,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
+import { runSanitizerBenchmark } from './benchmark-sanitizer.mjs';
 
 const require = createRequire(import.meta.url);
 require('reflect-metadata');
@@ -127,7 +128,13 @@ async function measureThroughput(name, storage) {
   return { name, perSecond: Math.round(ENTRIES / (elapsed / 1000)) };
 }
 
-console.log(`\nNestLens benchmark — Node ${process.version}, ${process.platform}/${process.arch}\n`);
+console.log(`\nNestLens benchmark — Node ${process.version}, ${process.platform}/${process.arch}`);
+
+// First, because it is the only pure-CPU section here. Run after the latency
+// and throughput sections and it reports roughly nine times its real cost:
+// same code, same machine, but a heap that two Nest applications and twenty
+// thousand stored entries have already been through.
+runSanitizerBenchmark();
 
 const withoutLens = await measureLatency(false, 3991);
 const withLens = await measureLatency(true, 3992);

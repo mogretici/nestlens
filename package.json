@@ -50,6 +50,7 @@
     "test:e2e:headed": "npx playwright test --headed",
     "test:smoke": "node scripts/smoke-published-package.mjs",
     "benchmark": "node --expose-gc scripts/benchmark.mjs",
+    "benchmark:sanitizer": "node scripts/benchmark-sanitizer.mjs",
     "prepublishOnly": "npm run build",
     "sync-versions": "node -e \"const fs=require('fs');const pkg=require('./package.json');const dash=require('./dashboard/package.json');dash.version=pkg.version;fs.writeFileSync('./dashboard/package.json',JSON.stringify(dash,null,2)+'\\n')\"",
     "prepare": "husky"

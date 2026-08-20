@@ -190,6 +190,75 @@ describe('GraphQL variable sanitizer', () => {
     });
   });
 
+  describe('response size limit', () => {
+    const overLimit = {
+      rows: Array.from({ length: 4000 }, (_, i) => ({ id: i, label: 'x'.repeat(50) })),
+    };
+
+    it('rejects an oversized response without serializing it', () => {
+      const result = sanitizeResponse(overLimit, PATTERNS, 64 * 1024) as Record<string, unknown>;
+
+      expect(result._truncated).toBe(true);
+      expect(result._maxSize).toBe(64 * 1024);
+      // Reported as a floor: the probe stopped counting once it had proved the
+      // response was too big, rather than serializing megabytes to find out by
+      // how much.
+      expect(result._sizeIsLowerBound).toBe(true);
+      expect(result._size as number).toBeGreaterThan(64 * 1024);
+    });
+
+    it('never truncates a response that fits, however heavily it escapes', () => {
+      // Escaping only makes JSON longer, so a size probe that estimates low is
+      // safe and one that estimates high silently drops responses the user
+      // asked to keep. This is the payload that would catch the latter.
+      const quoted = { note: '"\n\t\\'.repeat(2000) };
+      const exact = JSON.stringify(quoted).length;
+
+      const kept = sanitizeResponse(quoted, PATTERNS, exact) as Record<string, unknown>;
+
+      expect(kept._truncated).toBeUndefined();
+      expect(kept.note).toBe(quoted.note);
+    });
+
+    it('reports an exact size when the limit is too large for the cheap probe', () => {
+      // Above the probe's own ceiling, so the behaviour is what it always was:
+      // serialize, measure exactly, decide.
+      const bigLimit = 2 * 1024 * 1024;
+      const huge = {
+        rows: Array.from({ length: 200_000 }, (_, i) => ({ id: i, label: 'yyyyyyyyyy' })),
+      };
+
+      expect(JSON.stringify(huge).length).toBeGreaterThan(bigLimit);
+
+      const result = sanitizeResponse(huge, PATTERNS, bigLimit) as Record<string, unknown>;
+
+      expect(result._truncated).toBe(true);
+      expect(result._sizeIsLowerBound).toBeUndefined();
+      expect(result._size).toBe(JSON.stringify(huge).length);
+    });
+
+    it('falls back to the serializer for payloads it cannot measure', () => {
+      const cyclic: Record<string, unknown> = { name: 'loop' };
+      cyclic.self = cyclic;
+
+      expect(sanitizeResponse(cyclic, PATTERNS, 64 * 1024)).toEqual({
+        _error: 'Unable to serialize response',
+      });
+    });
+
+    it('still masks inside a response that fits', () => {
+      const result = sanitizeResponse(
+        { user: { id: 1, apiToken: 'ak_live_x', tokenCount: 3 } },
+        PATTERNS,
+        64 * 1024,
+      ) as { user: Record<string, unknown> };
+
+      expect(result.user.apiToken).toBe(MASKED);
+      expect(result.user.tokenCount).toBe(3);
+      expect(result.user.id).toBe(1);
+    });
+  });
+
   describe('sanitized payloads are marked for the collector', () => {
     it('marks what it produced', () => {
       expect(isSanitized(sanitizeVariables({ a: 1 }, PATTERNS))).toBe(true);

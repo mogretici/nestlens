@@ -77,6 +77,30 @@ NestLensModule.forRoot({
 | `maxResponseSize` | number | `65536` | Maximum response size to capture (bytes) |
 | `tags` | function | `undefined` | Function to generate custom tags |
 
+### What raising `maxResponseSize` costs
+
+A captured response is serialized and walked key by key on your application's
+event loop, so this option buys detail with latency added to the operation that
+returned it:
+
+| Response | Cost per operation |
+|---------:|-------------------:|
+| 70 KB | ~0.3 ms |
+| 280 KB | ~1.2 ms |
+| 980 KB | ~3.7 ms |
+| 4900 KB | ~27 ms |
+
+The cost is linear in the size of the response. Responses **over** the limit are
+cheap — around 0.2 ms whatever their size, because they are rejected without
+being serialized — so the table describes the responses you choose to keep, and
+raising the limit is what moves a response into it.
+
+64 KB is enough to read a response on the dashboard. Reach for
+`ignoreOperations` or a lower `samplingRate` before reaching for a bigger limit.
+
+Run `npm run benchmark:sanitizer` to measure this on your own hardware rather
+than trusting figures from someone else's.
+
 ### Subscription Options
 
 | Option | Type | Default | Description |

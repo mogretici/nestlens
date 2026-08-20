@@ -10,6 +10,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { DEFAULT_CONFIG } from '../nestlens.config';
+import { GRAPHQL_DEFAULTS } from '../watchers/graphql/types';
 
 const REPO_ROOT = join(__dirname, '..', '..');
 const docsDir = join(REPO_ROOT, 'docs', 'docs');
@@ -64,6 +65,38 @@ describe('Documentation consistency with code', () => {
     it('the old hard-coded test count is gone from intro.md', () => {
       const intro = readDoc('intro.md');
       expect(intro).not.toMatch(/1,312 tests/);
+    });
+  });
+
+  /**
+   * `maxResponseSize` was documented as "maximum response size to capture" and
+   * nothing else, so raising it looked free. Someone set it to 5MB in
+   * production, where every captured response of that size blocked the event
+   * loop for tens of milliseconds. The option is only safe to expose if the
+   * page exposing it says what it costs.
+   */
+  describe('the cost of raising maxResponseSize is documented', () => {
+    const graphql = () => readDoc('watchers/graphql.md');
+
+    it('states the default in bytes', () => {
+      const { maxResponseSize } = GRAPHQL_DEFAULTS;
+      expect(maxResponseSize).toBe(65536);
+      expect(graphql()).toContain(`\`${maxResponseSize}\``);
+    });
+
+    it('carries measured per-operation costs rather than an adjective', () => {
+      const doc = graphql();
+
+      expect(doc).toMatch(/cost per operation/i);
+      // The rows the table is useless without: the small case and the one that
+      // caused the incident.
+      expect(doc).toMatch(/70 KB/);
+      expect(doc).toMatch(/4900 KB/);
+      expect(doc).toMatch(/~27 ms/);
+    });
+
+    it('points at the benchmark that produced the figures', () => {
+      expect(graphql()).toContain('benchmark:sanitizer');
     });
   });
 

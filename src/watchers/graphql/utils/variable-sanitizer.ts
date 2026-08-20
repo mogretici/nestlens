@@ -338,7 +338,133 @@ function looksLikeSensitiveValue(value: string): boolean {
 }
 
 /**
+ * The largest `maxResponseSize` the cheap rejection below is used for.
+ *
+ * The probe stops once it has counted past the limit, so its cost is the limit
+ * rather than the payload — but only while the limit is the smaller of the two.
+ * Configured above this, it would walk megabytes to learn what
+ * `JSON.stringify` reports in one native pass, so it is skipped and the
+ * behaviour is exactly what it was.
+ */
+const PROBE_LIMIT = 1024 * 1024;
+
+interface SizeProbe {
+  bytes: number;
+  exceeded: boolean;
+  undecided: boolean;
+}
+
+/**
+ * A floor on the serialized size, abandoned as soon as it passes `limit`.
+ *
+ * Escaping only ever makes JSON longer and omitted members only ever make it
+ * shorter, so every value is counted at or below what it really costs. Passing
+ * the limit here therefore proves the real output passes it too, and no
+ * response is ever truncated that should have been kept.
+ *
+ * This exists because the check it guards used to serialize the whole payload
+ * and throw the string away: 7ms on the watched application's event loop to
+ * decide that a 4.8MB response was too big to keep, and 107ms once someone
+ * raised the limit far enough to keep it. Anything it cannot judge — a cycle,
+ * a `bigint`, nesting deep enough to exhaust the stack — falls through to
+ * `JSON.stringify`, which has always handled those.
+ */
+function probeSize(data: unknown, limit: number): SizeProbe {
+  const probe: SizeProbe = { bytes: 0, exceeded: false, undecided: false };
+
+  try {
+    measureSize(data, limit, probe, new Set<object>());
+  } catch {
+    probe.undecided = true;
+  }
+
+  return probe;
+}
+
+function measureSize(value: unknown, limit: number, probe: SizeProbe, path: Set<object>): void {
+  if (value === null) {
+    countBytes(4, limit, probe);
+    return;
+  }
+
+  switch (typeof value) {
+    case 'boolean':
+      countBytes(4, limit, probe);
+      return;
+    case 'number':
+      countBytes(1, limit, probe);
+      return;
+    case 'string':
+      countBytes(value.length + 2, limit, probe);
+      return;
+    case 'bigint':
+      // JSON.stringify throws on these; let it.
+      probe.undecided = true;
+      return;
+    case 'undefined':
+    case 'function':
+    case 'symbol':
+      // Dropped from objects, written as `null` inside arrays. Counting
+      // nothing stays a floor either way.
+      return;
+    default:
+      break;
+  }
+
+  const object = value as object;
+
+  if (path.has(object)) {
+    probe.undecided = true;
+    return;
+  }
+
+  // `toJSON` can return anything at all, so this counts only the braces it is
+  // certain of and lets the exact pass settle it.
+  if (typeof (object as { toJSON?: unknown }).toJSON === 'function') {
+    countBytes(2, limit, probe);
+    return;
+  }
+
+  countBytes(2, limit, probe);
+  if (probe.exceeded) {
+    return;
+  }
+
+  path.add(object);
+
+  if (Array.isArray(object)) {
+    for (const item of object) {
+      measureSize(item, limit, probe, path);
+      if (probe.exceeded || probe.undecided) break;
+    }
+  } else {
+    for (const [key, child] of Object.entries(object)) {
+      countBytes(key.length + 3, limit, probe);
+      if (probe.exceeded) break;
+
+      measureSize(child, limit, probe, path);
+      if (probe.exceeded || probe.undecided) break;
+    }
+  }
+
+  path.delete(object);
+}
+
+function countBytes(bytes: number, limit: number, probe: SizeProbe): void {
+  probe.bytes += bytes;
+
+  if (probe.bytes > limit) {
+    probe.exceeded = true;
+  }
+}
+
+/**
  * Sanitize response data
+ *
+ * Oversized responses are replaced by a marker carrying `_size` and `_maxSize`.
+ * When the cheap probe rejected the payload without serializing it, `_size` is
+ * a floor and says so through `_sizeIsLowerBound` — the response is at least
+ * that big, and the exact figure was not worth the pause it would have cost.
  */
 export function sanitizeResponse(
   data: unknown,
@@ -349,7 +475,21 @@ export function sanitizeResponse(
     return data;
   }
 
-  // First, check size
+  // Reject what is plainly too large before paying to serialize it.
+  if (maxSize <= PROBE_LIMIT) {
+    const probe = probeSize(data, maxSize);
+
+    if (probe.exceeded) {
+      return markSanitized({
+        _truncated: true,
+        _size: probe.bytes,
+        _sizeIsLowerBound: true,
+        _maxSize: maxSize,
+      });
+    }
+  }
+
+  // Then, check size exactly
   let stringified: string;
   try {
     stringified = JSON.stringify(data);
