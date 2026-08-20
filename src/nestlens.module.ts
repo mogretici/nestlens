@@ -30,8 +30,10 @@ import { createStorage } from './core/storage/storage.factory';
 import {
   NestLensApiController,
   DashboardController,
+  NestLensDashboardServer,
   NestLensGuard,
   NestLensStreamController,
+  NESTLENS_SERVER_CONFIG,
   SpaRouteRegistrar,
   TagController,
 } from './api';
@@ -208,17 +210,26 @@ export class NestLensModule implements NestModule, OnModuleInit {
       };
     }
 
+    // Given an address of its own, the dashboard is not registered on this
+    // application at all. Leaving the controllers here as well and filtering by
+    // address later would still put NestLens on the application's socket, where
+    // one mistake in front of it publishes everything NestLens has recorded —
+    // and a route that exists is a route something can reach. See
+    // `DashboardServerConfig`.
+    const ownServer = mergedConfig.server;
+
     // Settles the SPA catch-all's syntax against the adapter Nest was given;
     // see spa-wildcard.ts for why that cannot be decided here.
-    const providers: Provider[] = [NestLensGuard, SpaRouteRegistrar];
+    const providers: Provider[] = ownServer
+      ? [{ provide: NESTLENS_SERVER_CONFIG, useValue: ownServer }, NestLensDashboardServer]
+      : [NestLensGuard, SpaRouteRegistrar];
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
-    const controllers = [
-      NestLensApiController,
-      TagController,
-      NestLensStreamController,
-      DashboardController,
-    ];
+    const controllers = ownServer
+      ? []
+      : [NestLensApiController, TagController, NestLensStreamController, DashboardController];
 
+    // Applied either way: the dashboard application reads the same metadata, so
+    // `path` places the dashboard identically on both arrangements.
     this.mountControllersAt(mergedConfig.path);
 
     const imports: DynamicModule['imports'] = [

@@ -11,6 +11,7 @@ interface NestLensConfig {
   enabled?: boolean;
   path?: string;
   trustProxy?: boolean; // honour X-Forwarded-Prefix, off by default
+  server?: DashboardServerConfig; // a listener of its own; absent by default
   authorization?: AuthorizationConfig;
   storage?: StorageConfig;
   pruning?: PruningConfig;
@@ -156,6 +157,37 @@ request, and no path segment is being stripped otherwise.
 
 If your proxy does not rewrite the path — it forwards `/nestlens` unchanged —
 you do not need this option at all.
+
+### server
+
+Serves the dashboard on a listener NestLens owns, bound to an address you
+choose, instead of mounting it on your application's HTTP server.
+
+- **Type**: `{ host: string; port: number }`
+- **Default**: absent — the dashboard mounts on your application, as it always has
+
+```typescript
+NestLensModule.forRoot({
+  server: { host: '127.0.0.1', port: 3001 },
+});
+// Dashboard at http://127.0.0.1:3001/nestlens
+// http://your-app:3000/nestlens is a 404 — the route is not registered there
+```
+
+`host` has no default on purpose. Bind it to a private interface — a VPN or
+tailnet address, a container network, loopback behind an SSH tunnel — and the
+dashboard is not on the public interface at all, rather than on it and guarded.
+`0.0.0.0` is a valid answer where the network is the boundary; it just has to be
+written down.
+
+If the address cannot be bound, the application fails to start. There is no
+fallback to mounting on your application, because a silent fallback is how a
+private dashboard becomes a public one.
+
+Authorization is unaffected — `allowedIps`, `canAccess`, `requiredRoles` and the
+rest are enforced on this listener too.
+
+See [Network Isolation](../security/network-isolation.md) for the full picture.
 
 ## Watchers Configuration
 

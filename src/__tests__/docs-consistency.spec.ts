@@ -101,6 +101,31 @@ describe('Documentation consistency with code', () => {
   });
 
   /**
+   * `server` takes the dashboard off the application's socket, and the reason
+   * to reach for it is a security one. Undocumented, everyone keeps the mounted
+   * default — which is the arrangement the option exists to replace.
+   */
+  describe('the separate listener is documented', () => {
+    it('is absent by default in the code', () => {
+      expect(DEFAULT_CONFIG.server).toBeUndefined();
+    });
+
+    it('basic-config.md carries the option and says the address has no default', () => {
+      const doc = readDoc('configuration/basic-config.md');
+
+      expect(doc).toContain('server?: DashboardServerConfig');
+      expect(doc).toMatch(/`host` has no default/);
+    });
+
+    it('the security page says authorization is still enforced there', () => {
+      const doc = readDoc('security/network-isolation.md');
+
+      expect(doc).toMatch(/allowedIps/);
+      expect(doc).toMatch(/canAccess/);
+    });
+  });
+
+  /**
    * The one change in 0.10.0 a user can see without reading the release notes:
    * a field that used to arrive as `***` now arrives readable.
    */
@@ -120,6 +145,7 @@ describe('Documentation consistency with code', () => {
     it.each([
       'getting-started/installation.md',
       'configuration/basic-config.md',
+      'security/network-isolation.md',
       'watchers/overview.md',
       'watchers/schedule.md',
       'dashboard/keyboard-shortcuts.md',

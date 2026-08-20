@@ -9,6 +9,8 @@ export {
   AuthorizationConfig,
   AuthUser,
   RateLimitConfig,
+  // Dashboard on a listener of its own
+  DashboardServerConfig,
   // Watcher configs
   RequestWatcherConfig,
   QueryWatcherConfig,

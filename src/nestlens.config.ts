@@ -79,6 +79,46 @@ export interface AuthorizationConfig {
   requiredRoles?: string[];
 }
 
+/**
+ * A listener of NestLens's own, instead of a mount on the application's server.
+ *
+ * Everything under {@link AuthorizationConfig} decides who is allowed through;
+ * this decides who can reach the door at all. Mounted on the host application —
+ * the default, and unchanged — the dashboard shares that application's socket,
+ * so whatever reaches the application reaches `/nestlens` too and only the
+ * checks in front of it say otherwise. A reverse proxy that forgets to exclude
+ * the path, or excludes it in a `location` block that never matches, publishes
+ * every recorded Authorization header and request body to the internet, and
+ * nothing inside the application can tell that it happened.
+ *
+ * Given a `server`, NestLens binds its own socket to the address named here and
+ * registers no dashboard route on the application at all. On a private
+ * interface — a VPN address, a container network, `127.0.0.1` behind an SSH
+ * tunnel — the dashboard is then not merely protected from the internet but
+ * absent from it, which does not depend on a second component staying correct.
+ *
+ * The address is not optional and there is no default. `0.0.0.0` is a fine
+ * answer where the network is the boundary; it just has to be the answer
+ * somebody wrote down.
+ *
+ * Authorization is unaffected: `allowedEnvironments`, `allowedIps`, `canAccess`
+ * and `requiredRoles` are enforced on this listener exactly as they are on the
+ * mounted one.
+ */
+export interface DashboardServerConfig {
+  /**
+   * Address to bind, e.g. `'127.0.0.1'`, a tailnet address, or `'0.0.0.0'`.
+   *
+   * The socket is bound to this address alone — this is not a filter applied
+   * after listening on everything, so an address the host does not hold fails
+   * at startup rather than falling back.
+   */
+  host: string;
+
+  /** Port to bind. `0` asks the operating system for a free one. */
+  port: number;
+}
+
 export interface QueryWatcherConfig {
   enabled?: boolean;
   slowThreshold?: number; // ms, default: 100
@@ -444,6 +484,15 @@ export interface NestLensConfig {
    */
   trustProxy?: boolean;
 
+  /**
+   * Serve the dashboard on a listener of its own, bound to a chosen address,
+   * instead of mounting it on the application's server.
+   *
+   * Absent by default, which is the mounted behaviour every installation has
+   * today. See {@link DashboardServerConfig}.
+   */
+  server?: DashboardServerConfig;
+
   // Authorization
   authorization?: AuthorizationConfig;
 
@@ -517,7 +566,7 @@ export interface NestLensConfig {
 export const DEFAULT_CONFIG: Required<
   Omit<
     NestLensConfig,
-    'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security' | 'alerting'
+    'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security' | 'alerting' | 'server'
   >
 > & {
   authorization: AuthorizationConfig;
@@ -525,10 +574,14 @@ export const DEFAULT_CONFIG: Required<
   filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
   rateLimit?: RateLimitConfig | false;
   security?: SecurityConfig;
+  server?: DashboardServerConfig;
 } = {
   enabled: true,
   path: '/nestlens',
   trustProxy: false,
+  // Absent, not a disabled default: the dashboard mounts on the application's
+  // server unless somebody names an address for it.
+  server: undefined,
   authorization: {
     allowedEnvironments: ['development', 'local', 'test'],
     environmentVariable: 'NODE_ENV',

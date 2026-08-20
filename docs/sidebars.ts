@@ -122,6 +122,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'security/access-control',
         'security/ip-whitelisting',
+        'security/network-isolation',
         'security/data-masking',
         'security/production-usage',
       ],
