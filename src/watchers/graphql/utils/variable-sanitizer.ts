@@ -4,36 +4,203 @@
  * Masks sensitive data in GraphQL variables and responses.
  */
 
+import { markSanitized } from '../../../core/sanitized-payload';
+
 const MASKED_VALUE = '***';
 
 /**
- * Check if a key matches any of the sensitive patterns
+ * How many distinct key names one matcher will remember.
+ *
+ * A schema has a finite field set — a 20-item feed carries a couple of thousand
+ * key occurrences over about fifty names — so the memo answers nearly every
+ * lookup. A payload assembled by whoever is calling has no such bound, which is
+ * why there is a cap. Past it the answers stay correct and are simply
+ * recomputed.
  */
-function isSensitiveKey(key: string, sensitivePatterns: string[]): boolean {
-  const lowerKey = key.toLowerCase();
+const MEMO_LIMIT = 1024;
 
-  return sensitivePatterns.some((pattern) => {
-    const lowerPattern = pattern.toLowerCase();
+/**
+ * Words that name something *made from* a sensitive field rather than something
+ * that merely counts or describes it.
+ *
+ * `passwordHash` is as sensitive as the password, `stripeSecretKey` as the
+ * secret and `creditCardNumber` as the card, so a term matched in the middle of
+ * a name still masks when only these follow it. `tokenCount` is a number of
+ * tokens and stays readable.
+ */
+const DERIVATIVE_SEGMENTS = new Set([
+  'hash',
+  'hashed',
+  'key',
+  'keys',
+  'value',
+  'values',
+  'code',
+  'codes',
+  'number',
+  'numbers',
+  'num',
+  'no',
+  'confirm',
+  'confirmation',
+  'plain',
+  'raw',
+  'encrypted',
+  'digest',
+]);
 
-    // Exact match
-    if (lowerKey === lowerPattern) {
-      return true;
+/**
+ * A field name split into its words, lower case.
+ *
+ * `apiToken`, `api_token` and `API-TOKEN` are one field written three ways, and
+ * a payload uses whichever the schema author preferred, so the pattern list
+ * does not have to enumerate them.
+ *
+ * Splitting is also what stops the matcher lying. The list holds `pin`, and
+ * `shipping`, `shoppingCart`, `spinner`, `topping` and `isPinned` all contain
+ * those three letters — every one of them used to reach the dashboard as `***`,
+ * which made it describe a response the API never sent.
+ */
+function splitSegments(name: string): string[] {
+  const segments: string[] = [];
+
+  const spaced = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+
+  for (const part of spaced.split(/[^a-zA-Z0-9]+/)) {
+    if (part.length > 0) {
+      segments.push(part.toLowerCase());
+    }
+  }
+
+  return segments;
+}
+
+/** A pattern list compiled once, with its answers remembered. */
+interface KeyMatcher {
+  isSensitive(key: string): boolean;
+}
+
+/**
+ * Compiled matchers, keyed by the identity of the pattern list they came from.
+ *
+ * The resolved watcher configuration hands the same array to every call, so the
+ * compile and the memo happen once; reconfiguring produces a new array and with
+ * it a new matcher, so there is no cache to invalidate by hand. The list is
+ * treated as immutable, which is how the rest of the resolved config is treated
+ * — mutating one in place would leave the memo describing the old list.
+ *
+ * `WeakMap` keeps nothing alive that the configuration does not.
+ */
+const matchers = new WeakMap<string[], KeyMatcher>();
+
+function matcherFor(sensitivePatterns: string[]): KeyMatcher {
+  const existing = matchers.get(sensitivePatterns);
+  if (existing) {
+    return existing;
+  }
+
+  const compiled = compileMatcher(sensitivePatterns);
+  matchers.set(sensitivePatterns, compiled);
+
+  return compiled;
+}
+
+function compileMatcher(sensitivePatterns: string[]): KeyMatcher {
+  const terms = new Set<string>();
+  const prefixes: string[] = [];
+
+  for (const pattern of sensitivePatterns) {
+    // Wildcards are an explicit opt-in to breadth, so they keep the loose
+    // prefix match they have always had.
+    if (pattern.endsWith('*')) {
+      const prefix = splitSegments(pattern.slice(0, -1)).join('');
+      if (prefix.length > 0) {
+        prefixes.push(prefix);
+      }
+      continue;
     }
 
-    // Contains match (for nested keys like "user.password")
-    if (lowerKey.includes(lowerPattern)) {
-      return true;
+    const term = splitSegments(pattern).join('');
+    if (term.length > 0) {
+      terms.add(term);
     }
+  }
 
-    // Wildcard support (e.g., "secret*" matches "secretKey")
-    if (lowerPattern.endsWith('*')) {
-      const prefix = lowerPattern.slice(0, -1);
-      return lowerKey.startsWith(prefix);
+  const memo = new Map<string, boolean>();
+
+  return {
+    isSensitive(key: string): boolean {
+      const remembered = memo.get(key);
+      if (remembered !== undefined) {
+        return remembered;
+      }
+
+      const result = matchesTerm(key, terms, prefixes);
+      if (memo.size < MEMO_LIMIT) {
+        memo.set(key, result);
+      }
+
+      return result;
+    },
+  };
+}
+
+/**
+ * Whether a term covers this field name.
+ *
+ * A term has to line up with whole words: `token` matches `apiToken` and
+ * `access_token`, not `tokenCount`. Multi-word terms match a run of words, so
+ * `credit_card` still catches `creditCardNumber`.
+ */
+function matchesTerm(key: string, terms: Set<string>, prefixes: string[]): boolean {
+  const segments = splitSegments(key);
+  if (segments.length === 0) {
+    return false;
+  }
+
+  if (prefixes.length > 0) {
+    const joined = segments.join('');
+    for (const prefix of prefixes) {
+      if (joined.startsWith(prefix)) {
+        return true;
+      }
+    }
+  }
+
+  for (let start = 0; start < segments.length; start += 1) {
+    let run = '';
+
+    for (let end = start; end < segments.length; end += 1) {
+      run += segments[end];
+
+      if (terms.has(run) && tailIsDerivative(segments, end + 1)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function tailIsDerivative(segments: string[], from: number): boolean {
+  for (let index = from; index < segments.length; index += 1) {
+    const segment = segments[index];
+
+    // A bare number is an index or a version — `token_2`, `apiKeyV2` — and
+    // names the same kind of thing, not a fact about it.
+    if (DIGITS.test(segment) || DERIVATIVE_SEGMENTS.has(segment)) {
+      continue;
     }
 
     return false;
-  });
+  }
+
+  return true;
 }
+
+const DIGITS = /^\d+$/;
 
 /**
  * Recursively sanitize an object, masking sensitive values
@@ -47,7 +214,7 @@ export function sanitizeVariables(
     return variables;
   }
 
-  return sanitizeObject(variables, sensitivePatterns, 0, maxDepth);
+  return markSanitized(sanitizeObject(variables, matcherFor(sensitivePatterns), 0, maxDepth));
 }
 
 /**
@@ -55,7 +222,7 @@ export function sanitizeVariables(
  */
 function sanitizeObject(
   obj: Record<string, unknown>,
-  sensitivePatterns: string[],
+  matcher: KeyMatcher,
   depth: number,
   maxDepth: number,
 ): Record<string, unknown> {
@@ -66,7 +233,7 @@ function sanitizeObject(
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    if (isSensitiveKey(key, sensitivePatterns)) {
+    if (matcher.isSensitive(key)) {
       result[key] = MASKED_VALUE;
       continue;
     }
@@ -74,14 +241,9 @@ function sanitizeObject(
     if (value === null || value === undefined) {
       result[key] = value;
     } else if (Array.isArray(value)) {
-      result[key] = sanitizeArray(value, sensitivePatterns, depth + 1, maxDepth);
+      result[key] = sanitizeArray(value, matcher, depth + 1, maxDepth);
     } else if (typeof value === 'object') {
-      result[key] = sanitizeObject(
-        value as Record<string, unknown>,
-        sensitivePatterns,
-        depth + 1,
-        maxDepth,
-      );
+      result[key] = sanitizeObject(value as Record<string, unknown>, matcher, depth + 1, maxDepth);
     } else if (typeof value === 'string' && looksLikeSensitiveValue(value)) {
       // Mask values that look like tokens, keys, etc.
       result[key] = MASKED_VALUE;
@@ -98,7 +260,7 @@ function sanitizeObject(
  */
 function sanitizeArray(
   arr: unknown[],
-  sensitivePatterns: string[],
+  matcher: KeyMatcher,
   depth: number,
   maxDepth: number,
 ): unknown[] {
@@ -112,16 +274,11 @@ function sanitizeArray(
     }
 
     if (Array.isArray(item)) {
-      return sanitizeArray(item, sensitivePatterns, depth + 1, maxDepth);
+      return sanitizeArray(item, matcher, depth + 1, maxDepth);
     }
 
     if (typeof item === 'object') {
-      return sanitizeObject(
-        item as Record<string, unknown>,
-        sensitivePatterns,
-        depth + 1,
-        maxDepth,
-      );
+      return sanitizeObject(item as Record<string, unknown>, matcher, depth + 1, maxDepth);
     }
 
     if (typeof item === 'string' && looksLikeSensitiveValue(item)) {
@@ -197,24 +354,26 @@ export function sanitizeResponse(
   try {
     stringified = JSON.stringify(data);
   } catch {
-    return { _error: 'Unable to serialize response' };
+    return markSanitized({ _error: 'Unable to serialize response' });
   }
 
   if (stringified.length > maxSize) {
-    return {
+    return markSanitized({
       _truncated: true,
       _size: stringified.length,
       _maxSize: maxSize,
-    };
+    });
   }
+
+  const matcher = matcherFor(sensitivePatterns);
 
   // Sanitize the data
   if (Array.isArray(data)) {
-    return sanitizeArray(data, sensitivePatterns, 0, 10);
+    return markSanitized(sanitizeArray(data, matcher, 0, 10));
   }
 
   if (typeof data === 'object') {
-    return sanitizeObject(data as Record<string, unknown>, sensitivePatterns, 0, 10);
+    return markSanitized(sanitizeObject(data as Record<string, unknown>, matcher, 0, 10));
   }
 
   return data;

@@ -67,6 +67,22 @@ describe('Documentation consistency with code', () => {
     });
   });
 
+  /**
+   * The one change in 0.10.0 a user can see without reading the release notes:
+   * a field that used to arrive as `***` now arrives readable.
+   */
+  describe('the narrowed GraphQL variable masking is documented', () => {
+    const graphql = () => readDoc('watchers/graphql.md');
+
+    it('says a term matches whole words', () => {
+      expect(graphql()).toMatch(/matches whole words/i);
+    });
+
+    it('keeps the example of a name that no longer masks', () => {
+      expect(graphql()).toContain('tokenCount');
+    });
+  });
+
   describe('referenced docs exist', () => {
     it.each([
       'getting-started/installation.md',

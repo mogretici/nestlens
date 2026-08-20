@@ -294,6 +294,30 @@ The GraphQL Watcher automatically masks these sensitive variables by default:
 - `creditCard`, `credit_card`
 - `ssn`, `pin`
 
+### How a Variable Name Is Matched
+
+A term matches whole words in the name. `apiToken`, `api_token` and `API-TOKEN`
+are one field written three ways, so the list does not have to enumerate them,
+and a multi-word term matches a run of words — `credit_card` catches
+`creditCardNumber`.
+
+A term found in the middle of a name still masks when what follows only names
+something *made from* the field: `passwordHash`, `stripeSecretKey`,
+`creditCardNumber` and `token_2` are all masked. A word that describes the field
+rather than deriving from it is not: `tokenCount` is a number of tokens and
+stays readable.
+
+A term ending in `*` keeps the loose prefix match it has always had —
+`secret*` matches any name starting with those letters.
+
+:::info Changed in 0.10.0
+Matching used to be a plain substring test, so the default list's `pin` masked
+`shipping`, `shoppingCart`, `spinner`, `topping` and `isPinned`, and the
+dashboard showed `***` for values the API never sent. If you added a short term
+to `sensitiveVariables` and relied on it catching a name it appears inside —
+`id` inside `identityDocument`, say — add the fuller name or a `*` wildcard.
+:::
+
 Customize sensitive variable detection:
 
 ```typescript

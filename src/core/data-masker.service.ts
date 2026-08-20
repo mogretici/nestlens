@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isSanitized } from './sanitized-payload';
 
 /**
  * Configuration for data masking behavior.
@@ -197,6 +198,10 @@ export class DataMaskerService {
       return body;
     }
 
+    if (isSanitized(body)) {
+      return body;
+    }
+
     if (typeof body === 'string') {
       // Try to parse JSON and mask it
       try {
@@ -227,6 +232,12 @@ export class DataMaskerService {
     for (const [key, value] of Object.entries(obj)) {
       if (matchesSensitiveTerm(key, this.sensitiveParams)) {
         masked[key] = this.maskReplacement;
+      } else if (isSanitized(value)) {
+        // A watcher that already produced a clean copy of this subtree — the
+        // GraphQL response and its variables — is taken at its word rather
+        // than deep-cloned a second time. Only what `markSanitized` touched
+        // qualifies, so the rest of the payload is masked as it always was.
+        masked[key] = value;
       } else if (value !== null && typeof value === 'object') {
         if (Array.isArray(value)) {
           masked[key] = value.map((item) =>
