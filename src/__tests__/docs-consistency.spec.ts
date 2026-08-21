@@ -202,6 +202,15 @@ describe('Documentation consistency with code', () => {
       expect(performance()).toMatch(/never turns a watcher off/i);
     });
 
+    it('documents the shutdown deadline', () => {
+      // An application that leaves NestLens on needs to know its shutdown is
+      // bounded, and by how much.
+      const text = performance();
+
+      expect(text).toMatch(/shutting down/i);
+      expect(text).toContain('three-second');
+    });
+
     it('explains why per-request memory is off by default', () => {
       const text = performance();
 

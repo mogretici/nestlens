@@ -32,6 +32,15 @@ export {
   GateWatcherConfig,
   BatchWatcherConfig,
   DumpWatcherConfig,
+  GraphQLWatcherConfig,
+  GraphQLSubscriptionConfig,
+  GraphQLOperationContext,
+  // Security and masking
+  SecurityConfig,
+  // Alerting
+  AlertingConfig,
+  AlertingWebhook,
+  AlertingWebhookType,
   // Storage config
   StorageConfig,
   StorageDriver,

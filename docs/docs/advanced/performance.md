@@ -382,6 +382,29 @@ cost about 2.5% of the process's CPU.
 Turn it on where the application handles one thing at a time — a local
 reproduction, a worker — and the number means something.
 
+## Shutting Down
+
+The last thing NestLens does on shutdown is flush whatever is still buffered.
+That flush has a **three-second deadline**, after which the application finishes
+shutting down without it.
+
+The deadline exists because a storage that has stopped answering does not fail
+the flush — it never returns. Awaiting it meant `app.close()` never resolved,
+SIGTERM did nothing, and the process waited for whatever eventually killed it.
+An unreachable Redis was enough to leave a rolling deploy hanging.
+
+Measured against a storage whose `save` never settles:
+
+| storage | `app.close()` |
+| --- | --- |
+| healthy | 1 ms |
+| throwing | 302 ms |
+| hanging | never (now: 3 s) |
+
+A normal flush is milliseconds, so the deadline only ever applies when storage
+is already failing — and entries it will not accept were not going to be kept
+either way.
+
 ## Sampling
 
 NestLens records everything by default, which is the point of it. When that is
