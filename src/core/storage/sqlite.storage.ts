@@ -603,6 +603,9 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       // `*` stays a wildcard — it is the documented way to ask for one — but
       // everything around it is escaped, so a path containing `%` or `_`
       // matches itself.
+      // A pattern with a wildcard is anchored — `/item*` means "starts with
+      // /item" — and one without matches anywhere. The JavaScript backends
+      // follow the same rule; see `matchesPathPattern`.
       const pathParams = filters.paths.map((p) =>
         p.includes('*') ? escapeLike(p).replace(/\*/g, '%') : `%${escapeLike(p)}%`,
       );

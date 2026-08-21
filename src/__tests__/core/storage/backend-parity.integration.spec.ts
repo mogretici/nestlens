@@ -205,6 +205,49 @@ describe('storage backends agree', () => {
 
   it('returns nothing for a tag nobody has', () => agree((s) => s.findByTags(['nobody-has-this'])));
 
+  describe('filtering by path', () => {
+    // The JavaScript backends passed the pattern to `new RegExp`, so every
+    // regex character was live: `[` threw, `.` matched anything, and the
+    // pattern an attacker chose ran against every entry. SQLite answered with
+    // `LIKE` and treated all of them literally.
+    it.each([
+      ['an invalid regular expression', '['],
+      ['a pattern that could backtrack', '(a+)+$'],
+      ['a dot, which is not a wildcard', '/item.1'],
+      ['a wildcard, which is', '/item*'],
+      ['a wildcard in the middle', '/item*9'],
+      ['different capitalisation', '/ITEM'],
+      ['a regex anchor as text', '^/item'],
+    ])('agrees on %s', (_name, pattern) =>
+      agree(
+        async (s) =>
+          (await s.findWithCursor(undefined, { limit: 50, filters: { paths: [pattern] } })).data
+            .length,
+      ),
+    );
+  });
+
+  describe('filtering by name, ignoring case', () => {
+    // SQLite's LIKE ignores case for ASCII; `includes` does not. A filter for
+    // `typeerror` found the `TypeError` on one backend and nothing on the
+    // others — and `search` had always ignored case, so the two disagreed even
+    // within a single dashboard.
+    it.each(['request', 'REQUEST', 'ReQuEsT'])('agrees on a search for %p', (term) =>
+      agree(
+        async (s) =>
+          (await s.findWithCursor(undefined, { limit: 50, filters: { search: term } })).data.length,
+      ),
+    );
+
+    it.each(['/ITEM', '/item', '/Item'])('agrees on a path filter for %p', (term) =>
+      agree(
+        async (s) =>
+          (await s.findWithCursor(undefined, { limit: 50, filters: { paths: [term] } })).data
+            .length,
+      ),
+    );
+  });
+
   describe('searching for text that looks like a pattern', () => {
     // SQLite compares with LIKE, where `%` and `_` are wildcards; the others
     // compare with `includes`, where they are ordinary characters. Unescaped,

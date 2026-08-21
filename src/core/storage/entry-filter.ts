@@ -1,6 +1,54 @@
 import { CursorPaginationParams, StoredEntry } from '../../types';
 
 /**
+ * Whether `haystack` contains `needle`, ignoring case.
+ *
+ * The SQLite backend answers these filters with `LIKE`, which ignores case for
+ * ASCII; these two answered with `includes`, which does not. So a filter for
+ * `typeerror` found the `TypeError` on SQLite and nothing on the others, and a
+ * path filter for `/ORDERS` matched `/Orders/42` on one backend only.
+ *
+ * Case-insensitive is also the behaviour to converge on rather than away from:
+ * `search` has always worked this way, and a reader typing into a filter box is
+ * not thinking about capitalisation.
+ */
+const containsIgnoringCase = (haystack: unknown, needle: string): boolean =>
+  typeof haystack === 'string' && haystack.toLowerCase().includes(needle.toLowerCase());
+
+/**
+ * Whether a path matches a filter pattern.
+ *
+ * `*` is a wildcard and everything else is literal — the semantics the SQLite
+ * backend has always had, since it answers this with `LIKE`. A pattern with no
+ * wildcard matches anywhere in the path; one with a wildcard has to match the
+ * whole path, so `/item*` means "starts with /item" rather than "contains it".
+ *
+ * The previous implementation passed the pattern straight to `new RegExp`,
+ * which made every regular-expression character live:
+ *
+ *     paths: ['[']        -> SyntaxError, and the request failed
+ *     paths: ['/a.b']     -> also matched /axb
+ *     paths: ['(a+)+$']   -> a pattern an attacker chooses, run against
+ *                            every entry
+ *
+ * A dashboard filter is text a reader typed, not a program. Escaping first
+ * leaves `*` as the one character that means anything else, and nothing in the
+ * result can backtrack catastrophically: the alternations are gone and only
+ * `.*` remains.
+ */
+const matchesPathPattern = (path: string, pattern: string): boolean => {
+  const target = path.toLowerCase();
+  const wanted = pattern.toLowerCase();
+
+  if (!wanted.includes('*')) {
+    return target.includes(wanted);
+  }
+
+  const escaped = wanted.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped.replace(/\*/g, '.*')}$`).test(target);
+};
+
+/**
  * Whether a stored entry satisfies a set of dashboard filters.
  *
  * One implementation on purpose. MemoryStorage and RedisStorage each filter in
@@ -45,7 +93,7 @@ export const matchesEntryFilters = (
   // Exception filters
   if (filters.names?.length && entry.type === 'exception') {
     const name = payload.name as string;
-    if (!filters.names.some((n) => name?.includes(n))) return false;
+    if (!filters.names.some((n) => containsIgnoringCase(name, n))) return false;
   }
   if (filters.resolved !== undefined) {
     const isResolved = !!entry.resolvedAt;
@@ -59,13 +107,7 @@ export const matchesEntryFilters = (
   }
   if (filters.paths?.length) {
     const path = (payload.path as string) || (payload.request as { url?: string })?.url || '';
-    if (
-      !filters.paths.some((p) => {
-        const pattern = p.replace(/\*/g, '.*');
-        return new RegExp(pattern).test(path);
-      })
-    )
-      return false;
+    if (!filters.paths.some((p) => matchesPathPattern(path, p))) return false;
   }
   if (filters.statuses?.length) {
     const status = payload.statusCode as number | undefined;
@@ -83,7 +125,7 @@ export const matchesEntryFilters = (
       (payload.headers as { host?: string; Host?: string })?.host ||
       (payload.headers as { host?: string; Host?: string })?.Host ||
       (payload.hostname as string);
-    if (!host || !filters.hostnames.some((h) => host.includes(h))) return false;
+    if (!filters.hostnames.some((h) => containsIgnoringCase(host, h))) return false;
   }
   if (filters.controllers?.length) {
     if (!filters.controllers.includes(payload.controllerAction as string)) return false;
@@ -95,7 +137,7 @@ export const matchesEntryFilters = (
   // Event filters
   if (filters.eventNames?.length && entry.type === 'event') {
     const name = payload.name as string;
-    if (!filters.eventNames.some((n) => name?.includes(n))) return false;
+    if (!filters.eventNames.some((n) => containsIgnoringCase(name, n))) return false;
   }
 
   // Schedule filters
@@ -104,7 +146,7 @@ export const matchesEntryFilters = (
   }
   if (filters.scheduleNames?.length && entry.type === 'schedule') {
     const name = payload.name as string;
-    if (!filters.scheduleNames.some((n) => name?.includes(n))) return false;
+    if (!filters.scheduleNames.some((n) => containsIgnoringCase(name, n))) return false;
   }
 
   // Job filters
@@ -113,7 +155,7 @@ export const matchesEntryFilters = (
   }
   if (filters.jobNames?.length && entry.type === 'job') {
     const name = payload.name as string;
-    if (!filters.jobNames.some((n) => name?.includes(n))) return false;
+    if (!filters.jobNames.some((n) => containsIgnoringCase(name, n))) return false;
   }
   if (filters.queues?.length && entry.type === 'job') {
     if (!filters.queues.includes(payload.queue as string)) return false;
@@ -170,13 +212,13 @@ export const matchesEntryFilters = (
   }
   if (filters.commandNames?.length && entry.type === 'command') {
     const name = payload.name as string;
-    if (!filters.commandNames.some((n) => name?.includes(n))) return false;
+    if (!filters.commandNames.some((n) => containsIgnoringCase(name, n))) return false;
   }
 
   // Gate filters
   if (filters.gateNames?.length && entry.type === 'gate') {
     const gate = payload.gate as string;
-    if (!filters.gateNames.some((n) => gate?.includes(n))) return false;
+    if (!filters.gateNames.some((n) => containsIgnoringCase(gate, n))) return false;
   }
   if (filters.gateResults?.length && entry.type === 'gate') {
     const allowed = payload.allowed as boolean;
@@ -209,7 +251,7 @@ export const matchesEntryFilters = (
   }
   if (filters.operationNames?.length && entry.type === 'graphql') {
     const opName = payload.operationName as string;
-    if (!filters.operationNames.some((n) => opName?.includes(n))) return false;
+    if (!filters.operationNames.some((n) => containsIgnoringCase(opName, n))) return false;
   }
   if (filters.hasErrors !== undefined && entry.type === 'graphql') {
     if (payload.hasErrors !== filters.hasErrors) return false;
