@@ -139,6 +139,75 @@ describe('Documentation consistency with code', () => {
     it('keeps the example of a name that no longer masks', () => {
       expect(graphql()).toContain('tokenCount');
     });
+
+    it('names the plural forms that are covered', () => {
+      // Narrowing to whole words dropped these on its first cut, which is a
+      // worse failure than the over-matching it was fixing.
+      const text = graphql();
+
+      expect(text).toContain('tokens');
+      expect(text).toContain('apiKeys');
+    });
+
+    it("says the watcher's list is the whole of the masking for GraphQL", () => {
+      // The collector does not walk a marked payload, so a reader who assumes
+      // there is a second pass behind this list will configure a leak.
+      expect(graphql()).toMatch(/whole of the masking/i);
+    });
+
+    it('documents how to narrow the list', () => {
+      const text = graphql();
+
+      expect(text).toContain('{ replace:');
+      expect(readDoc('security/data-masking.md')).toContain('{ replace:');
+    });
+
+    it("lists the collector's defaults that the watcher now carries", () => {
+      // Named in the docs because they used to be masked by a pass that no
+      // longer runs, and a reader auditing the list would not otherwise expect
+      // them to be in it.
+      const text = graphql();
+
+      for (const term of ['cvv', 'card_number', 'social_security']) {
+        expect(text).toContain(term);
+      }
+    });
+  });
+
+  describe('the cost of leaving NestLens running is documented', () => {
+    const performance = () => readDoc('advanced/performance.md');
+
+    it('carries a concurrency figure, not only a serial one', () => {
+      // The serial latency number reads as "NestLens is free", and under 32
+      // connections it was costing 85% of throughput. One number without the
+      // other is how that went unnoticed.
+      expect(performance()).toMatch(/benchmark:load/);
+      expect(performance()).toMatch(/concurren/i);
+    });
+
+    it('names the idle cost, which is the question behind leaving it on', () => {
+      expect(performance()).toMatch(/idle cpu/i);
+    });
+
+    it('documents sampling and what it does to correlation', () => {
+      const text = performance();
+
+      expect(text).toContain('sampling');
+      // The property that makes it usable: whole requests, not scattered
+      // entries.
+      expect(text).toMatch(/kept\s*\n?\s*together or dropped together/);
+    });
+
+    it('says a settings block does not switch a watcher off', () => {
+      expect(performance()).toMatch(/never turns a watcher off/i);
+    });
+
+    it('explains why per-request memory is off by default', () => {
+      const text = performance();
+
+      expect(text).toContain('captureMemory');
+      expect(text).toMatch(/negative/i);
+    });
   });
 
   describe('referenced docs exist', () => {

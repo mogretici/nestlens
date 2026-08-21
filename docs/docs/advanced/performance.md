@@ -8,10 +8,13 @@ Learn how to optimize NestLens for minimal performance impact on your applicatio
 
 ## Performance Overview
 
-These numbers come from `npm run benchmark`, which is in the repository — run it
-on your own hardware rather than trusting the table. The figures below were
-measured on Node 25, Apple Silicon, with the request and exception watchers
-enabled and the default in-memory storage.
+These numbers come from two benchmarks in the repository — run them on your own
+hardware rather than trusting the tables. Both were measured on Node 25, Apple
+Silicon, with the default configuration and the default in-memory storage.
+
+### One request at a time
+
+`npm run benchmark`:
 
 | | measured |
 | --- | --- |
@@ -21,15 +24,49 @@ enabled and the default in-memory storage.
 | Write throughput, SQLite storage | ~23,000 entries/second |
 
 The latency figure is the difference between the same application with and
-without NestLens, over 2,000 requests after a warm-up. Watchers that wrap a
-library — queries, cache, mail — cost in proportion to how often that library is
-called, so an application making twenty queries per request pays twenty times
-the per-entry cost rather than the per-request one.
+without NestLens, over 2,000 requests after a warm-up.
 
-Two things dominate in practice and neither is on this table: the storage driver
-you choose (SQLite is roughly sixty times slower to write than memory, and Redis
-depends on your network) and how much payload you record. `maxBodySize` and the
-`filter` hook are the levers.
+### Under concurrency
+
+`npm run benchmark:load` runs the application in a process of its own and drives
+32 concurrent connections at it, which is the question that matters if you are
+leaving NestLens on:
+
+| | GET, no body | POST, 2.5 KB body |
+| --- | --- | --- |
+| CPU without NestLens | 27 ms / 1,000 requests | 50 ms / 1,000 requests |
+| CPU with NestLens, defaults | **55 ms / 1,000 requests** | **87 ms / 1,000 requests** |
+| Throughput cost | ~32% | ~18% |
+| Idle CPU, dashboard open, nothing arriving | **~0.5%** | |
+
+So roughly **28 microseconds of CPU per request**, plus what the payload costs
+to copy. On a service handling 200 requests a second that is about 0.6% of one
+core.
+
+Watchers that wrap a library — queries, cache, mail — cost in proportion to how
+often that library is called, so an application making twenty queries per
+request pays twenty times the per-entry cost rather than the per-request one.
+
+Two things dominate beyond that: the storage driver you choose (SQLite is
+roughly sixty times slower to write than memory, and Redis depends on your
+network) and how much payload you record. `maxBodySize`, [`sampling`](#sampling)
+and the `filter` hook are the levers.
+
+:::note Improved in 0.10.0
+The figure above was 200 ms / 1,000 requests before 0.10.0 — 7× what it is now.
+Three things were responsible and none of them were the price of the feature:
+
+- in-memory eviction sorted every key on **every save** once the entry cap was
+  reached, which is the steady state of a capped storage — 32% of the whole
+  process's CPU,
+- the collector's masker re-derived the answer for every field name on every
+  entry instead of remembering it,
+- every request read `process.memoryUsage()` twice, for a figure that is not
+  meaningful under concurrency (see [`captureMemory`](#request-watcher-memory)).
+
+If you measured NestLens before 0.10.0 and put it aside, the numbers you got are
+not the numbers now.
+:::
 
 ### Serving the dashboard
 
@@ -319,6 +356,63 @@ NestLensModule.forRoot({
   },
 })
 ```
+
+Passing a settings block never turns a watcher off — only `false` or
+`{ enabled: false }` does. (Before 0.10.0 it did, silently: any configured
+watcher recorded nothing at all.)
+
+### Request Watcher Memory
+
+`captureMemory` records how much the heap grew across the handler. It is **off
+by default** and should usually stay off:
+
+```typescript
+watchers: {
+  request: { captureMemory: true },   // default: false
+}
+```
+
+The figure is `process.memoryUsage().heapUsed` read either side of the handler.
+Under concurrency the heap is shared with every other request in flight and a
+garbage collection may run between the two readings, so the number is mostly
+noise: measured on an endpoint returning `{ok: true}`, it ranged from **-570 KB
+to +671 KB** and came out negative once in thirty. Reading it twice per request
+cost about 2.5% of the process's CPU.
+
+Turn it on where the application handles one thing at a time — a local
+reproduction, a worker — and the number means something.
+
+## Sampling
+
+NestLens records everything by default, which is the point of it. When that is
+more than you want to pay for, `sampling` records a fraction of traffic instead:
+
+```typescript
+NestLensModule.forRoot({
+  sampling: {
+    rate: 0.1,              // one request in ten
+    always: ['exception'],  // exceptions regardless — this is the default
+  },
+})
+```
+
+The decision is made **per request, from its id**, so a request and everything
+recorded under it — its queries, cache reads, logs and outgoing calls — are kept
+together or dropped together. A detail page is therefore always complete; you
+get fewer requests, not partial ones.
+
+It costs a hash rather than a callback, and it runs before the entry is masked
+or buffered, so a dropped entry costs almost nothing. Use `filter` instead when
+the rule depends on what is *inside* the entry:
+
+| | use |
+| --- | --- |
+| "record a tenth of traffic" | `sampling` |
+| "record only 4xx and 5xx" | `filter` |
+| "record everything for one customer" | `filter`, or a monitored tag |
+
+`rate: 0` records nothing except what `always` names — exceptions only, which is
+a reasonable way to run in production if you mostly want the error pages.
 
 ## Entry Filtering Performance
 
