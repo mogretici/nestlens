@@ -8,7 +8,9 @@ import {
   Injectable,
   Logger,
   OnModuleDestroy,
+  Optional,
 } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 import type { Request } from 'express';
 import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 
@@ -53,6 +55,10 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
   constructor(
     @Inject(NESTLENS_CONFIG)
     private readonly config: NestLensConfig,
+    // Optional so the guard can still be constructed in isolation, which is
+    // how most of its tests build it.
+    @Optional()
+    private readonly httpAdapterHost?: HttpAdapterHost,
   ) {
     // Periodic cleanup of expired rate limit entries
     this.cleanupInterval = setInterval(
@@ -92,11 +98,19 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
     // Check rate limit first (before any other checks)
     const clientIp = this.getClientIp(request);
     if (!this.checkRateLimit(clientIp)) {
+      const retryAfter = Math.ceil(this.getRateLimitResetTime(clientIp) / 1000);
+
+      // A 429 without `Retry-After` tells a client it has been refused and
+      // nothing about when to come back, so the only strategy left is to guess
+      // — which is how a rate limit turns into a retry storm. RFC 6585 asks for
+      // this header, and the value was already being computed for the body.
+      this.setRetryAfter(context, retryAfter);
+
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Too many requests. Please try again later.',
-          retryAfter: Math.ceil(this.getRateLimitResetTime(clientIp) / 1000),
+          retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -159,6 +173,27 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
     }
 
     return true;
+  }
+
+  /**
+   * Writes `Retry-After`, on whichever HTTP platform is underneath.
+   *
+   * Express and Fastify disagree about the method name; the adapter does not.
+   * Absent — in a unit test that builds the guard on its own — the header is
+   * simply not written, which is what happens anyway when there is no response
+   * to write it to.
+   */
+  private setRetryAfter(context: ExecutionContext, seconds: number): void {
+    const adapter = this.httpAdapterHost?.httpAdapter;
+    if (!adapter || typeof adapter.setHeader !== 'function') {
+      return;
+    }
+
+    try {
+      adapter.setHeader(context.switchToHttp().getResponse(), 'Retry-After', String(seconds));
+    } catch {
+      // Writing a header must never turn a 429 into a 500.
+    }
   }
 
   /**
