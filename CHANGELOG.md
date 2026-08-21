@@ -1,3 +1,10 @@
+## [0.10.1](https://github.com/mogretici/nestlens/compare/v0.10.0...v0.10.1) (2026-08-21)
+
+
+### Bug Fixes
+
+* **authorization:** honour an explicit null in allowedEnvironments ([8e64381](https://github.com/mogretici/nestlens/commit/8e643812caa7936902a10767fe0d5205e259dfaa))
+
 # [0.10.0](https://github.com/mogretici/nestlens/compare/v0.9.7...v0.10.0) (2026-08-21)
 
 
