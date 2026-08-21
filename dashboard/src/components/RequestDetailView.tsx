@@ -255,16 +255,13 @@ export default function RequestDetailView({ entry, related = [] }: RequestDetail
                 value={<code className="font-mono text-sm">{payload.handler}</code>}
               />
             )}
-            <DetailRow
-              label="Memory Usage"
-              value={
-                payload.memory !== undefined ? (
-                  formatBytes(payload.memory)
-                ) : (
-                  '-'
-                )
-              }
-            />
+            {/* Absent unless `watchers.request.captureMemory` is on, which it is
+                not by default — the figure is not meaningful under concurrency.
+                A row reading "Memory Usage: -" says nothing; showing no row says
+                the same thing without asking the reader to wonder. */}
+            {payload.memory !== undefined && (
+              <DetailRow label="Memory Usage" value={formatBytes(payload.memory)} />
+            )}
             {tags.length > 0 && (
               <DetailRow
                 label="Tags"
