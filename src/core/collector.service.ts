@@ -9,6 +9,14 @@ import { TagService } from './tag.service';
 import { FamilyHashService } from './family-hash.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 
+/**
+ * How long the final flush may take before shutdown proceeds without it.
+ *
+ * A normal flush is milliseconds; anything approaching this means storage has
+ * stopped answering, and waiting longer only delays the process exiting.
+ */
+const SHUTDOWN_FLUSH_TIMEOUT = 3000;
+
 @Injectable()
 export class CollectorService implements OnModuleDestroy {
   private readonly logger = new Logger(CollectorService.name);
@@ -380,14 +388,56 @@ export class CollectorService implements OnModuleDestroy {
 
   /**
    * Stop flush timer and flush remaining entries
+   *
+   * The last flush is given a deadline. A storage that has stopped answering
+   * does not fail here — it simply never returns, and `await` on it means the
+   * application never finishes shutting down: `app.close()` hangs, SIGTERM
+   * does nothing, and the process waits for whatever eventually kills it.
+   * Measured against a storage whose `save` never settles: healthy 1ms, a
+   * throwing storage 302ms, a hanging one still going after six seconds.
+   *
+   * A monitoring tool must not be the reason a deployment cannot roll. So the
+   * remaining entries get {@link SHUTDOWN_FLUSH_TIMEOUT} to reach storage,
+   * and after that they are given up — which is the right trade in the one
+   * situation where it applies, since a storage that is not answering was not
+   * going to keep them anyway.
    */
   async shutdown(): Promise<void> {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
       this.flushTimer = null;
     }
-    await this.flush();
+
+    await this.flushBeforeShutdown();
     this.entrySubject.complete();
+  }
+
+  /** The final flush, bounded. See {@link shutdown}. */
+  private async flushBeforeShutdown(): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const deadline = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), SHUTDOWN_FLUSH_TIMEOUT);
+      // Nothing should stay alive for this timer, least of all during shutdown.
+      timer.unref?.();
+    });
+
+    try {
+      const outcome = await Promise.race([this.flush().then(() => 'flushed' as const), deadline]);
+
+      if (outcome === 'timeout') {
+        this.logger.warn(
+          `Storage did not accept the final ${this.buffer.length} entries within ` +
+            `${SHUTDOWN_FLUSH_TIMEOUT}ms; shutting down without them.`,
+        );
+      }
+    } catch (error) {
+      // `flush` already reports storage failures; this is here so a rejection
+      // cannot escape into the shutdown sequence.
+      this.logger.warn(`Final flush failed: ${error}`);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /**
