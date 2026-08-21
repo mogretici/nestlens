@@ -7,6 +7,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
@@ -35,7 +36,7 @@ const DEFAULT_RATE_LIMIT = {
 };
 
 @Injectable()
-export class NestLensGuard implements CanActivate {
+export class NestLensGuard implements CanActivate, OnModuleDestroy {
   private readonly logger = new Logger(NestLensGuard.name);
 
   /**
@@ -65,6 +66,19 @@ export class NestLensGuard implements CanActivate {
     if (this.cleanupInterval.unref) {
       this.cleanupInterval.unref();
     }
+  }
+
+  /**
+   * Stops the cleanup timer with the application.
+   *
+   * `unref()` above keeps the timer from holding the process open, which is a
+   * different thing from stopping it: without this, a closed application leaves
+   * a timer still firing against a store nobody reads, and a test suite that
+   * creates guards leaves one behind per application it builds.
+   */
+  onModuleDestroy(): void {
+    clearInterval(this.cleanupInterval);
+    this.rateLimitStore.clear();
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
