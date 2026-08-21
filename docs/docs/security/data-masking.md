@@ -167,7 +167,7 @@ NestLensModule.forRoot({
 
 ## Global Security Configuration
 
-The top-level `security` option configures the global `DataMaskerService`, which masks request headers, body/query parameters, and user fields across watchers. Anything you list here is **added** to the built-in defaults (it does not replace them).
+The top-level `security` option configures the global `DataMaskerService`, which masks request headers, body/query parameters, and user fields across watchers. Anything you list here is **added** to the built-in defaults. To mask only what you name instead, see [Masking Only What You Name](#masking-only-what-you-name).
 
 ```typescript
 NestLensModule.forRoot({
@@ -189,6 +189,29 @@ NestLensModule.forRoot({
   },
 })
 ```
+
+### Masking Only What You Name
+
+Each of the three lists accepts `{ replace: [...] }` instead of an array. That
+drops the built-in defaults for that list and masks exactly what is named:
+
+```typescript
+security: {
+  dataMasking: {
+    // 'pin' here is a map pin, not a credential — and the defaults redact it
+    sensitiveParams: { replace: ['otp', 'iban'] },
+  },
+}
+```
+
+Written out rather than inferred, because the built-in list is what stops a
+password reaching storage when nobody thought about it. An array adds; only
+`{ replace: [...] }` takes away.
+
+GraphQL variables and responses are masked by
+[`watchers.graphql.sensitiveVariables`](../watchers/graphql#which-terms-apply),
+which resolves `sensitiveParams` into its own list — so a term added here is
+masked there too, and narrowing GraphQL alone is done there.
 
 ### Input limits on the dashboard API
 

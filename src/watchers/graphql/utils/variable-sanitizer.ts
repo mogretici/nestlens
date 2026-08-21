@@ -66,7 +66,10 @@ function splitSegments(name: string): string[] {
 
   const spaced = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    // `token2` is `token_2` written without the separator, and a name should
+    // not mask or not mask depending on which the author preferred.
+    .replace(/([a-zA-Z])(\d)/g, '$1 $2');
 
   for (const part of spaced.split(/[^a-zA-Z0-9]+/)) {
     if (part.length > 0) {
@@ -124,7 +127,9 @@ function compileMatcher(sensitivePatterns: string[]): KeyMatcher {
 
     const term = splitSegments(pattern).join('');
     if (term.length > 0) {
-      terms.add(term);
+      for (const form of pluralForms(term)) {
+        terms.add(form);
+      }
     }
   }
 
@@ -188,9 +193,9 @@ function tailIsDerivative(segments: string[], from: number): boolean {
   for (let index = from; index < segments.length; index += 1) {
     const segment = segments[index];
 
-    // A bare number is an index or a version — `token_2`, `apiKeyV2` — and
-    // names the same kind of thing, not a fact about it.
-    if (DIGITS.test(segment) || DERIVATIVE_SEGMENTS.has(segment)) {
+    // A number or a version marker is an index or a revision — `token_2`,
+    // `apiKeyV2` — and names the same kind of thing, not a fact about it.
+    if (DIGITS.test(segment) || VERSION.test(segment) || DERIVATIVE_SEGMENTS.has(segment)) {
       continue;
     }
 
@@ -201,6 +206,30 @@ function tailIsDerivative(segments: string[], from: number): boolean {
 }
 
 const DIGITS = /^\d+$/;
+
+/** A version marker: the `v` of `apiKeyV2`, which the digit split leaves alone. */
+const VERSION = /^v$/;
+
+/**
+ * A term and the plural of it.
+ *
+ * A schema names a collection for what it holds — `tokens`, `apiKeys`,
+ * `creditCards` — and the singular term is what anybody writes in the pattern
+ * list. Matching whole words without this would have left every one of those
+ * collections in the clear, which is worse than the over-matching that whole
+ * words were introduced to stop.
+ */
+function pluralForms(term: string): string[] {
+  if (term.endsWith('s')) {
+    return [term];
+  }
+
+  if (/[^aeiou]y$/.test(term)) {
+    return [term, `${term.slice(0, -1)}ies`];
+  }
+
+  return [term, `${term}s`];
+}
 
 /**
  * Recursively sanitize an object, masking sensitive values
@@ -418,10 +447,11 @@ function measureSize(value: unknown, limit: number, probe: SizeProbe, path: Set<
     return;
   }
 
-  // `toJSON` can return anything at all, so this counts only the braces it is
-  // certain of and lets the exact pass settle it.
+  // `toJSON` can return anything at all — including `undefined`, which removes
+  // the member entirely, and a single digit, which is shorter than the braces
+  // this would otherwise assume. Nothing about it is certain, so nothing about
+  // it is counted and the exact pass settles it.
   if (typeof (object as { toJSON?: unknown }).toJSON === 'function') {
-    countBytes(2, limit, probe);
     return;
   }
 
@@ -439,6 +469,12 @@ function measureSize(value: unknown, limit: number, probe: SizeProbe, path: Set<
     }
   } else {
     for (const [key, child] of Object.entries(object)) {
+      // A member whose value cannot be written vanishes from the output, key
+      // and all. Counting the key of one would put the total above what the
+      // payload really costs — and a floor that is not a floor rejects
+      // responses that would have fitted.
+      if (!isCertainlyWritten(child)) continue;
+
       countBytes(key.length + 3, limit, probe);
       if (probe.exceeded) break;
 
@@ -448,6 +484,27 @@ function measureSize(value: unknown, limit: number, probe: SizeProbe, path: Set<
   }
 
   path.delete(object);
+}
+
+/**
+ * Whether a member holding this value is certain to reach the output.
+ *
+ * `undefined`, functions and symbols are dropped from an object, and a `toJSON`
+ * may return any of them. Both are counted as nothing rather than guessed at,
+ * which keeps the total a floor.
+ */
+function isCertainlyWritten(value: unknown): boolean {
+  const type = typeof value;
+
+  if (type === 'undefined' || type === 'function' || type === 'symbol') {
+    return false;
+  }
+
+  return !(
+    value !== null &&
+    type === 'object' &&
+    typeof (value as { toJSON?: unknown }).toJSON === 'function'
+  );
 }
 
 function countBytes(bytes: number, limit: number, probe: SizeProbe): void {

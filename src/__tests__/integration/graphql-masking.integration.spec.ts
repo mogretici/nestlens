@@ -13,7 +13,8 @@ import { DataMaskerService } from '../../core/data-masker.service';
 import { STORAGE, StorageInterface } from '../../core/storage/storage.interface';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 import { Entry, GraphQLPayload } from '../../types';
-import { GRAPHQL_DEFAULTS } from '../../watchers/graphql/types';
+import { GRAPHQL_DEFAULTS, resolveGraphQLConfig } from '../../watchers/graphql/types';
+import { resolveSensitiveParams } from '../../core/data-masker.service';
 import {
   sanitizeResponse,
   sanitizeVariables,
@@ -147,6 +148,38 @@ describe('GraphQL entries from watcher to storage', () => {
     // second traversal ever becomes entry-wide, this is what leaks.
     expect(extensions.token).toBe(REDACTED);
     expect(extensions.code).toBe('BAD_GATEWAY');
+  });
+
+  it("masks a field only the collector's list names", async () => {
+    // `cvv` is in the collector's defaults and in no GraphQL list. It used to
+    // be caught by the collector's second pass over the payload; the mark now
+    // stops that pass, so the watcher's own list has to carry it. This is the
+    // regression that made the mark unsafe.
+    const patterns = resolveGraphQLConfig(
+      true,
+      resolveSensitiveParams(['iban']),
+    ).sensitiveVariables;
+
+    await collector.collectImmediate(
+      'graphql',
+      {
+        operationName: 'Pay',
+        operationType: 'mutation',
+        query: 'mutation Pay { pay { id } }',
+        queryHash: 'pay1',
+        duration: 3,
+        statusCode: 200,
+        hasErrors: false,
+        variables: sanitizeVariables({ cvv: '123', iban: 'TR00', amount: 10 }, patterns),
+      } as unknown as GraphQLPayload,
+      'req-2',
+    );
+
+    const payload = saved[0].payload as GraphQLPayload;
+
+    expect(payload.variables?.cvv).toBe('***');
+    expect(payload.variables?.iban).toBe('***');
+    expect(payload.variables?.amount).toBe(10);
   });
 
   it('hands storage the sanitized copy rather than a clone of it', async () => {

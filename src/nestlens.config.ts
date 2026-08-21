@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import { Entry, EntryType } from './types';
+import { MaskingTerms } from './core/masking-terms';
 
 /**
  * Payload format for an alerting webhook.
@@ -262,16 +263,30 @@ export interface GraphQLWatcherConfig {
   maxQuerySize?: number;
   /** Capture variables passed to operations. Default: true */
   captureVariables?: boolean;
-  /** Variable names to mask (case-insensitive). Default: ['password', 'token', 'secret', 'apiKey', 'api_key', 'accessToken', 'access_token', 'refreshToken', 'refresh_token', 'authorization'] */
-  sensitiveVariables?: string[];
+  /**
+   * Variable and response field names to mask, added to the built-in list and
+   * to whatever `security.dataMasking.sensitiveParams` names.
+   *
+   * A name matches on whole words, ignoring case, underscores and dashes:
+   * `token` covers `apiToken`, `api_token`, `TOKENS` and `resetToken`, and
+   * does not cover `tokenCount`. A trailing `*` matches by prefix instead.
+   *
+   * Masking here is what the collector trusts — it does not walk a payload
+   * this watcher has already cleaned — so this list is the whole answer for
+   * GraphQL variables and responses. `{ replace: [...] }` masks exactly these
+   * and drops both built-in lists; see {@link MaskingTerms}.
+   */
+  sensitiveVariables?: MaskingTerms;
   /** Capture request headers (sensitive headers masked). Default: true */
   captureHeaders?: boolean;
   /**
    * Additional header names to mask (case-insensitive), merged with the
    * built-in defaults ['authorization', 'cookie', 'set-cookie', 'x-api-key',
    * 'x-auth-token']. Example: ['x-csrf-token', 'x-session-id']
+   *
+   * `{ replace: [...] }` masks exactly these instead; see {@link MaskingTerms}.
    */
-  sensitiveHeaders?: string[];
+  sensitiveHeaders?: MaskingTerms;
   /** Skip introspection queries (__schema, __type). Default: true */
   ignoreIntrospection?: boolean;
   /** Operation names to ignore. Example: ['HealthCheck', 'InternalMetrics'] */
@@ -429,12 +444,17 @@ export interface SecurityConfig {
    * Data masking configuration.
    */
   dataMasking?: {
-    /** Additional headers to mask (case-insensitive) */
-    sensitiveHeaders?: string[];
-    /** Additional body/query parameters to mask (case-insensitive) */
-    sensitiveParams?: string[];
-    /** Additional user fields to mask (case-insensitive) */
-    sensitiveUserFields?: string[];
+    /**
+     * Headers to mask (case-insensitive), added to the built-in list.
+     *
+     * `{ replace: [...] }` masks exactly these instead. See
+     * {@link MaskingTerms}.
+     */
+    sensitiveHeaders?: MaskingTerms;
+    /** Body/query parameters to mask, added to the built-in list. */
+    sensitiveParams?: MaskingTerms;
+    /** User object fields to mask, added to the built-in list. */
+    sensitiveUserFields?: MaskingTerms;
     /** Replacement string for masked values. Default: '***REDACTED***' */
     maskReplacement?: string;
   };

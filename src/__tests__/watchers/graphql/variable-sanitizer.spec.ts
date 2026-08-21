@@ -85,6 +85,42 @@ describe('GraphQL variable sanitizer', () => {
     });
   });
 
+  describe('the forms one field name is written in', () => {
+    /**
+     * A schema names a collection for what it holds, and every one of these
+     * reached storage in the clear when a term only matched its exact singular
+     * — the first cut of whole-word matching narrowed `tokens` out along with
+     * `topping`.
+     */
+    it.each(['tokens', 'passwords', 'secrets', 'apiKeys', 'accessTokens', 'creditCards'])(
+      'masks the plural %s',
+      (key) => {
+        expect(isMasked(key)).toBe(true);
+      },
+    );
+
+    it('does not let the plural widen a term past its own words', () => {
+      expect(isMasked('toppings')).toBe(false);
+      expect(isMasked('shippings')).toBe(false);
+      expect(isMasked('tokenCounts')).toBe(false);
+    });
+
+    it('masks a term suffixed with an index or a revision', () => {
+      // `token_2` and `token2` are the same field written two ways, and used
+      // to disagree because only the separator produced a word boundary.
+      expect(isMasked('token_2')).toBe(true);
+      expect(isMasked('token2')).toBe(true);
+      expect(isMasked('password1')).toBe(true);
+      expect(isMasked('apiKeyV2')).toBe(true);
+      expect(isMasked('apiKey2')).toBe(true);
+    });
+
+    it('still leaves a name that merely contains the digits alone', () => {
+      expect(isMasked('shipping2')).toBe(false);
+      expect(isMasked('base64Data')).toBe(false);
+    });
+  });
+
   describe('matching rules', () => {
     it('matches a term against whole words, in any spelling', () => {
       expect(isMasked('apiToken')).toBe(true);
@@ -157,36 +193,33 @@ describe('GraphQL variable sanitizer', () => {
       expect(result.token_2999).toBe(MASKED);
     });
 
-    it('costs less on a payload that reuses key names than on one that does not', () => {
+    it('answers a repeated key without consulting the term list again', () => {
       // The memo is worth having because a GraphQL schema has a finite field
-      // set: thousands of key occurrences over a few dozen names. If this ratio
-      // collapses, the memo has stopped working and the watcher is paying full
-      // price on every key of every response.
-      // Same number of lookups either way. `reused` cycles fifty names, the
-      // shape a schema produces; `fresh` never repeats one.
-      const reused = Array.from({ length: 5000 }, (_, i) => `feedItemLabel${i % 50}`);
-      const fresh = Array.from({ length: 5000 }, (_, i) => `feedItemLabel${i}`);
+      // set: thousands of key occurrences over a few dozen names. If it stops
+      // working the watcher pays full price on every key of every response.
+      //
+      // Counted rather than timed. The first version of this test compared two
+      // wall-clock measurements and failed roughly one run in three under
+      // parallel workers, which is a test that reports on the machine instead
+      // of on the code. Every term lookup goes through `Set.prototype.has`, and
+      // a memo hit performs none, so counting them says the same thing exactly.
+      const termLookups = jest.spyOn(Set.prototype, 'has');
 
-      const measure = (names: string[]): number => {
-        // A copy per run, so each measurement starts from an empty memo rather
-        // than inheriting the previous one's.
+      try {
+        // Fifty distinct names, five thousand occurrences — the shape a schema
+        // produces.
+        const names = Array.from({ length: 5000 }, (_, i) => `feedItemLabel${i % 50}`);
         const patterns = [...PATTERNS];
 
-        const started = process.hrtime.bigint();
+        termLookups.mockClear();
         for (const name of names) sanitizeVariables({ [name]: 1 }, patterns);
-        return Number(process.hrtime.bigint() - started);
-      };
 
-      // Warm both paths so the comparison is of the memo, not of the JIT.
-      measure(reused);
-      measure(fresh);
-
-      const cached = measure(reused) + measure(reused);
-      const uncached = measure(fresh) + measure(fresh);
-
-      // Measured at roughly 15x on the benchmark fixture; 2x leaves room for a
-      // noisy CI runner while still failing if the memo is gone.
-      expect(uncached).toBeGreaterThan(cached * 2);
+        // Each distinct name costs one walk of its word runs — a few lookups.
+        // Without the memo every one of the 5,000 occurrences pays that again.
+        expect(termLookups.mock.calls.length).toBeLessThan(names.length);
+      } finally {
+        termLookups.mockRestore();
+      }
     });
   });
 
@@ -235,6 +268,56 @@ describe('GraphQL variable sanitizer', () => {
       expect(result._truncated).toBe(true);
       expect(result._sizeIsLowerBound).toBeUndefined();
       expect(result._size).toBe(JSON.stringify(huge).length);
+    });
+
+    it('keeps a response whose members vanish from the output', () => {
+      // `undefined`, functions and symbols are dropped from an object — key
+      // included. Counting those keys made the probe report more than the
+      // payload costs, which rejects a response that would have fitted.
+      const vanishing = { ['a'.repeat(64)]: undefined, ['b'.repeat(64)]: () => 1 };
+
+      expect(JSON.stringify(vanishing)).toBe('{}');
+
+      const result = sanitizeResponse(vanishing, PATTERNS, 16) as Record<string, unknown>;
+      expect(result._truncated).toBeUndefined();
+    });
+
+    it('keeps a response whose values serialize shorter than their braces', () => {
+      // `toJSON` may return anything, including a single digit — shorter than
+      // the two braces the probe would otherwise assume an object costs.
+      const compact = { a: { toJSON: () => 0 }, b: { toJSON: () => 1 } };
+
+      expect(JSON.stringify(compact)).toBe('{"a":0,"b":1}');
+
+      const result = sanitizeResponse(compact, PATTERNS, 13) as Record<string, unknown>;
+      expect(result._truncated).toBeUndefined();
+    });
+
+    it('never rejects a payload that JSON.stringify would fit inside the limit', () => {
+      // The probe is only sound while its count is a floor on the real output.
+      // These shapes are the ones where a naive count is not.
+      const shapes: unknown[] = [
+        {},
+        { a: undefined },
+        { a: undefined, b: undefined, c: undefined },
+        [undefined, undefined],
+        { d: new Date(0) },
+        { n: { toJSON: () => 1 } },
+        { s: Symbol.iterator ? undefined : 1 },
+        { nested: { deeper: { gone: undefined } } },
+        { mixed: [1, undefined, 'x'] },
+        { empty: [], obj: {} },
+      ];
+
+      for (const shape of shapes) {
+        const exact = JSON.stringify(shape) ?? '';
+
+        // At the tightest limit the payload still fits in, nothing may be
+        // rejected.
+        const result = sanitizeResponse(shape, PATTERNS, exact.length);
+
+        expect((result as { _truncated?: boolean })?._truncated).toBeUndefined();
+      }
     });
 
     it('falls back to the serializer for payloads it cannot measure', () => {

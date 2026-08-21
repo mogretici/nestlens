@@ -47,6 +47,7 @@ export {
 export * from './types';
 
 // Core services (for advanced usage)
+export { MaskingTerms } from './core/masking-terms';
 export { CollectorService } from './core/collector.service';
 export { StorageInterface, STORAGE } from './core/storage/storage.interface';
 export { createStorage } from './core/storage/storage.factory';

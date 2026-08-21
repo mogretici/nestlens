@@ -10,6 +10,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nest
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../../nestlens.config';
 import { ResolvedGraphQLConfig, resolveGraphQLConfig } from './types';
+import { resolveSensitiveParams } from '../../core/data-masker.service';
 import { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter';
 import { createApolloAdapter } from './adapters/apollo.adapter';
 import { createMercuriusAdapter } from './adapters/mercurius.adapter';
@@ -59,7 +60,13 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.graphql;
-    this.config = resolveGraphQLConfig(watcherConfig);
+    // The collector's terms travel with the watcher's: this watcher marks what
+    // it has sanitised and the collector's masker honours the mark, so the two
+    // lists have to be one list. See `mergeSensitiveVariables`.
+    this.config = resolveGraphQLConfig(
+      watcherConfig,
+      resolveSensitiveParams(nestlensConfig.security?.dataMasking?.sensitiveParams),
+    );
   }
 
   /**
