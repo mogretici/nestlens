@@ -165,6 +165,32 @@ NestLensModule.forRoot({
 })
 ```
 
+## What Masking Cannot Reach
+
+Masking works from field names. Where a value carries no name of its own,
+nothing here can decide about it, and these watchers record what they are shown:
+
+| Watcher | Field | Why it cannot be masked |
+| --- | --- | --- |
+| Query | `query` | A literal embedded in SQL text — `WHERE token = 'abc'` — is inside a string, not a named field. Parameterised queries keep values in `parameters`, which is also unnamed: masking it would blank every value a slow query is read for. |
+| Command | positional arguments | `seed hunter2` marks nothing. Values passed to a **named flag** *are* masked: `--password hunter2` and `--token=abc` both lose their value and keep the flag. |
+| Redis | command arguments | `SET session:1 <value>` is positional in the same way. |
+| Cache | `value` | Seeing what was cached is the reason the watcher exists. |
+| Mail | `text`, `html` | Free text. A token pasted into an email body reads like any other sentence. |
+
+Two things do get masked wherever they appear, because their shape is
+unambiguous:
+
+- **Query strings inside URLs.** `GET /reset?token=abc` is masked in `url` as
+  well as in `query`.
+- **Credentials inside URLs.** `postgres://app:hunter2@db/orders` keeps the
+  user and host and loses the password — in `url`, `connectionString`,
+  `connectionUri` and `dsn`.
+
+Where a watcher in the table above would record something you cannot store,
+turn it off, narrow it with `filter`, or add the field name to
+`sensitiveParams` if it has one.
+
 ## Global Security Configuration
 
 The top-level `security` option configures the global `DataMaskerService`, which masks request headers, body/query parameters, and user fields across watchers. Anything you list here is **added** to the built-in defaults. To mask only what you name instead, see [Masking Only What You Name](#masking-only-what-you-name).

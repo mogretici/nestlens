@@ -110,7 +110,36 @@ const DEFAULT_MASK = '***REDACTED***';
  * treating every string that contains a `?` as a URL would rewrite message
  * bodies and SQL.
  */
-const URL_FIELDS = new Set(['url', 'originalUrl', 'uri', 'href', 'requestUrl', 'fullUrl']);
+const URL_FIELDS = new Set([
+  'url',
+  'originalUrl',
+  'uri',
+  'href',
+  'requestUrl',
+  'fullUrl',
+  // Connection strings are URLs whose password sits in the userinfo, and they
+  // are recorded whenever a driver is configured or an outgoing call is made.
+  'connectionString',
+  'connectionUri',
+  'dsn',
+]);
+
+/**
+ * Payload fields that hold a command line, where the secret is positional.
+ *
+ * `['--password', 'hunter2']` names the credential in the element *before* the
+ * one holding it, so no key ever matches and nothing else here would catch it.
+ */
+const ARGUMENT_FIELDS = new Set(['arguments', 'argv', 'commandArguments']);
+
+/**
+ * The `user:password@` in front of a host.
+ *
+ * `postgres://app:hunter2@db/orders` and `https://key:secret@api.example.com`
+ * put a credential in a place no field name marks — it is part of the URL, so
+ * masking the query string leaves it untouched.
+ */
+const URL_CREDENTIALS = /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/?#@]*)@/;
 
 /**
  * Service for masking sensitive data in entries.
@@ -311,15 +340,27 @@ export class DataMaskerService {
    * the dashboard printed it at the top of the entry — as did every OAuth
    * callback carrying a `code`, and every API that takes its key in the query.
    *
-   * Only the query is touched. The path is what the entry is *about*, and a
-   * path segment is not a named field, so there is nothing here to decide
+   * The `user:password@` in front of a host goes too. A connection string —
+   * `postgres://app:hunter2@db/orders` — puts a credential where no field name
+   * marks it, so masking the query alone would leave it in place.
+   *
+   * Otherwise only the query is touched. The path is what the entry is *about*,
+   * and a path segment is not a named field, so there is nothing here to decide
    * about it.
    *
    * Parsed by hand rather than through `URL`, because these are usually
    * relative (`/reset?token=…`) and `URL` needs a base for those — a base this
    * would have to invent, and then remove again.
    */
-  maskUrl(url: string): string {
+  maskUrl(value: string): string {
+    const url = value.replace(URL_CREDENTIALS, (_match, scheme: string, userinfo: string) => {
+      const separator = userinfo.indexOf(':');
+      // A bare username is not a secret; the password after the colon is.
+      return separator === -1
+        ? `${scheme}${userinfo}@`
+        : `${scheme}${userinfo.slice(0, separator)}:${this.maskReplacement}@`;
+    });
+
     const start = url.indexOf('?');
     if (start === -1) {
       return url;
@@ -353,6 +394,57 @@ export class DataMaskerService {
   }
 
   /**
+   * Masks the values a command line passes to sensitive flags.
+   *
+   * Two shapes, both common:
+   *
+   *     ['--password', 'hunter2']   the value is the next element
+   *     ['--password=hunter2']      the value is in the same one
+   *
+   * Only the value goes; the flag stays, because which flags were passed is
+   * most of what makes a recorded command worth reading.
+   *
+   * Positional arguments are left alone. `seed hunter2` carries a secret in a
+   * place nothing marks, and guessing would redact the arguments that are the
+   * reason to look.
+   */
+  private maskArguments(args: unknown[]): unknown[] {
+    const result: unknown[] = [];
+    let maskNext = false;
+
+    for (const arg of args) {
+      if (typeof arg !== 'string') {
+        result.push(arg);
+        maskNext = false;
+        continue;
+      }
+
+      if (maskNext) {
+        result.push(this.maskReplacement);
+        maskNext = false;
+        continue;
+      }
+
+      const equals = arg.indexOf('=');
+      if (arg.startsWith('-') && equals !== -1) {
+        const flag = arg.slice(0, equals).replace(/^-+/, '');
+        result.push(
+          this.matchesParam(flag) ? `${arg.slice(0, equals)}=${this.maskReplacement}` : arg,
+        );
+        continue;
+      }
+
+      if (arg.startsWith('-') && this.matchesParam(arg.replace(/^-+/, ''))) {
+        maskNext = true;
+      }
+
+      result.push(arg);
+    }
+
+    return result;
+  }
+
+  /**
    * Mask sensitive fields in an object recursively.
    */
   private maskObject(obj: Record<string, unknown>): Record<string, unknown> {
@@ -363,6 +455,8 @@ export class DataMaskerService {
         masked[key] = this.maskReplacement;
       } else if (URL_FIELDS.has(key) && typeof value === 'string') {
         masked[key] = this.maskUrl(value);
+      } else if (ARGUMENT_FIELDS.has(key) && Array.isArray(value)) {
+        masked[key] = this.maskArguments(value);
       } else if (isSanitized(value)) {
         // A watcher that already produced a clean copy of this subtree — the
         // GraphQL response and its variables — is taken at its word rather

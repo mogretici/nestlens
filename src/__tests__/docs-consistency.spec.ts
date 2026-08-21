@@ -174,6 +174,31 @@ describe('Documentation consistency with code', () => {
     });
   });
 
+  describe('the limits of masking are documented', () => {
+    const masking = () => readDoc('security/data-masking.md');
+
+    it('says what masking cannot reach', () => {
+      // Anyone storing production traffic needs to know which watchers record
+      // values that no rule here can redact.
+      expect(masking()).toMatch(/cannot be masked|Cannot Reach/i);
+    });
+
+    it('names the watchers whose values carry no field name', () => {
+      const text = masking();
+
+      for (const watcher of ['Query', 'Command', 'Redis', 'Cache', 'Mail']) {
+        expect(text).toContain(watcher);
+      }
+    });
+
+    it('says that URLs and connection strings are masked', () => {
+      const text = masking();
+
+      expect(text).toContain('connectionString');
+      expect(text).toMatch(/query strings inside urls/i);
+    });
+  });
+
   describe('the cost of leaving NestLens running is documented', () => {
     const performance = () => readDoc('advanced/performance.md');
 

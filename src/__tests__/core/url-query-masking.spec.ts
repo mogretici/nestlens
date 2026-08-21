@@ -104,6 +104,100 @@ describe('masking a URL', () => {
   });
 });
 
+describe('masking credentials inside a URL', () => {
+  const masker = new DataMaskerService();
+
+  it('masks the password in a connection string', () => {
+    const masked = masker.maskUrl('postgres://app:hunter2@db.internal:5432/orders');
+
+    expect(masked).not.toContain('hunter2');
+    // The rest still identifies the connection, which is the point of storing it.
+    expect(masked).toContain('postgres://app:');
+    expect(masked).toContain('@db.internal:5432/orders');
+  });
+
+  it('masks the password in an https URL', () => {
+    expect(masker.maskUrl('https://key:s3cret@api.example.com/v1')).not.toContain('s3cret');
+  });
+
+  it('leaves a bare username alone', () => {
+    // A username is not a credential, and removing it would lose which account
+    // the connection was for.
+    expect(masker.maskUrl('redis://cache@127.0.0.1:6379')).toBe('redis://cache@127.0.0.1:6379');
+  });
+
+  it('masks both the credential and the query', () => {
+    const masked = masker.maskUrl('https://u:p@api.example.com/pay?token=abc');
+
+    expect(masked).not.toContain('p@');
+    expect(masked).not.toContain('abc');
+  });
+
+  it('does not mistake an @ in a path for a credential', () => {
+    expect(masker.maskUrl('/users/@handle/posts')).toBe('/users/@handle/posts');
+  });
+
+  it.each(['connectionString', 'connectionUri', 'dsn'])('masks a %s field', (field) => {
+    const masked = masker.maskBody({ [field]: 'postgres://app:hunter2@db/orders' }) as Record<
+      string,
+      unknown
+    >;
+
+    expect(masked[field]).not.toContain('hunter2');
+  });
+});
+
+describe('masking a command line', () => {
+  const masker = new DataMaskerService();
+
+  const argv = (args: string[]): unknown[] =>
+    (masker.maskBody({ arguments: args }) as { arguments: unknown[] }).arguments;
+
+  it('masks the value after a sensitive flag', () => {
+    expect(argv(['seed', '--password', 'hunter2'])).toEqual(['seed', '--password', REDACTED]);
+  });
+
+  it('masks a value joined to its flag', () => {
+    expect(argv(['--token=abc123'])).toEqual([`--token=${REDACTED}`]);
+  });
+
+  it('keeps the flag itself', () => {
+    // Which flags were passed is most of what makes a recorded command useful.
+    expect(argv(['--password', 'x'])[0]).toBe('--password');
+  });
+
+  it('leaves ordinary flags and values alone', () => {
+    expect(argv(['migrate', '--env', 'production', '-v'])).toEqual([
+      'migrate',
+      '--env',
+      'production',
+      '-v',
+    ]);
+  });
+
+  it('does not treat a positional argument as a secret', () => {
+    // Nothing marks it, and guessing would redact the arguments worth reading.
+    expect(argv(['seed', 'hunter2'])).toEqual(['seed', 'hunter2']);
+  });
+
+  it('stops masking after the one value it was told about', () => {
+    expect(argv(['--password', 'x', 'then', 'more'])).toEqual([
+      '--password',
+      REDACTED,
+      'then',
+      'more',
+    ]);
+  });
+
+  it('handles a single-dash flag', () => {
+    expect(argv(['-token', 'abc'])).toEqual(['-token', REDACTED]);
+  });
+
+  it('leaves non-string elements alone', () => {
+    expect(argv(['--retries', 3 as unknown as string])).toEqual(['--retries', 3]);
+  });
+});
+
 describe('masking a payload that carries a URL', () => {
   const masker = new DataMaskerService();
 
