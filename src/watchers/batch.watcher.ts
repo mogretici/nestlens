@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/comm
 import { CollectorService } from '../core/collector.service';
 import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 type BatchMethod = (name: string, items: unknown[], options?: unknown) => Promise<unknown>;
 
@@ -37,8 +38,7 @@ export class BatchWatcher implements OnModuleInit {
     private readonly batchProcessor?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.batch;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {
@@ -74,8 +74,7 @@ export class BatchWatcher implements OnModuleInit {
     // The processor is user-supplied and its methods are looked up by name, so
     // the shape is checked at runtime rather than declared.
     const processor: Record<string, unknown> | undefined = this.batchProcessor as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     if (!processor) return;
 
     const existing = processor[methodName];

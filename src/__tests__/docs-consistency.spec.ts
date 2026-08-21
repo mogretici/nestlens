@@ -10,6 +10,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { DEFAULT_CONFIG } from '../nestlens.config';
+import { GRAPHQL_DEFAULTS } from '../watchers/graphql/types';
 
 const REPO_ROOT = join(__dirname, '..', '..');
 const docsDir = join(REPO_ROOT, 'docs', 'docs');
@@ -67,10 +68,153 @@ describe('Documentation consistency with code', () => {
     });
   });
 
+  /**
+   * `maxResponseSize` was documented as "maximum response size to capture" and
+   * nothing else, so raising it looked free. Someone set it to 5MB in
+   * production, where every captured response of that size blocked the event
+   * loop for tens of milliseconds. The option is only safe to expose if the
+   * page exposing it says what it costs.
+   */
+  describe('the cost of raising maxResponseSize is documented', () => {
+    const graphql = () => readDoc('watchers/graphql.md');
+
+    it('states the default in bytes', () => {
+      const { maxResponseSize } = GRAPHQL_DEFAULTS;
+      expect(maxResponseSize).toBe(65536);
+      expect(graphql()).toContain(`\`${maxResponseSize}\``);
+    });
+
+    it('carries measured per-operation costs rather than an adjective', () => {
+      const doc = graphql();
+
+      expect(doc).toMatch(/cost per operation/i);
+      // The rows the table is useless without: the small case and the one that
+      // caused the incident.
+      expect(doc).toMatch(/70 KB/);
+      expect(doc).toMatch(/4900 KB/);
+      expect(doc).toMatch(/~27 ms/);
+    });
+
+    it('points at the benchmark that produced the figures', () => {
+      expect(graphql()).toContain('benchmark:sanitizer');
+    });
+  });
+
+  /**
+   * `server` takes the dashboard off the application's socket, and the reason
+   * to reach for it is a security one. Undocumented, everyone keeps the mounted
+   * default — which is the arrangement the option exists to replace.
+   */
+  describe('the separate listener is documented', () => {
+    it('is absent by default in the code', () => {
+      expect(DEFAULT_CONFIG.server).toBeUndefined();
+    });
+
+    it('basic-config.md carries the option and says the address has no default', () => {
+      const doc = readDoc('configuration/basic-config.md');
+
+      expect(doc).toContain('server?: DashboardServerConfig');
+      expect(doc).toMatch(/`host` has no default/);
+    });
+
+    it('the security page says authorization is still enforced there', () => {
+      const doc = readDoc('security/network-isolation.md');
+
+      expect(doc).toMatch(/allowedIps/);
+      expect(doc).toMatch(/canAccess/);
+    });
+  });
+
+  /**
+   * The one change in 0.10.0 a user can see without reading the release notes:
+   * a field that used to arrive as `***` now arrives readable.
+   */
+  describe('the narrowed GraphQL variable masking is documented', () => {
+    const graphql = () => readDoc('watchers/graphql.md');
+
+    it('says a term matches whole words', () => {
+      expect(graphql()).toMatch(/matches whole words/i);
+    });
+
+    it('keeps the example of a name that no longer masks', () => {
+      expect(graphql()).toContain('tokenCount');
+    });
+
+    it('names the plural forms that are covered', () => {
+      // Narrowing to whole words dropped these on its first cut, which is a
+      // worse failure than the over-matching it was fixing.
+      const text = graphql();
+
+      expect(text).toContain('tokens');
+      expect(text).toContain('apiKeys');
+    });
+
+    it("says the watcher's list is the whole of the masking for GraphQL", () => {
+      // The collector does not walk a marked payload, so a reader who assumes
+      // there is a second pass behind this list will configure a leak.
+      expect(graphql()).toMatch(/whole of the masking/i);
+    });
+
+    it('documents how to narrow the list', () => {
+      const text = graphql();
+
+      expect(text).toContain('{ replace:');
+      expect(readDoc('security/data-masking.md')).toContain('{ replace:');
+    });
+
+    it("lists the collector's defaults that the watcher now carries", () => {
+      // Named in the docs because they used to be masked by a pass that no
+      // longer runs, and a reader auditing the list would not otherwise expect
+      // them to be in it.
+      const text = graphql();
+
+      for (const term of ['cvv', 'card_number', 'social_security']) {
+        expect(text).toContain(term);
+      }
+    });
+  });
+
+  describe('the cost of leaving NestLens running is documented', () => {
+    const performance = () => readDoc('advanced/performance.md');
+
+    it('carries a concurrency figure, not only a serial one', () => {
+      // The serial latency number reads as "NestLens is free", and under 32
+      // connections it was costing 85% of throughput. One number without the
+      // other is how that went unnoticed.
+      expect(performance()).toMatch(/benchmark:load/);
+      expect(performance()).toMatch(/concurren/i);
+    });
+
+    it('names the idle cost, which is the question behind leaving it on', () => {
+      expect(performance()).toMatch(/idle cpu/i);
+    });
+
+    it('documents sampling and what it does to correlation', () => {
+      const text = performance();
+
+      expect(text).toContain('sampling');
+      // The property that makes it usable: whole requests, not scattered
+      // entries.
+      expect(text).toMatch(/kept\s*\n?\s*together or dropped together/);
+    });
+
+    it('says a settings block does not switch a watcher off', () => {
+      expect(performance()).toMatch(/never turns a watcher off/i);
+    });
+
+    it('explains why per-request memory is off by default', () => {
+      const text = performance();
+
+      expect(text).toContain('captureMemory');
+      expect(text).toMatch(/negative/i);
+    });
+  });
+
   describe('referenced docs exist', () => {
     it.each([
       'getting-started/installation.md',
       'configuration/basic-config.md',
+      'security/network-isolation.md',
       'watchers/overview.md',
       'watchers/schedule.md',
       'dashboard/keyboard-shortcuts.md',

@@ -712,19 +712,46 @@ describe('RequestWatcher', () => {
       );
     });
 
-    it('should capture memory usage', async () => {
-      // Arrange
+    it('does not capture memory usage unless asked to', async () => {
+      // Two `process.memoryUsage()` calls per request came to about 2.5% of the
+      // process's CPU under load, for `heapUsed` minus `heapUsed` across a
+      // handler sharing the heap with everything else in flight — a figure that
+      // measured between -570KB and +671KB on an endpoint returning
+      // `{ok: true}`. Off unless the application says otherwise.
       const context = createMockContext();
 
-      // Act
       await watcher.intercept(context, createMockHandler()).toPromise();
 
-      // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'request',
-        expect.objectContaining({
-          memory: expect.any(Number),
-        }),
+        expect.objectContaining({ memory: undefined }),
+        expect.any(String),
+      );
+    });
+
+    it('captures memory usage when asked to', async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          RequestWatcher,
+          { provide: CollectorService, useValue: mockCollector },
+          httpAdapterHostProvider,
+          {
+            provide: NESTLENS_CONFIG,
+            useValue: {
+              path: '/nestlens',
+              watchers: { request: { enabled: true, captureMemory: true } },
+            },
+          },
+        ],
+      }).compile();
+
+      const measuring = module.get<RequestWatcher>(RequestWatcher);
+
+      await measuring.intercept(createMockContext(), createMockHandler()).toPromise();
+
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'request',
+        expect.objectContaining({ memory: expect.any(Number) }),
         expect.any(String),
       );
     });

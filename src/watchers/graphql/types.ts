@@ -1,4 +1,5 @@
 import { GraphQLWatcherConfig } from '../../nestlens.config';
+import { MaskingTerms, replacesDefaults, resolveMaskingTerms } from '../../core/masking-terms';
 import { GraphQLFieldTrace, GraphQLPayload } from '../../types';
 
 /**
@@ -99,15 +100,57 @@ export const GRAPHQL_DEFAULTS = {
 };
 
 /**
+ * Every term the GraphQL sanitiser masks a field for.
+ *
+ * Three lists in one, because the sanitised payload is marked and the
+ * collector's masker skips what is marked — so anything this list misses is
+ * missed for good rather than caught on the way to storage:
+ *
+ * - the GraphQL defaults above,
+ * - `security.dataMasking.sensitiveParams` and the collector's own defaults,
+ *   passed in as `collectorTerms`, which is what the mark used to be backed by,
+ * - whatever the application configured here.
+ *
+ * The last of those *adds* to the other two rather than substituting for them.
+ * The option read as "also mask these" and was implemented as "mask only
+ * these", and the difference was invisible: the collector's second pass masked
+ * `password` and `token` afterwards whatever this list said, so nobody could
+ * tell their own list had replaced the defaults until the second pass went
+ * away.
+ *
+ * `{ replace: [...] }` is how to mean it, and then it means it completely —
+ * the collector's terms go too, because this watcher's mark is what stops the
+ * collector looking and there is no point dropping a list on one side of that
+ * only for the other side to apply it. Masking GraphQL payloads and nothing
+ * else is then exactly what is named here.
+ *
+ * Deduplicated so the compiled matcher is built from each term once, and one
+ * array per resolved configuration — the sanitiser caches its compiled matcher
+ * on that array's identity.
+ */
+function mergeSensitiveVariables(collectorTerms: string[], configured?: MaskingTerms): string[] {
+  if (replacesDefaults(configured)) {
+    return resolveMaskingTerms([], configured);
+  }
+
+  return resolveMaskingTerms(
+    [...GRAPHQL_DEFAULTS.sensitiveVariables, ...collectorTerms],
+    configured,
+  );
+}
+
+/**
  * Resolve configuration with defaults
  */
 export function resolveGraphQLConfig(
   config?: boolean | GraphQLWatcherConfig,
+  collectorTerms: string[] = [],
 ): ResolvedGraphQLConfig {
   if (config === false) {
     return {
       ...GRAPHQL_DEFAULTS,
       enabled: false,
+      sensitiveVariables: mergeSensitiveVariables(collectorTerms),
       subscriptions: { ...GRAPHQL_DEFAULTS.subscriptions },
     };
   }
@@ -116,6 +159,7 @@ export function resolveGraphQLConfig(
     return {
       ...GRAPHQL_DEFAULTS,
       enabled: true,
+      sensitiveVariables: mergeSensitiveVariables(collectorTerms),
       subscriptions: { ...GRAPHQL_DEFAULTS.subscriptions },
     };
   }
@@ -127,9 +171,12 @@ export function resolveGraphQLConfig(
     server: config.server ?? GRAPHQL_DEFAULTS.server,
     maxQuerySize: config.maxQuerySize ?? GRAPHQL_DEFAULTS.maxQuerySize,
     captureVariables: config.captureVariables ?? GRAPHQL_DEFAULTS.captureVariables,
-    sensitiveVariables: config.sensitiveVariables ?? GRAPHQL_DEFAULTS.sensitiveVariables,
+    sensitiveVariables: mergeSensitiveVariables(collectorTerms, config.sensitiveVariables),
     captureHeaders: config.captureHeaders ?? GRAPHQL_DEFAULTS.captureHeaders,
-    sensitiveHeaders: [...GRAPHQL_DEFAULTS.sensitiveHeaders, ...(config.sensitiveHeaders ?? [])],
+    sensitiveHeaders: resolveMaskingTerms(
+      GRAPHQL_DEFAULTS.sensitiveHeaders,
+      config.sensitiveHeaders,
+    ),
     ignoreIntrospection: config.ignoreIntrospection ?? GRAPHQL_DEFAULTS.ignoreIntrospection,
     ignoreOperations: config.ignoreOperations ?? GRAPHQL_DEFAULTS.ignoreOperations,
     traceFieldResolvers: config.traceFieldResolvers ?? GRAPHQL_DEFAULTS.traceFieldResolvers,

@@ -9,6 +9,7 @@ import {
 import { CollectorService } from '../core/collector.service';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The mailer surface this watcher touches.
@@ -58,8 +59,7 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly mailerService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.mail;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

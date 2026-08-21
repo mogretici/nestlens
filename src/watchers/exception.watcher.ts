@@ -11,6 +11,7 @@ import { isNestLensRequest } from '../api/route-path';
 import { CollectorService } from '../core/collector.service';
 import { ExceptionWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ExceptionEntry, NestLensRequest } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 @Catch()
 @Injectable()
@@ -25,8 +26,7 @@ export class ExceptionWatcher implements ExceptionFilter {
     private readonly applicationConfig: ApplicationConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.exception;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   catch(exception: Error, host: ArgumentsHost): void {

@@ -9,6 +9,7 @@ import {
 import { CollectorService } from '../core/collector.service';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 type NotificationMethod = (...args: unknown[]) => unknown;
 
@@ -36,8 +37,7 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly notificationService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.notification;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {
@@ -171,8 +171,7 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
       const data = args[0] as Record<string, unknown>;
       return {
         recipient: (data.to || data.recipient || data.recipients || data.email || 'unknown') as
-          | string
-          | string[],
+          string | string[],
         title: (data.subject || data.title) as string | undefined,
         message: this.config.captureMessage
           ? ((data.body || data.message || data.text || data.content) as string | undefined)

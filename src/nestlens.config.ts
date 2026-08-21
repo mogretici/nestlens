@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import { Entry, EntryType } from './types';
+import { MaskingTerms } from './core/masking-terms';
 
 /**
  * Payload format for an alerting webhook.
@@ -79,6 +80,46 @@ export interface AuthorizationConfig {
   requiredRoles?: string[];
 }
 
+/**
+ * A listener of NestLens's own, instead of a mount on the application's server.
+ *
+ * Everything under {@link AuthorizationConfig} decides who is allowed through;
+ * this decides who can reach the door at all. Mounted on the host application —
+ * the default, and unchanged — the dashboard shares that application's socket,
+ * so whatever reaches the application reaches `/nestlens` too and only the
+ * checks in front of it say otherwise. A reverse proxy that forgets to exclude
+ * the path, or excludes it in a `location` block that never matches, publishes
+ * every recorded Authorization header and request body to the internet, and
+ * nothing inside the application can tell that it happened.
+ *
+ * Given a `server`, NestLens binds its own socket to the address named here and
+ * registers no dashboard route on the application at all. On a private
+ * interface — a VPN address, a container network, `127.0.0.1` behind an SSH
+ * tunnel — the dashboard is then not merely protected from the internet but
+ * absent from it, which does not depend on a second component staying correct.
+ *
+ * The address is not optional and there is no default. `0.0.0.0` is a fine
+ * answer where the network is the boundary; it just has to be the answer
+ * somebody wrote down.
+ *
+ * Authorization is unaffected: `allowedEnvironments`, `allowedIps`, `canAccess`
+ * and `requiredRoles` are enforced on this listener exactly as they are on the
+ * mounted one.
+ */
+export interface DashboardServerConfig {
+  /**
+   * Address to bind, e.g. `'127.0.0.1'`, a tailnet address, or `'0.0.0.0'`.
+   *
+   * The socket is bound to this address alone — this is not a filter applied
+   * after listening on everything, so an address the host does not hold fails
+   * at startup rather than falling back.
+   */
+  host: string;
+
+  /** Port to bind. `0` asks the operating system for a free one. */
+  port: number;
+}
+
 export interface QueryWatcherConfig {
   enabled?: boolean;
   slowThreshold?: number; // ms, default: 100
@@ -96,6 +137,21 @@ export interface RequestWatcherConfig {
   captureUser?: boolean; // default: true - capture request.user
   captureSession?: boolean; // default: true - capture request.session
   captureResponseHeaders?: boolean; // default: true - capture response headers
+  /**
+   * Record how much the heap grew across the handler. Default: false.
+   *
+   * Off by default because the figure is not what it appears to be and is not
+   * free. It is `process.memoryUsage().heapUsed` read either side of the
+   * handler, and the heap is shared with every other request in flight, with a
+   * garbage collection free to run between the two readings. Measured on an
+   * endpoint that returns `{ok: true}` and allocates nothing worth naming, it
+   * ranged from -570KB to +671KB and was negative in one request out of thirty.
+   *
+   * Reading it twice per request cost about 2.5% of the process's CPU under
+   * load. Turn it on when the application is handling one request at a time —
+   * a local reproduction, a worker — where the number means something.
+   */
+  captureMemory?: boolean;
   captureControllerInfo?: boolean; // default: true - capture controller/handler
   tags?: (req: Request) => string[] | Promise<string[]>; // custom tags function
 }
@@ -222,16 +278,30 @@ export interface GraphQLWatcherConfig {
   maxQuerySize?: number;
   /** Capture variables passed to operations. Default: true */
   captureVariables?: boolean;
-  /** Variable names to mask (case-insensitive). Default: ['password', 'token', 'secret', 'apiKey', 'api_key', 'accessToken', 'access_token', 'refreshToken', 'refresh_token', 'authorization'] */
-  sensitiveVariables?: string[];
+  /**
+   * Variable and response field names to mask, added to the built-in list and
+   * to whatever `security.dataMasking.sensitiveParams` names.
+   *
+   * A name matches on whole words, ignoring case, underscores and dashes:
+   * `token` covers `apiToken`, `api_token`, `TOKENS` and `resetToken`, and
+   * does not cover `tokenCount`. A trailing `*` matches by prefix instead.
+   *
+   * Masking here is what the collector trusts — it does not walk a payload
+   * this watcher has already cleaned — so this list is the whole answer for
+   * GraphQL variables and responses. `{ replace: [...] }` masks exactly these
+   * and drops both built-in lists; see {@link MaskingTerms}.
+   */
+  sensitiveVariables?: MaskingTerms;
   /** Capture request headers (sensitive headers masked). Default: true */
   captureHeaders?: boolean;
   /**
    * Additional header names to mask (case-insensitive), merged with the
    * built-in defaults ['authorization', 'cookie', 'set-cookie', 'x-api-key',
    * 'x-auth-token']. Example: ['x-csrf-token', 'x-session-id']
+   *
+   * `{ replace: [...] }` masks exactly these instead; see {@link MaskingTerms}.
    */
-  sensitiveHeaders?: string[];
+  sensitiveHeaders?: MaskingTerms;
   /** Skip introspection queries (__schema, __type). Default: true */
   ignoreIntrospection?: boolean;
   /** Operation names to ignore. Example: ['HealthCheck', 'InternalMetrics'] */
@@ -262,7 +332,33 @@ export interface GraphQLWatcherConfig {
   // Response capture
   /** Capture response data. Default: false */
   captureResponse?: boolean;
-  /** Maximum response size in bytes before truncation. Default: 64KB */
+  /**
+   * Maximum response size in bytes before truncation. Default: 64KB (65536)
+   *
+   * Read this before raising it. A captured response is serialized and walked
+   * key by key on the event loop of the application being watched, so this
+   * option buys detail with latency added to every operation that returns a
+   * response near the limit:
+   *
+   * | response | cost per operation |
+   * |---------:|-------------------:|
+   * |    70 KB |             ~0.3ms |
+   * |   280 KB |             ~1.2ms |
+   * |   980 KB |             ~3.7ms |
+   * |  4900 KB |              ~27ms |
+   *
+   * It is linear, and it is time the request is not doing its own work. 64KB
+   * is enough to read a response on the dashboard; someone once set this to
+   * 5MB in production because nothing here said what that meant.
+   *
+   * Responses over the limit are cheap — around 0.2ms, whatever their size,
+   * because they are rejected without being serialized. So the table is the
+   * cost of the responses you choose to keep, and raising the limit is what
+   * moves a response into it.
+   *
+   * Measured by `npm run benchmark:sanitizer`; run it rather than trusting
+   * these figures on hardware that is not the one they came from.
+   */
   maxResponseSize?: number;
 
   // Custom tagging
@@ -356,6 +452,41 @@ export interface PruningConfig {
 }
 
 /**
+ * Records a fraction of traffic instead of all of it.
+ *
+ * Absent by default: NestLens records everything, which is what it is for. This
+ * is for an application that has outgrown paying for that on every request and
+ * would rather see one request in ten completely than all of them not at all.
+ *
+ * Sampling is decided per *request*, from its id, so a request and everything
+ * recorded under it — its queries, cache reads, logs and outgoing calls — are
+ * kept together or dropped together. A detail page is therefore always whole.
+ *
+ * Cheaper than {@link NestLensConfig.filter} for this purpose: the decision is
+ * a hash rather than a callback, and it is made before the entry is masked or
+ * buffered. Use `filter` when the rule depends on what is *in* the entry.
+ */
+export interface SamplingConfig {
+  /**
+   * Fraction of requests to record, from 0 to 1. Default: 1, meaning all.
+   *
+   * `0.1` records a tenth of requests, whole. `0` records nothing except what
+   * `always` names, which is a coherent setting: exceptions only.
+   */
+  rate?: number;
+
+  /**
+   * Entry types recorded whatever the rate says.
+   * Default: `['exception']`.
+   *
+   * An exception is the thing you went looking for, and sampling it away is the
+   * one outcome that makes the tool useless at the moment it matters. Set it
+   * explicitly to change what is exempt — `[]` exempts nothing.
+   */
+  always?: EntryType[];
+}
+
+/**
  * Security configuration for data masking and input validation.
  */
 export interface SecurityConfig {
@@ -363,12 +494,17 @@ export interface SecurityConfig {
    * Data masking configuration.
    */
   dataMasking?: {
-    /** Additional headers to mask (case-insensitive) */
-    sensitiveHeaders?: string[];
-    /** Additional body/query parameters to mask (case-insensitive) */
-    sensitiveParams?: string[];
-    /** Additional user fields to mask (case-insensitive) */
-    sensitiveUserFields?: string[];
+    /**
+     * Headers to mask (case-insensitive), added to the built-in list.
+     *
+     * `{ replace: [...] }` masks exactly these instead. See
+     * {@link MaskingTerms}.
+     */
+    sensitiveHeaders?: MaskingTerms;
+    /** Body/query parameters to mask, added to the built-in list. */
+    sensitiveParams?: MaskingTerms;
+    /** User object fields to mask, added to the built-in list. */
+    sensitiveUserFields?: MaskingTerms;
     /** Replacement string for masked values. Default: '***REDACTED***' */
     maskReplacement?: string;
   };
@@ -417,6 +553,22 @@ export interface NestLensConfig {
    * @default false
    */
   trustProxy?: boolean;
+
+  /**
+   * Record a fraction of traffic instead of all of it.
+   *
+   * Absent by default, which records everything. See {@link SamplingConfig}.
+   */
+  sampling?: SamplingConfig;
+
+  /**
+   * Serve the dashboard on a listener of its own, bound to a chosen address,
+   * instead of mounting it on the application's server.
+   *
+   * Absent by default, which is the mounted behaviour every installation has
+   * today. See {@link DashboardServerConfig}.
+   */
+  server?: DashboardServerConfig;
 
   // Authorization
   authorization?: AuthorizationConfig;
@@ -491,7 +643,14 @@ export interface NestLensConfig {
 export const DEFAULT_CONFIG: Required<
   Omit<
     NestLensConfig,
-    'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security' | 'alerting'
+    | 'authorization'
+    | 'filter'
+    | 'filterBatch'
+    | 'rateLimit'
+    | 'security'
+    | 'alerting'
+    | 'server'
+    | 'sampling'
   >
 > & {
   authorization: AuthorizationConfig;
@@ -499,10 +658,17 @@ export const DEFAULT_CONFIG: Required<
   filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
   rateLimit?: RateLimitConfig | false;
   security?: SecurityConfig;
+  server?: DashboardServerConfig;
+  sampling?: SamplingConfig;
 } = {
   enabled: true,
   path: '/nestlens',
   trustProxy: false,
+  // Absent, not a disabled default: the dashboard mounts on the application's
+  // server unless somebody names an address for it.
+  server: undefined,
+  // Absent likewise: everything is recorded until somebody asks for less.
+  sampling: undefined,
   authorization: {
     allowedEnvironments: ['development', 'local', 'test'],
     environmentVariable: 'NODE_ENV',

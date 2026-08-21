@@ -9,6 +9,7 @@ import {
 import { CollectorService } from '../core/collector.service';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The cache-manager surface this watcher touches. Every method is optional
@@ -52,8 +53,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly cacheManager?: CacheLike,
   ) {
     const watcherConfig = nestlensConfig.watchers?.cache;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

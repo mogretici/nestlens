@@ -64,7 +64,7 @@ NestLensModule.forRoot({
 | `server` | string | `'auto'` | GraphQL server type: 'apollo', 'mercurius', or 'auto' |
 | `maxQuerySize` | number | `8192` | Maximum query size to capture (bytes) |
 | `captureVariables` | boolean | `true` | Capture operation variables |
-| `sensitiveVariables` | string[] | `['password', 'token', ...]` | Variable names to mask |
+| `sensitiveVariables` | string[] \| `{ replace: string[] }` | `['password', 'token', ...]` | Variable names to mask, added to the defaults and to `security.dataMasking.sensitiveParams` |
 | `ignoreIntrospection` | boolean | `true` | Ignore introspection queries |
 | `ignoreOperations` | string[] | `[]` | Operation names to ignore |
 | `traceFieldResolvers` | boolean | `false` | Enable field-level resolver tracing |
@@ -76,6 +76,30 @@ NestLensModule.forRoot({
 | `captureResponse` | boolean | `false` | Capture response data |
 | `maxResponseSize` | number | `65536` | Maximum response size to capture (bytes) |
 | `tags` | function | `undefined` | Function to generate custom tags |
+
+### What raising `maxResponseSize` costs
+
+A captured response is serialized and walked key by key on your application's
+event loop, so this option buys detail with latency added to the operation that
+returned it:
+
+| Response | Cost per operation |
+|---------:|-------------------:|
+| 70 KB | ~0.3 ms |
+| 280 KB | ~1.2 ms |
+| 980 KB | ~3.7 ms |
+| 4900 KB | ~27 ms |
+
+The cost is linear in the size of the response. Responses **over** the limit are
+cheap — around 0.2 ms whatever their size, because they are rejected without
+being serialized — so the table describes the responses you choose to keep, and
+raising the limit is what moves a response into it.
+
+64 KB is enough to read a response on the dashboard. Reach for
+`ignoreOperations` or a lower `samplingRate` before reaching for a bigger limit.
+
+Run `npm run benchmark:sanitizer` to measure this on your own hardware rather
+than trusting figures from someone else's.
 
 ### Subscription Options
 
@@ -293,6 +317,68 @@ The GraphQL Watcher automatically masks these sensitive variables by default:
 - `privateKey`, `private_key`
 - `creditCard`, `credit_card`
 - `ssn`, `pin`
+
+### How a Variable Name Is Matched
+
+A term matches whole words in the name. `apiToken`, `api_token` and `API-TOKEN`
+are one field written three ways, so the list does not have to enumerate them,
+and a multi-word term matches a run of words — `credit_card` catches
+`creditCardNumber`.
+
+A term found in the middle of a name still masks when what follows only names
+something *made from* the field: `passwordHash`, `stripeSecretKey`,
+`creditCardNumber` and `token_2` are all masked. A word that describes the field
+rather than deriving from it is not: `tokenCount` is a number of tokens and
+stays readable.
+
+The plural is the same field: `tokens`, `apiKeys` and `creditCards` are masked
+by the singular terms in the list, because a schema names a collection for what
+it holds. So is a name carrying an index or a revision — `token2`, `password1`,
+`apiKeyV2` — whether or not a separator marks it off.
+
+A term ending in `*` keeps the loose prefix match it has always had —
+`secret*` matches any name starting with those letters.
+
+### Which Terms Apply
+
+Three lists are masked for, as one:
+
+1. the defaults above,
+2. everything `security.dataMasking.sensitiveParams` masks, including *its*
+   defaults — `cvv`, `cvc`, `card_number`, `passwd`, `social_security` and
+   anything you added there,
+3. whatever `sensitiveVariables` names.
+
+The third *adds* to the first two. That matters here more than elsewhere: the
+watcher builds a clean copy of the variables and the response and marks it, and
+the collector does not walk a marked payload a second time. For a GraphQL entry
+this list is the whole of the masking, with nothing behind it.
+
+To mask exactly what you name and drop both built-in lists, say so:
+
+```typescript
+graphql: {
+  sensitiveVariables: { replace: ['orderNote', 'internalRef'] },
+}
+```
+
+That is the way to make a default term readable — a `pin` field that really is
+a map pin, a `secret` column holding a room number. It applies to GraphQL
+payloads only; other watchers keep masking whatever
+`security.dataMasking.sensitiveParams` says.
+
+:::info Changed in 0.10.0
+Matching used to be a plain substring test, so the default list's `pin` masked
+`shipping`, `shoppingCart`, `spinner`, `topping` and `isPinned`, and the
+dashboard showed `***` for values the API never sent. If you added a short term
+to `sensitiveVariables` and relied on it catching a name it appears inside —
+`id` inside `identityDocument`, say — add the fuller name or a `*` wildcard.
+
+`sensitiveVariables` also used to substitute for the default list rather than
+adding to it. The difference was invisible, because the collector masked the
+defaults afterwards regardless; now that it does not, the option does what it
+reads as. Use `{ replace: [...] }` for the old behaviour.
+:::
 
 Customize sensitive variable detection:
 

@@ -1,15 +1,17 @@
 import { Injectable } from '@nestjs/common';
+import { isSanitized } from './sanitized-payload';
+import { MaskingTerms, resolveMaskingTerms } from './masking-terms';
 
 /**
  * Configuration for data masking behavior.
  */
 export interface DataMaskerConfig {
-  /** Headers to mask (case-insensitive) */
-  sensitiveHeaders?: string[];
-  /** Body/query parameter names to mask (case-insensitive) */
-  sensitiveParams?: string[];
-  /** User object fields to mask (case-insensitive) */
-  sensitiveUserFields?: string[];
+  /** Headers to mask, added to the built-in list. See {@link MaskingTerms}. */
+  sensitiveHeaders?: MaskingTerms;
+  /** Body/query parameter names to mask, added to the built-in list. */
+  sensitiveParams?: MaskingTerms;
+  /** User object fields to mask, added to the built-in list. */
+  sensitiveUserFields?: MaskingTerms;
   /** Replacement string for masked values */
   maskReplacement?: string;
   /** Whether to sanitize stack traces in production */
@@ -65,6 +67,20 @@ const DEFAULT_SENSITIVE_PARAMS = [
 ];
 
 /**
+ * Every term this masker will redact a body or query parameter for.
+ *
+ * Exported because the GraphQL watcher sanitises its own payloads and marks
+ * them so the collector does not walk them a second time. That mark is only
+ * safe while the watcher redacts at least as much as the collector would, so
+ * the watcher resolves its list from this one rather than keeping a shorter
+ * list of its own — which is what let `cvv`, `passwd` and anything added
+ * through `security.dataMasking.sensitiveParams` reach storage in the clear.
+ */
+export function resolveSensitiveParams(configured?: MaskingTerms): string[] {
+  return resolveMaskingTerms(DEFAULT_SENSITIVE_PARAMS, configured);
+}
+
+/**
  * Default sensitive user fields that should always be masked.
  */
 const DEFAULT_SENSITIVE_USER_FIELDS = [
@@ -109,10 +125,50 @@ const normalizeFieldName = (name: string): string => name.toLowerCase().replace(
  * right direction for something recording production traffic. A field that
  * should be readable can be kept by narrowing the configured list.
  */
-const matchesSensitiveTerm = (fieldName: string, terms: readonly string[]): boolean => {
-  const normalized = normalizeFieldName(fieldName);
+/**
+ * How many distinct field names one matcher will remember.
+ *
+ * A payload's key names come from a schema, a header set and a query string —
+ * a few dozen names repeated across every entry — so the memo answers nearly
+ * every lookup after the first entry. A body assembled by whoever is calling
+ * has no such bound, which is why there is a cap; past it the answers stay
+ * correct and are recomputed.
+ */
+const MEMO_LIMIT = 1024;
 
-  return terms.some((term) => term.length > 0 && normalized.includes(term));
+/**
+ * One term list, with its answers remembered.
+ *
+ * Deciding a single field name normalises it — a `toLowerCase` and a regex
+ * replace, both allocating — and then scans every configured term for a
+ * substring. That is twenty-odd comparisons per key, on every key of every
+ * entry, for an answer that never changes for a given name. The GraphQL
+ * sanitiser memoised this in 0.10.0 and measured the difference; the collector
+ * masker, which runs on *every* entry rather than on GraphQL ones, kept
+ * recomputing it and was the largest single cost in the masker under load.
+ *
+ * The term list belongs to the masker and never changes after construction, so
+ * the memo lives as long as the masker and needs nothing to invalidate it.
+ */
+const createTermMatcher = (terms: readonly string[]): ((fieldName: string) => boolean) => {
+  const meaningful = terms.filter((term) => term.length > 0);
+  const memo = new Map<string, boolean>();
+
+  return (fieldName: string): boolean => {
+    const remembered = memo.get(fieldName);
+    if (remembered !== undefined) {
+      return remembered;
+    }
+
+    const normalized = normalizeFieldName(fieldName);
+    const result = meaningful.some((term) => normalized.includes(term));
+
+    if (memo.size < MEMO_LIMIT) {
+      memo.set(fieldName, result);
+    }
+
+    return result;
+  };
 };
 
 /**
@@ -148,19 +204,29 @@ export class DataMaskerService {
   private readonly sensitiveHeaders: readonly string[];
   private readonly sensitiveParams: readonly string[];
   private readonly sensitiveUserFields: readonly string[];
+  private readonly matchesHeader: (fieldName: string) => boolean;
+  private readonly matchesParam: (fieldName: string) => boolean;
+  private readonly matchesUserField: (fieldName: string) => boolean;
   private readonly maskReplacement: string;
   private readonly sanitizeStackTraces: boolean;
   private readonly stackTraceSanitization: StackTraceSanitization;
   private readonly isProduction: boolean;
 
   constructor(config?: DataMaskerConfig) {
-    const headers = [...DEFAULT_SENSITIVE_HEADERS, ...(config?.sensitiveHeaders ?? [])];
-    const params = [...DEFAULT_SENSITIVE_PARAMS, ...(config?.sensitiveParams ?? [])];
-    const userFields = [...DEFAULT_SENSITIVE_USER_FIELDS, ...(config?.sensitiveUserFields ?? [])];
+    const headers = resolveMaskingTerms(DEFAULT_SENSITIVE_HEADERS, config?.sensitiveHeaders);
+    const params = resolveSensitiveParams(config?.sensitiveParams);
+    const userFields = resolveMaskingTerms(
+      DEFAULT_SENSITIVE_USER_FIELDS,
+      config?.sensitiveUserFields,
+    );
 
     this.sensitiveHeaders = headers.map(normalizeFieldName);
     this.sensitiveParams = params.map(normalizeFieldName);
     this.sensitiveUserFields = userFields.map(normalizeFieldName);
+
+    this.matchesHeader = createTermMatcher(this.sensitiveHeaders);
+    this.matchesParam = createTermMatcher(this.sensitiveParams);
+    this.matchesUserField = createTermMatcher(this.sensitiveUserFields);
     this.maskReplacement = config?.maskReplacement ?? DEFAULT_MASK;
     this.sanitizeStackTraces = config?.sanitizeStackTraces ?? true;
     this.stackTraceSanitization =
@@ -179,7 +245,7 @@ export class DataMaskerService {
     const masked: Record<string, string> = {};
 
     for (const [key, value] of Object.entries(headers)) {
-      if (matchesSensitiveTerm(key, this.sensitiveHeaders)) {
+      if (this.matchesHeader(key)) {
         masked[key] = this.maskReplacement;
       } else {
         masked[key] = String(value ?? '');
@@ -194,6 +260,10 @@ export class DataMaskerService {
    */
   maskBody(body: unknown): unknown {
     if (body === null || body === undefined) {
+      return body;
+    }
+
+    if (isSanitized(body)) {
       return body;
     }
 
@@ -225,8 +295,14 @@ export class DataMaskerService {
     const masked: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
-      if (matchesSensitiveTerm(key, this.sensitiveParams)) {
+      if (this.matchesParam(key)) {
         masked[key] = this.maskReplacement;
+      } else if (isSanitized(value)) {
+        // A watcher that already produced a clean copy of this subtree — the
+        // GraphQL response and its variables — is taken at its word rather
+        // than deep-cloned a second time. Only what `markSanitized` touched
+        // qualifies, so the rest of the payload is masked as it always was.
+        masked[key] = value;
       } else if (value !== null && typeof value === 'object') {
         if (Array.isArray(value)) {
           masked[key] = value.map((item) =>
@@ -257,7 +333,7 @@ export class DataMaskerService {
     const userObj = user as Record<string, unknown>;
 
     for (const [key, value] of Object.entries(userObj)) {
-      if (matchesSensitiveTerm(key, this.sensitiveUserFields)) {
+      if (this.matchesUserField(key)) {
         masked[key] = this.maskReplacement;
       } else if (value !== null && typeof value === 'object') {
         masked[key] = this.maskUserInfo(value);
@@ -300,11 +376,7 @@ export class DataMaskerService {
    * Check if a key is sensitive.
    */
   isSensitiveKey(key: string): boolean {
-    return (
-      matchesSensitiveTerm(key, this.sensitiveHeaders) ||
-      matchesSensitiveTerm(key, this.sensitiveParams) ||
-      matchesSensitiveTerm(key, this.sensitiveUserFields)
-    );
+    return this.matchesHeader(key) || this.matchesParam(key) || this.matchesUserField(key);
   }
 
   /**

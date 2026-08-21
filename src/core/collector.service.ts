@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/c
 import { Observable, Subject } from 'rxjs';
 import { Entry, EntryType } from '../types';
 import { DataMaskerService } from './data-masker.service';
+import { createSampler, Sampler } from './sampling';
 import { currentRequestId } from './request-context';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
 import { TagService } from './tag.service';
@@ -67,8 +68,18 @@ export class CollectorService implements OnModuleDestroy {
     @Optional()
     private readonly familyHashService?: FamilyHashService,
   ) {
+    this.sampler = createSampler(this.config.sampling);
     this.startFlushTimer();
   }
+
+  /**
+   * Drops entries the configured rate does not keep.
+   *
+   * Applied before the filter, the mask and the buffer, because an entry that
+   * is not being kept should not be paid for. `undefined` unless `sampling` is
+   * configured with a rate below 1, so the default path costs nothing.
+   */
+  private readonly sampler?: Sampler;
 
   /**
    * Apply filter to an entry
@@ -143,6 +154,10 @@ export class CollectorService implements OnModuleDestroy {
       requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
 
+    if (this.sampler && !this.sampler.shouldRecord(entry)) {
+      return;
+    }
+
     // The filter callback runs in the application's own process against its own
     // data, so it sees the entry as recorded; what gets buffered — and from
     // there stored, streamed and posted to webhooks — is masked.
@@ -181,6 +196,10 @@ export class CollectorService implements OnModuleDestroy {
       payload,
       requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
+
+    if (this.sampler && !this.sampler.shouldRecord(entry)) {
+      return null;
+    }
 
     // Apply filter
     const shouldCollect = await this.applyFilter(entry);

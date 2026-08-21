@@ -9,6 +9,7 @@ import { CollectorService } from '../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
 import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -24,8 +25,7 @@ export class RequestWatcher implements NestInterceptor {
     private readonly applicationConfig: ApplicationConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.request;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   private getRequestPath(request: NestLensRequest): string {
@@ -84,7 +84,14 @@ export class RequestWatcher implements NestInterceptor {
     // back keeps the watcher usable where the middleware did not run.
     const requestId = request.nestlensRequestId ?? currentRequestId() ?? uuidv4();
     const startTime = Date.now();
-    const startMemory = process.memoryUsage().heapUsed;
+    // Only when asked for. `process.memoryUsage()` walks V8's heap statistics,
+    // and two of those per request came to about 2.5% of the process's CPU
+    // under load — for a figure that is `heapUsed` minus `heapUsed`, a global
+    // counter read either side of a handler that shares the heap with every
+    // other request in flight. Measured on an endpoint returning `{ok:true}`,
+    // it ranged from -570KB to +671KB and came out negative once in thirty.
+    // See `captureMemory`.
+    const startMemory = this.config.captureMemory ? process.memoryUsage().heapUsed : undefined;
 
     // Attach request ID to request object for correlation
     request.nestlensRequestId = requestId;
@@ -116,7 +123,8 @@ export class RequestWatcher implements NestInterceptor {
       tap({
         next: async (responseBody) => {
           const duration = Date.now() - startTime;
-          const memory = process.memoryUsage().heapUsed - startMemory;
+          const memory =
+            startMemory === undefined ? undefined : process.memoryUsage().heapUsed - startMemory;
 
           // Capture response headers (Telescope-like)
           const responseHeaders = this.captureResponseHeaders(response);
@@ -154,7 +162,8 @@ export class RequestWatcher implements NestInterceptor {
         },
         error: async (error) => {
           const duration = Date.now() - startTime;
-          const memory = process.memoryUsage().heapUsed - startMemory;
+          const memory =
+            startMemory === undefined ? undefined : process.memoryUsage().heapUsed - startMemory;
 
           // Capture response headers (Telescope-like)
           const responseHeaders = this.captureResponseHeaders(response);

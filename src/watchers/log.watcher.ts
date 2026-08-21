@@ -2,6 +2,7 @@ import { ConsoleLogger, Inject, Injectable } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { LogWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { LogEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 const LOG_LEVEL_PRIORITY: Record<string, number> = {
   verbose: 0,
@@ -23,10 +24,7 @@ export class NestLensLogger extends ConsoleLogger {
   ) {
     super();
     const watcherConfig = nestlensConfig.watchers?.log;
-    this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false, minLevel: 'log' };
+    this.config = resolveWatcherConfig(watcherConfig, { minLevel: 'log' });
 
     this.minLevelPriority = LOG_LEVEL_PRIORITY[this.config.minLevel ?? 'log'];
   }

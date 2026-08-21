@@ -9,6 +9,7 @@ import {
 import { CollectorService } from '../core/collector.service';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 type RedisCommand = (...args: unknown[]) => unknown;
 
@@ -49,8 +50,7 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly redisClient?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.redis;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

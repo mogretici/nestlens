@@ -9,6 +9,10 @@ export {
   AuthorizationConfig,
   AuthUser,
   RateLimitConfig,
+  // Dashboard on a listener of its own
+  DashboardServerConfig,
+  // Recording a fraction of traffic
+  SamplingConfig,
   // Watcher configs
   RequestWatcherConfig,
   QueryWatcherConfig,
@@ -45,6 +49,7 @@ export {
 export * from './types';
 
 // Core services (for advanced usage)
+export { MaskingTerms } from './core/masking-terms';
 export { CollectorService } from './core/collector.service';
 export { StorageInterface, STORAGE } from './core/storage/storage.interface';
 export { createStorage } from './core/storage/storage.factory';

@@ -30,8 +30,10 @@ import { createStorage } from './core/storage/storage.factory';
 import {
   NestLensApiController,
   DashboardController,
+  NestLensDashboardServer,
   NestLensGuard,
   NestLensStreamController,
+  NESTLENS_SERVER_CONFIG,
   SpaRouteRegistrar,
   TagController,
 } from './api';
@@ -208,17 +210,26 @@ export class NestLensModule implements NestModule, OnModuleInit {
       };
     }
 
+    // Given an address of its own, the dashboard is not registered on this
+    // application at all. Leaving the controllers here as well and filtering by
+    // address later would still put NestLens on the application's socket, where
+    // one mistake in front of it publishes everything NestLens has recorded —
+    // and a route that exists is a route something can reach. See
+    // `DashboardServerConfig`.
+    const ownServer = mergedConfig.server;
+
     // Settles the SPA catch-all's syntax against the adapter Nest was given;
     // see spa-wildcard.ts for why that cannot be decided here.
-    const providers: Provider[] = [NestLensGuard, SpaRouteRegistrar];
+    const providers: Provider[] = ownServer
+      ? [{ provide: NESTLENS_SERVER_CONFIG, useValue: ownServer }, NestLensDashboardServer]
+      : [NestLensGuard, SpaRouteRegistrar];
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
-    const controllers = [
-      NestLensApiController,
-      TagController,
-      NestLensStreamController,
-      DashboardController,
-    ];
+    const controllers = ownServer
+      ? []
+      : [NestLensApiController, TagController, NestLensStreamController, DashboardController];
 
+    // Applied either way: the dashboard application reads the same metadata, so
+    // `path` places the dashboard identically on both arrangements.
     this.mountControllersAt(mergedConfig.path);
 
     const imports: DynamicModule['imports'] = [
@@ -250,7 +261,8 @@ export class NestLensModule implements NestModule, OnModuleInit {
     }
 
     // Add Log Watcher
-    if (mergedConfig.watchers?.log !== false) {
+    const logWatcherEnabled = mergedConfig.watchers?.log !== false;
+    if (logWatcherEnabled) {
       providers.push(NestLensLogger);
     }
 
@@ -332,8 +344,14 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // NOTE: GraphQL Watcher is provided by NestLensCoreModule (global)
     // so it's accessible via moduleRef.get(GraphQLWatcher) from any module
 
-    // Build exports list - only export what's actually provided
-    const exports: Provider[] = [NestLensLogger];
+    // Build exports list - only export what's actually provided.
+    //
+    // Only when it is. Nest refuses to boot a module that exports a provider it
+    // does not hold, so exporting this unconditionally turned
+    // `watchers: { log: false }` into `UnknownExportException` at startup — the
+    // application did not come up at all, which is a strange price for turning
+    // off one watcher.
+    const exports: Provider[] = logWatcherEnabled ? [NestLensLogger] : [];
     // GraphQLWatcher is already exported from NestLensCoreModule (global)
 
     return {

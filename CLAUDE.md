@@ -33,6 +33,25 @@ npm run test:e2e:ui        # Run with Playwright UI
 npm run test:e2e:headed    # Run in headed browser mode
 ```
 
+### Benchmarks
+```bash
+npm run build:lib          # Required first — benchmarks run against dist/
+npm run benchmark          # Serial latency, memory per entry, write throughput
+npm run benchmark:load     # 32 concurrent connections, server in its own
+                           # process: throughput, CPU per 1k requests, RSS,
+                           # idle CPU. This is the one that answers "can I
+                           # leave NestLens on in production".
+npm run benchmark:sanitizer # GraphQL sanitizer and the response size probe
+```
+
+`benchmark:load` prints an `entries` column on purpose: a configuration that
+recorded nothing once looked like the fastest one on the table.
+
+To profile, run the benchmark server on its own and point Node at it:
+```bash
+node --cpu-prof scripts/benchmark-load-server.mjs 4201 '{}'
+```
+
 ### Linting
 ```bash
 npm run lint               # ESLint on src/**/*.ts
