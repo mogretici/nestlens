@@ -100,26 +100,51 @@ function getQueryType(query: string): string {
 
 export default function EntryDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [entry, setEntry] = useState<Entry | null>(null);
-  const [related, setRelated] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
+  /**
+   * What is on screen, and which id it belongs to.
+   *
+   * Held together on purpose. Moving between entries starts a second request
+   * before the first has landed — from the list, from a related entry, from
+   * the back button — and whichever finished last used to win, putting one
+   * entry's detail under another entry's id. Recording the id alongside the
+   * data makes that impossible to render: the spinner shows exactly while what
+   * is loaded is not what the URL asks for, so the two can never disagree.
+   */
+  const [loaded, setLoaded] = useState<{
+    id?: string;
+    entry: Entry | null;
+    related: Entry[];
+  }>({ entry: null, related: [] });
   const fallbackToolbar = useJsonToolbar();
 
+  const loading = loaded.id !== id;
+  const entry = loaded.entry;
+  const related = loaded.related;
+
   useEffect(() => {
+    // A response that arrives after the effect has been torn down is answering
+    // a question nobody is asking any more.
+    let current = true;
+
     const fetchData = async () => {
       if (!id) return;
+
       try {
-        const response = await getEntry(parseInt(id));
-        setEntry(response.data);
-        setRelated(response.related ?? []);
+        const response = await getEntry(parseInt(id, 10));
+        if (current) setLoaded({ id, entry: response.data, related: response.related ?? [] });
       } catch (error) {
         console.error('Failed to fetch entry:', error);
-      } finally {
-        setLoading(false);
+        // Settled even so: the spinner has to stop, and "not found" is what
+        // the page shows instead.
+        if (current) setLoaded({ id, entry: null, related: [] });
       }
     };
 
     fetchData();
+
+    return () => {
+      current = false;
+    };
   }, [id]);
 
   if (loading) {

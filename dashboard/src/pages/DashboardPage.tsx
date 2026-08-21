@@ -332,10 +332,16 @@ export default function DashboardPage() {
 
   // Fetch initial activities
   useEffect(() => {
+    // Same rule as everywhere else that fetches: a response that arrives after
+    // the effect has been torn down is answering a question nobody is asking
+    // any more.
+    let current = true;
+
     const fetchInitialActivities = async () => {
       setLoading(true);
       try {
         const response = await getEntriesWithCursor({ limit: ACTIVITY_PAGE_SIZE });
+        if (!current) return;
         setActivityEntries(response.data);
         setActivityTotal(response.meta.total);
         setActivityHasMore(response.meta.hasMore);
@@ -343,13 +349,18 @@ export default function DashboardPage() {
         setActivityPage(1);
         setPageHistory([]);
       } catch (error) {
+        if (!current) return;
         console.error('Failed to fetch activities:', error);
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
     fetchInitialActivities();
+
+    return () => {
+      current = false;
+    };
   }, []);
 
   // Pagination handlers
