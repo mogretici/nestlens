@@ -18,11 +18,11 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Logger } from '@nestjs/common';
-import { SqliteStorage } from '../../../core/storage/sqlite.storage';
+import { SCHEMA_VERSION, SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { Entry, EntryType } from '../../../types';
 
-/** Matches `SCHEMA_VERSION` in the storage. */
-const CURRENT_SCHEMA = 2;
+/** Read from the storage rather than copied, so a bump cannot desync them. */
+const CURRENT_SCHEMA = SCHEMA_VERSION;
 
 let workspace: string;
 

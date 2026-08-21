@@ -13,8 +13,10 @@ import { RedisStorageConfig } from '../../../nestlens.config';
 // Mock pipeline
 const createMockPipeline = () => ({
   hset: jest.fn().mockReturnThis(),
+  hget: jest.fn().mockReturnThis(),
   zadd: jest.fn().mockReturnThis(),
   sadd: jest.fn().mockReturnThis(),
+  scard: jest.fn().mockReturnThis(),
   hgetall: jest.fn().mockReturnThis(),
   hincrby: jest.fn().mockReturnThis(),
   exec: jest.fn().mockResolvedValue([]),
@@ -26,6 +28,8 @@ const createMockRedisClient = () => {
   return {
     incr: jest.fn(),
     incrby: jest.fn(),
+    exists: jest.fn().mockResolvedValue(1),
+    scard: jest.fn(),
     hset: jest.fn(),
     hget: jest.fn(),
     hgetall: jest.fn(),
@@ -313,11 +317,40 @@ describe('RedisStorage', () => {
       mockClient.zcard.mockResolvedValue(5);
 
       // Act
-      const count = await storage.count('request');
+      const count = await storage.count('query');
 
       // Assert
       expect(count).toBe(5);
-      expect(mockClient.zcard).toHaveBeenCalledWith(expect.stringContaining('type:request'));
+      expect(mockClient.zcard).toHaveBeenCalledWith(expect.stringContaining('type:query'));
+
+      await storage.close();
+    });
+  });
+
+  describe("count('request')", () => {
+    it('leaves GraphQL operations out', async () => {
+      // A GraphQL operation reaches the request watcher too, flagged. It
+      // belongs to the GraphQL page, and the other two backends have always
+      // excluded it here — this one counted it, so the badge above the request
+      // list disagreed with the list itself.
+      const { storage, mockClient, mockPipeline } = await createTestStorage();
+      mockClient.zrange.mockResolvedValue(['1', '2', '3']);
+      mockPipeline.exec.mockResolvedValue([
+        [null, JSON.stringify({ method: 'GET' })],
+        [null, JSON.stringify({ isGraphQL: true })],
+        [null, JSON.stringify({ method: 'POST' })],
+      ]);
+
+      expect(await storage.count('request')).toBe(2);
+
+      await storage.close();
+    });
+
+    it('counts nothing when there are no requests', async () => {
+      const { storage, mockClient } = await createTestStorage();
+      mockClient.zrange.mockResolvedValue([]);
+
+      expect(await storage.count('request')).toBe(0);
 
       await storage.close();
     });
@@ -333,9 +366,35 @@ describe('RedisStorage', () => {
       // Act
       await storage.addTags(1, ['bug', 'urgent']);
 
-      // Assert
-      expect(mockPipeline.sadd).toHaveBeenCalledTimes(4); // 2 tags x 2 sets each
+      // Assert: the entry's set, the tag's index, and the register of tag
+      // names that `getAllTags` measures.
+      expect(mockPipeline.sadd).toHaveBeenCalledTimes(6); // 2 tags x 3 sets each
       expect(mockPipeline.exec).toHaveBeenCalled();
+
+      await storage.close();
+    });
+
+    it('does not keep a tag for an entry that is not there', async () => {
+      // The collector tags an entry just after saving it, and pruning can
+      // remove it in between. Nothing to record, and nothing to throw about.
+      const { storage, mockClient, mockPipeline } = await createTestStorage();
+      mockClient.exists.mockResolvedValue(0);
+
+      await storage.addTags(999, ['ghost']);
+
+      expect(mockPipeline.sadd).not.toHaveBeenCalled();
+
+      await storage.close();
+    });
+
+    it('does not keep a running count beside the sets', async () => {
+      // The count used to be maintained here and drifted from the sets on
+      // every path. `getAllTags` measures the sets instead.
+      const { storage, mockPipeline } = await createTestStorage();
+
+      await storage.addTags(1, ['bug']);
+
+      expect(mockPipeline.hincrby).not.toHaveBeenCalled();
 
       await storage.close();
     });
@@ -373,13 +432,15 @@ describe('RedisStorage', () => {
 
   describe('getAllTags', () => {
     it('should return all tags with counts', async () => {
-      // Arrange
-      const { storage, mockClient } = await createTestStorage();
-      mockClient.hgetall.mockResolvedValue({
-        bug: '5',
-        feature: '3',
-        urgent: '2',
-      });
+      // Arrange: the names in one read, the sizes of their index sets in one
+      // pipeline — measured rather than remembered.
+      const { storage, mockClient, mockPipeline } = await createTestStorage();
+      mockClient.smembers.mockResolvedValue(['bug', 'feature', 'urgent']);
+      mockPipeline.exec.mockResolvedValue([
+        [null, 5],
+        [null, 3],
+        [null, 2],
+      ]);
 
       // Act
       const tags = await storage.getAllTags();
@@ -392,13 +453,24 @@ describe('RedisStorage', () => {
       await storage.close();
     });
 
-    it('should filter out tags with zero count', async () => {
-      // Arrange
+    it('returns nothing when no tag has ever been used', async () => {
       const { storage, mockClient } = await createTestStorage();
-      mockClient.hgetall.mockResolvedValue({
-        bug: '5',
-        deleted: '0',
-      });
+      mockClient.smembers.mockResolvedValue([]);
+
+      expect(await storage.getAllTags()).toEqual([]);
+
+      await storage.close();
+    });
+
+    it('leaves out a tag no entry carries any more', async () => {
+      // The name stays registered after its last entry is pruned; an empty
+      // index set is what says it is no longer in use.
+      const { storage, mockClient, mockPipeline } = await createTestStorage();
+      mockClient.smembers.mockResolvedValue(['bug', 'deleted']);
+      mockPipeline.exec.mockResolvedValue([
+        [null, 5],
+        [null, 0],
+      ]);
 
       // Act
       const tags = await storage.getAllTags();

@@ -61,7 +61,18 @@ interface TypeCountRow {
  * the change. Files written before versioning read as 0 and are migrated the
  * same way — the column probing below has always been idempotent.
  */
-const SCHEMA_VERSION = 2;
+/**
+ * The schema this version of NestLens reads and writes.
+ *
+ * Exported so the tests read it from here rather than keeping their own copy:
+ * a hand-maintained second copy is a test that fails on every bump for the one
+ * reason that is never interesting.
+ *
+ *  1. original
+ *  2. `family_hash` and `resolved_at` on entries
+ *  3. `UNIQUE (entry_id, tag)` — see `migrateTagUniqueness`
+ */
+export const SCHEMA_VERSION = 3;
 
 @Injectable()
 export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDestroy {
@@ -137,7 +148,12 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         entry_id INTEGER NOT NULL,
         tag TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (entry_id) REFERENCES nestlens_entries(id) ON DELETE CASCADE
+        FOREIGN KEY (entry_id) REFERENCES nestlens_entries(id) ON DELETE CASCADE,
+        -- What the INSERT OR IGNORE in addTags needs in order to ignore
+        -- anything. Without it the clause is inert: tagging an entry twice
+        -- stored the tag twice, getAllTags counted it twice, and removeTags
+        -- left a copy behind.
+        UNIQUE (entry_id, tag)
       );
 
       CREATE INDEX IF NOT EXISTS idx_nestlens_tags_entry_id ON nestlens_tags(entry_id);
@@ -181,6 +197,52 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     this.db.exec(
       'CREATE INDEX IF NOT EXISTS idx_nestlens_family_hash ON nestlens_entries(family_hash)',
     );
+
+    this.migrateTagUniqueness();
+  }
+
+  /**
+   * Gives an existing tag table the uniqueness it was always assumed to have.
+   *
+   * `addTags` has always written `INSERT OR IGNORE`, which does nothing unless
+   * a constraint exists to be violated — and none did. A file written by an
+   * earlier version therefore holds one row per tagging rather than one row per
+   * tag, so the duplicates have to go before the index can be built.
+   *
+   * `CREATE TABLE` above carries the constraint for new files; this is for the
+   * ones already on disk. Both paths end at the same schema.
+   */
+  private migrateTagUniqueness(): void {
+    const tagTable = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'nestlens_tags'")
+      .get();
+
+    if (!tagTable) {
+      return;
+    }
+
+    const alreadyUnique = (
+      this.db.prepare('PRAGMA index_list(nestlens_tags)').all() as {
+        unique: number;
+        name: string;
+      }[]
+    ).some((index) => index.unique === 1);
+
+    if (alreadyUnique) {
+      return;
+    }
+
+    // Keep the earliest row for each pair; the later ones were never meant to
+    // exist and carry nothing the first does not.
+    this.db.exec(`
+      DELETE FROM nestlens_tags
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM nestlens_tags GROUP BY entry_id, tag
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_nestlens_tags_entry_tag
+        ON nestlens_tags(entry_id, tag);
+    `);
   }
 
   async initialize(): Promise<void> {
@@ -1052,6 +1114,19 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   // ==================== Tag Methods ====================
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
+    // An entry that is not there cannot be tagged, and asking to is not an
+    // error worth throwing over: the collector tags an entry just after saving
+    // it, and pruning or the entry cap can remove it in between. The foreign
+    // key made that race throw out of the collector; there is nothing for the
+    // caller to do about it, and nothing to record either.
+    const exists = this.db
+      .prepare('SELECT 1 FROM nestlens_entries WHERE id = ?')
+      .get(entryId) as unknown;
+
+    if (!exists) {
+      return;
+    }
+
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO nestlens_tags (entry_id, tag)
       VALUES (?, ?)

@@ -38,6 +38,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # Redis is a supported storage backend whose tests were written against a
+    # mock, so they agreed with the implementation rather than checking it: tag
+    # counts drifted on every path — `ALPHA:2` for one entry, `NEVER:-1` for a
+    # tag that never existed — and every mocked test passed throughout. The
+    # parity suite runs against this and compares the three backends' answers.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -63,6 +79,8 @@ jobs:
 
       - name: Run library tests
         run: npm test
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
 
       # The dependencies a consumer actually receives, and only those.
       #

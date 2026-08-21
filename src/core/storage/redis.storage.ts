@@ -415,8 +415,43 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async count(type?: EntryType): Promise<number> {
     const client = this.getClient();
-    const key = type ? this.key('entries', 'type', type) : this.key('entries', 'all');
-    return client.zcard(key);
+
+    if (!type) {
+      return client.zcard(this.key('entries', 'all'));
+    }
+
+    // A GraphQL operation arrives over HTTP, so the request watcher records it
+    // as a request too, flagged. It belongs to the GraphQL page and not to the
+    // Requests page, and `find` and `findWithCursor` have excluded it here for
+    // some time — this did not, so the badge above the list disagreed with the
+    // list under it.
+    if (type !== 'request') {
+      return client.zcard(this.key('entries', 'type', type));
+    }
+
+    const ids = await client.zrange(this.key('entries', 'type', 'request'), 0, -1);
+    if (ids.length === 0) {
+      return 0;
+    }
+
+    const pipeline = client.pipeline();
+    for (const id of ids) {
+      pipeline.hget(this.key('entries', id), 'payload');
+    }
+
+    const results = (await pipeline.exec()) ?? [];
+
+    return results.reduce((total: number, [error, payload]) => {
+      if (error || typeof payload !== 'string') {
+        return total + 1;
+      }
+
+      try {
+        return (JSON.parse(payload) as { isGraphQL?: boolean }).isGraphQL ? total : total + 1;
+      } catch {
+        return total + 1;
+      }
+    }, 0);
   }
 
   async clear(): Promise<void> {
@@ -607,6 +642,15 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
     const client = this.getClient();
+
+    // An entry that is not there cannot be tagged — the same rule the other
+    // two backends follow. The collector tags an entry just after saving it,
+    // and pruning or the entry cap can remove it in between; storing the tag
+    // anyway left it counted for an id nothing else knows about.
+    if (!(await client.exists(this.key('entries', String(entryId))))) {
+      return;
+    }
+
     const pipeline = client.pipeline();
 
     for (const rawTag of tags) {
@@ -614,7 +658,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       const tag = rawTag.toUpperCase();
       pipeline.sadd(this.key('tags', String(entryId)), tag);
       pipeline.sadd(this.key('tags', 'index', tag), String(entryId));
-      pipeline.hincrby(this.key('tags', 'counts'), tag, 1);
+      // The tag's name, so `getAllTags` knows which sets to measure. How many
+      // entries carry it is not recorded here — see `getAllTags`.
+      pipeline.sadd(this.key('tags', 'names'), tag);
     }
 
     await pipeline.exec();
@@ -628,7 +674,6 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       const tag = rawTag.toUpperCase();
       await client.srem(this.key('tags', String(entryId)), tag);
       await client.srem(this.key('tags', 'index', tag), String(entryId));
-      await client.hincrby(this.key('tags', 'counts'), tag, -1);
     }
   }
 
@@ -638,14 +683,45 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     return tags.sort();
   }
 
+  /**
+   * Every tag in use, and how many entries carry it.
+   *
+   * Counted from the sets that hold the answer rather than from a running
+   * total kept alongside them. The total was maintained by three call sites,
+   * none of which could see whether the set had actually changed: tagging an
+   * entry twice counted it twice, removing a tag left the count behind, and
+   * removing one that was never there drove it negative — `NEVER: -1`, hidden
+   * from this list only by the filter below. A second source of truth for
+   * something already recorded exactly once can only ever drift from it.
+   *
+   * One round trip: the names in one read, the sizes in one pipeline.
+   */
   async getAllTags(): Promise<TagWithCount[]> {
     const client = this.getClient();
-    const counts = await client.hgetall(this.key('tags', 'counts'));
+    const names = await client.smembers(this.key('tags', 'names'));
 
-    return Object.entries(counts)
-      .map(([tag, count]) => ({ tag, count: parseInt(count, 10) }))
-      .filter((t) => t.count > 0)
-      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    if (names.length === 0) {
+      return [];
+    }
+
+    const pipeline = client.pipeline();
+    for (const tag of names) {
+      pipeline.scard(this.key('tags', 'index', tag));
+    }
+
+    const results = (await pipeline.exec()) ?? [];
+
+    return (
+      names
+        .map((tag, index) => {
+          const [error, size] = results[index] ?? [null, 0];
+          return { tag, count: error ? 0 : Number(size ?? 0) };
+        })
+        // A tag whose last entry was pruned keeps its name here and no members;
+        // it is not in use, so it is not listed.
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+    );
   }
 
   async findByTags(tags: string[], logic: 'AND' | 'OR' = 'OR', limit = 50): Promise<Entry[]> {
@@ -864,7 +940,6 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const tags = await client.smembers(this.key('tags', String(id)));
     for (const tag of tags) {
       await client.srem(this.key('tags', 'index', tag), String(id));
-      await client.hincrby(this.key('tags', 'counts'), tag, -1);
     }
     await client.del(this.key('tags', String(id)));
   }

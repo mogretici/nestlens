@@ -345,6 +345,15 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   // ==================== Tag Methods ====================
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
+    // Same rule as the SQLite backend: an entry that is not here cannot be
+    // tagged. Storing the tag anyway left it counted by `getAllTags` and
+    // returned by `getEntryTags` for an id nothing else knows about, and it
+    // would never be cleaned up — `removeEntryTagsInternal` only runs for
+    // entries that were evicted, and this one was never there.
+    if (!this.entries.has(entryId)) {
+      return;
+    }
+
     const entryTagSet = this.entryTags.get(entryId) ?? new Set<string>();
     this.entryTags.set(entryId, entryTagSet);
 
