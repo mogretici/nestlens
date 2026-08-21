@@ -173,6 +173,65 @@ describe('NestLensGuard', () => {
       expect(result).toBe(true);
     });
 
+    it('should allow every environment when allowedEnvironments is null', async () => {
+      // Arrange - null is the documented way to say "any environment", and the
+      // environment here is in none of the defaults.
+      process.env.NODE_ENV = 'production';
+      const anyEnvConfig: NestLensConfig = {
+        enabled: true,
+        authorization: { allowedEnvironments: null },
+      };
+
+      const module = await Test.createTestingModule({
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: anyEnvConfig }],
+      }).compile();
+      const anyEnvGuard = module.get<NestLensGuard>(NestLensGuard);
+
+      // Act
+      const result = await anyEnvGuard.canActivate(createMockContext());
+
+      // Assert - and this failed before the merge stopped coalescing null:
+      // `?? ['development', 'local', 'test']` replaced the explicit null with
+      // the default list, so isEnvironmentAllowed's null branch was unreachable
+      // and a dashboard configured for production answered 403.
+      expect(result).toBe(true);
+    });
+
+    it('should tell an explicit null apart from an absent key', async () => {
+      // The two mean opposite things and `??` cannot distinguish them, which is
+      // the whole bug. Absent still means "use the defaults".
+      process.env.NODE_ENV = 'production';
+
+      const absent = await Test.createTestingModule({
+        providers: [
+          NestLensGuard,
+          { provide: NESTLENS_CONFIG, useValue: { enabled: true, authorization: {} } },
+        ],
+      }).compile();
+
+      await expect(
+        absent.get<NestLensGuard>(NestLensGuard).canActivate(createMockContext()),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should still refuse an empty array', async () => {
+      // `[]` means "no environment", and it must not be swept up by the same
+      // change that made `null` mean "every environment".
+      process.env.NODE_ENV = 'development';
+      const noneConfig: NestLensConfig = {
+        enabled: true,
+        authorization: { allowedEnvironments: [] },
+      };
+
+      const module = await Test.createTestingModule({
+        providers: [NestLensGuard, { provide: NESTLENS_CONFIG, useValue: noneConfig }],
+      }).compile();
+
+      await expect(
+        module.get<NestLensGuard>(NestLensGuard).canActivate(createMockContext()),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
     it('should use custom environment variable', async () => {
       // Arrange
       process.env.APP_ENV = 'staging';

@@ -154,7 +154,23 @@ export class NestLensGuard implements CanActivate {
     const authConfig = this.config.authorization ?? {};
 
     return {
-      allowedEnvironments: authConfig.allowedEnvironments ?? ['development', 'local', 'test'],
+      // Whether the key is present, not whether its value is truthy.
+      //
+      // `??` returns the right-hand side for `null` as well as `undefined`, and
+      // those mean opposite things here: `undefined` is "the caller said
+      // nothing, use the default", while `null` is the documented way to say
+      // "allow every environment". Coalescing turned the second into the first,
+      // so an explicit `null` became the default list and
+      // `isEnvironmentAllowed`'s `null` branch — which implements exactly what
+      // the documentation promises — could never be reached.
+      //
+      // It failed the way that kind of bug does: a dashboard configured for
+      // production answered 403 with `not available in this environment`, which
+      // is a true sentence about a value the caller never set.
+      allowedEnvironments:
+        'allowedEnvironments' in authConfig
+          ? authConfig.allowedEnvironments
+          : ['development', 'local', 'test'],
       environmentVariable: authConfig.environmentVariable ?? 'NODE_ENV',
       allowedIps: authConfig.allowedIps,
       canAccess: authConfig.canAccess,
