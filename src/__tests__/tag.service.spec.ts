@@ -182,6 +182,10 @@ describe('TagService', () => {
             method: 'POST',
             url: '/graphql',
             path: '/graphql',
+            // Set by the request watcher after inspecting the request. The
+            // path is not what decides this — an application serving GraphQL
+            // at `/api/gql` gets the same treatment.
+            isGraphQL: true,
             query: {},
             params: {},
             headers: {},

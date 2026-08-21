@@ -12,6 +12,7 @@ import { CollectorService } from '../core/collector.service';
 import { ExceptionWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ExceptionEntry, NestLensRequest } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { describeThrown } from './thrown-value';
 
 @Catch()
 @Injectable()
@@ -29,7 +30,13 @@ export class ExceptionWatcher implements ExceptionFilter {
     this.config = resolveWatcherConfig(watcherConfig);
   }
 
-  catch(exception: Error, host: ArgumentsHost): void {
+  /**
+   * `unknown`, not `Error`: an application can throw a string, a bare object or
+   * `null`, and Nest hands all of them here exactly as they were thrown. The
+   * old signature was a promise the runtime does not keep, and reading
+   * `.name` off `null` under it took the process down.
+   */
+  catch(exception: unknown, host: ArgumentsHost): void {
     const contextType = host.getType<string>();
 
     // Only handle HTTP context - GraphQL has its own error handling
@@ -65,8 +72,12 @@ export class ExceptionWatcher implements ExceptionFilter {
       return;
     }
 
+    // Described before anything is read off it: an application may throw a
+    // string, a bare object or `null`, and all three reach here as-is.
+    const thrown = describeThrown(exception);
+
     // Skip ignored exceptions
-    if (this.config.ignoreExceptions?.includes(exception.name)) {
+    if (this.config.ignoreExceptions?.includes(thrown.name)) {
       this.sendException(exception, response);
       return;
     }
@@ -74,9 +85,9 @@ export class ExceptionWatcher implements ExceptionFilter {
     const requestId = request.nestlensRequestId;
 
     const payload: ExceptionEntry['payload'] = {
-      name: exception.name,
-      message: exception.message,
-      stack: exception.stack,
+      name: thrown.name,
+      message: thrown.message,
+      stack: thrown.stack,
       code: this.getExceptionCode(exception),
       context: this.getExceptionContext(host),
       request: {
@@ -103,7 +114,7 @@ export class ExceptionWatcher implements ExceptionFilter {
     return typeof url === 'string' ? url.split('?')[0] : '';
   }
 
-  private sendException(exception: Error, response: unknown): void {
+  private sendException(exception: unknown, response: unknown): void {
     const status = exception instanceof HttpException ? exception.getStatus() : 500;
 
     const errorResponse =
@@ -111,14 +122,17 @@ export class ExceptionWatcher implements ExceptionFilter {
         ? exception.getResponse()
         : {
             statusCode: status,
-            message: exception.message,
+            // Described rather than read: the application may have thrown a
+            // string, a bare object or `null`, and `null.message` would turn
+            // its failure into ours.
+            message: describeThrown(exception).message,
             error: 'Internal Server Error',
           };
 
     this.httpAdapterHost.httpAdapter.reply(response, errorResponse, status);
   }
 
-  private getExceptionCode(exception: Error): string | number | undefined {
+  private getExceptionCode(exception: unknown): string | number | undefined {
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
@@ -131,10 +145,18 @@ export class ExceptionWatcher implements ExceptionFilter {
     return undefined;
   }
 
-  private hasErrorCode(error: Error): error is Error & { code: string | number } {
+  private hasErrorCode(error: unknown): error is { code: string | number } {
+    // `in` throws on anything that is not an object — including `null`, which
+    // is what a rejected promise with no reason arrives as. The type said
+    // `Error`; the runtime does not.
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+
     if (!('code' in error)) {
       return false;
     }
+
     const errorWithCode = error as { code: unknown };
     return typeof errorWithCode.code === 'string' || typeof errorWithCode.code === 'number';
   }

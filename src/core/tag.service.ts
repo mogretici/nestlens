@@ -115,8 +115,14 @@ export class TagService {
     }
 
     // Method tag - skip for GraphQL (shown in Method column as GRAPHQL)
-    // Only add HTTP method tag for non-GraphQL requests
-    if (payload.method && !payload.path?.toLowerCase().includes('/graphql')) {
+    //
+    // Read from the flag the request watcher set, which decides by looking at
+    // the request — POST, a JSON content type, a `query` field holding GraphQL
+    // syntax — rather than from the path. The path is not the answer: an
+    // application serving GraphQL at `/api/gql` was tagged POST, and a REST
+    // route named `/graphql-docs` was not tagged at all. The storage layer has
+    // always used this flag; this is the last place that guessed.
+    if (payload.method && !payload.isGraphQL) {
       tags.push(payload.method.toUpperCase());
     }
 
@@ -127,7 +133,15 @@ export class TagService {
 
     // Custom tags from payload
     if (payload.tags && Array.isArray(payload.tags)) {
-      tags.push(...payload.tags.map((t) => t.toUpperCase()));
+      for (const tag of payload.tags) {
+        const upper = String(tag).toUpperCase();
+        // Deduplicated the way the GraphQL branch already does: a caller's
+        // `tags` may repeat what was derived above, and a list of tags should
+        // hold each one once.
+        if (!tags.includes(upper)) {
+          tags.push(upper);
+        }
+      }
     }
   }
 

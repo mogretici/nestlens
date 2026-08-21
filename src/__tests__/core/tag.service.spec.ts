@@ -135,7 +135,7 @@ describe('TagService', () => {
         const entry = {
           id: 1,
           type: 'request' as const,
-          payload: { statusCode: 200, method: 'POST', path: '/graphql' },
+          payload: { statusCode: 200, method: 'POST', path: '/graphql', isGraphQL: true },
         } as Entry;
 
         // Act

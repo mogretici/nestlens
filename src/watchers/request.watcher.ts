@@ -10,6 +10,7 @@ import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestle
 import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { describeThrown } from './thrown-value';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -160,7 +161,12 @@ export class RequestWatcher implements NestInterceptor {
 
           this.collector.collect('request', payload, requestId);
         },
-        error: async (error) => {
+        error: async (thrown) => {
+          // Anything can be thrown, including `null`. Reading `.status` off it
+          // here used to take the process down from inside an RxJS error
+          // handler, where nothing was left to catch it. See `describeThrown`.
+          const error = describeThrown(thrown);
+
           const duration = Date.now() - startTime;
           const memory =
             startMemory === undefined ? undefined : process.memoryUsage().heapUsed - startMemory;
@@ -181,7 +187,7 @@ export class RequestWatcher implements NestInterceptor {
             body,
             ip: this.getClientIp(request),
             userAgent: request.headers['user-agent'],
-            statusCode: error.status || 500,
+            statusCode: error.status ?? 500,
             responseBody: {
               error: error.message,
               name: error.name,
