@@ -62,6 +62,26 @@ const matchesPathPattern = (path: string, pattern: string): boolean => {
  * callers hydrate before filtering and the rules stay independent of where the
  * entries came from.
  */
+/**
+ * Whether a filter object asks for anything.
+ *
+ * A dashboard sends the whole shape whether or not the reader narrowed
+ * anything, so `filters !== undefined` is not the question — every key being
+ * empty is. Storages that walk their entries to answer a filtered page need to
+ * know which of the two they are being asked for: one is proportional to the
+ * page, the other to the store.
+ */
+export const hasFilters = (filters: CursorPaginationParams['filters']): boolean => {
+  if (!filters) return false;
+
+  return Object.values(filters).some((value) => {
+    if (value === undefined || value === null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.length > 0;
+    return true;
+  });
+};
+
 export const matchesEntryFilters = (
   entry: StoredEntry,
   filters: CursorPaginationParams['filters'],

@@ -12,7 +12,7 @@ import {
   MonitoredTag,
   TagWithCount,
 } from '../../types';
-import { matchesEntryFilters } from './entry-filter';
+import { hasFilters, matchesEntryFilters } from './entry-filter';
 import { StorageInterface } from './storage.interface';
 import { normalizeTag } from './tag-normalization';
 import { RedisStorageConfig } from '../../nestlens.config';
@@ -41,7 +41,7 @@ import { RedisStorageConfig } from '../../nestlens.config';
  * Bumped when the meaning of an index score changes, so an existing database is
  * rewritten once rather than read with the wrong assumption.
  */
-const INDEX_SCHEMA_VERSION = '3';
+const INDEX_SCHEMA_VERSION = '4';
 
 /**
  * How many ids one pipeline carries.
@@ -54,16 +54,18 @@ const INDEX_SCHEMA_VERSION = '3';
 const PIPELINE_CHUNK = 500;
 
 /**
- * Whether an entry belongs to the GraphQL page rather than the Requests page.
+ * Whether an entry belongs on the Requests page.
  *
  * A GraphQL operation arrives over HTTP, so the request watcher records it as a
- * request as well, flagged. Both lists exclude it here, and the badge above the
- * Requests list has to agree with the list under it — so the flag is indexed at
- * write time and the badge subtracts, rather than reading every request back to
- * ask each one.
+ * request as well, flagged; it belongs to the GraphQL page instead. Excluding
+ * it after a page of ids had already been read meant a page of fifty came back
+ * with however many were left — and the count above the list was of the whole
+ * type index, so it disagreed with the list under it. The entries that belong
+ * on the page have an index of their own, so paging and counting both read the
+ * answer directly.
  */
-const isGraphQLRequest = (entry: Pick<Entry, 'type' | 'payload'>): boolean =>
-  entry.type === 'request' && (entry.payload as { isGraphQL?: boolean })?.isGraphQL === true;
+const isPlainRequest = (entry: Pick<Entry, 'type' | 'payload'>): boolean =>
+  entry.type === 'request' && (entry.payload as { isGraphQL?: boolean })?.isGraphQL !== true;
 
 /** Splits ids into pipeline-sized runs. */
 const inChunks = <T>(items: T[], size = PIPELINE_CHUNK): T[][] => {
@@ -207,9 +209,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
         // The flag was only ever kept inside the payload, so entries stored
         // before this version have to be read once to build the index the
-        // request badge now counts against.
-        if (hash.type === 'request' && this.wasGraphQL(hash.payload)) {
-          writer.zadd(this.key('entries', 'graphql'), Number(id), id);
+        // Requests page now pages and counts against.
+        if (hash.type === 'request' && !this.wasGraphQL(hash.payload)) {
+          writer.zadd(this.key('entries', 'type', 'request', 'rest'), Number(id), id);
         }
 
         rescored += 1;
@@ -289,8 +291,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       writes.sadd(this.key('entries', 'request', entry.requestId), String(id));
     }
 
-    if (isGraphQLRequest(entry)) {
-      writes.zadd(this.key('entries', 'graphql'), id, String(id));
+    if (isPlainRequest(entry)) {
+      writes.zadd(this.key('entries', 'type', 'request', 'rest'), id, String(id));
     }
 
     await writes.exec();
@@ -343,8 +345,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         pipeline.sadd(this.key('entries', 'request', entry.requestId), String(id));
       }
 
-      if (isGraphQLRequest(entry)) {
-        pipeline.zadd(this.key('entries', 'graphql'), id, String(id));
+      if (isPlainRequest(entry)) {
+        pipeline.zadd(this.key('entries', 'type', 'request', 'rest'), id, String(id));
       }
     }
 
@@ -359,29 +361,18 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     if (filter.requestId) {
       ids = await client.smembers(this.key('entries', 'request', filter.requestId));
-    } else if (filter.type) {
-      const start = filter.offset ?? 0;
-      const end = start + (filter.limit ?? 100) - 1;
-      ids = await client.zrevrange(this.key('entries', 'type', filter.type), start, end);
     } else {
+      // Through `indexFor`, so a page of requests is a page of the entries the
+      // Requests page lists. Reading the type index and dropping the GraphQL
+      // operations afterwards returned however many of the fifty were left.
       const start = filter.offset ?? 0;
       const end = start + (filter.limit ?? 100) - 1;
-      ids = await client.zrevrange(this.key('entries', 'all'), start, end);
+      ids = await client.zrevrange(this.indexFor(filter.type), start, end);
     }
 
     if (ids.length === 0) return [];
 
-    let entries = await this.fetchEntriesByIds(ids);
-
-    // Exclude GraphQL requests from regular requests list
-    // GraphQL requests should only appear in the GraphQL watcher
-    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
-    if (filter.type === 'request') {
-      entries = entries.filter((e) => {
-        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
-        return !isGraphQL;
-      });
-    }
+    const entries = await this.fetchEntriesByIds(ids);
 
     // Apply date filters
     let filtered = entries;
@@ -401,34 +392,27 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     type: EntryType | undefined,
     params: CursorPaginationParams,
   ): Promise<CursorPaginatedResponse<Entry>> {
+    const indexKey = this.indexFor(type);
+
+    return hasFilters(params.filters)
+      ? this.findFiltered(indexKey, params)
+      : this.findPage(indexKey, params);
+  }
+
+  /**
+   * A page with no filter on it: one ranged read of the index.
+   *
+   * The common case, and the one the live tail polls, so it stays proportional
+   * to the page rather than to the store.
+   */
+  private async findPage(
+    indexKey: string,
+    params: CursorPaginationParams,
+  ): Promise<CursorPaginatedResponse<Entry>> {
     const client = this.getClient();
     const limit = params.limit ?? 50;
 
-    const indexKey = type ? this.key('entries', 'type', type) : this.key('entries', 'all');
-
-    let ids: string[];
-
-    if (params.beforeSequence !== undefined) {
-      ids = await client.zrevrangebyscore(
-        indexKey,
-        `(${params.beforeSequence}`,
-        '-inf',
-        'LIMIT',
-        '0',
-        String(limit + 1),
-      );
-    } else if (params.afterSequence !== undefined) {
-      ids = await client.zrangebyscore(
-        indexKey,
-        `(${params.afterSequence}`,
-        '+inf',
-        'LIMIT',
-        '0',
-        String(limit + 1),
-      );
-    } else {
-      ids = await client.zrevrange(indexKey, 0, limit);
-    }
+    let ids = await this.readIds(indexKey, params, limit + 1);
 
     const hasMore = ids.length > limit;
     if (hasMore) ids = ids.slice(0, limit);
@@ -437,34 +421,107 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       ids.reverse();
     }
 
-    let entries = await this.fetchEntriesByIds(ids);
-
-    // Exclude GraphQL requests from regular requests list
-    // GraphQL requests should only appear in the GraphQL watcher
-    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
-    if (type === 'request') {
-      entries = entries.filter((e) => {
-        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
-        return !isGraphQL;
-      });
-    }
-
-    // Hydrate tags before filtering so tag-aware filters (e.g. search) work
-    let hydratedEntries = await this.hydrateEntriesWithTags(entries);
-
-    // Apply advanced filters
-    if (params.filters) {
-      hydratedEntries = this.applyAdvancedFilters(hydratedEntries, params.filters);
-    }
+    const entries = await this.hydrateEntriesWithTags(await this.fetchEntriesByIds(ids));
     const total = await client.zcard(indexKey);
 
+    return this.pageOf(entries, hasMore, total);
+  }
+
+  /**
+   * A page with a filter on it.
+   *
+   * The filter used to be applied to the page after it had been read, so it
+   * removed rows from the fifty that happened to be newest instead of choosing
+   * fifty from the rows that match. Anything whose matches were not in the
+   * newest page came back empty — measured at 0 rows where the other two
+   * backends returned 5 — and `total` counted the whole index, so the heading
+   * said 205 above an empty list.
+   *
+   * Both numbers need the same walk, so one pass does both: it reads the index
+   * in chunks from the cursor outwards, keeps the first `limit` matches and
+   * counts the rest. That is proportional to the store, which is what the other
+   * two backends also pay for a filtered view — `countWithFilters` scans in
+   * memory, and SQLite counts with a `WHERE`. Only here does the walk cross a
+   * network, so it goes out in pipelines rather than one command at a time.
+   */
+  private async findFiltered(
+    indexKey: string,
+    params: CursorPaginationParams,
+  ): Promise<CursorPaginatedResponse<Entry>> {
+    const limit = params.limit ?? 50;
+    const ascending = params.afterSequence !== undefined;
+
+    const candidates = await this.readIds(indexKey, params);
+    const matches: StoredEntry[] = [];
+    let total = 0;
+
+    for (const chunk of inChunks(candidates)) {
+      const entries = await this.hydrateEntriesWithTags(await this.fetchEntriesByIds(chunk));
+
+      for (const entry of entries) {
+        if (!matchesEntryFilters(entry, params.filters)) continue;
+        total += 1;
+        if (matches.length < limit + 1) matches.push(entry);
+      }
+    }
+
+    const hasMore = matches.length > limit;
+    const page = matches.slice(0, limit);
+
+    if (ascending) page.reverse();
+
+    return this.pageOf(page, hasMore, total);
+  }
+
+  /**
+   * The ids the cursor selects, newest first unless it asks for what is newer.
+   *
+   * `count` bounds the read where the caller only needs a page; a filtered walk
+   * leaves it out, because it cannot know how far it has to go.
+   */
+  private async readIds(
+    indexKey: string,
+    params: CursorPaginationParams,
+    count?: number,
+  ): Promise<string[]> {
+    const client = this.getClient();
+    const window: [string, string, string] | [] =
+      count === undefined ? [] : ['LIMIT', '0', String(count)];
+
+    if (params.beforeSequence !== undefined) {
+      return client.zrevrangebyscore(
+        indexKey,
+        `(${params.beforeSequence}`,
+        '-inf',
+        ...(window as ['LIMIT', string, string]),
+      );
+    }
+
+    if (params.afterSequence !== undefined) {
+      return client.zrangebyscore(
+        indexKey,
+        `(${params.afterSequence}`,
+        '+inf',
+        ...(window as ['LIMIT', string, string]),
+      );
+    }
+
+    return count === undefined
+      ? client.zrevrange(indexKey, 0, -1)
+      : client.zrevrange(indexKey, 0, count - 1);
+  }
+
+  private pageOf(
+    entries: StoredEntry[],
+    hasMore: boolean,
+    total: number,
+  ): CursorPaginatedResponse<Entry> {
     return {
-      data: hydratedEntries,
+      data: entries,
       meta: {
         hasMore,
-        oldestSequence:
-          hydratedEntries.length > 0 ? hydratedEntries[hydratedEntries.length - 1].id : null,
-        newestSequence: hydratedEntries.length > 0 ? hydratedEntries[0].id : null,
+        oldestSequence: entries.length > 0 ? entries[entries.length - 1].id : null,
+        newestSequence: entries.length > 0 ? entries[0].id : null,
         total,
       },
     };
@@ -499,17 +556,23 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       return client.zcard(this.key('entries', 'type', type));
     }
 
-    // Two counts, not a read of every request. This used to fetch the payload
-    // of every request entry ever recorded and parse each one — the reply grew
-    // with the store, and the badge is polled.
-    const [all, graphql] = await client
-      .pipeline()
-      .zcard(this.key('entries', 'type', 'request'))
-      .zcard(this.key('entries', 'graphql'))
-      .exec()
-      .then((results) => (results ?? []).map(([, value]) => Number(value ?? 0)));
+    // The index the Requests page pages against, so the badge cannot disagree
+    // with the list under it. This used to read the payload of every request
+    // entry ever recorded and parse each one — a reply that grew with the
+    // store, for a number the dashboard polls.
+    return client.zcard(this.indexFor('request'));
+  }
 
-    return Math.max(0, (all ?? 0) - (graphql ?? 0));
+  /**
+   * The sorted set a type is listed and counted from.
+   *
+   * Requests have two: the type index, which includes the GraphQL operations
+   * the request watcher also records, and the one the Requests page means.
+   */
+  private indexFor(type?: EntryType): string {
+    if (!type) return this.key('entries', 'all');
+    if (type === 'request') return this.key('entries', 'type', 'request', 'rest');
+    return this.key('entries', 'type', type);
   }
 
   /**
@@ -1072,7 +1135,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         writer.zrem(this.key('entries', 'all'), id);
         writer.zrem(this.key('entries', 'type', hash.type), id);
         writer.zrem(this.key('entries', 'createdAt'), id);
-        writer.zrem(this.key('entries', 'graphql'), id);
+        writer.zrem(this.key('entries', 'type', 'request', 'rest'), id);
 
         if (hash.requestId) {
           writer.srem(this.key('entries', 'request', hash.requestId), id);
@@ -1091,12 +1154,5 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       await writer.exec();
     }
-  }
-
-  private applyAdvancedFilters(
-    entries: StoredEntry[],
-    filters: CursorPaginationParams['filters'],
-  ): StoredEntry[] {
-    return entries.filter((entry) => matchesEntryFilters(entry, filters));
   }
 }

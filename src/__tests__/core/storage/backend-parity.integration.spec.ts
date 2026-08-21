@@ -205,6 +205,132 @@ describe('storage backends agree', () => {
 
   it('returns nothing for a tag nobody has', () => agree((s) => s.findByTags(['nobody-has-this'])));
 
+  describe('a filter that matches more than one page away', () => {
+    /**
+     * The seed above fits in a single page, so a filter applied to the page and
+     * a filter applied to the set gave the same answer — which is how Redis
+     * shipped doing the first. It read fifty ids, hydrated them, filtered
+     * those, and reported `zcard` of the whole index as the total:
+     *
+     *     205 logs, the 5 errors oldest, filter level=error, limit 50
+     *       memory  5 rows, total 5
+     *       sqlite  5 rows, total 5
+     *       redis   0 rows, total 205
+     *
+     * A dashboard on Redis therefore answered every filter whose matches were
+     * not among the newest fifty entries with an empty list under a heading
+     * that claimed hundreds.
+     */
+    const PREFIX = 'deep-filter';
+    let deep: { name: string; storage: StorageInterface }[];
+
+    beforeAll(async () => {
+      deep = [
+        { name: 'memory', storage: new MemoryStorage({ maxEntries: 100_000 }) },
+        { name: 'sqlite', storage: new SqliteStorage(join(workspace, `${PREFIX}.db`)) },
+      ];
+
+      if (redisReachable) {
+        const url = new URL(REDIS_URL as string);
+        const redis = new RedisStorage({
+          host: url.hostname,
+          port: Number(url.port || 6379),
+          db: 14,
+          keyPrefix: `nestlens-${PREFIX}-test:`,
+        });
+        await redis.initialize();
+        await redis.clear();
+        deep.push({ name: 'redis', storage: redis });
+      }
+
+      for (const { storage } of deep) {
+        if (!(storage instanceof RedisStorage)) await storage.initialize();
+
+        // The matches are the oldest entries, so nothing on the first page
+        // matches unless the filter was applied before the page was chosen.
+        for (let i = 0; i < 5; i += 1) {
+          await storage.save({
+            type: 'log',
+            payload: { level: 'error', message: `boom ${i}`, context: 'App' },
+          } as unknown as Entry);
+        }
+        for (let i = 0; i < 200; i += 1) {
+          await storage.save({
+            type: 'log',
+            payload: { level: 'info', message: `m${i}`, context: 'App' },
+          } as unknown as Entry);
+        }
+      }
+    });
+
+    afterAll(async () => {
+      for (const { storage } of deep) {
+        if (storage instanceof RedisStorage) await storage.clear();
+        await storage.close();
+      }
+    });
+
+    /** The same question of every backend in this fixture. */
+    const agreeDeep = async (ask: (storage: StorageInterface) => Promise<unknown>) => {
+      const answers: { name: string; value: string }[] = [];
+      for (const { name, storage } of deep) {
+        answers.push({ name, value: JSON.stringify(shape(await ask(storage))) });
+      }
+      const [first, ...rest] = answers;
+      for (const other of rest) {
+        expect(`${other.name}: ${other.value}`).toBe(`${other.name}: ${first.value}`);
+      }
+    };
+
+    const errorsOnly = { limit: 50, filters: { levels: ['error'] } };
+
+    it('returns the matches rather than the matches on page one', () =>
+      agreeDeep(async (s) => (await s.findWithCursor('log', errorsOnly)).data.length));
+
+    it('returns the same matches', () =>
+      agreeDeep(async (s) =>
+        (await s.findWithCursor('log', errorsOnly)).data.map(
+          (e) => (e.payload as { message: string }).message,
+        ),
+      ));
+
+    it('counts the matches, not the type', () =>
+      agreeDeep(async (s) => (await s.findWithCursor('log', errorsOnly)).meta.total));
+
+    it('says there is no more when the matches all fit', () =>
+      agreeDeep(async (s) => (await s.findWithCursor('log', errorsOnly)).meta.hasMore));
+
+    it('pages through the matches consistently', () =>
+      agreeDeep(async (s) => {
+        const first = await s.findWithCursor('log', { limit: 2, filters: { levels: ['error'] } });
+        const second = await s.findWithCursor('log', {
+          limit: 2,
+          filters: { levels: ['error'] },
+          beforeSequence: first.meta.oldestSequence ?? undefined,
+        });
+        return {
+          first: first.data.map((e) => (e.payload as { message: string }).message),
+          second: second.data.map((e) => (e.payload as { message: string }).message),
+          hasMore: [first.meta.hasMore, second.meta.hasMore],
+        };
+      }));
+
+    it('agrees on a filter that matches nothing', () =>
+      agreeDeep(async (s) => {
+        const result = await s.findWithCursor('log', {
+          limit: 50,
+          filters: { levels: ['nothing-is-this-level'] },
+        });
+        return { rows: result.data.length, total: result.meta.total, more: result.meta.hasMore };
+      }));
+
+    it('leaves an unfiltered page alone', () =>
+      agreeDeep(async (s) => {
+        const result = await s.findWithCursor('log', { limit: 50 });
+        return { rows: result.data.length, total: result.meta.total, more: result.meta.hasMore };
+      }));
+  });
+
   describe('the shape of a timestamp', () => {
     // `shape` above drops `createdAt` before comparing, on the grounds that the
     // clocks differ — which also meant nothing here ever looked at the format.
