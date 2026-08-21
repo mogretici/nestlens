@@ -41,7 +41,38 @@ import { RedisStorageConfig } from '../../nestlens.config';
  * Bumped when the meaning of an index score changes, so an existing database is
  * rewritten once rather than read with the wrong assumption.
  */
-const INDEX_SCHEMA_VERSION = '2';
+const INDEX_SCHEMA_VERSION = '3';
+
+/**
+ * How many ids one pipeline carries.
+ *
+ * A pipeline is one round trip whatever its length, but the whole reply is
+ * held in memory at both ends, so an unbounded one turns a large prune into a
+ * large allocation. Five hundred keeps the reply small while spending one
+ * round trip per five hundred entries instead of one per entry.
+ */
+const PIPELINE_CHUNK = 500;
+
+/**
+ * Whether an entry belongs to the GraphQL page rather than the Requests page.
+ *
+ * A GraphQL operation arrives over HTTP, so the request watcher records it as a
+ * request as well, flagged. Both lists exclude it here, and the badge above the
+ * Requests list has to agree with the list under it — so the flag is indexed at
+ * write time and the badge subtracts, rather than reading every request back to
+ * ask each one.
+ */
+const isGraphQLRequest = (entry: Pick<Entry, 'type' | 'payload'>): boolean =>
+  entry.type === 'request' && (entry.payload as { isGraphQL?: boolean })?.isGraphQL === true;
+
+/** Splits ids into pipeline-sized runs. */
+const inChunks = <T>(items: T[], size = PIPELINE_CHUNK): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
 
 @Injectable()
 export class RedisStorage implements StorageInterface, OnModuleDestroy {
@@ -144,19 +175,22 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     const ids = await client.zrange(this.key('entries', 'all'), 0, -1);
+    let rescored = 0;
 
-    if (ids.length > 0) {
+    // Chunked: reading every entry ever stored into one reply is an allocation
+    // that grows with the store, on the path an application takes to start.
+    for (const chunk of inChunks(ids)) {
       const reader = client.pipeline();
-      for (const id of ids) {
+      for (const id of chunk) {
         reader.hgetall(this.key('entries', id));
       }
       const hashes = (await reader.exec()) ?? [];
 
       const writer = client.pipeline();
-      let rescored = 0;
 
-      ids.forEach((id, index) => {
-        const hash = hashes[index]?.[1] as Record<string, string> | undefined;
+      chunk.forEach((id, index) => {
+        const [error, value] = hashes[index] ?? [];
+        const hash = error ? undefined : (value as Record<string, string> | undefined);
         if (!hash?.type) {
           return;
         }
@@ -170,14 +204,35 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
           Number.isNaN(createdAt) ? Number(id) : createdAt,
           id,
         );
+
+        // The flag was only ever kept inside the payload, so entries stored
+        // before this version have to be read once to build the index the
+        // request badge now counts against.
+        if (hash.type === 'request' && this.wasGraphQL(hash.payload)) {
+          writer.zadd(this.key('entries', 'graphql'), Number(id), id);
+        }
+
         rescored += 1;
       });
 
       await writer.exec();
+    }
+
+    if (rescored > 0) {
       this.logger.log(`Rescored ${rescored} entries onto the sequence index`);
     }
 
     await client.set(schemaKey, INDEX_SCHEMA_VERSION);
+  }
+
+  /** Reads the GraphQL flag out of a stored payload, which may be anything. */
+  private wasGraphQL(payload: string | undefined): boolean {
+    if (!payload) return false;
+    try {
+      return (JSON.parse(payload) as { isGraphQL?: boolean })?.isGraphQL === true;
+    } catch {
+      return false;
+    }
   }
 
   // ==================== Core CRUD Operations ====================
@@ -195,8 +250,13 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       createdAt,
     };
 
-    // Store entry as hash
-    await client.hset(
+    // One pipeline rather than five awaits. Every write below is independent of
+    // the others' replies, and `save` is what the exception filter calls
+    // directly — six sequential round trips cost 15 ms per entry against a
+    // Redis one millisecond away, where the whole set costs one.
+    const writes = client.pipeline();
+
+    writes.hset(
       this.key('entries', String(id)),
       'id',
       String(id),
@@ -219,15 +279,21 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     // millisecond clock — every page after the first came back empty — and gave
     // entries saved in the same millisecond equal scores, so an exclusive range
     // would have skipped them.
-    await client.zadd(this.key('entries', 'all'), id, String(id));
-    await client.zadd(this.key('entries', 'type', entry.type), id, String(id));
+    writes.zadd(this.key('entries', 'all'), id, String(id));
+    writes.zadd(this.key('entries', 'type', entry.type), id, String(id));
     // Pruning is the one thing that genuinely asks a time question.
-    await client.zadd(this.key('entries', 'createdAt'), timestamp, String(id));
+    writes.zadd(this.key('entries', 'createdAt'), timestamp, String(id));
 
     // Add to request index if applicable
     if (entry.requestId) {
-      await client.sadd(this.key('entries', 'request', entry.requestId), String(id));
+      writes.sadd(this.key('entries', 'request', entry.requestId), String(id));
     }
+
+    if (isGraphQLRequest(entry)) {
+      writes.zadd(this.key('entries', 'graphql'), id, String(id));
+    }
+
+    await writes.exec();
 
     return savedEntry;
   }
@@ -275,6 +341,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       if (entry.requestId) {
         pipeline.sadd(this.key('entries', 'request', entry.requestId), String(id));
+      }
+
+      if (isGraphQLRequest(entry)) {
+        pipeline.zadd(this.key('entries', 'graphql'), id, String(id));
       }
     }
 
@@ -429,38 +499,50 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       return client.zcard(this.key('entries', 'type', type));
     }
 
-    const ids = await client.zrange(this.key('entries', 'type', 'request'), 0, -1);
-    if (ids.length === 0) {
-      return 0;
-    }
+    // Two counts, not a read of every request. This used to fetch the payload
+    // of every request entry ever recorded and parse each one — the reply grew
+    // with the store, and the badge is polled.
+    const [all, graphql] = await client
+      .pipeline()
+      .zcard(this.key('entries', 'type', 'request'))
+      .zcard(this.key('entries', 'graphql'))
+      .exec()
+      .then((results) => (results ?? []).map(([, value]) => Number(value ?? 0)));
 
-    const pipeline = client.pipeline();
-    for (const id of ids) {
-      pipeline.hget(this.key('entries', id), 'payload');
-    }
-
-    const results = (await pipeline.exec()) ?? [];
-
-    return results.reduce((total: number, [error, payload]) => {
-      if (error || typeof payload !== 'string') {
-        return total + 1;
-      }
-
-      try {
-        return (JSON.parse(payload) as { isGraphQL?: boolean }).isGraphQL ? total : total + 1;
-      } catch {
-        return total + 1;
-      }
-    }, 0);
+    return Math.max(0, (all ?? 0) - (graphql ?? 0));
   }
 
+  /**
+   * Removes everything NestLens has stored.
+   *
+   * Scanned rather than listed. `KEYS` walks the entire keyspace in one
+   * uninterruptible step, so on a Redis shared with the application — the
+   * ordinary arrangement — a reader pressing Clear stalled every other client
+   * for as long as the walk took. This is reachable from the dashboard, so it
+   * must not be able to do that. `SCAN` gives the server its loop back between
+   * batches, and the deletes go out in pipelines rather than as one `DEL` with
+   * a million arguments.
+   */
   async clear(): Promise<void> {
     const client = this.getClient();
-    const keys = await client.keys(this.keyPrefix + '*');
-    if (keys.length > 0) {
-      await client.del(...keys);
-    }
-    this.logger.log('Storage cleared');
+    let cursor = '0';
+    let removed = 0;
+
+    do {
+      const [next, keys] = await client.scan(cursor, 'MATCH', `${this.keyPrefix}*`, 'COUNT', 500);
+      cursor = next;
+
+      if (keys.length > 0) {
+        const deletes = client.pipeline();
+        for (const key of keys) {
+          deletes.del(key);
+        }
+        await deletes.exec();
+        removed += keys.length;
+      }
+    } while (cursor !== '0');
+
+    this.logger.log(`Storage cleared (${removed} keys)`);
   }
 
   async close(): Promise<void> {
@@ -472,6 +554,37 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   // ==================== Statistics ====================
+
+  /**
+   * How many entries each type holds, in one round trip.
+   *
+   * Eighteen sequential `zcard` calls were 50 ms of a dashboard refresh against
+   * a Redis one millisecond away, for eighteen numbers that do not depend on
+   * each other.
+   */
+  private async countByType(
+    types: EntryType[],
+  ): Promise<{ byType: Record<EntryType, number>; total: number }> {
+    const reader = this.getClient().pipeline();
+    for (const type of types) {
+      reader.zcard(this.key('entries', 'type', type));
+    }
+
+    const results = (await reader.exec()) ?? [];
+    const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
+    let total = 0;
+
+    types.forEach((type, index) => {
+      const [error, value] = results[index] ?? [];
+      const count = error ? 0 : Number(value ?? 0);
+      if (count > 0) {
+        byType[type] = count;
+        total += count;
+      }
+    });
+
+    return { byType, total };
+  }
 
   async getLatestSequence(type?: EntryType): Promise<number | null> {
     const client = this.getClient();
@@ -488,8 +601,6 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   async getStats(): Promise<EntryStats> {
-    const client = this.getClient();
-
     // Get counts by type
     const types: EntryType[] = [
       'request',
@@ -512,16 +623,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       'dump',
     ];
 
-    const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
-    let total = 0;
-
-    for (const type of types) {
-      const count = await client.zcard(this.key('entries', 'type', type));
-      if (count > 0) {
-        byType[type] = count;
-        total += count;
-      }
-    }
+    const { byType, total } = await this.countByType(types);
 
     // For avgResponseTime and slowQueries, we'd need to iterate over entries
     // which is expensive in Redis. Return undefined for now.
@@ -560,32 +662,23 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       'dump',
     ];
 
-    const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
-    let total = 0;
+    const { byType, total } = await this.countByType(types);
 
-    for (const type of types) {
-      const count = await client.zcard(this.key('entries', 'type', type));
-      if (count > 0) {
-        byType[type] = count;
-        total += count;
-      }
-    }
+    const [oldest, newest] = await client
+      .pipeline()
+      .zrange(this.key('entries', 'all'), 0, 0)
+      .zrevrange(this.key('entries', 'all'), 0, 0)
+      .exec()
+      .then((results) => (results ?? []).map(([, value]) => (value as string[]) ?? []));
 
-    // Get oldest and newest entries
-    const oldest = await client.zrange(this.key('entries', 'all'), 0, 0);
-    const newest = await client.zrevrange(this.key('entries', 'all'), 0, 0);
+    const ends = client.pipeline();
+    if (oldest.length > 0) ends.hget(this.key('entries', oldest[0]), 'createdAt');
+    if (newest.length > 0) ends.hget(this.key('entries', newest[0]), 'createdAt');
+    const stamps = (await ends.exec()) ?? [];
 
-    let oldestEntry: string | null = null;
-    let newestEntry: string | null = null;
-
-    if (oldest.length > 0) {
-      const hash = await client.hget(this.key('entries', oldest[0]), 'createdAt');
-      oldestEntry = hash ?? null;
-    }
-    if (newest.length > 0) {
-      const hash = await client.hget(this.key('entries', newest[0]), 'createdAt');
-      newestEntry = hash ?? null;
-    }
+    const oldestEntry = oldest.length > 0 ? ((stamps[0]?.[1] as string) ?? null) : null;
+    const newestEntry =
+      newest.length > 0 ? ((stamps[oldest.length > 0 ? 1 : 0]?.[1] as string) ?? null) : null;
 
     return {
       total,
@@ -605,9 +698,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const ids = await client.zrangebyscore(this.key('entries', 'createdAt'), '-inf', maxScore);
     if (ids.length === 0) return 0;
 
-    for (const id of ids) {
-      await this.deleteEntry(parseInt(id, 10));
-    }
+    await this.deleteEntries(ids);
 
     this.logger.log(`Pruned ${ids.length} entries older than ${before.toISOString()}`);
     return ids.length;
@@ -626,14 +717,23 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     // The type index is scored by id now, so it can no longer answer a time
     // question on its own; membership is what it is asked for instead.
     const typeKey = this.key('entries', 'type', type);
-    const membership = await Promise.all(olderThanCutoff.map((id) => client.zscore(typeKey, id)));
+    const membership: (string | null)[] = [];
+
+    for (const chunk of inChunks(olderThanCutoff)) {
+      const reader = client.pipeline();
+      for (const id of chunk) {
+        reader.zscore(typeKey, id);
+      }
+      for (const [error, score] of (await reader.exec()) ?? []) {
+        membership.push(error ? null : ((score as string | null) ?? null));
+      }
+    }
+
     const ids = olderThanCutoff.filter((_, index) => membership[index] !== null);
 
     if (ids.length === 0) return 0;
 
-    for (const id of ids) {
-      await this.deleteEntry(parseInt(id, 10));
-    }
+    await this.deleteEntries(ids);
 
     return ids.length;
   }
@@ -667,14 +767,18 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   async removeTags(entryId: number, tags: string[]): Promise<void> {
-    const client = this.getClient();
+    if (tags.length === 0) return;
+
+    const pipeline = this.getClient().pipeline();
 
     for (const rawTag of tags) {
       // Normalize to uppercase for consistent lookup
       const tag = rawTag.toUpperCase();
-      await client.srem(this.key('tags', String(entryId)), tag);
-      await client.srem(this.key('tags', 'index', tag), String(entryId));
+      pipeline.srem(this.key('tags', String(entryId)), tag);
+      pipeline.srem(this.key('tags', 'index', tag), String(entryId));
     }
+
+    await pipeline.exec();
   }
 
   async getEntryTags(entryId: number): Promise<string[]> {
@@ -903,45 +1007,90 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
   }
 
+  /**
+   * Attaches each entry's tags.
+   *
+   * One round trip for the page. It used to be one per row, which a list of
+   * fifty paid fifty times over on every poll — 146 ms of a 257 ms dashboard
+   * refresh against a Redis one millisecond away, nearly all of it waiting.
+   */
   private async hydrateEntriesWithTags(entries: StoredEntry[]): Promise<StoredEntry[]> {
+    if (entries.length === 0) return [];
+
     const client = this.getClient();
-    const result: StoredEntry[] = [];
+    const reader = client.pipeline();
 
     for (const entry of entries) {
-      const tags = await client.smembers(this.key('tags', String(entry.id)));
-      result.push({ ...entry, tags: tags.sort() });
+      reader.smembers(this.key('tags', String(entry.id)));
     }
 
-    return result;
+    const results = (await reader.exec()) ?? [];
+
+    return entries.map((entry, index) => {
+      const [error, tags] = results[index] ?? [];
+      return {
+        ...entry,
+        tags: error || !Array.isArray(tags) ? [] : (tags as string[]).slice().sort(),
+      };
+    });
   }
 
-  private async deleteEntry(id: number): Promise<void> {
+  /**
+   * Removes entries and every index that mentions them.
+   *
+   * In pipelines, because this is what pruning does and pruning is the only
+   * thing keeping the store bounded. One entry at a time cost eight sequential
+   * round trips — 22 ms an entry against a Redis one millisecond away, so an
+   * hourly prune of ten thousand entries took nearly four minutes of solid
+   * traffic. Past a few hundred entries an hour it could not keep up at all,
+   * and a store nothing removes from grows until Redis runs out of memory.
+   */
+  private async deleteEntries(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
     const client = this.getClient();
 
-    // Get entry to find its type
-    const hash = await client.hgetall(this.key('entries', String(id)));
-    if (!hash?.type) return;
+    for (const chunk of inChunks(ids)) {
+      // What each entry belongs to has to be read before it can be unlinked.
+      const reader = client.pipeline();
+      for (const id of chunk) {
+        reader.hgetall(this.key('entries', id));
+        reader.smembers(this.key('tags', id));
+      }
+      const read = (await reader.exec()) ?? [];
 
-    // Remove from indexes
-    await client.del(this.key('entries', String(id)));
-    await client.zrem(this.key('entries', 'all'), String(id));
-    await client.zrem(this.key('entries', 'type', hash.type), String(id));
-    await client.zrem(this.key('entries', 'createdAt'), String(id));
+      const writer = client.pipeline();
 
-    if (hash.requestId) {
-      await client.srem(this.key('entries', 'request', hash.requestId), String(id));
+      chunk.forEach((id, index) => {
+        const [hashError, hashValue] = read[index * 2] ?? [];
+        const [tagError, tagValue] = read[index * 2 + 1] ?? [];
+
+        const hash = hashError ? undefined : (hashValue as Record<string, string> | undefined);
+        if (!hash?.type) return;
+
+        writer.del(this.key('entries', id));
+        writer.zrem(this.key('entries', 'all'), id);
+        writer.zrem(this.key('entries', 'type', hash.type), id);
+        writer.zrem(this.key('entries', 'createdAt'), id);
+        writer.zrem(this.key('entries', 'graphql'), id);
+
+        if (hash.requestId) {
+          writer.srem(this.key('entries', 'request', hash.requestId), id);
+        }
+
+        if (hash.familyHash) {
+          writer.srem(this.key('family', hash.familyHash), id);
+        }
+
+        const tags = tagError ? [] : ((tagValue as string[]) ?? []);
+        for (const tag of tags) {
+          writer.srem(this.key('tags', 'index', tag), id);
+        }
+        writer.del(this.key('tags', id));
+      });
+
+      await writer.exec();
     }
-
-    if (hash.familyHash) {
-      await client.srem(this.key('family', hash.familyHash), String(id));
-    }
-
-    // Remove tags
-    const tags = await client.smembers(this.key('tags', String(id)));
-    for (const tag of tags) {
-      await client.srem(this.key('tags', 'index', tag), String(id));
-    }
-    await client.del(this.key('tags', String(id)));
   }
 
   private applyAdvancedFilters(
