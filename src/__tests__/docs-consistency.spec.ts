@@ -191,6 +191,12 @@ describe('Documentation consistency with code', () => {
       }
     });
 
+    it('says webhooks are sent the masked entry', () => {
+      // Alerting sends data out of the process; a reader has to know whether
+      // what leaves is redacted.
+      expect(masking()).toMatch(/webhooks[\s\S]{0,120}after.{0,20}masking/i);
+    });
+
     it('says that URLs and connection strings are masked', () => {
       const text = masking();
 

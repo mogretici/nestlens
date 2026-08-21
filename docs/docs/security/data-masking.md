@@ -177,6 +177,7 @@ nothing here can decide about it, and these watchers record what they are shown:
 | Redis | command arguments | `SET session:1 <value>` is positional in the same way. |
 | Cache | `value` | Seeing what was cached is the reason the watcher exists. |
 | Mail | `text`, `html` | Free text. A token pasted into an email body reads like any other sentence. |
+| Exception | `message` | Free text as well: an application that interpolates a token into an error message puts the value inside a sentence. Stack traces are handled separately by `stackTraceSanitization`. |
 
 Two things do get masked wherever they appear, because their shape is
 unambiguous:
@@ -190,6 +191,10 @@ unambiguous:
 Where a watcher in the table above would record something you cannot store,
 turn it off, narrow it with `filter`, or add the field name to
 `sensitiveParams` if it has one.
+
+The same applies to [alerting webhooks](../configuration/alerting): they are
+sent the entry **after** masking, so a redacted field is redacted there too —
+but an unmaskable value stays unmaskable on its way out.
 
 ## Global Security Configuration
 
