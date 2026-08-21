@@ -10,6 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * The mailer surface this watcher touches.
@@ -48,7 +49,9 @@ export const NESTLENS_MAILER_SERVICE = Symbol('NESTLENS_MAILER_SERVICE');
 export class MailWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MailWatcher.name);
   private readonly config: MailWatcherConfig;
-  private originalSendMail?: SendMail;
+  private wrapped?: WrappedMethods;
+  /** Mailers handed to `setupMailer`, which also have to be given back. */
+  private readonly manuallyWrapped: WrappedMethods[] = [];
 
   constructor(
     private readonly collector: CollectorService,
@@ -89,52 +92,26 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
-    const mailer = this.mailerService;
-    if (mailer && isMailer(mailer) && this.originalSendMail) {
-      mailer.sendMail = this.originalSendMail;
-      this.originalSendMail = undefined;
+    this.wrapped?.restore();
+    this.wrapped = undefined;
+
+    for (const wrapped of this.manuallyWrapped) {
+      wrapped.restore();
     }
+    this.manuallyWrapped.length = 0;
   }
 
   private setupInterceptors(): void {
     const mailer = this.mailerService;
     if (!mailer) return;
 
-    // Try to wrap sendMail method (common for both @nestjs-modules/mailer and nodemailer)
-    if (isMailer(mailer)) {
-      this.originalSendMail = mailer.sendMail.bind(mailer);
-      const originalSendMail = this.originalSendMail;
-
-      mailer.sendMail = async (mailOptions: MailOptionsLike): Promise<unknown> => {
-        const startTime = Date.now();
-
-        try {
-          const result = await originalSendMail(mailOptions);
-          const duration = Date.now() - startTime;
-
-          // Track successful send
-          this.collectEntry(mailOptions, 'sent', duration);
-
-          return result;
-        } catch (error) {
-          const duration = Date.now() - startTime;
-
-          // Track failed send
-          this.collectEntry(
-            mailOptions,
-            'failed',
-            duration,
-            error instanceof Error ? error.message : String(error),
-          );
-
-          throw error; // Re-throw to maintain original behavior
-        }
-      };
-
-      this.logger.log('Mail interceptors installed');
-    } else {
+    if (!isMailer(mailer)) {
       this.logger.warn('Mailer service does not have a sendMail method');
+      return;
     }
+
+    this.wrapped = this.trackSendMail(mailer);
+    this.logger.log('Mail interceptors installed');
   }
 
   /**
@@ -147,35 +124,67 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const originalSendMail = mailerService.sendMail.bind(mailerService);
-
-    mailerService.sendMail = async (mailOptions: MailOptionsLike): Promise<unknown> => {
-      const startTime = Date.now();
-
-      try {
-        const result = await originalSendMail(mailOptions);
-        const duration = Date.now() - startTime;
-
-        // Track successful send
-        this.collectEntry(mailOptions, 'sent', duration);
-
-        return result;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-
-        // Track failed send
-        this.collectEntry(
-          mailOptions,
-          'failed',
-          duration,
-          error instanceof Error ? error.message : String(error),
-        );
-
-        throw error;
-      }
-    };
-
+    this.manuallyWrapped.push(this.trackSendMail(mailerService));
     this.logger.log('Mail interceptors installed on custom mailer');
+  }
+
+  /**
+   * Replaces `sendMail`, in both of the shapes it is called in.
+   *
+   * Nodemailer documents two: `sendMail(options)` returns a promise, and
+   * `sendMail(options, callback)` returns nothing and answers through the
+   * callback. The wrapper used to be written `(mailOptions) => ...`, which
+   * accepts only the first — so a caller passing a callback lost it, and its
+   * continuation never ran. Measured against a transport supporting both:
+   *
+   *     before   callback fired
+   *     after    callback NEVER fired
+   *
+   * Every argument is forwarded now, and where the outcome arrives through a
+   * callback the entry is recorded when the callback fires rather than when
+   * the call returns — which for that form is before anything has been sent.
+   */
+  private trackSendMail(mailer: { sendMail: SendMail }): WrappedMethods {
+    const wrapped = new WrappedMethods(mailer as unknown as Record<string, unknown>);
+    const recordSend = this.recordSend.bind(this);
+
+    wrapped.replace('sendMail', (original) => {
+      const throughPromise = wrapMethodPreservingShape(original, ({ args, error, durationMs }) => {
+        this.recordSend(args[0] as MailOptionsLike, error, durationMs);
+      });
+
+      return function sendMail(this: unknown, ...args: unknown[]): unknown {
+        const callback = args[args.length - 1];
+        if (typeof callback !== 'function') {
+          return throughPromise.apply(this, args);
+        }
+
+        const started = Date.now();
+        const forwarded = [...args];
+        forwarded[forwarded.length - 1] = (error: unknown, info: unknown): unknown => {
+          recordSend(args[0] as MailOptionsLike, error, Date.now() - started);
+          return (callback as (error: unknown, info: unknown) => unknown)(error, info);
+        };
+
+        return original.apply(this, forwarded);
+      };
+    });
+
+    return wrapped;
+  }
+
+  private recordSend(options: MailOptionsLike, error: unknown, duration: number): void {
+    if (error) {
+      this.collectEntry(
+        options,
+        'failed',
+        duration,
+        error instanceof Error ? error.message : String(error),
+      );
+      return;
+    }
+
+    this.collectEntry(options, 'sent', duration);
   }
 
   private collectEntry(
