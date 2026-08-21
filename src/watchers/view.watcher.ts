@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/comm
 import { CollectorService } from '../core/collector.service';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The view engine surface this watcher touches — a single `render` method.
@@ -38,8 +39,7 @@ export class ViewWatcher implements OnModuleInit {
     private readonly viewEngine?: ViewEngineLike,
   ) {
     const watcherConfig = nestlensConfig.watchers?.view;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

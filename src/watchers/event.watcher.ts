@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/comm
 import { CollectorService } from '../core/collector.service';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The EventEmitter2 surface this watcher touches.
@@ -40,8 +41,7 @@ export class EventWatcher implements OnModuleInit {
     private readonly eventEmitter?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.event;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

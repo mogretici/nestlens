@@ -9,6 +9,7 @@ import {
 import { CollectorService } from '../core/collector.service';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /** The @nestjs/cqrs CommandBus surface this watcher touches. */
 interface CommandBusLike {
@@ -49,8 +50,7 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly commandBus?: CommandBusLike,
   ) {
     const watcherConfig = nestlensConfig.watchers?.command;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

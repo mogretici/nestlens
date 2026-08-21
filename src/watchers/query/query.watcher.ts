@@ -14,6 +14,7 @@ import {
 } from './types';
 import { NestLensQuerySubscriber } from './typeorm-subscriber';
 import { NestLensTypeOrmLogger } from './typeorm-logger';
+import { resolveWatcherConfig } from '../watcher-config';
 
 export interface QueryData {
   query: string;
@@ -40,10 +41,7 @@ export class QueryWatcher implements OnApplicationBootstrap {
     private readonly nestlensConfig: NestLensConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.query;
-    this.config =
-      typeof watcherConfig === 'object'
-        ? watcherConfig
-        : { enabled: watcherConfig !== false, slowThreshold: 100 };
+    this.config = resolveWatcherConfig(watcherConfig, { slowThreshold: 100 });
   }
 
   onApplicationBootstrap(): void {

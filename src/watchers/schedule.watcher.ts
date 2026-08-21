@@ -3,6 +3,7 @@ import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ScheduleEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The part of a `cron` job this watcher touches.
@@ -66,8 +67,7 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     private readonly nestlensConfig: NestLensConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.schedule;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onApplicationBootstrap(): void {

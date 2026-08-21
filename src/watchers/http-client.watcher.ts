@@ -2,6 +2,7 @@ import { Inject, Injectable, OnModuleInit, Optional, Logger } from '@nestjs/comm
 import { CollectorService } from '../core/collector.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The axios surface this watcher touches.
@@ -74,8 +75,7 @@ export class HttpClientWatcher implements OnModuleInit {
     private readonly axiosInstance?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.httpClient;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
     this.maxBodySize = this.config.maxBodySize ?? 64 * 1024; // 64KB default; 0 captures nothing
   }
 

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/comm
 import { CollectorService } from '../core/collector.service';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The TypeORM subscriber surface this watcher touches.
@@ -92,8 +93,7 @@ export class ModelWatcher implements OnModuleInit {
     private readonly entitySubscriber?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

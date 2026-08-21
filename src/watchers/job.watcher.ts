@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { JobWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { JobEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 /**
  * The Bull / BullMQ surface this watcher touches.
@@ -71,8 +72,7 @@ export class JobWatcher implements OnModuleInit {
     private readonly nestlensConfig: NestLensConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.job;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {

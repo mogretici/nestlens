@@ -9,6 +9,7 @@ import { CollectorService } from '../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
 import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -24,8 +25,7 @@ export class RequestWatcher implements NestInterceptor {
     private readonly applicationConfig: ApplicationConfig,
   ) {
     const watcherConfig = nestlensConfig.watchers?.request;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   private getRequestPath(request: NestLensRequest): string {

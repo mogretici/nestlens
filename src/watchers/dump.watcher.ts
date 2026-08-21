@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/comm
 import { CollectorService } from '../core/collector.service';
 import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
+import { resolveWatcherConfig } from './watcher-config';
 
 type DumpMethod = (options?: unknown) => Promise<unknown>;
 
@@ -30,8 +31,7 @@ export class DumpWatcher implements OnModuleInit {
     private readonly dumpService?: unknown,
   ) {
     const watcherConfig = nestlensConfig.watchers?.dump;
-    this.config =
-      typeof watcherConfig === 'object' ? watcherConfig : { enabled: watcherConfig !== false };
+    this.config = resolveWatcherConfig(watcherConfig);
   }
 
   onModuleInit() {
@@ -69,8 +69,7 @@ export class DumpWatcher implements OnModuleInit {
     // The service is user-supplied and its methods are looked up by name, so
     // the shape is checked at runtime rather than declared.
     const service: Record<string, unknown> | undefined = this.dumpService as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     if (!service) return;
 
     const existing = service[methodName];
