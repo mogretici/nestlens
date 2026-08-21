@@ -7,12 +7,14 @@
  * proof that `@Sse()` works on Fastify, not only Express.
  */
 import {
+  Body,
   Controller,
   Get,
   HttpException,
   HttpStatus,
   INestApplication,
   Module,
+  Post,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -27,6 +29,12 @@ class DemoController {
   @Get('boom')
   boom(): never {
     throw new HttpException('kaboom', HttpStatus.BAD_REQUEST);
+  }
+
+  @Post('login')
+  login(@Body() body: unknown): { ok: boolean } {
+    void body;
+    return { ok: true };
   }
 }
 
@@ -125,6 +133,38 @@ describe.each<AdapterName>(['Express', 'Fastify'])('SSE live-tail on %s adapter'
       expect(entryEvent).toBeDefined();
       const payload = JSON.parse(entryEvent.data);
       expect(payload.type).toBe('exception');
+    } finally {
+      sse.close();
+    }
+  });
+
+  /**
+   * The stream is a second way out of the process for entry data, beside the
+   * REST API, and nothing here looked at what it carries. Masking runs before
+   * the entry is saved and the stream emits what was saved, so the two exits
+   * cannot disagree — but "cannot" is a claim about code that changes, and a
+   * credential reaching a live-tail is the same disclosure as one reaching
+   * storage.
+   */
+  it('carries what was masked, not what arrived', async () => {
+    const sse = openSse(`${baseUrl}${toBaseHref(DEFAULT_CONFIG.path)}/__nestlens__/stream`);
+    try {
+      await sleep(150);
+
+      await fetch(`${baseUrl}/demo/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', authorization: 'Bearer sk-live-9f3a' },
+        body: JSON.stringify({ username: 'ada', password: 'hunter2', apiKey: 'sk-live-9f3a' }),
+      }).catch(() => undefined);
+
+      const entryEvent = await waitFor(() =>
+        sse.events.find((e) => e.type === 'entry' && e.data.includes('/demo/login')),
+      );
+
+      expect(entryEvent.data).not.toContain('hunter2');
+      expect(entryEvent.data).not.toContain('sk-live-9f3a');
+      // And it is the entry, not an empty husk.
+      expect(entryEvent.data).toContain('ada');
     } finally {
       sse.close();
     }
