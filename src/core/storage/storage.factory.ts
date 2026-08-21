@@ -89,7 +89,26 @@ async function createSqliteStorage(config: StorageConfig): Promise<StorageInterf
       );
     }
 
-    throw error;
+    // Anything else is the file itself: a directory that cannot be written, a
+    // path that is not a database, a disk with nothing left on it.
+    //
+    // Not fatal. A debugging tool must not be the reason a deployment fails to
+    // start, and the application has nothing to do with why the file would not
+    // open — a read-only container filesystem is the common case, and the
+    // default path (`.cache/nestlens.db`) sits inside the project directory.
+    // Redis already behaves this way: an unreachable server does not stop the
+    // application, so SQLite doing the opposite was the odd one out.
+    //
+    // Loud, though. Falling back silently would leave a reader wondering why
+    // nothing survives a restart.
+    logger.error(
+      `Could not open the SQLite database at ${config.sqlite?.filename ?? '.cache/nestlens.db'}: ` +
+        `${err.message}. Falling back to in-memory storage — entries will be kept for this ` +
+        'process only and lost on restart. Point `storage.sqlite.filename` somewhere writable, ' +
+        "or set `storage.driver: 'memory'` to make that the intent.",
+    );
+
+    return createMemoryStorage(config);
   }
 }
 

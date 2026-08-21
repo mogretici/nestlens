@@ -56,21 +56,15 @@ interface TypeCountRow {
  *
  *   1  the original table: id, type, request_id, payload, created_at
  *   2  adds family_hash and resolved_at
+ *   3  adds UNIQUE (entry_id, tag) — see `migrateTagUniqueness`
  *
  * Bump it whenever the schema changes, alongside the migration that performs
  * the change. Files written before versioning read as 0 and are migrated the
  * same way — the column probing below has always been idempotent.
- */
-/**
- * The schema this version of NestLens reads and writes.
  *
  * Exported so the tests read it from here rather than keeping their own copy:
  * a hand-maintained second copy is a test that fails on every bump for the one
  * reason that is never interesting.
- *
- *  1. original
- *  2. `family_hash` and `resolved_at` on entries
- *  3. `UNIQUE (entry_id, tag)` — see `migrateTagUniqueness`
  */
 export const SCHEMA_VERSION = 3;
 
