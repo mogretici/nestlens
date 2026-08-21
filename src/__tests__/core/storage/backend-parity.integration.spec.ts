@@ -205,6 +205,32 @@ describe('storage backends agree', () => {
 
   it('returns nothing for a tag nobody has', () => agree((s) => s.findByTags(['nobody-has-this'])));
 
+  describe('searching for text that looks like a pattern', () => {
+    // SQLite compares with LIKE, where `%` and `_` are wildcards; the others
+    // compare with `includes`, where they are ordinary characters. Unescaped,
+    // a search for `%` returned every entry on SQLite and one on the others.
+    it.each(['%', '_', '50%', 'a_b', '100%_off', '\\'])('agrees on a search for %p', (term) =>
+      agree(
+        async (s) =>
+          (await s.findWithCursor(undefined, { limit: 50, filters: { search: term } })).data.length,
+      ),
+    );
+
+    it('agrees on a path filter containing a percent sign', () =>
+      agree(
+        async (s) =>
+          (await s.findWithCursor(undefined, { limit: 50, filters: { paths: ['%'] } })).data.length,
+      ));
+
+    it('still treats * in a path filter as a wildcard', () =>
+      // The documented way to ask for one, and escaping must not take it away.
+      agree(
+        async (s) =>
+          (await s.findWithCursor(undefined, { limit: 50, filters: { paths: ['/item*'] } })).data
+            .length,
+      ));
+  });
+
   it('returns nothing for a family hash nobody has', () =>
     agree(async (s) => (await s.findByFamilyHash('no-such-family')).length));
 

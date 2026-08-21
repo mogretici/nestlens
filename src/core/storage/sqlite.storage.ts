@@ -68,6 +68,21 @@ interface TypeCountRow {
  */
 export const SCHEMA_VERSION = 3;
 
+/**
+ * Escapes the characters `LIKE` treats as wildcards.
+ *
+ * A reader searching for `50%` means the three characters, not "anything
+ * starting with 50" — and a search for `%` alone matched every row rather than
+ * the rows containing a percent sign. The other two backends compare with
+ * `includes`, where these are ordinary characters, so SQLite was reading the
+ * same query differently: `%` returned 4 of 4 entries against their 1.
+ *
+ * Paired with `ESCAPE '\\'` on every `LIKE` below. The backslash has to go
+ * first, or it would escape the escapes.
+ */
+const escapeLike = (value: string): string =>
+  value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+
 @Injectable()
 export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SqliteStorage.name);
@@ -539,10 +554,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Queries: queryTypes filter (SELECT, INSERT, UPDATE, DELETE)
     if (filters.queryTypes && filters.queryTypes.length > 0) {
       const queryConditions = filters.queryTypes
-        .map(() => `json_extract(e.payload, '$.query') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.query') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${queryConditions})`);
-      params.push(...filters.queryTypes.map((qt) => `${qt}%`));
+      params.push(...filters.queryTypes.map((qt) => `${escapeLike(qt)}%`));
     }
 
     // Queries: sources filter (typeorm, prisma, etc)
@@ -561,10 +576,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Exceptions: names filter
     if (filters.names && filters.names.length > 0) {
       const nameConditions = filters.names
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.names.map((n) => `%${n}%`));
+      params.push(...filters.names.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Requests & Exceptions: methods filter
@@ -579,14 +594,17 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Requests & Exceptions: paths filter (supports LIKE)
     if (filters.paths && filters.paths.length > 0) {
       const requestConditions = filters.paths
-        .map(() => `json_extract(e.payload, '$.path') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.path') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       const exceptionConditions = filters.paths
-        .map(() => `json_extract(e.payload, '$.request.url') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.request.url') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`((${requestConditions}) OR (${exceptionConditions}))`);
+      // `*` stays a wildcard — it is the documented way to ask for one — but
+      // everything around it is escaped, so a path containing `%` or `_`
+      // matches itself.
       const pathParams = filters.paths.map((p) =>
-        p.includes('*') ? p.replace(/\*/g, '%') : `%${p}%`,
+        p.includes('*') ? escapeLike(p).replace(/\*/g, '%') : `%${escapeLike(p)}%`,
       );
       params.push(...pathParams, ...pathParams);
     }
@@ -625,12 +643,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       const hostnameConditions = filters.hostnames
         .map(
           () =>
-            `(json_extract(e.payload, '$.headers.host') LIKE ? OR json_extract(e.payload, '$.headers.Host') LIKE ? OR json_extract(e.payload, '$.hostname') LIKE ?)`,
+            `(json_extract(e.payload, '$.headers.host') LIKE ? ESCAPE '\\' OR json_extract(e.payload, '$.headers.Host') LIKE ? ESCAPE '\\' OR json_extract(e.payload, '$.hostname') LIKE ? ESCAPE '\\')`,
         )
         .join(' OR ');
       conditions.push(`(${hostnameConditions})`);
       filters.hostnames.forEach((h) => {
-        params.push(`%${h}%`, `%${h}%`, `%${h}%`);
+        const pattern = `%${escapeLike(h)}%`;
+        params.push(pattern, pattern, pattern);
       });
     }
 
@@ -651,10 +670,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Events: eventNames filter
     if (filters.eventNames && filters.eventNames.length > 0) {
       const nameConditions = filters.eventNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.eventNames.map((n) => `%${n}%`));
+      params.push(...filters.eventNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Schedule: scheduleStatuses filter (started, completed, failed)
@@ -667,10 +686,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Schedule: scheduleNames filter
     if (filters.scheduleNames && filters.scheduleNames.length > 0) {
       const nameConditions = filters.scheduleNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.scheduleNames.map((n) => `%${n}%`));
+      params.push(...filters.scheduleNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Jobs: jobStatuses filter (waiting, active, completed, failed, delayed)
@@ -683,10 +702,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Jobs: jobNames filter
     if (filters.jobNames && filters.jobNames.length > 0) {
       const nameConditions = filters.jobNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.jobNames.map((n) => `%${n}%`));
+      params.push(...filters.jobNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Jobs: queues filter
@@ -783,19 +802,19 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Command: commandNames filter
     if (filters.commandNames && filters.commandNames.length > 0) {
       const nameConditions = filters.commandNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.commandNames.map((n) => `%${n}%`));
+      params.push(...filters.commandNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Gate: gateNames filter
     if (filters.gateNames && filters.gateNames.length > 0) {
       const nameConditions = filters.gateNames
-        .map(() => `json_extract(e.payload, '$.gate') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.gate') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.gateNames.map((n) => `%${n}%`));
+      params.push(...filters.gateNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Gate: gateResults filter (allowed, denied mapped from boolean)
@@ -857,10 +876,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // GraphQL: operationNames filter
     if (filters.operationNames && filters.operationNames.length > 0) {
       const nameConditions = filters.operationNames
-        .map(() => `json_extract(e.payload, '$.operationName') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.operationName') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.operationNames.map((n) => `%${n}%`));
+      params.push(...filters.operationNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // GraphQL: hasErrors filter
@@ -892,9 +911,9 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Search filter (searches in payload and entry tags)
     if (filters.search) {
       conditions.push(
-        `(e.payload LIKE ? OR EXISTS (SELECT 1 FROM nestlens_tags st WHERE st.entry_id = e.id AND st.tag LIKE ?))`,
+        `(e.payload LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM nestlens_tags st WHERE st.entry_id = e.id AND st.tag LIKE ? ESCAPE '\\'))`,
       );
-      params.push(`%${filters.search}%`, `%${filters.search}%`);
+      params.push(`%${escapeLike(filters.search)}%`, `%${escapeLike(filters.search)}%`);
     }
 
     return { conditions, params };
