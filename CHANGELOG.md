@@ -1,3 +1,27 @@
+# [0.10.0](https://github.com/mogretici/nestlens/compare/v0.9.7...v0.10.0) (2026-08-21)
+
+
+### Bug Fixes
+
+* **dashboard:** hide the memory row when nothing measured it ([720c784](https://github.com/mogretici/nestlens/commit/720c7844367cdb285ffbcf3a9fce9aa3a5aafed2))
+* **graphql:** mask the fields a term names, not every field containing it ([ba4457b](https://github.com/mogretici/nestlens/commit/ba4457b04026f94d015c8ae9a4c040939f844170))
+* **graphql:** mask what the collector would, in payloads it no longer walks ([11beb52](https://github.com/mogretici/nestlens/commit/11beb527663f33138ebd12bc8434759963c07d21))
+* **module:** keep the application starting with the log watcher off ([dd71eb0](https://github.com/mogretici/nestlens/commit/dd71eb04c09ffc2e26338e133915a899934a3d8d))
+* **watchers:** stop a configured watcher switching itself off ([6d6783c](https://github.com/mogretici/nestlens/commit/6d6783cc401d2a798fba014bc24901569b898de2))
+
+
+### Features
+
+* **dashboard:** serve the dashboard on a listener of its own ([04dcd5f](https://github.com/mogretici/nestlens/commit/04dcd5f9f44286065741921deccf1f00e0278596))
+* **sampling:** record a fraction of traffic, a whole request at a time ([4889e66](https://github.com/mogretici/nestlens/commit/4889e66a21bf8e035df820a0c481f63d3ec44177))
+
+
+### Performance Improvements
+
+* **graphql:** reject an oversized response without serializing it ([ccd9e12](https://github.com/mogretici/nestlens/commit/ccd9e129ef94d1ad0873701dc04838fe702707c6))
+* **request:** stop measuring heap growth nobody can use ([10829e3](https://github.com/mogretici/nestlens/commit/10829e368104203f7ee8ccd7ec8b253e26346b5d))
+* **storage:** evict the oldest entry without walking the map ([a13d591](https://github.com/mogretici/nestlens/commit/a13d59105c3bad7a12c8c2c8d4c54055a011e18c))
+
 ## [0.9.7](https://github.com/mogretici/nestlens/compare/v0.9.6...v0.9.7) (2026-08-15)
 
 
