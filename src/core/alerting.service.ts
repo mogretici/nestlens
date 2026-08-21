@@ -20,6 +20,17 @@ const DEFAULT_EVENTS: EntryType[] = ['exception'];
 const DEFAULT_THROTTLE_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
+/**
+ * How many throttle keys are remembered at once.
+ *
+ * The map holds one entry per distinct alert seen inside the throttle window,
+ * and nothing removed them: a destination configured for `request` events grew
+ * it by one per request, forever. The cap and the sweep below are both here
+ * because either alone leaves a hole — a sweep cannot run if the keys never
+ * expire, and a cap alone would evict live keys under load.
+ */
+const MAX_THROTTLE_KEYS = 5_000;
+
 /** Concise, safe summary of an entry used to build webhook payloads. */
 interface AlertSummary {
   type: EntryType;
@@ -94,16 +105,77 @@ export class AlertingService implements OnModuleInit, OnModuleDestroy {
     if (last !== undefined && now - last < throttleMs) {
       return true;
     }
+
+    this.forgetExpired(now, throttleMs);
     this.lastSent.set(key, now);
     return false;
   }
 
+  /**
+   * Drops keys whose throttle window has closed.
+   *
+   * A key past its window can never throttle anything again — the next alert
+   * carrying it is sent regardless — so keeping it costs memory and buys
+   * nothing. Only swept once the map is large, since walking it on every alert
+   * would cost more than the keys do.
+   */
+  private forgetExpired(now: number, throttleMs: number): void {
+    if (this.lastSent.size < MAX_THROTTLE_KEYS) {
+      return;
+    }
+
+    for (const [key, sentAt] of this.lastSent) {
+      if (now - sentAt >= throttleMs) {
+        this.lastSent.delete(key);
+      }
+    }
+
+    // Still full: every key is live, which means more distinct alerts are in
+    // flight than the throttle can track. Drop the oldest rather than grow —
+    // insertion order is age order, since a key is re-inserted when it is set.
+    while (this.lastSent.size >= MAX_THROTTLE_KEYS) {
+      const oldest = this.lastSent.keys().next();
+      if (oldest.done) break;
+      this.lastSent.delete(oldest.value);
+    }
+  }
+
+  /**
+   * What makes two alerts "the same alert" for throttling.
+   *
+   * It has to describe what happened, not which entry it was. Keyed on
+   * `entry.id` — which is unique by construction — every alert got a key of
+   * its own, so a throttle of sixty seconds threw away nothing: a destination
+   * configured for `request` events received one delivery per request.
+   * Measured: 200 identical requests, 200 webhook calls, 201 keys retained.
+   *
+   * `familyHash` is exactly this idea and is already computed for the types
+   * that have one, so it is used where it exists.
+   */
   private dedupKey(entry: Entry): string {
+    if (entry.familyHash) {
+      return `${entry.type}:${entry.familyHash}`;
+    }
+
     if (entry.type === 'exception') {
       const payload = entry.payload as { name?: string; message?: string };
       return `exception:${payload.name ?? ''}:${payload.message ?? ''}`;
     }
-    return `${entry.type}:${entry.id ?? ''}`;
+
+    if (entry.type === 'request') {
+      const payload = entry.payload as {
+        method?: string;
+        path?: string;
+        statusCode?: number;
+      };
+      // The route and its outcome. Two failures of the same endpoint are one
+      // thing worth being told about; two hundred are still one thing.
+      return `request:${payload.method ?? ''}:${payload.path ?? ''}:${payload.statusCode ?? ''}`;
+    }
+
+    // Nothing better to go on. Throttling by type is coarse, and coarse is the
+    // right direction: the alternative was not throttling at all.
+    return `${entry.type}`;
   }
 
   private async send(webhook: AlertingWebhook, entry: Entry): Promise<void> {
