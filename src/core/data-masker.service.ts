@@ -242,6 +242,49 @@ function replaceParenthesisedPaths(line: string): string {
   return result + line.slice(index);
 }
 
+/**
+ * Whether a stack-trace token is a path on this machine.
+ *
+ * `node:internal/...` and `node_modules/...` are left alone: they name code the
+ * reader did not write, carry nothing about the host, and are most of what
+ * makes a trimmed stack still readable.
+ */
+function isLocalPath(token: string): boolean {
+  if (token.startsWith('node:')) return false;
+
+  // POSIX absolute, or a Windows drive.
+  return token.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(token);
+}
+
+/**
+ * Replaces the bare paths a stack frame carries outside parentheses.
+ *
+ * V8 writes a frame two ways, and only one of them has brackets:
+ *
+ *     at Object.handler (/srv/app/dist/orders.js:42:11)
+ *     at /srv/app/dist/main.js:10:5
+ *
+ * The second is what an anonymous function or top-level code produces, and
+ * `partial` sanitisation left it untouched — so a production trace still
+ * published the deployment directory and the account it runs under
+ * (`/home/deploy/secret-project/...`), which is the thing `partial` exists to
+ * remove.
+ *
+ * Scanned by splitting on spaces rather than matched with a pattern: the input
+ * arrives inside exceptions NestLens did not throw, and a regex over
+ * attacker-influenced text is how this file got its last two performance bugs.
+ */
+function replaceBarePaths(line: string): string {
+  if (!line.includes('/') && !line.includes('\\')) {
+    return line;
+  }
+
+  return line
+    .split(' ')
+    .map((token) => (isLocalPath(token) ? '...' : token))
+    .join(' ');
+}
+
 @Injectable()
 export class DataMaskerService {
   private readonly sensitiveHeaders: readonly string[];
@@ -528,7 +571,7 @@ export class DataMaskerService {
     return stack
       .split('\n')
       .slice(0, 10) // Only the first ten lines are kept, so only they are scanned
-      .map((line) => replaceParenthesisedPaths(line))
+      .map((line) => replaceBarePaths(replaceParenthesisedPaths(line)))
       .join('\n');
   }
 
