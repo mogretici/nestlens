@@ -452,6 +452,41 @@ export interface PruningConfig {
 }
 
 /**
+ * Records a fraction of traffic instead of all of it.
+ *
+ * Absent by default: NestLens records everything, which is what it is for. This
+ * is for an application that has outgrown paying for that on every request and
+ * would rather see one request in ten completely than all of them not at all.
+ *
+ * Sampling is decided per *request*, from its id, so a request and everything
+ * recorded under it — its queries, cache reads, logs and outgoing calls — are
+ * kept together or dropped together. A detail page is therefore always whole.
+ *
+ * Cheaper than {@link NestLensConfig.filter} for this purpose: the decision is
+ * a hash rather than a callback, and it is made before the entry is masked or
+ * buffered. Use `filter` when the rule depends on what is *in* the entry.
+ */
+export interface SamplingConfig {
+  /**
+   * Fraction of requests to record, from 0 to 1. Default: 1, meaning all.
+   *
+   * `0.1` records a tenth of requests, whole. `0` records nothing except what
+   * `always` names, which is a coherent setting: exceptions only.
+   */
+  rate?: number;
+
+  /**
+   * Entry types recorded whatever the rate says.
+   * Default: `['exception']`.
+   *
+   * An exception is the thing you went looking for, and sampling it away is the
+   * one outcome that makes the tool useless at the moment it matters. Set it
+   * explicitly to change what is exempt — `[]` exempts nothing.
+   */
+  always?: EntryType[];
+}
+
+/**
  * Security configuration for data masking and input validation.
  */
 export interface SecurityConfig {
@@ -518,6 +553,13 @@ export interface NestLensConfig {
    * @default false
    */
   trustProxy?: boolean;
+
+  /**
+   * Record a fraction of traffic instead of all of it.
+   *
+   * Absent by default, which records everything. See {@link SamplingConfig}.
+   */
+  sampling?: SamplingConfig;
 
   /**
    * Serve the dashboard on a listener of its own, bound to a chosen address,
@@ -601,7 +643,14 @@ export interface NestLensConfig {
 export const DEFAULT_CONFIG: Required<
   Omit<
     NestLensConfig,
-    'authorization' | 'filter' | 'filterBatch' | 'rateLimit' | 'security' | 'alerting' | 'server'
+    | 'authorization'
+    | 'filter'
+    | 'filterBatch'
+    | 'rateLimit'
+    | 'security'
+    | 'alerting'
+    | 'server'
+    | 'sampling'
   >
 > & {
   authorization: AuthorizationConfig;
@@ -610,6 +659,7 @@ export const DEFAULT_CONFIG: Required<
   rateLimit?: RateLimitConfig | false;
   security?: SecurityConfig;
   server?: DashboardServerConfig;
+  sampling?: SamplingConfig;
 } = {
   enabled: true,
   path: '/nestlens',
@@ -617,6 +667,8 @@ export const DEFAULT_CONFIG: Required<
   // Absent, not a disabled default: the dashboard mounts on the application's
   // server unless somebody names an address for it.
   server: undefined,
+  // Absent likewise: everything is recorded until somebody asks for less.
+  sampling: undefined,
   authorization: {
     allowedEnvironments: ['development', 'local', 'test'],
     environmentVariable: 'NODE_ENV',

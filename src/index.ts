@@ -11,6 +11,8 @@ export {
   RateLimitConfig,
   // Dashboard on a listener of its own
   DashboardServerConfig,
+  // Recording a fraction of traffic
+  SamplingConfig,
   // Watcher configs
   RequestWatcherConfig,
   QueryWatcherConfig,
