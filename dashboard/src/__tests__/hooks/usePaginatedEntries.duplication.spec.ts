@@ -142,6 +142,38 @@ describe('usePaginatedEntries: an id appears once', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it('stops the live feed growing without bound', async () => {
+    // A tab left open on a busy service used to accumulate a row per request
+    // forever. The reader can see fifty; the tab was holding thousands, each
+    // re-rendered on every update.
+    const { result } = renderHook(() => usePaginatedEntries({ type: 'graphql' }));
+    await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+    let next = 100;
+    for (let round = 0; round < 12; round += 1) {
+      const ids = Array.from({ length: 60 }, () => next++).reverse();
+
+      (api.checkNewEntries as never as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: { count: ids.length },
+      });
+      (api.getEntriesWithCursor as never as ReturnType<typeof vi.fn>).mockResolvedValue(page(ids));
+
+      await act(async () => {
+        await result.current.loadNew();
+      });
+    }
+
+    // 720 entries arrived; the list holds a bounded window of the newest.
+    expect(result.current.entries.length).toBeLessThanOrEqual(500);
+    expect(result.current.entries.length).toBeGreaterThan(400);
+
+    // And the newest are the ones kept.
+    expect(result.current.entries[0].id).toBe(next - 1);
+
+    const ids = result.current.entries.map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('does not double-count the total when rows are already held', async () => {
     const { result } = renderHook(() => usePaginatedEntries({ type: 'graphql' }));
     await waitFor(() => expect(result.current.entries).toHaveLength(3));

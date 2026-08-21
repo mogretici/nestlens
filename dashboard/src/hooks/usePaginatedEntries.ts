@@ -29,6 +29,20 @@ function stableStringify(obj: unknown): string {
 }
 
 /**
+ * How many rows the live feed may leave on screen.
+ *
+ * New entries arrive for as long as the page is open, and nothing was dropping
+ * the old ones: a tab left on a busy service accumulated a row per request
+ * forever — a few thousand within the hour, each one about nineteen DOM nodes,
+ * all of them re-rendered on every update. The reader can see fifty.
+ *
+ * Ten pages' worth is far more than anyone scrolls back through in a live feed
+ * and still bounds what the tab holds. Paging deliberately with "load more" is
+ * a different thing and is not capped here — see `loadMore`.
+ */
+const MAX_LIVE_ROWS = 500;
+
+/**
  * Prepends only the entries that are not on the list already.
  *
  * The guard above stops the overlap that produced duplicates; this makes a
@@ -42,7 +56,13 @@ function prependNew<T extends Entry>(previous: T[], incoming: T[]): T[] {
   const known = new Set(previous.map((entry) => entry.id));
   const fresh = incoming.filter((entry) => !known.has(entry.id));
 
-  return fresh.length === 0 ? previous : [...fresh, ...previous];
+  if (fresh.length === 0) return previous;
+
+  const combined = [...fresh, ...previous];
+
+  // Oldest first out of the window, which is the end of the list: the feed is
+  // newest-first, and what fell off the bottom is a "load more" away.
+  return combined.length > MAX_LIVE_ROWS ? combined.slice(0, MAX_LIVE_ROWS) : combined;
 }
 
 interface UsePaginatedEntriesResult<T extends Entry> {
