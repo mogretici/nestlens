@@ -10,29 +10,8 @@ import {
   IsBooleanLike,
   MAX_SEARCH_LENGTH,
 } from './transformers';
+import { ENTRY_TYPES } from './entry-types';
 import { EntryType } from '@/types';
-
-const ENTRY_TYPES: EntryType[] = [
-  'request',
-  'query',
-  'exception',
-  'log',
-  'cache',
-  'event',
-  'job',
-  'schedule',
-  'mail',
-  'http-client',
-  'redis',
-  'model',
-  'notification',
-  'view',
-  'command',
-  'gate',
-  'batch',
-  'dump',
-  'graphql',
-];
 
 /**
  * Complete cursor query DTO that combines pagination with all filter types.

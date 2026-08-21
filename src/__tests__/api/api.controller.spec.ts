@@ -107,7 +107,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue(entries);
       mockStorage.count.mockResolvedValue(1);
 
-      const result = await controller.getEntries();
+      const result = await controller.getEntries({});
 
       expect(mockStorage.find).toHaveBeenCalledWith({
         type: undefined,
@@ -126,7 +126,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue(entries);
       mockStorage.count.mockResolvedValue(1);
 
-      const result = await controller.getEntries('query' as EntryType);
+      const result = await controller.getEntries({ type: 'query' as EntryType });
 
       expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'query' }));
       expect(result.data).toEqual(entries);
@@ -137,7 +137,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(0);
 
-      await controller.getEntries(undefined, requestId);
+      await controller.getEntries({ requestId });
 
       expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ requestId }));
     });
@@ -146,7 +146,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(100);
 
-      const result = await controller.getEntries(undefined, undefined, '25', '50');
+      const result = await controller.getEntries({ limit: 25, offset: 50 });
 
       expect(mockStorage.find).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 25, offset: 50 }),
@@ -160,7 +160,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(0);
 
-      await controller.getEntries(undefined, undefined, undefined, undefined, from, to);
+      await controller.getEntries({ from: new Date(from), to: new Date(to) });
 
       expect(mockStorage.find).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -565,7 +565,7 @@ describe('NestLensApiController', () => {
     it('should return count and hasNew true when new entries exist', async () => {
       mockStorage.hasEntriesAfter.mockResolvedValue(5);
 
-      const result = await controller.checkNewEntries('100');
+      const result = await controller.checkNewEntries({ afterSequence: 100 });
 
       expect(mockStorage.hasEntriesAfter).toHaveBeenCalledWith(100, undefined);
       expect(result).toEqual({ data: { count: 5, hasNew: true } });
@@ -574,7 +574,7 @@ describe('NestLensApiController', () => {
     it('should return hasNew false when no new entries', async () => {
       mockStorage.hasEntriesAfter.mockResolvedValue(0);
 
-      const result = await controller.checkNewEntries('100');
+      const result = await controller.checkNewEntries({ afterSequence: 100 });
 
       expect(result).toEqual({ data: { count: 0, hasNew: false } });
     });
@@ -582,7 +582,7 @@ describe('NestLensApiController', () => {
     it('should filter by type', async () => {
       mockStorage.hasEntriesAfter.mockResolvedValue(3);
 
-      await controller.checkNewEntries('50', 'exception' as EntryType);
+      await controller.checkNewEntries({ afterSequence: 50, type: 'exception' as EntryType });
 
       expect(mockStorage.hasEntriesAfter).toHaveBeenCalledWith(50, 'exception');
     });
@@ -593,7 +593,7 @@ describe('NestLensApiController', () => {
       const groups = [{ familyHash: 'abc', count: 5, latestEntry: createMockEntry() }];
       mockStorage.getGroupedByFamilyHash.mockResolvedValue(groups);
 
-      const result = await controller.getGroupedEntries();
+      const result = await controller.getGroupedEntries({});
 
       expect(mockStorage.getGroupedByFamilyHash).toHaveBeenCalledWith(undefined, 50);
       expect(result).toEqual({ data: groups });
@@ -602,7 +602,7 @@ describe('NestLensApiController', () => {
     it('should filter by type and limit', async () => {
       mockStorage.getGroupedByFamilyHash.mockResolvedValue([]);
 
-      await controller.getGroupedEntries('exception' as EntryType, '25');
+      await controller.getGroupedEntries({ type: 'exception' as EntryType, limit: 25 });
 
       expect(mockStorage.getGroupedByFamilyHash).toHaveBeenCalledWith('exception', 25);
     });
@@ -613,7 +613,7 @@ describe('NestLensApiController', () => {
       const entries = [createMockEntry(), createMockEntry({ id: 2 })];
       mockStorage.findByFamilyHash.mockResolvedValue(entries);
 
-      const result = await controller.getEntriesByFamilyHash('abc123');
+      const result = await controller.getEntriesByFamilyHash('abc123', {});
 
       expect(mockStorage.findByFamilyHash).toHaveBeenCalledWith('abc123', 50);
       expect(result).toEqual({ data: entries });
@@ -622,7 +622,7 @@ describe('NestLensApiController', () => {
     it('should respect limit parameter', async () => {
       mockStorage.findByFamilyHash.mockResolvedValue([]);
 
-      await controller.getEntriesByFamilyHash('xyz789', '100');
+      await controller.getEntriesByFamilyHash('xyz789', { limit: 100 });
 
       expect(mockStorage.findByFamilyHash).toHaveBeenCalledWith('xyz789', 100);
     });
@@ -718,91 +718,120 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue(entries);
       mockStorage.count.mockResolvedValue(1);
 
-      await controller.getRequests();
+      await controller.getRequests({});
 
       expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'request' }));
     });
   });
 
+  /**
+   * These two used to read a page and filter what came back, so `?level=error`
+   * chose the errors out of the newest fifty rather than the newest fifty
+   * errors — and reported the count of the whole type above them. The tests
+   * that covered it mocked `find` to return two entries and checked that one
+   * survived, which is the bug expressed as an expectation.
+   *
+   * The narrowing belongs to the storage, which applies it before it chooses a
+   * page. What is left to check here is that the right question is asked and
+   * the storage's answer is passed through unchanged.
+   */
   describe('getQueries', () => {
-    it('should return queries without slow filter', async () => {
-      const entries = [
-        createMockEntry({
-          type: 'query' as EntryType,
-          payload: { query: 'SELECT 1', duration: 10, slow: false } as any,
-        }),
-        createMockEntry({
-          type: 'query' as EntryType,
-          payload: { query: 'SELECT 2', duration: 1000, slow: true } as any,
-        }),
-      ];
-      mockStorage.find.mockResolvedValue(entries);
-      mockStorage.count.mockResolvedValue(2);
+    it('asks for every query when nothing is narrowed', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
 
-      const result = await controller.getQueries();
+      await controller.getQueries({});
 
-      expect(result.data).toHaveLength(2);
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('query', {
+        limit: 50,
+        filters: undefined,
+      });
     });
 
-    it('should filter slow queries when slow=true', async () => {
-      const entries = [
-        createMockEntry({
-          type: 'query' as EntryType,
-          payload: { query: 'SELECT 1', duration: 10, slow: false } as any,
-        }),
-        createMockEntry({
-          type: 'query' as EntryType,
-          payload: { query: 'SELECT 2', duration: 1000, slow: true } as any,
-        }),
-      ];
-      mockStorage.find.mockResolvedValue(entries);
-      mockStorage.count.mockResolvedValue(2);
+    it('asks the storage to narrow to the slow ones', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
 
-      const result = await controller.getQueries(undefined, undefined, 'true');
+      await controller.getQueries({ slow: 'true' });
 
-      expect(result.data).toHaveLength(1);
-      expect((result.data[0].payload as any).slow).toBe(true);
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('query', {
+        limit: 50,
+        filters: { slow: true },
+      });
+    });
+
+    it('reports the count of what matched, not of the type', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [createMockEntry({ type: 'query' as EntryType })],
+        meta: { hasMore: false, oldestSequence: 1, newestSequence: 1, total: 1 },
+      });
+
+      const result = await controller.getQueries({ slow: 'true' });
+
+      // The count used to be `storage.count('query')` — every query there is.
+      expect(result.meta.total).toBe(1);
+      expect(mockStorage.count).not.toHaveBeenCalled();
     });
   });
 
   describe('getLogs', () => {
-    it('should return logs without level filter', async () => {
-      const entries = [
-        createMockEntry({
-          type: 'log' as EntryType,
-          payload: { level: 'log', message: 'Test log' } as any,
-        }),
-        createMockEntry({
-          type: 'log' as EntryType,
-          payload: { level: 'error', message: 'Test error' } as any,
-        }),
-      ];
-      mockStorage.find.mockResolvedValue(entries);
-      mockStorage.count.mockResolvedValue(2);
+    it('asks for every log when nothing is narrowed', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
 
-      const result = await controller.getLogs();
+      await controller.getLogs({});
 
-      expect(result.data).toHaveLength(2);
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('log', {
+        limit: 50,
+        filters: undefined,
+      });
     });
 
-    it('should filter by level', async () => {
-      const entries = [
-        createMockEntry({
-          type: 'log' as EntryType,
-          payload: { level: 'log', message: 'Test log' } as any,
-        }),
-        createMockEntry({
-          type: 'log' as EntryType,
-          payload: { level: 'error', message: 'Test error' } as any,
-        }),
-      ];
-      mockStorage.find.mockResolvedValue(entries);
-      mockStorage.count.mockResolvedValue(2);
+    it('asks the storage to narrow by level', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
 
-      const result = await controller.getLogs(undefined, undefined, 'error');
+      await controller.getLogs({ level: 'error' });
 
-      expect(result.data).toHaveLength(1);
-      expect((result.data[0].payload as any).level).toBe('error');
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('log', {
+        limit: 50,
+        filters: { levels: ['error'] },
+      });
+    });
+
+    it('asks for enough matches to reach the offset', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
+
+      await controller.getLogs({ level: 'error', limit: 20, offset: 40 });
+
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('log', {
+        limit: 60,
+        filters: { levels: ['error'] },
+      });
+    });
+
+    it('returns the page the offset asks for', async () => {
+      const entries = Array.from({ length: 5 }, (_, i) => createMockEntry({ id: i + 1 }));
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: entries,
+        meta: { hasMore: false, oldestSequence: 1, newestSequence: 5, total: 5 },
+      });
+
+      const result = await controller.getLogs({ limit: 2, offset: 3 });
+
+      expect(result.data.map((e) => e.id)).toEqual([4, 5]);
+      expect(result.meta).toEqual({ total: 5, limit: 2, offset: 3 });
     });
   });
 
@@ -811,7 +840,7 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(0);
 
-      await controller.getExceptions();
+      await controller.getExceptions({});
 
       expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'exception' }));
     });
@@ -1026,27 +1055,32 @@ describe('NestLensApiController', () => {
     });
   });
 
+  /**
+   * Pagination bounds used to be hand-parsed inside the handler, so the only
+   * way to check them was to call the handler. They belong to the DTO now, and
+   * a DTO only means anything once the validation pipe has run it — which is
+   * exactly what these handler-level tests never did, and why `?from=yesterday`
+   * reached the storage as an Invalid Date.
+   *
+   * `entries-query-validation.spec.ts` runs the pipe.
+   */
   describe('Edge Cases', () => {
-    describe('getEntries with invalid pagination', () => {
-      it('should handle NaN limit by using default', async () => {
-        mockStorage.find.mockResolvedValue([]);
-        mockStorage.count.mockResolvedValue(0);
+    it('uses the limit the DTO settled on', async () => {
+      mockStorage.find.mockResolvedValue([]);
+      mockStorage.count.mockResolvedValue(0);
 
-        await controller.getEntries(undefined, undefined, 'invalid', undefined);
+      await controller.getEntries({ limit: 1000 });
 
-        expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
-      });
+      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 1000 }));
     });
 
-    describe('pagination bounds', () => {
-      it('should cap limit at MAX_LIMIT (1000)', async () => {
-        mockStorage.find.mockResolvedValue([]);
-        mockStorage.count.mockResolvedValue(0);
+    it('falls back to the default when the DTO left it out', async () => {
+      mockStorage.find.mockResolvedValue([]);
+      mockStorage.count.mockResolvedValue(0);
 
-        await controller.getEntries(undefined, undefined, '9999', undefined);
+      await controller.getEntries({});
 
-        expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 1000 }));
-      });
+      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
     });
   });
 });

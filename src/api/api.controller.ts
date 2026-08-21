@@ -20,9 +20,17 @@ import { STORAGE, StorageInterface } from '@/core';
 import { PruningService } from '@/core';
 import { CollectorService } from '@/core';
 import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '@/nestlens.config';
-import { EntryType, CursorPaginatedResponse, Entry } from '@/types';
+import { EntryType, CursorPaginatedResponse, CursorPaginationParams, Entry } from '@/types';
 import { NestLensGuard } from './api.guard';
-import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT, PauseRecordingDto } from './dto';
+import {
+  CheckNewQueryDto,
+  CursorQueryDto,
+  DEFAULT_LIMIT,
+  EntriesQueryDto,
+  LogsQueryDto,
+  PauseRecordingDto,
+  QueriesQueryDto,
+} from './dto';
 import { NestLensApiExceptionFilter } from '@/api/filters';
 import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
@@ -47,25 +55,6 @@ export class NestLensApiController {
   private lastPruneRun: Date | null = null;
   private nextPruneRun: Date | null = null;
 
-  /**
-   * Safely parse and bound pagination limit
-   */
-  private parseLimit(limit?: string): number {
-    if (!limit) return DEFAULT_LIMIT;
-    const parsed = parseInt(limit, 10);
-    if (isNaN(parsed) || parsed < 1) return DEFAULT_LIMIT;
-    return Math.min(parsed, MAX_LIMIT);
-  }
-
-  /**
-   * Safely parse pagination offset
-   */
-  private parseOffset(offset?: string): number {
-    if (!offset) return 0;
-    const parsed = parseInt(offset, 10);
-    return isNaN(parsed) || parsed < 0 ? 0 : parsed;
-  }
-
   constructor(
     @Inject(STORAGE)
     private readonly storage: StorageInterface,
@@ -80,36 +69,55 @@ export class NestLensApiController {
   }
 
   @Get('entries')
-  async getEntries(
-    @Query('type') type?: EntryType,
-    @Query('requestId') requestId?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Res() _res?: unknown,
-  ) {
-    const parsedLimit = this.parseLimit(limit);
-    const parsedOffset = this.parseOffset(offset);
+  async getEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const offset = query.offset ?? 0;
 
     const entries = await this.storage.find({
-      type,
-      requestId,
-      limit: parsedLimit,
-      offset: parsedOffset,
-      from: from ? new Date(from) : undefined,
-      to: to ? new Date(to) : undefined,
+      type: query.type,
+      requestId: query.requestId,
+      limit,
+      offset,
+      from: query.from,
+      to: query.to,
     });
-
-    const total = await this.storage.count(type);
 
     return {
       data: entries,
-      meta: {
-        total,
-        limit: parsedLimit,
-        offset: parsedOffset,
-      },
+      meta: { total: await this.storage.count(query.type), limit, offset },
+    };
+  }
+
+  /**
+   * A page of one type, narrowed by a filter the storage applies.
+   *
+   * `logs` and `queries` used to read a page and then filter what came back,
+   * which chooses the matches out of the newest fifty rather than the newest
+   * fifty matches. On 5,005 logs whose five errors were the oldest,
+   * `?level=error` returned nothing at all and reported a total of 5,005 —
+   * a hundred pages to click through to reach the first match.
+   *
+   * `findWithCursor` applies filters before it chooses a page, in every
+   * backend, and counts what matches. Offset paging on top of it asks for
+   * `offset + limit` matches and drops the ones already shown, which is what
+   * an offset costs anywhere.
+   */
+  private async filteredPage(
+    type: EntryType,
+    query: EntriesQueryDto,
+    filters: CursorPaginationParams['filters'],
+  ) {
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const offset = query.offset ?? 0;
+
+    const result = await this.storage.findWithCursor(type, {
+      limit: offset + limit,
+      filters,
+    });
+
+    return {
+      data: result.data.slice(offset),
+      meta: { total: result.meta.total, limit, offset },
     };
   }
 
@@ -138,13 +146,12 @@ export class NestLensApiController {
   }
 
   @Get('entries/check-new')
-  async checkNewEntries(
-    @Query('afterSequence') afterSequence: string,
-    @Query('type') type?: EntryType,
-    @Res() _res?: unknown,
-  ) {
-    const seq = parseInt(afterSequence, 10);
-    const count = await this.storage.hasEntriesAfter(seq, type);
+  async checkNewEntries(@Query() query: CheckNewQueryDto, @Res() _res?: unknown) {
+    // `parseInt` of a missing or unreadable parameter is NaN, and NaN reached
+    // the storage: Redis was asked for `zcount (NaN +inf` and answered with an
+    // error. The live tail calls this on a timer, so it would have been a 500
+    // every few seconds rather than once.
+    const count = await this.storage.hasEntriesAfter(query.afterSequence, query.type);
     return { data: { count, hasNew: count > 0 } };
   }
 
@@ -153,12 +160,11 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflict
    */
   @Get('entries/grouped')
-  async getGroupedEntries(
-    @Query('type') type?: EntryType,
-    @Query('limit') limit?: string,
-    @Res() _res?: unknown,
-  ) {
-    const groups = await this.storage.getGroupedByFamilyHash(type, this.parseLimit(limit));
+  async getGroupedEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    const groups = await this.storage.getGroupedByFamilyHash(
+      query.type,
+      query.limit ?? DEFAULT_LIMIT,
+    );
     return { data: groups };
   }
 
@@ -169,10 +175,10 @@ export class NestLensApiController {
   @Get('entries/family/:hash')
   async getEntriesByFamilyHash(
     @Param('hash') hash: string,
-    @Query('limit') limit?: string,
+    @Query() query: EntriesQueryDto,
     @Res() _res?: unknown,
   ) {
-    const entries = await this.storage.findByFamilyHash(hash, this.parseLimit(limit));
+    const entries = await this.storage.findByFamilyHash(hash, query.limit ?? DEFAULT_LIMIT);
     return { data: entries };
   }
 
@@ -207,86 +213,23 @@ export class NestLensApiController {
   }
 
   @Get('requests')
-  async getRequests(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Res() _res?: unknown,
-  ) {
-    return this.getEntries('request', undefined, limit, offset);
+  async getRequests(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    return this.getEntries({ ...query, type: 'request' });
   }
 
   @Get('queries')
-  async getQueries(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('slow') slow?: string,
-    @Res() _res?: unknown,
-  ) {
-    const parsedLimit = this.parseLimit(limit);
-    const parsedOffset = this.parseOffset(offset);
-
-    const entries = await this.storage.find({
-      type: 'query',
-      limit: parsedLimit,
-      offset: parsedOffset,
-    });
-
-    // Filter slow queries if requested
-    const filtered =
-      slow === 'true' ? entries.filter((e) => e.type === 'query' && e.payload.slow) : entries;
-
-    const total = await this.storage.count('query');
-
-    return {
-      data: filtered,
-      meta: {
-        total,
-        limit: parsedLimit,
-        offset: parsedOffset,
-      },
-    };
+  async getQueries(@Query() query: QueriesQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage('query', query, query.slow === 'true' ? { slow: true } : undefined);
   }
 
   @Get('exceptions')
-  async getExceptions(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Res() _res?: unknown,
-  ) {
-    return this.getEntries('exception', undefined, limit, offset);
+  async getExceptions(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    return this.getEntries({ ...query, type: 'exception' });
   }
 
   @Get('logs')
-  async getLogs(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('level') level?: string,
-    @Res() _res?: unknown,
-  ) {
-    const parsedLimit = this.parseLimit(limit);
-    const parsedOffset = this.parseOffset(offset);
-
-    const entries = await this.storage.find({
-      type: 'log',
-      limit: parsedLimit,
-      offset: parsedOffset,
-    });
-
-    // Filter by level if requested
-    const filtered = level
-      ? entries.filter((e) => e.type === 'log' && e.payload.level === level)
-      : entries;
-
-    const total = await this.storage.count('log');
-
-    return {
-      data: filtered,
-      meta: {
-        total,
-        limit: parsedLimit,
-        offset: parsedOffset,
-      },
-    };
+  async getLogs(@Query() query: LogsQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage('log', query, query.level ? { levels: [query.level] } : undefined);
   }
 
   /**

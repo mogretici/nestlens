@@ -354,6 +354,16 @@ export type Entry =
  */
 export type StoredEntry = Entry & { id: number; createdAt: string };
 
+/**
+ * What `find` narrows by.
+ *
+ * It used to declare thirteen more fields under a heading that said "advanced
+ * filtering", and no storage read any of them: a caller could ask `find` for
+ * `{ method: 'POST', statusCodeMin: 500 }` and receive every entry there is,
+ * with nothing to say the request had been ignored. Narrowing beyond this is
+ * `findWithCursor`'s `filters`, which every backend applies before it chooses
+ * a page — and which is checked against all three in the parity suite.
+ */
 export interface EntryFilter {
   type?: EntryType;
   requestId?: string;
@@ -361,18 +371,6 @@ export interface EntryFilter {
   to?: Date;
   limit?: number;
   offset?: number;
-  // Advanced filtering
-  tags?: string[];
-  tagLogic?: 'AND' | 'OR';
-  familyHash?: string;
-  userId?: string;
-  statusCodeMin?: number;
-  statusCodeMax?: number;
-  path?: string;
-  method?: string;
-  search?: string;
-  hideDuplicates?: boolean;
-  resolved?: boolean;
 }
 
 /**

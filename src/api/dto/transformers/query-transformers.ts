@@ -81,3 +81,31 @@ export function TransformLimit() {
 export function TransformSequence() {
   return TransformToInt({ min: 0 });
 }
+
+/**
+ * Transforms offset query parameter, which has no upper bound but no meaning
+ * below zero either.
+ */
+export function TransformOffset() {
+  return TransformToInt({ min: 0, default: 0 });
+}
+
+/**
+ * Turns a date query parameter into a Date, or into something the validator
+ * will reject.
+ *
+ * `new Date('yesterday')` is an Invalid Date, and every backend did something
+ * different with one: SQLite threw `RangeError: Invalid time value` out of
+ * `toISOString`, which the reader saw as a 500, while the other two compared
+ * against NaN and answered with nothing. Leaving the original string in place
+ * lets `IsDate` fail it, so an unusable date is a 400 that names the parameter.
+ */
+export function TransformDate() {
+  return Transform(({ value }: TransformFnParams) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value;
+
+    const parsed = new Date(String(value));
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed;
+  });
+}
