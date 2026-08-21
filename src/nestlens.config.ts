@@ -137,6 +137,21 @@ export interface RequestWatcherConfig {
   captureUser?: boolean; // default: true - capture request.user
   captureSession?: boolean; // default: true - capture request.session
   captureResponseHeaders?: boolean; // default: true - capture response headers
+  /**
+   * Record how much the heap grew across the handler. Default: false.
+   *
+   * Off by default because the figure is not what it appears to be and is not
+   * free. It is `process.memoryUsage().heapUsed` read either side of the
+   * handler, and the heap is shared with every other request in flight, with a
+   * garbage collection free to run between the two readings. Measured on an
+   * endpoint that returns `{ok: true}` and allocates nothing worth naming, it
+   * ranged from -570KB to +671KB and was negative in one request out of thirty.
+   *
+   * Reading it twice per request cost about 2.5% of the process's CPU under
+   * load. Turn it on when the application is handling one request at a time —
+   * a local reproduction, a worker — where the number means something.
+   */
+  captureMemory?: boolean;
   captureControllerInfo?: boolean; // default: true - capture controller/handler
   tags?: (req: Request) => string[] | Promise<string[]>; // custom tags function
 }

@@ -57,7 +57,11 @@ export interface RequestEntry extends BaseEntry {
     responseBody?: unknown;
     responseHeaders?: Record<string, string>;
     duration: number;
-    memory: number;
+    /**
+     * Heap growth across the handler, when `watchers.request.captureMemory` is
+     * on. Absent otherwise, which is the default — see that option for why.
+     */
+    memory?: number;
     // New fields for Telescope-like features
     controllerAction?: string;
     handler?: string;
