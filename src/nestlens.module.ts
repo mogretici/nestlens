@@ -261,7 +261,8 @@ export class NestLensModule implements NestModule, OnModuleInit {
     }
 
     // Add Log Watcher
-    if (mergedConfig.watchers?.log !== false) {
+    const logWatcherEnabled = mergedConfig.watchers?.log !== false;
+    if (logWatcherEnabled) {
       providers.push(NestLensLogger);
     }
 
@@ -343,8 +344,14 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // NOTE: GraphQL Watcher is provided by NestLensCoreModule (global)
     // so it's accessible via moduleRef.get(GraphQLWatcher) from any module
 
-    // Build exports list - only export what's actually provided
-    const exports: Provider[] = [NestLensLogger];
+    // Build exports list - only export what's actually provided.
+    //
+    // Only when it is. Nest refuses to boot a module that exports a provider it
+    // does not hold, so exporting this unconditionally turned
+    // `watchers: { log: false }` into `UnknownExportException` at startup — the
+    // application did not come up at all, which is a strange price for turning
+    // off one watcher.
+    const exports: Provider[] = logWatcherEnabled ? [NestLensLogger] : [];
     // GraphQLWatcher is already exported from NestLensCoreModule (global)
 
     return {
