@@ -8,6 +8,24 @@ import { Entry } from '../types';
  * Family hashes allow grouping similar exceptions, queries, etc.
  * to identify recurring issues and reduce noise in the dashboard.
  */
+/**
+ * How much of a value is read before hashing it.
+ *
+ * A family hash groups entries that are the same problem, and the front of a
+ * message or a query settles that long before this. The limit is here because
+ * the normalisation below is regular expressions over attacker-influenced text:
+ * `throw new Error(untrustedInput)` reaches this on every exception, and one
+ * 50KB message took 1.6 seconds of the event loop before the input was bounded.
+ */
+const MAX_HASH_INPUT = 2000;
+
+/** Takes the front of a value, and says nothing about what it is not given. */
+const bounded = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+
+  return value.length > MAX_HASH_INPUT ? value.slice(0, MAX_HASH_INPUT) : value;
+};
+
 @Injectable()
 export class FamilyHashService {
   private readonly logger = new Logger(FamilyHashService.name);
@@ -137,13 +155,17 @@ export class FamilyHashService {
   private extractStackInfo(stack?: string): { file: string; line: string } | undefined {
     if (!stack) return undefined;
 
+    // Only the first frames matter for identifying the family, and a stack is
+    // as attacker-influenced as the message it came with.
+    const head = bounded(stack);
+
     // Match common stack trace patterns
     // Node.js: at Function.name (/path/to/file.js:10:15)
     // or: at /path/to/file.js:10:15
     const patterns = [/at\s+(?:[^\s]+\s+)?\(?([^:]+):(\d+):\d+\)?/, /^\s+at\s+([^:]+):(\d+):\d+$/m];
 
     for (const pattern of patterns) {
-      const match = stack.match(pattern);
+      const match = head.match(pattern);
       if (match) {
         return {
           file: this.normalizeFilePath(match[1]),
@@ -176,7 +198,7 @@ export class FamilyHashService {
    */
   private normalizeQuery(query: string): string {
     return (
-      query
+      bounded(query)
         // Remove extra whitespace
         .replace(/\s+/g, ' ')
         .trim()
@@ -199,17 +221,29 @@ export class FamilyHashService {
    */
   private normalizeErrorMessage(message: string): string {
     return (
-      message
+      bounded(message)
         // Remove UUIDs
         .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[UUID]')
         // Remove numbers
         .replace(/\b\d+\b/g, '[N]')
         // Remove email addresses
-        .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+        //
+        // Bounded on every part. The unbounded version — `[\w.%+-]+@…` — has
+        // to restart at each position of a long run with no `@` in it, which
+        // is quadratic: 1,659ms on 50,000 characters, all of it on the event
+        // loop of the application being watched. The limits are RFC 5321's, so
+        // nothing that was matched before stops matching.
+        .replace(/[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9.-]{1,255}\.[a-zA-Z]{2,24}/g, '[EMAIL]')
         // Remove URLs
         .replace(/https?:\/\/[^\s]+/g, '[URL]')
         // Remove file paths
-        .replace(/[\/\\][\w\-\.\/\\]+\.\w+/g, '[PATH]')
+        //
+        // Bounded, like the address above. `[\w\-./\\]+` followed by `\.`
+        // is ambiguous — the dot is inside the class as well as after it — so
+        // a long run with no extension backtracks quadratically. A path
+        // segment longer than 200 characters is not a path anyone wrote, and
+        // the ceiling turns the cost linear.
+        .replace(/[\/\\][\w\-\.\/\\]{1,200}\.\w{1,10}/g, '[PATH]')
         // Remove quoted strings
         .replace(/'[^']*'/g, '[STR]')
         .replace(/"[^"]*"/g, '[STR]')
@@ -224,7 +258,7 @@ export class FamilyHashService {
    */
   private normalizeSubject(subject: string): string {
     return (
-      subject
+      bounded(subject)
         // Remove UUIDs
         .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[ID]')
         // Remove numeric IDs
