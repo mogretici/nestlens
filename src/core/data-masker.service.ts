@@ -49,6 +49,11 @@ const DEFAULT_SENSITIVE_PARAMS = [
   'passwd',
   'secret',
   'token',
+  // Masked as a header since the beginning, and as a body or query field only
+  // now. It carries the same credential wherever it appears — `?authorization=`
+  // on a callback URL, an `authorization` field in a JSON body — and the
+  // GraphQL watcher's list has always included it.
+  'authorization',
   'api_key',
   'apikey',
   'api-key',
@@ -97,6 +102,15 @@ const DEFAULT_SENSITIVE_USER_FIELDS = [
 export type StackTraceSanitization = 'none' | 'partial' | 'full';
 
 const DEFAULT_MASK = '***REDACTED***';
+
+/**
+ * Payload fields that hold a URL, and therefore may hold a query string.
+ *
+ * Matched by name because a URL is only recognisable by where it came from:
+ * treating every string that contains a `?` as a URL would rewrite message
+ * bodies and SQL.
+ */
+const URL_FIELDS = new Set(['url', 'originalUrl', 'uri', 'href', 'requestUrl', 'fullUrl']);
 
 /**
  * Service for masking sensitive data in entries.
@@ -289,6 +303,56 @@ export class DataMaskerService {
   }
 
   /**
+   * Masks the sensitive parameters in a URL's query string.
+   *
+   * A request's query string is recorded twice: parsed into `query`, which was
+   * masked, and whole inside `url`, which was not. So
+   * `GET /reset?token=abc123` reached storage with the token in plain text and
+   * the dashboard printed it at the top of the entry — as did every OAuth
+   * callback carrying a `code`, and every API that takes its key in the query.
+   *
+   * Only the query is touched. The path is what the entry is *about*, and a
+   * path segment is not a named field, so there is nothing here to decide
+   * about it.
+   *
+   * Parsed by hand rather than through `URL`, because these are usually
+   * relative (`/reset?token=…`) and `URL` needs a base for those — a base this
+   * would have to invent, and then remove again.
+   */
+  maskUrl(url: string): string {
+    const start = url.indexOf('?');
+    if (start === -1) {
+      return url;
+    }
+
+    const [query, ...fragment] = url.slice(start + 1).split('#');
+    const parts = query.split('&').map((pair) => {
+      const equals = pair.indexOf('=');
+      if (equals === -1) {
+        return pair;
+      }
+
+      const rawName = pair.slice(0, equals);
+      let name = rawName;
+      try {
+        name = decodeURIComponent(rawName);
+      } catch {
+        // A malformed escape is not a reason to drop the parameter; match on
+        // what is there.
+      }
+
+      return this.matchesParam(name)
+        ? `${rawName}=${encodeURIComponent(this.maskReplacement)}`
+        : pair;
+    });
+
+    const rebuilt = parts.join('&');
+    const suffix = fragment.length > 0 ? `#${fragment.join('#')}` : '';
+
+    return `${url.slice(0, start)}?${rebuilt}${suffix}`;
+  }
+
+  /**
    * Mask sensitive fields in an object recursively.
    */
   private maskObject(obj: Record<string, unknown>): Record<string, unknown> {
@@ -297,6 +361,8 @@ export class DataMaskerService {
     for (const [key, value] of Object.entries(obj)) {
       if (this.matchesParam(key)) {
         masked[key] = this.maskReplacement;
+      } else if (URL_FIELDS.has(key) && typeof value === 'string') {
+        masked[key] = this.maskUrl(value);
       } else if (isSanitized(value)) {
         // A watcher that already produced a clean copy of this subtree — the
         // GraphQL response and its variables — is taken at its word rather

@@ -108,6 +108,11 @@ describe('memory storage eviction', () => {
     /**
      * Counts how much work a run of saves does, in `Map` operations.
      *
+     * Counted, not timed. A wall-clock ratio against an uncapped storage was
+     * tried first and failed under parallel workers — a test that reports on
+     * the machine rather than on the code, which is the thing this file exists
+     * to complain about.
+     *
      * Both previous versions failed this: the sort called `Array.prototype.sort`
      * once per save, and the iterator version called `Map.prototype.keys` once
      * per save and then walked every tombstone inside it. Counting the calls
@@ -137,30 +142,6 @@ describe('memory storage eviction', () => {
         sort.mockRestore();
         keys.mockRestore();
       }
-    });
-
-    it('fills a capped storage about as fast as an uncapped one', async () => {
-      // The tombstone version was ~100x slower here and grew with the run
-      // length, so the ratio is what this is watching rather than either
-      // figure. Generous enough that a loaded machine does not fail it.
-      const fill = async (maxEntries: number): Promise<number> => {
-        const storage = new MemoryStorage({ maxEntries });
-        await storage.initialize();
-
-        const started = process.hrtime.bigint();
-        for (let i = 0; i < 20_000; i += 1) await storage.save(request(i));
-        const elapsed = Number(process.hrtime.bigint() - started);
-
-        await storage.close();
-        return elapsed;
-      };
-
-      await fill(1_000);
-
-      const capped = await fill(1_000);
-      const uncapped = await fill(100_000);
-
-      expect(capped).toBeLessThan(uncapped * 10);
     });
   });
 });

@@ -101,8 +101,11 @@ describe('Entries filter pipe + GraphQL tags + search (real HTTP)', () => {
     // Tags are normalized to UPPERCASE by the storage layer (consistent across
     // all watchers), so the stored USER tag is USER:USER-7, not USER:user-7.
     expect(entry!.tags).toEqual(expect.arrayContaining(['SUCCESS', 'USER:USER-7', 'CHECKOUT']));
+    // Masked, and by the collector rather than only by the GraphQL sanitiser:
+    // `authorization` is now a sensitive parameter as well as a sensitive
+    // header, so whichever path an entry takes, the value is gone.
     expect((entry!.payload as { headers?: Record<string, string> }).headers?.authorization).toBe(
-      '***',
+      '***REDACTED***',
     );
   });
 
