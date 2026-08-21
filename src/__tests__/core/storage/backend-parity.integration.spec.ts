@@ -157,6 +157,19 @@ describe('storage backends agree', () => {
   it('applies offset the same way', () =>
     agree(async (s) => (await s.find({ offset: 3, limit: 5 })).length));
 
+  it('applies an offset with no limit the same way', () =>
+    // SQLite will not take an OFFSET without a LIMIT and answered
+    // `near "OFFSET": syntax error` while the others skipped and returned the
+    // rest. The pair above passed throughout, which is why this is its own
+    // case: the combination that was tested was the one that worked.
+    agree(async (s) => (await s.find({ offset: 3 })).length));
+
+  it('applies a limit with no offset the same way', () =>
+    agree(async (s) => (await s.find({ limit: 4 })).length));
+
+  it('handles an offset past the end the same way', () =>
+    agree(async (s) => (await s.find({ offset: 10_000 })).length));
+
   it('applies a requestId filter the same way', () =>
     agree(async (s) => (await s.find({ requestId: 'req-1' })).length));
 

@@ -320,9 +320,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // id breaks ties so rows written in the same millisecond page consistently.
     sql += ' ORDER BY created_at DESC, id DESC';
 
-    if (filter.limit) {
+    // SQLite will not take an OFFSET without a LIMIT — `near "OFFSET": syntax
+    // error` — while the other two backends skip and return the rest. `-1` is
+    // SQLite's "no limit", so an offset on its own means the same thing here as
+    // it does there.
+    if (filter.limit || filter.offset) {
       sql += ' LIMIT ?';
-      params.push(filter.limit);
+      params.push(filter.limit ?? -1);
     }
 
     if (filter.offset) {
