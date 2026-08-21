@@ -1,4 +1,5 @@
 import { MailPayload } from '../types';
+import { parseDate } from './date';
 
 /**
  * Format email addresses for RFC 2822 header
@@ -54,7 +55,11 @@ export function generateEmlContent(payload: MailPayload, createdAt: string): str
     lines.push(`Bcc: ${formatAddresses(payload.bcc)}`);
   }
   lines.push(`Subject: ${encodeSubject(payload.subject)}`);
-  lines.push(`Date: ${new Date(createdAt).toUTCString()}`);
+  // Through the same parser every other view uses. This was the one place
+  // that read a stored timestamp with a bare `new Date`, so an entry from a
+  // backend that did not write ISO landed in the header at the reader's offset
+  // from the truth rather than at the moment the mail was sent.
+  lines.push(`Date: ${parseDate(createdAt).toUTCString()}`);
   lines.push(`Message-ID: ${generateMessageId()}`);
   lines.push('MIME-Version: 1.0');
   lines.push('X-NestLens-Status: ' + payload.status);

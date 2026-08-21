@@ -13,7 +13,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { SqliteStorage } from '../../../core/storage/sqlite.storage';
+import { SCHEMA_VERSION, SqliteStorage } from '../../../core/storage/sqlite.storage';
 
 /** The schema exactly as version 2 wrote it: no UNIQUE on (entry_id, tag). */
 function writeLegacyDatabase(file: string): void {
@@ -105,7 +105,9 @@ describe('opening a database written before tag uniqueness', () => {
     const version = db.pragma('user_version', { simple: true });
     db.close();
 
-    expect(version).toBe(3);
+    // Read from the source rather than kept as a second copy here, which
+    // would fail on every bump for the one reason that is never interesting.
+    expect(version).toBe(SCHEMA_VERSION);
   });
 
   it('is safe to open twice', async () => {

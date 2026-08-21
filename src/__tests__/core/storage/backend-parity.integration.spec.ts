@@ -205,6 +205,28 @@ describe('storage backends agree', () => {
 
   it('returns nothing for a tag nobody has', () => agree((s) => s.findByTags(['nobody-has-this'])));
 
+  describe('the shape of a timestamp', () => {
+    // `shape` above drops `createdAt` before comparing, on the grounds that the
+    // clocks differ — which also meant nothing here ever looked at the format.
+    // SQLite wrote `2026-08-21 14:29:25` while the other two wrote
+    // `2026-08-21T14:29:25.683Z`, and every reader of that string is
+    // JavaScript, which takes the first for local time. One backend therefore
+    // displayed every entry at the reader's offset from the truth.
+    it('every backend stores an ISO instant', async () => {
+      for (const { name, storage } of backends) {
+        const saved = await storage.save(entry('request', 500));
+        const read = await storage.findById(saved.id as number);
+
+        expect([name, read!.createdAt]).toEqual([
+          name,
+          expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+        ]);
+        // And the value the write reported is the value the read returns.
+        expect([name, read!.createdAt]).toEqual([name, saved.createdAt]);
+      }
+    });
+  });
+
   describe('filtering by path', () => {
     // The JavaScript backends passed the pattern to `new RegExp`, so every
     // regex character was live: `[` threw, `.` matched anything, and the

@@ -57,6 +57,8 @@ interface TypeCountRow {
  *   1  the original table: id, type, request_id, payload, created_at
  *   2  adds family_hash and resolved_at
  *   3  adds UNIQUE (entry_id, tag) — see `migrateTagUniqueness`
+ *   4  timestamps in one format — see `migrateTimestampFormat`, and an index
+ *      over the GraphQL flag
  *
  * Bump it whenever the schema changes, alongside the migration that performs
  * the change. Files written before versioning read as 0 and are migrated the
@@ -66,7 +68,19 @@ interface TypeCountRow {
  * a hand-maintained second copy is a test that fails on every bump for the one
  * reason that is never interesting.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
+
+/**
+ * What a timestamp column defaults to when an INSERT does not name it.
+ *
+ * `CURRENT_TIMESTAMP` writes `2026-08-21 14:29:25`. Read back and parsed by a
+ * browser, a space where the `T` belongs means local time rather than UTC, so
+ * every entry displayed at the reader's offset from the truth — three hours
+ * out in Istanbul — and the seconds-only resolution lost the rest. The other
+ * two backends have always written `toISOString()`, and this now writes what
+ * they write, to the millisecond.
+ */
+const ISO_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
 
 /**
  * Escapes the characters `LIKE` treats as wildcards.
@@ -139,12 +153,22 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         type TEXT NOT NULL,
         request_id TEXT,
         payload TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT (${ISO_NOW})
       );
 
       CREATE INDEX IF NOT EXISTS idx_nestlens_type ON nestlens_entries(type);
       CREATE INDEX IF NOT EXISTS idx_nestlens_request_id ON nestlens_entries(request_id);
       CREATE INDEX IF NOT EXISTS idx_nestlens_created_at ON nestlens_entries(created_at);
+
+      -- A GraphQL operation is recorded as a request too, flagged, and belongs
+      -- to the GraphQL page rather than the Requests page. The badge above the
+      -- Requests list has to subtract them, and without this it read the
+      -- payload of every request row and parsed each one: 56 ms across 200,000
+      -- entries, on a driver that is synchronous and so on the application's
+      -- event loop, for a number the dashboard polls. Indexing the expression
+      -- the count already asks for makes the plan a covering search — 7 ms.
+      CREATE INDEX IF NOT EXISTS idx_nestlens_graphql
+        ON nestlens_entries(type, json_extract(payload, '$.isGraphQL'));
     `);
 
     // Migrate existing database - add new columns if they don't exist
@@ -156,7 +180,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         entry_id INTEGER NOT NULL,
         tag TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT DEFAULT (${ISO_NOW}),
         FOREIGN KEY (entry_id) REFERENCES nestlens_entries(id) ON DELETE CASCADE,
         -- What the INSERT OR IGNORE in addTags needs in order to ignore
         -- anything. Without it the clause is inert: tagging an entry twice
@@ -174,9 +198,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       CREATE TABLE IF NOT EXISTS nestlens_monitored_tags (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tag TEXT NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT (${ISO_NOW})
       );
     `);
+
+    this.migrateTimestampFormat();
 
     // Stamped last, so a run that dies midway through leaves the file marked
     // with the version it still is rather than the one it was becoming.
@@ -208,6 +234,35 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     );
 
     this.migrateTagUniqueness();
+  }
+
+  /**
+   * Rewrites timestamps an earlier version left in SQLite's own format.
+   *
+   * `CURRENT_TIMESTAMP` writes `2026-08-21 14:29:25`. A browser parsing that
+   * sees no timezone and a space where the `T` belongs, so it reads it as local
+   * time: every entry in a file written before this version displayed at the
+   * reader's offset from the truth, three hours out in Istanbul, and to the
+   * second rather than the millisecond. The other two backends have always
+   * written `toISOString()`.
+   *
+   * One format in the column is also what lets `created_at < ?` use the index
+   * — see `prune` — so this has to convert every row, not only the ones being
+   * displayed. The stored value is UTC either way, so the conversion is
+   * textual: a `T` for the space and a `.000Z` on the end.
+   */
+  private migrateTimestampFormat(): void {
+    const legacy = "created_at IS NOT NULL AND created_at NOT LIKE '%T%'";
+    const converted = "replace(created_at, ' ', 'T') || '.000Z'";
+
+    for (const table of ['nestlens_entries', 'nestlens_tags', 'nestlens_monitored_tags']) {
+      this.db.exec(`UPDATE ${table} SET created_at = ${converted} WHERE ${legacy}`);
+    }
+
+    this.db.exec(
+      `UPDATE nestlens_entries SET resolved_at = replace(resolved_at, ' ', 'T') || '.000Z'
+       WHERE resolved_at IS NOT NULL AND resolved_at NOT LIKE '%T%'`,
+    );
   }
 
   /**
@@ -258,36 +313,57 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     this.initializeDatabase();
   }
 
+  /**
+   * Writes the timestamp rather than leaving it to the column default.
+   *
+   * `save` reported `new Date().toISOString()` while the row kept whatever
+   * `CURRENT_TIMESTAMP` had written, so the two disagreed about the same
+   * entry: the dashboard showed one time as the entry arrived and a different
+   * one after a refresh. Naming the column makes the value returned and the
+   * value stored the same string.
+   */
   async save(entry: Entry): Promise<Entry> {
     const stmt = this.db.prepare(`
-      INSERT INTO nestlens_entries (type, request_id, payload)
-      VALUES (?, ?, ?)
+      INSERT INTO nestlens_entries (type, request_id, payload, created_at)
+      VALUES (?, ?, ?, ?)
     `);
 
-    const result = stmt.run(entry.type, entry.requestId || null, JSON.stringify(entry.payload));
+    const createdAt = new Date().toISOString();
+    const result = stmt.run(
+      entry.type,
+      entry.requestId || null,
+      JSON.stringify(entry.payload),
+      createdAt,
+    );
 
     return {
       ...entry,
       id: result.lastInsertRowid as number,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
   }
 
   async saveBatch(entries: Entry[]): Promise<Entry[]> {
     const stmt = this.db.prepare(`
-      INSERT INTO nestlens_entries (type, request_id, payload)
-      VALUES (?, ?, ?)
+      INSERT INTO nestlens_entries (type, request_id, payload, created_at)
+      VALUES (?, ?, ?, ?)
     `);
 
     const savedEntries: Entry[] = [];
 
     const insertMany = this.db.transaction((items: Entry[]) => {
       for (const entry of items) {
-        const result = stmt.run(entry.type, entry.requestId || null, JSON.stringify(entry.payload));
+        const createdAt = new Date().toISOString();
+        const result = stmt.run(
+          entry.type,
+          entry.requestId || null,
+          JSON.stringify(entry.payload),
+          createdAt,
+        );
         savedEntries.push({
           ...entry,
           id: Number(result.lastInsertRowid),
-          createdAt: new Date().toISOString(),
+          createdAt,
         });
       }
     });
@@ -318,17 +394,18 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       params.push(filter.requestId);
     }
 
-    // `datetime()` on both sides: SQLite writes CURRENT_TIMESTAMP as
-    // "2026-08-12 21:55:45" and a Date arrives as "2026-08-12T21:25:45.292Z",
-    // so comparing them as text compares a space against a "T" — every row
-    // from today or earlier reads as older than any cutoff today. See prune().
+    // Compared as text, which is what the column holds and what the parameter
+    // is: both sides are `toISOString()` now, a fixed-width UTC format whose
+    // lexical order is its chronological order. That also lets the comparison
+    // use `idx_nestlens_created_at`, which wrapping the column in `datetime()`
+    // ruled out.
     if (filter.from) {
-      sql += ' AND datetime(created_at) >= datetime(?)';
+      sql += ' AND created_at >= ?';
       params.push(filter.from.toISOString());
     }
 
     if (filter.to) {
-      sql += ' AND datetime(created_at) <= datetime(?)';
+      sql += ' AND created_at <= ?';
       params.push(filter.to.toISOString());
     }
 
@@ -497,27 +574,33 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   }
 
   /**
-   * Both sides go through `datetime()` before they are compared.
+   * Deletes by comparing the column directly, which the index can answer.
    *
-   * SQLite stores `CURRENT_TIMESTAMP` as `2026-08-12 21:55:45` and a JavaScript
-   * Date arrives as `2026-08-12T21:25:45.292Z`. Compared as text — which is
-   * what `created_at < ?` does — the eleventh character decides: a space sorts
-   * before a "T", so every row whose date is the cutoff's date or earlier reads
-   * as older than the cutoff whatever its time. Pruning anything therefore
-   * pruned everything recorded that day, including entries seconds old.
+   * Both sides used to go through `datetime()`, because the column held
+   * `2026-08-12 21:55:45` and the parameter arrived as
+   * `2026-08-12T21:25:45.292Z`: compared as text the eleventh character
+   * decided, a space sorting before a "T", so every row from the cutoff's date
+   * or earlier read as older whatever its time — pruning anything pruned
+   * everything recorded that day.
+   *
+   * Wrapping the column fixed that and cost the index: `EXPLAIN QUERY PLAN`
+   * read `SCAN nestlens_entries`, so every prune walked the whole table, on a
+   * driver that is synchronous and therefore on the application's event loop.
+   * A prune that matched nothing at all still took 21 ms across 200,000
+   * entries, and that figure grows with the table.
+   *
+   * The column holds `toISOString()` now — see `migrateTimestampFormat` — so
+   * the two sides are the same fixed-width UTC format, text order is time
+   * order, and the plan reads `SEARCH ... USING COVERING INDEX`.
    */
   async prune(before: Date): Promise<number> {
-    const stmt = this.db.prepare(
-      'DELETE FROM nestlens_entries WHERE datetime(created_at) < datetime(?)',
-    );
+    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE created_at < ?');
     const result = stmt.run(before.toISOString());
     return result.changes;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
-    const stmt = this.db.prepare(
-      'DELETE FROM nestlens_entries WHERE type = ? AND datetime(created_at) < datetime(?)',
-    );
+    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE type = ? AND created_at < ?');
     const result = stmt.run(type, before.toISOString());
     return result.changes;
   }
@@ -1295,7 +1378,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   async resolveEntry(id: number): Promise<void> {
     const stmt = this.db.prepare(`
       UPDATE nestlens_entries
-      SET resolved_at = CURRENT_TIMESTAMP
+      SET resolved_at = ${ISO_NOW}
       WHERE id = ?
     `);
     stmt.run(id);
