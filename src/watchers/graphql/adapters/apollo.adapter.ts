@@ -101,6 +101,15 @@ interface GraphQLError {
  * Apollo Server Adapter
  */
 export class ApolloAdapter extends BaseGraphQLAdapter {
+  /**
+   * Operations already picked up, so a second plugin cannot record them again.
+   *
+   * A `WeakSet` because the key is Apollo's request context: it lives exactly
+   * as long as the operation, and nothing here keeps it alive a moment longer.
+   * See `getPlugin()`.
+   */
+  private readonly startedRequests = new WeakSet<object>();
+
   readonly type = 'apollo' as const;
 
   /**
@@ -120,6 +129,24 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
       async requestDidStart(
         requestContext: ApolloRequestContext,
       ): Promise<ApolloRequestListener | void> {
+        // One entry per operation, however many plugins reach it.
+        //
+        // NestLens registers itself with Apollo automatically, and
+        // `getPlugin()` still exists for the manual wiring that used to be
+        // required. An application carrying both — every installation written
+        // before auto-registration, including this repository's own example —
+        // hands Apollo two plugins that delegate to this adapter, and Apollo
+        // calls each of them: two entries per request, storage filling twice as
+        // fast, and every operation listed twice on the dashboard. Measured at
+        // 10 requests in, 20 entries out.
+        //
+        // Keyed on the request context, which Apollo creates per operation, so
+        // it does not matter which plugin arrives first or how many there are.
+        if (adapter.startedRequests.has(requestContext)) {
+          return;
+        }
+        adapter.startedRequests.add(requestContext);
+
         const { request } = requestContext;
         const query = request.query;
 

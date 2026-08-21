@@ -153,6 +153,19 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
     return {
       async preParsing(_schema: unknown, source: string, context: MercuriusContext) {
+        // One entry per operation, however many hook sets are registered.
+        //
+        // NestLens registers its hooks automatically, and `getPlugin()` still
+        // exists for the manual wiring that used to be required. An application
+        // carrying both runs this twice for one operation: the second call
+        // overwrites the tracking data the first stored on the context, and
+        // `onResolution` then fires twice — two entries, two of everything on
+        // the dashboard. The Apollo adapter guards the same case on the request
+        // context; here the context already carries the mark.
+        if ((context as Record<symbol, unknown>)[TRACKING_KEY]) {
+          return;
+        }
+
         // Check sampling
         if (!adapter.shouldSample()) {
           return;
@@ -201,8 +214,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
       async preValidation(_schema: unknown, _document: unknown, context: MercuriusContext) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.parsingEndTime = process.hrtime.bigint();
@@ -212,8 +224,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
       async preExecution(_schema: unknown, _document: unknown, context: MercuriusContext) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
@@ -225,8 +236,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
       async onResolution(execution: MercuriusExecutionContext, context: MercuriusContext) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (!tracking) {
           return;
@@ -374,8 +384,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         context: MercuriusContext,
       ) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
@@ -393,8 +402,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         }
 
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (!tracking) {
           return;
@@ -406,8 +414,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
       async onSubscriptionEnd(context: MercuriusContext, id: string) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (!tracking) {
           return;
@@ -444,8 +451,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
    */
   trackResolver(event: MercuriusResolutionEvent, context: MercuriusContext): void {
     const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-      | RequestTrackingData
-      | undefined;
+      RequestTrackingData | undefined;
 
     if (!tracking) {
       return;
