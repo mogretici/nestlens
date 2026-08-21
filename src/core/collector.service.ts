@@ -174,7 +174,16 @@ export class CollectorService implements OnModuleDestroy {
       return;
     }
 
-    this.buffer.push(this.mask(entry));
+    try {
+      this.buffer.push(this.mask(entry));
+    } catch (error) {
+      // Masking walks a payload the application handed us; a getter that
+      // throws or a hostile `toJSON` is its failure, not a reason to reject a
+      // promise most watchers do not await.
+      this.logger.warn(`Failed to record entry: ${error}`);
+      return;
+    }
+
     this.enforceBufferLimit();
 
     // Flush if buffer is full — unless storage is already failing, in which
@@ -225,8 +234,21 @@ export class CollectorService implements OnModuleDestroy {
 
       return savedEntry;
     } catch (error) {
+      // Reported, not rethrown.
+      //
+      // Every caller of this is a watcher recording something the application
+      // already handled, and two of the three do not await it. A rejected
+      // promise nobody is holding is an unhandled rejection, which Node treats
+      // as fatal — so a database outage during an application error took the
+      // process down: five failing saves, five unhandled rejections, and the
+      // only thing wrong was that NestLens could not write them down.
+      //
+      // The ones that do await it are inside a GraphQL plugin and a
+      // subscription handler, where throwing would break the operation being
+      // watched. `null` says "not recorded", which is all any of them can act
+      // on anyway.
       this.logger.error(`Failed to save entry: ${error}`);
-      throw error;
+      return null;
     }
   }
 
