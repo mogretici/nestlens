@@ -29,6 +29,9 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
+/** What `evaluateCanAccess` returns when the answer is no. */
+const DENIED = Symbol('nestlens.access.denied');
+
 /**
  * Default rate limit configuration
  */
@@ -147,28 +150,42 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
     }
 
     // 3. Check custom access function
-    const canAccess = authConfig.canAccess;
-    if (canAccess) {
-      const result = await this.evaluateCanAccess(canAccess, request);
+    if (authConfig.canAccess) {
+      const user = await this.evaluateCanAccess(authConfig.canAccess, request);
 
-      if (result === false) {
-        this.logger.warn('Access denied: canAccess function returned false');
+      if (user === DENIED) {
+        this.logger.warn('Access denied: canAccess did not grant access');
         throw new ForbiddenException('Access denied');
       }
 
-      // If result is an AuthUser object, attach to request and check roles
-      if (typeof result === 'object' && result !== null) {
-        request.nestlensUser = result as AuthUser;
+      if (user) {
+        request.nestlensUser = user;
+      }
+    }
 
-        // 4. Check required roles
-        if (authConfig.requiredRoles && authConfig.requiredRoles.length > 0) {
-          if (!this.hasRequiredRoles(request.nestlensUser, authConfig.requiredRoles)) {
-            this.logger.warn(
-              `Access denied: User missing required roles. Required: ${authConfig.requiredRoles.join(', ')}`,
-            );
-            throw new ForbiddenException('Insufficient permissions');
-          }
-        }
+    // 4. Check required roles
+    const requiredRoles = authConfig.requiredRoles;
+    if (requiredRoles && requiredRoles.length > 0) {
+      // Roles are checked against a user, and the only thing that produces one
+      // is `canAccess` returning an `AuthUser`. Without one there is nothing to
+      // check, and this used to mean the requirement was skipped: configuring
+      // `requiredRoles: ['admin']` on its own protected nothing at all, and
+      // configuring it beside a `canAccess` that returned plain `true` was the
+      // same. An authorization setting the operator wrote down cannot quietly
+      // do nothing, so absent a user this denies and says what is missing.
+      if (!request.nestlensUser) {
+        this.logger.warn(
+          `Access denied: requiredRoles is set to [${requiredRoles.join(', ')}] but no user was ` +
+            'resolved. canAccess has to return an AuthUser for roles to be checked.',
+        );
+        throw new ForbiddenException('Insufficient permissions');
+      }
+
+      if (!this.hasRequiredRoles(request.nestlensUser, requiredRoles)) {
+        this.logger.warn(
+          `Access denied: User missing required roles. Required: ${requiredRoles.join(', ')}`,
+        );
+        throw new ForbiddenException('Insufficient permissions');
       }
     }
 
@@ -256,19 +273,38 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
   }
 
   /**
-   * Evaluate canAccess function
+   * Runs the caller's access function and reads its answer as a decision.
+   *
+   * Only `true` and an object grant. Everything else denies, including the
+   * values a function returns when it did not decide anything: `undefined` from
+   * a branch with no `return`, `null` from a lookup that found nobody, `0` from
+   * a count. Each of those used to grant access, because the check was
+   * `result === false` and nothing else was refused — so a hook written as
+   *
+   *     canAccess: (req) => { if (!req.user) return false; }
+   *
+   * let everyone in through the branch its author forgot to write. An
+   * authorization hook is the one place where an unrecognised answer has to
+   * mean no.
    */
   private async evaluateCanAccess(
     canAccess: NonNullable<AuthorizationConfig['canAccess']>,
     request: Request,
-  ): Promise<boolean | AuthUser> {
+  ): Promise<AuthUser | undefined | typeof DENIED> {
+    let result: boolean | AuthUser;
+
     try {
-      const result = canAccess(request);
-      return result instanceof Promise ? await result : result;
+      const returned = canAccess(request);
+      result = returned instanceof Promise ? await returned : returned;
     } catch (error) {
       this.logger.error(`Error in canAccess function: ${error}`);
-      return false;
+      return DENIED;
     }
+
+    if (result === true) return undefined;
+    if (typeof result === 'object' && result !== null) return result as AuthUser;
+
+    return DENIED;
   }
 
   /**

@@ -572,16 +572,17 @@ describe('NestLensGuard', () => {
       expect(result).toBe(true);
     });
 
-    it('should skip role check when canAccess returns boolean true', async () => {
-      // Arrange
+    it('refuses when canAccess granted without saying who', async () => {
+      // This used to read "should skip role check when canAccess returns
+      // boolean true", and it passed: `true` grants access with no user, so
+      // the role check — which lived inside the branch that runs when a user
+      // comes back — never ran. An operator asking for `requiredRoles:
+      // ['admin']` got no role requirement at all. See
+      // `authorization-fails-closed.spec.ts` for the rest of that shape.
       mockConfig.authorization!.canAccess = () => true;
       mockConfig.authorization!.requiredRoles = ['admin'];
 
-      // Act
-      const result = await guard.canActivate(createMockContext());
-
-      // Assert - should pass because canAccess returned boolean, not user object
-      expect(result).toBe(true);
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
   });
 
