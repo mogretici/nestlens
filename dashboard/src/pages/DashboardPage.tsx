@@ -284,6 +284,7 @@ export default function DashboardPage() {
   const [activityEntries, setActivityEntries] = useState<Entry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
+  const [activityError, setActivityError] = useState<Error | null>(null);
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityHasMore, setActivityHasMore] = useState(false);
   const [activityOldestSeq, setActivityOldestSeq] = useState<number | null>(null);
@@ -356,9 +357,13 @@ export default function DashboardPage() {
         setActivityOldestSeq(response.meta.oldestSequence);
         setActivityPage(1);
         setPageHistory([]);
+        setActivityError(null);
       } catch (error) {
         if (!current) return;
-        console.error('Failed to fetch activities:', error);
+        // Kept, because the panel's empty state is a claim about the
+        // application — "No entries recorded yet" — and a list that could not
+        // be fetched is not an empty one.
+        setActivityError(error instanceof Error ? error : new Error('Failed to load activity'));
       } finally {
         if (current) setLoading(false);
       }
@@ -586,7 +591,19 @@ export default function DashboardPage() {
             {activityLoading && activityEntries.length > 0 && (
               <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 z-10 pointer-events-none" />
             )}
-            {activityEntries.length === 0 && !activityLoading ? (
+            {activityEntries.length === 0 && activityError ? (
+              <div
+                className="p-8 text-center text-gray-500 dark:text-gray-400"
+                role="alert"
+                data-testid="activity-error"
+              >
+                <AlertTriangle className="h-7 w-7 mx-auto mb-2 text-red-500 dark:text-red-400" />
+                <p className="text-sm">Could not load recent activity</p>
+                <p className="mt-1 text-xs">
+                  {activityError.message}. This is not a report of an idle application.
+                </p>
+              </div>
+            ) : activityEntries.length === 0 && !activityLoading ? (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                 <Activity className="h-7 w-7 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No entries recorded yet</p>

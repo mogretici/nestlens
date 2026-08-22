@@ -98,6 +98,50 @@ describe('the overview when NestLens cannot be reached', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
   });
 
+  /**
+   * The stats can answer while the entry list cannot — a 500 on one endpoint,
+   * a filter the storage refuses. The panel's empty state is a claim about the
+   * application, so a list that could not be fetched must not read as an empty
+   * one.
+   */
+  describe('when only the activity list fails', () => {
+    beforeEach(() => {
+      vi.mocked(api.getStats).mockResolvedValue({ data: STATS } as never);
+      vi.mocked(api.getEntriesWithCursor).mockRejectedValue(new Error('API error: 500'));
+    });
+
+    it('says it could not load the activity', async () => {
+      draw();
+
+      await waitFor(() => expect(screen.getByTestId('activity-error')).toBeInTheDocument());
+    });
+
+    it('does not say nothing has been recorded', async () => {
+      draw();
+
+      await waitFor(() => expect(screen.getByTestId('activity-error')).toBeInTheDocument());
+      expect(screen.queryByText('No entries recorded yet')).not.toBeInTheDocument();
+    });
+
+    it('still shows the numbers it could fetch', async () => {
+      draw();
+
+      await waitFor(() => expect(screen.getByText('total recorded')).toBeInTheDocument());
+    });
+
+    it('says nothing about activity when the list is genuinely empty', async () => {
+      vi.mocked(api.getEntriesWithCursor).mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, total: 0 },
+      } as never);
+
+      draw();
+
+      await waitFor(() => expect(screen.getByText('No entries recorded yet')).toBeInTheDocument());
+      expect(screen.queryByTestId('activity-error')).not.toBeInTheDocument();
+    });
+  });
+
   it('shows the numbers when they can be fetched', async () => {
     vi.mocked(api.getStats).mockResolvedValue({ data: STATS } as never);
 
