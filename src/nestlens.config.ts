@@ -415,6 +415,8 @@ export interface RedisStorageConfig {
   url?: string;
   /** Command timeout in milliseconds. Default: 5000 */
   commandTimeout?: number;
+  /** Set by the factory from `storage.maxEntries`; not configured here. */
+  maxEntries?: number;
 }
 
 /**
@@ -429,6 +431,21 @@ export interface MemoryStorageConfig {
  * Storage configuration for NestLens
  */
 export interface StorageConfig {
+  /**
+   * The most entries to keep, whichever driver is in use. Default: 10000.
+   *
+   * Age was the only bound the file and Redis drivers had — `maxEntries` was
+   * declared on the memory driver alone — so a busy application filled a disk
+   * or a Redis instance long before anything reached `pruning.maxAge`. At a
+   * thousand requests a second the default twenty-four hours is eighty-six
+   * million entries.
+   *
+   * The oldest go first, which is the same rule the in-memory driver has
+   * always followed. Set it to `0` to keep everything and rely on age alone —
+   * a deliberate choice rather than the previous silence.
+   */
+  maxEntries?: number;
+
   /**
    * Storage driver to use.
    * Default: 'memory' (zero config, works everywhere including Docker)
@@ -681,6 +698,7 @@ export const DEFAULT_CONFIG: Required<
   rateLimit: false, // Rate limiting disabled by default - NestLens is a dev tool
   storage: {
     driver: 'memory' as StorageDriver,
+    maxEntries: 10000,
     sqlite: {
       filename: '.cache/nestlens.db',
     },

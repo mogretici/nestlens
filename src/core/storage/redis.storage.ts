@@ -81,11 +81,23 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   private readonly logger = new Logger(RedisStorage.name);
   private client: Redis | null = null;
   private readonly keyPrefix: string;
+  /**
+   * The most entries to keep, or `0` to keep everything.
+   *
+   * Age was the only bound this driver had, and Redis holds everything in
+   * memory: a busy application filled the instance long before anything
+   * reached `pruning.maxAge`.
+   */
+  private readonly maxEntries: number;
+  /** Saves since the ceiling was last checked. See `enforceEntryLimit`. */
+  private sinceLimitCheck = 0;
+  private static readonly LIMIT_CHECK_EVERY = 100;
   private readonly config: RedisStorageConfig;
 
   constructor(config: RedisStorageConfig = {}) {
     this.config = config;
     this.keyPrefix = config.keyPrefix ?? 'nestlens:';
+    this.maxEntries = Math.max(0, config.maxEntries ?? 10_000);
   }
 
   /**
@@ -333,6 +345,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     await writes.exec();
+    await this.enforceEntryLimit(1);
 
     return savedEntry;
   }
@@ -388,7 +401,35 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     await pipeline.exec();
+    await this.enforceEntryLimit(entries.length);
+
     return results;
+  }
+
+  /**
+   * Keeps the newest `maxEntries` and deletes the rest.
+   *
+   * `zcard` is O(1) and the oldest ids come straight off the front of the same
+   * sorted set, so the cost is one command plus whatever is actually over the
+   * line. Amortised anyway: checking on every write would be a round trip per
+   * entry, and overshooting by up to a hundred out of thousands is not worth
+   * one.
+   */
+  private async enforceEntryLimit(saved: number): Promise<void> {
+    if (this.maxEntries <= 0) return;
+
+    this.sinceLimitCheck += saved;
+    if (this.sinceLimitCheck < RedisStorage.LIMIT_CHECK_EVERY) return;
+    this.sinceLimitCheck = 0;
+
+    const client = this.getClient();
+    const total = await client.zcard(this.key('entries', 'all'));
+    const overflow = total - this.maxEntries;
+
+    if (overflow <= 0) return;
+
+    const oldest = await client.zrange(this.key('entries', 'all'), 0, overflow - 1);
+    await this.deleteEntries(oldest);
   }
 
   async find(filter: EntryFilter): Promise<Entry[]> {

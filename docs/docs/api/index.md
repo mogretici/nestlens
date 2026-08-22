@@ -114,7 +114,7 @@ interface StorageConfig {
 
   /** In-memory storage config */
   memory?: {
-    maxEntries?: number;  // default: 10000
+    maxEntries?: number;  // default: 10000, applies to every driver
   };
 
   /** SQLite storage config (requires better-sqlite3) */

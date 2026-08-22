@@ -102,7 +102,31 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   private readonly logger = new Logger(SqliteStorage.name);
   private db: DatabaseType;
 
-  constructor(private readonly filename: string = '.cache/nestlens.db') {
+  /**
+   * The most entries to keep, or `0` to keep everything.
+   *
+   * Age was the only bound this driver had, so a busy application filled a
+   * disk long before anything reached `pruning.maxAge`: at a thousand requests
+   * a second the default twenty-four hours is eighty-six million rows.
+   */
+  private readonly maxEntries: number;
+
+  /**
+   * Saves since the ceiling was last checked.
+   *
+   * Checking on every write would mean a `COUNT(*)` per entry. Checking every
+   * hundred costs the same query once per hundred and lets the store overshoot
+   * by at most that, which for a ceiling measured in thousands is noise.
+   */
+  private sinceLimitCheck = 0;
+  private static readonly LIMIT_CHECK_EVERY = 100;
+
+  constructor(
+    private readonly filename: string = '.cache/nestlens.db',
+    maxEntries = 10_000,
+  ) {
+    this.maxEntries = Math.max(0, maxEntries);
+
     // Ensure directory exists
     const dir = path.dirname(filename);
     if (dir && dir !== '.' && !fs.existsSync(dir)) {
@@ -336,6 +360,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       createdAt,
     );
 
+    this.enforceEntryLimit(1);
+
     return {
       ...entry,
       id: result.lastInsertRowid as number,
@@ -369,6 +395,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     });
 
     insertMany(entries);
+    this.enforceEntryLimit(entries.length);
+
     return savedEntries;
   }
 
@@ -571,6 +599,46 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       exceptions: byType.exception || 0,
       unresolvedExceptions: aggregateRow.unresolved_exceptions,
     };
+  }
+
+  /**
+   * Keeps the newest `maxEntries` and deletes the rest.
+   *
+   * By id rather than by count: ids are handed out in order, so the id of the
+   * last row over the line is the boundary and everything up to it goes in one
+   * indexed delete.
+   *
+   * Counted from the *oldest* end. Asking for the n-th newest row means
+   * `OFFSET maxEntries`, and SQLite walks every one of those index entries to
+   * get there — ten thousand steps per check, which cost a third of the write
+   * throughput. Walking the overflow instead is at most `LIMIT_CHECK_EVERY`
+   * steps, because that is how far the store can have drifted since the last
+   * check.
+   *
+   * Amortised: a count per entry is more than the ceiling is worth, and
+   * overshooting by up to a hundred entries out of thousands is not.
+   */
+  private enforceEntryLimit(saved: number): void {
+    if (this.maxEntries <= 0) return;
+
+    this.sinceLimitCheck += saved;
+    if (this.sinceLimitCheck < SqliteStorage.LIMIT_CHECK_EVERY) return;
+    this.sinceLimitCheck = 0;
+
+    const { count } = this.db.prepare('SELECT COUNT(*) as count FROM nestlens_entries').get() as {
+      count: number;
+    };
+
+    const overflow = count - this.maxEntries;
+    if (overflow <= 0) return;
+
+    const boundary = this.db
+      .prepare('SELECT id FROM nestlens_entries ORDER BY id ASC LIMIT 1 OFFSET ?')
+      .get(overflow - 1) as { id: number } | undefined;
+
+    if (!boundary) return;
+
+    this.db.prepare('DELETE FROM nestlens_entries WHERE id <= ?').run(boundary.id);
   }
 
   /**
