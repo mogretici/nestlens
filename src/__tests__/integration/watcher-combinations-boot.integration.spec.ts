@@ -57,6 +57,40 @@ describe('watcher combinations', () => {
     await expect(boots({ watchers: on })).resolves.toBeUndefined();
   });
 
+  /**
+   * Closing and reopening, which is what a test suite and `nest start --hmr`
+   * do all day. Eight watchers replace something on an object the application
+   * owns; five of them never put it back, so each round stacked on the last —
+   * three lifecycles against one axios instance left three request
+   * interceptors, and one render through a view engine recorded three entries.
+   *
+   * `watchers-give-back.spec.ts` checks the shape of the code; this checks that
+   * the application survives it, with everything switched on.
+   */
+  it('starts and closes three times over with every watcher on', async () => {
+    const on = Object.fromEntries(WATCHERS.map((name) => [name, true]));
+
+    for (let round = 0; round < 3; round += 1) {
+      await expect(boots({ watchers: on })).resolves.toBeUndefined();
+    }
+  });
+
+  it('leaves no timer holding the event loop', async () => {
+    // A debugging tool is never the reason a process stays alive.
+    const on = Object.fromEntries(WATCHERS.map((name) => [name, true]));
+    await boots({ watchers: on });
+
+    const holding = (
+      process as unknown as {
+        _getActiveHandles: () => { constructor: { name: string }; hasRef?: () => boolean }[];
+      }
+    )
+      ._getActiveHandles()
+      .filter((handle) => handle.constructor.name === 'Timeout' && handle.hasRef?.());
+
+    expect(holding).toHaveLength(0);
+  });
+
   it('starts when NestLens is disabled outright', async () => {
     await expect(boots({ enabled: false })).resolves.toBeUndefined();
   });
