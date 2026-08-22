@@ -55,7 +55,9 @@ import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
  * Mercurius context type
  */
 interface MercuriusContext {
+  /** Fastify's reply, which is what Mercurius puts on the context. */
   reply?: {
+    statusCode?: number;
     request?: {
       ip?: string;
       headers?: Record<string, string>;
@@ -71,21 +73,25 @@ interface MercuriusContext {
 }
 
 /**
- * Mercurius execution context for hooks
+ * What `onResolution` is handed first.
+ *
+ * A GraphQL `ExecutionResult` — the answer, not the request. This was modelled
+ * as the request: `operationName`, `query`, `variables` and `reply` were read
+ * off it and every one of them was undefined, so the variables were never
+ * captured, the status code always came from a fallback, and the errors were
+ * read from a tracking array nothing ever wrote to. Every failing operation
+ * was recorded as a success. See `mercurius/index.d.ts`:
+ *
+ *     onResolutionHookHandler(execution: ExecutionResult<TData>, context)
  */
-interface MercuriusExecutionContext {
-  operationName?: string;
-  query?: string;
-  variables?: Record<string, unknown>;
-  context?: MercuriusContext;
-  reply?: {
-    statusCode?: number;
-    request?: {
-      ip?: string;
-      headers?: Record<string, string>;
-      user?: Record<string, unknown>;
-    };
-  };
+interface MercuriusExecutionResult {
+  data?: Record<string, unknown> | null;
+  errors?: {
+    message: string;
+    path?: (string | number)[];
+    locations?: { line: number; column: number }[];
+    extensions?: Record<string, unknown>;
+  }[];
 }
 
 /**
@@ -105,6 +111,7 @@ interface MercuriusHooks {
     schema: unknown,
     document: unknown,
     context: MercuriusContext,
+    variables?: Record<string, unknown>,
   ) => Promise<{
     document?: unknown;
     errors?: unknown[];
@@ -115,7 +122,7 @@ interface MercuriusHooks {
     context: MercuriusContext,
     service: unknown,
   ) => Promise<void>;
-  onResolution?: (execution: MercuriusExecutionContext, context: MercuriusContext) => Promise<void>;
+  onResolution?: (execution: MercuriusExecutionResult, context: MercuriusContext) => Promise<void>;
   preSubscriptionParsing?: (
     schema: unknown,
     source: string,
@@ -127,7 +134,7 @@ interface MercuriusHooks {
     context: MercuriusContext,
   ) => Promise<void>;
   onSubscriptionResolution?: (
-    execution: MercuriusExecutionContext,
+    execution: MercuriusExecutionResult,
     context: MercuriusContext,
   ) => Promise<void>;
   onSubscriptionEnd?: (context: MercuriusContext, id: string) => Promise<void>;
@@ -148,6 +155,8 @@ interface RequestTrackingData {
   validationStartTime?: bigint;
   validationEndTime?: bigint;
   executionStartTime?: bigint;
+  /** Handed to `preExecution`, and to no other hook. */
+  variables?: Record<string, unknown>;
   n1Detector?: N1Detector;
   fieldTracer?: FieldTracer;
   resolverCount: number;
@@ -246,19 +255,28 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         }
       },
 
-      async preExecution(_schema: unknown, _document: unknown, context: MercuriusContext) {
+      async preExecution(
+        _schema: unknown,
+        _document: unknown,
+        context: MercuriusContext,
+        variables?: Record<string, unknown>,
+      ) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
           RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
           tracking.executionStartTime = process.hrtime.bigint();
+          // This is the only hook Mercurius hands the variables to. They were
+          // read off the `onResolution` argument instead, which is the result,
+          // so `captureVariables` recorded nothing on this server.
+          tracking.variables = variables;
         }
 
         return undefined;
       },
 
-      async onResolution(execution: MercuriusExecutionContext, context: MercuriusContext) {
+      async onResolution(execution: MercuriusExecutionResult, context: MercuriusContext) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
           RequestTrackingData | undefined;
 
@@ -299,7 +317,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
         // Sanitize variables
         const sanitizedVariables = adapter.config.captureVariables
-          ? sanitizeVariables(execution.variables, adapter.config.sensitiveVariables)
+          ? sanitizeVariables(tracking.variables, adapter.config.sensitiveVariables)
           : undefined;
 
         // Truncate query
@@ -310,15 +328,15 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           ? tracking.fieldTracer.getTraces()
           : undefined;
 
-        // Determine status code and errors
-        const errors = tracking.errors as Array<{
-          message: string;
-          path?: (string | number)[];
-          locations?: { line: number; column: number }[];
-          extensions?: Record<string, unknown>;
-        }>;
+        // The result carries the errors. They used to be read from a tracking
+        // array nothing ever pushed to, so every failing operation was recorded
+        // as a success and the dashboard's error filter never matched one.
+        const errors = execution.errors ?? [];
         const hasErrors = errors.length > 0;
-        const statusCode = execution.reply?.statusCode ?? (hasErrors ? 400 : 200);
+        // What the client was actually given. Mercurius answers a failed
+        // operation with 200 and the errors in the body, so the old fallback of
+        // 400 was reporting a status nobody received.
+        const statusCode = context.reply?.statusCode ?? (hasErrors ? 400 : 200);
 
         // Build payload
         const payload: GraphQLPayload = {
@@ -358,7 +376,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
               operationName: tracking.operationName,
               operationType: tracking.operationType,
               query: tracking.query,
-              variables: execution.variables,
+              variables: tracking.variables,
               request: {
                 ip,
                 userAgent,
@@ -417,7 +435,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
       },
 
       async onSubscriptionResolution(
-        execution: MercuriusExecutionContext,
+        execution: MercuriusExecutionResult,
         context: MercuriusContext,
       ) {
         // Handle subscription messages if tracking is enabled
