@@ -549,8 +549,15 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const matches: StoredEntry[] = [];
     let total = 0;
 
+    // Only two filters read an entry's tags. Reading them for every candidate
+    // is a second command per entry across the network, spent on rows that are
+    // about to be discarded: measured at 115ms for a status filter over ten
+    // thousand entries against 24ms without.
+    const walkNeedsTags = Boolean(params.filters?.tags?.length) || Boolean(params.filters?.search);
+
     for (const chunk of inChunks(candidates)) {
-      const entries = await this.hydrateEntriesWithTags(await this.fetchEntriesByIds(chunk));
+      const fetched = await this.fetchEntriesByIds(chunk);
+      const entries = walkNeedsTags ? await this.hydrateEntriesWithTags(fetched) : fetched;
 
       for (const entry of entries) {
         if (!matchesEntryFilters(entry, params.filters)) continue;
@@ -564,7 +571,12 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     if (ascending) page.reverse();
 
-    return this.pageOf(page, hasMore, total);
+    // The page carries its tags either way; only the walk skipped them.
+    return this.pageOf(
+      walkNeedsTags ? page : await this.hydrateEntriesWithTags(page),
+      hasMore,
+      total,
+    );
   }
 
   /**

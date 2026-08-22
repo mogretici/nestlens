@@ -126,6 +126,44 @@ describe('the backends agree about tagging', () => {
     }
   };
 
+  /**
+   * A filtered walk reads every candidate. Only two filters look at an entry's
+   * tags, and reading them for the rest is a second command per entry — a
+   * second round trip per chunk, where the walk crosses a network. The page
+   * carries its tags either way, which is what these check.
+   */
+  describe('a filtered page carries its tags', () => {
+    it('when the filter does not read tags', () =>
+      agree(async (storage) => {
+        const page = await storage.findWithCursor('exception', {
+          limit: 10,
+          filters: { search: undefined, names: ['Error'] },
+        });
+
+        return page.data.map((entry) => (entry.tags ?? []).slice().sort());
+      }));
+
+    it('when the filter is a tag', () =>
+      agree(async (storage) => {
+        const page = await storage.findWithCursor(undefined, {
+          limit: 10,
+          filters: { tags: ['CHECKOUT'] },
+        });
+
+        return page.data.map((entry) => (entry.tags ?? []).slice().sort());
+      }));
+
+    it('when the search term is a tag', () =>
+      agree(async (storage) => {
+        const page = await storage.findWithCursor(undefined, {
+          limit: 10,
+          filters: { search: 'payments' },
+        });
+
+        return page.data.map((entry) => (entry.tags ?? []).slice().sort());
+      }));
+  });
+
   it('names the backends being compared', () => {
     // Named rather than counted: the suite reports the same number of green
     // tests whether or not Redis was among them, so the only way to tell what
