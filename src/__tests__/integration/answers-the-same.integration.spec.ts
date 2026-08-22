@@ -22,11 +22,18 @@
  * This compares the two, response by response.
  */
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
+  Header,
+  HttpCode,
   INestApplication,
   NotFoundException,
+  Post,
+  Query,
+  Redirect,
+  Res,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../../nestlens.module';
@@ -89,6 +96,50 @@ class BoomController {
   fine(): { ok: boolean } {
     return { ok: true };
   }
+
+  @Get('text')
+  @Header('content-type', 'text/plain')
+  text(): string {
+    return 'hello';
+  }
+
+  @Get('empty')
+  @HttpCode(204)
+  empty(): void {}
+
+  @Get('created')
+  @HttpCode(201)
+  created(): { id: number } {
+    return { id: 1 };
+  }
+
+  @Get('custom-header')
+  @Header('x-thing', 'yes')
+  customHeader(): { ok: boolean } {
+    return { ok: true };
+  }
+
+  @Get('redirect')
+  @Redirect('/boom/fine', 302)
+  redirect(): void {}
+
+  @Get('query')
+  query(@Query('q') q: string): { q: string } {
+    return { q };
+  }
+
+  @Post('echo')
+  echo(@Body() body: unknown): { body: unknown } {
+    return { body };
+  }
+
+  @Get('raw')
+  raw(
+    @Res() response: { setHeader(key: string, value: string): void; end(body: string): void },
+  ): void {
+    response.setHeader('content-type', 'application/octet-stream');
+    response.end('rawbytes');
+  }
 }
 
 describe('an application answers the same with NestLens as without', () => {
@@ -113,7 +164,7 @@ describe('an application answers the same with NestLens as without', () => {
     bare = await start([]);
     watched = await start([
       NestLensModule.forRoot({
-        watchers: { exception: true, request: false, log: false },
+        watchers: { exception: true, request: true, log: false },
       }),
     ]);
   });
@@ -139,6 +190,73 @@ describe('an application answers the same with NestLens as without', () => {
     ['a request that works', '/boom/fine'],
   ])('answers %s identically', async (_name, path) => {
     expect(await answer(watched, path)).toBe(await answer(bare, path));
+  });
+
+  /**
+   * Everything about a response except what changes on its own.
+   *
+   * `x-nestlens-request-id` is left out on purpose: it is the documented
+   * correlation header, exported as `REQUEST_ID_HEADER`, and the one thing
+   * NestLens does add.
+   */
+  const IGNORED_HEADERS = new Set([
+    'date',
+    'etag',
+    'x-powered-by',
+    'keep-alive',
+    'connection',
+    'x-nestlens-request-id',
+  ]);
+
+  const fullAnswer = async (
+    app: INestApplication,
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<string> => {
+    const response = await fetch(`${await app.getUrl()}${path}`, {
+      method,
+      redirect: 'manual',
+      ...(body
+        ? { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }
+        : {}),
+    });
+
+    const headers = [...response.headers.entries()]
+      .filter(([key]) => !IGNORED_HEADERS.has(key))
+      .sort()
+      .map(([key, value]) => `${key}: ${value}`);
+
+    return `${response.status} | ${headers.join(' | ')} | ${await response.text()}`;
+  };
+
+  it.each([
+    ['a JSON body', 'GET', '/boom/fine'],
+    ['a text body and its content type', 'GET', '/boom/text'],
+    ['a 204 with no body', 'GET', '/boom/empty'],
+    ['a 201', 'GET', '/boom/created'],
+    ['a header the handler set', 'GET', '/boom/custom-header'],
+    ['a redirect', 'GET', '/boom/redirect'],
+    ['a query parameter', 'GET', '/boom/query?q=x'],
+    ['a response written by hand', 'GET', '/boom/raw'],
+    ['a route that does not exist', 'GET', '/boom/missing'],
+  ])('answers %s identically', async (_name, method, path) => {
+    expect(await fullAnswer(watched, method, path)).toBe(await fullAnswer(bare, method, path));
+  });
+
+  it('answers a POST body identically', async () => {
+    const body = { hi: 1, nested: { a: [1, 2] } };
+
+    expect(await fullAnswer(watched, 'POST', '/boom/echo', body)).toBe(
+      await fullAnswer(bare, 'POST', '/boom/echo', body),
+    );
+  });
+
+  it('adds the correlation header, and only that', async () => {
+    // The one deliberate difference, named so it cannot become an accident.
+    const response = await fetch(`${await watched.getUrl()}/boom/fine`);
+
+    expect(response.headers.get('x-nestlens-request-id')).toBeTruthy();
   });
 
   it('keeps the status the error carried', async () => {
