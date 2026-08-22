@@ -198,6 +198,13 @@ it is no longer required for Apollo or Mercurius.
   production project can check is that the bytes leaving the package are
   correct — 0.8.0 served every script as `{"type":"Buffer","data":[…]}` and
   not one existing test noticed.
+- The Redis-backed suites are skipped unless `REDIS_URL` is set (CI sets one
+  up as a service). They run locally against any Redis:
+  `REDIS_URL=redis://127.0.0.1:6379 npm test`. They use database 12 and 13 with
+  a `nestlens-*-test:` key prefix and delete their own keys afterwards, so they
+  are safe against a Redis holding something else — but they are the only thing
+  that exercises `redis.storage.ts`, and running without them leaves a
+  supported backend measured only by its unit tests.
 - `npm run test:smoke` installs the **published** package into a throwaway
   project, boots a real NestJS application against it and checks the dashboard,
   an asset and the API. `--tarball <path>` runs it against a local
