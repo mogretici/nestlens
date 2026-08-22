@@ -1,4 +1,5 @@
 import {
+  Inject,
   MiddlewareConsumer,
   NestModule,
   DynamicModule,
@@ -180,14 +181,29 @@ class NestLensScheduleModule {
 
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
+  constructor(
+    @Inject(NESTLENS_CONFIG)
+    private readonly config: NestLensConfig,
+  ) {}
+
   /**
    * Opens a request context around every request.
    *
    * Middleware rather than an interceptor: it calls into the rest of the
    * request synchronously, so a query or cache read recorded deep inside the
    * handler still knows which request it belongs to. See request-context.ts.
+   *
+   * Not applied when NestLens is switched off. `forRoot` returns an empty
+   * module for `enabled: false`, but this hook belongs to the class rather
+   * than to what `forRoot` returned, so it ran anyway: a uuid and an
+   * `AsyncLocalStorage.run` on every request of an application that had turned
+   * the library off, plus a property written onto every request object.
    */
   configure(consumer: MiddlewareConsumer): void {
+    if (this.config.enabled === false) {
+      return;
+    }
+
     consumer.apply(RequestContextMiddleware).forRoutes('*');
   }
 

@@ -645,7 +645,7 @@ describe('NestLensModule', () => {
   describe('OnModuleInit Implementation', () => {
     it('should implement onModuleInit method', () => {
       // Arrange
-      const module = new NestLensModule();
+      const module = new NestLensModule({} as NestLensConfig);
 
       // Assert
       expect(module.onModuleInit).toBeDefined();
@@ -654,7 +654,7 @@ describe('NestLensModule', () => {
 
     it('should log initialization message', async () => {
       // Arrange
-      const module = new NestLensModule();
+      const module = new NestLensModule({} as NestLensConfig);
       const logSpy = jest.spyOn((NestLensModule as any).logger, 'log');
 
       // Act
