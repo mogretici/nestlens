@@ -15,6 +15,38 @@ import {
 } from '../utils/query-parser';
 import { sanitizeVariables } from '../utils/variable-sanitizer';
 import { N1Detector } from '../utils/n1-detector';
+
+/** What Mercurius hands a resolver hook, of which three parts matter here. */
+interface ResolverFieldInfo {
+  fieldName: string;
+  parentType: { name: string };
+  returnType: { toString: () => string; ofType?: unknown; getFields?: unknown };
+  path: {
+    key: string | number;
+    prev?: { key: string | number };
+  };
+}
+
+/**
+ * Whether a field could be fetching something.
+ *
+ * A scalar or an enum is a leaf and cannot be an N+1 however often it is
+ * resolved; an object, or a list of them, is the shape one takes. See the same
+ * function in the Apollo adapter for what this replaced and why.
+ */
+const returnsSomethingFetchable = (info: ResolverFieldInfo): boolean => {
+  try {
+    let type = info.returnType as { ofType?: unknown; getFields?: unknown } | undefined;
+
+    while (type && typeof (type as { ofType?: unknown }).ofType === 'object') {
+      type = (type as { ofType?: { ofType?: unknown; getFields?: unknown } }).ofType;
+    }
+
+    return typeof type?.getFields === 'function';
+  } catch {
+    return false;
+  }
+};
 import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer, FieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
@@ -60,15 +92,7 @@ interface MercuriusExecutionContext {
  * Mercurius resolution event
  */
 interface MercuriusResolutionEvent {
-  info: {
-    fieldName: string;
-    parentType: { name: string };
-    returnType: { toString: () => string };
-    path: {
-      key: string | number;
-      prev?: { key: string | number };
-    };
-  };
+  info: ResolverFieldInfo;
 }
 
 /**
@@ -459,8 +483,9 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
     tracking.resolverCount++;
 
-    // N+1 tracking
-    if (tracking.n1Detector) {
+    // N+1 tracking, for fields that return something there is more to fetch
+    // from. See `N1Detector.recordCall`.
+    if (tracking.n1Detector && returnsSomethingFetchable(event.info)) {
       tracking.n1Detector.recordCall({
         parentType: event.info.parentType.name,
         fieldName: event.info.fieldName,

@@ -47,7 +47,20 @@ export class N1Detector {
   }
 
   /**
-   * Record a resolver call
+   * Record a resolver call.
+   *
+   * Only calls that could be fetching something. Every call used to count, so a
+   * query over sixteen order items reported three findings of equal weight:
+   *
+   *     OrderItem.id       16 times   "consider using DataLoader"
+   *     OrderItem.product  16 times   "consider using DataLoader"
+   *     Product.name       16 times   "consider using DataLoader"
+   *
+   * One of those three is the query's actual problem and two are property
+   * reads; advising a DataLoader for `id` is advice a reader has to know to
+   * ignore. What separates them is what the field returns — a scalar is a leaf
+   * and an object is not — and the adapters decide, because only they hold the
+   * schema's types.
    */
   recordCall(call: ResolverCall): void {
     const key = `${call.parentType}.${call.fieldName}`;

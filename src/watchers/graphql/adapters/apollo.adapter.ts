@@ -62,12 +62,52 @@ interface ApolloFieldResolverParams {
 }
 
 /**
+ * Whether a field could be fetching something.
+ *
+ * Every counted call used to be a candidate, so a query over sixteen order
+ * items reported three findings of equal weight:
+ *
+ *     OrderItem.id       16 times   "consider using DataLoader"
+ *     OrderItem.product  16 times   "consider using DataLoader"
+ *     Product.name       16 times   "consider using DataLoader"
+ *
+ * One of those is the query's actual problem and two are property reads. A
+ * DataLoader for `id` is advice a reader has to know to ignore, and the finding
+ * that matters is buried among them.
+ *
+ * Having a resolver does not separate them: `@nestjs/graphql` attaches one to
+ * every field in a code-first schema, which was measured before this was
+ * written. What does separate them is what the field returns. A scalar or an
+ * enum is a leaf — whatever produced it, there is nothing further to fetch —
+ * while an object or a list of them is the shape an N+1 takes.
+ *
+ * Read structurally rather than by importing `graphql`, which is not a
+ * dependency of this package: unwrap the wrappers, and a named type that can
+ * be asked for its fields is not a leaf.
+ */
+const returnsSomethingFetchable = (info: GraphQLResolveInfo): boolean => {
+  try {
+    let type = info.returnType as { ofType?: unknown; getFields?: unknown } | undefined;
+
+    // `[Order!]!` is a non-null of a list of a non-null of Order.
+    while (type && typeof (type as { ofType?: unknown }).ofType === 'object') {
+      type = (type as { ofType?: { ofType?: unknown; getFields?: unknown } }).ofType;
+    }
+
+    return typeof type?.getFields === 'function';
+  } catch {
+    // An unreadable type is not a reason to stop recording the operation.
+    return false;
+  }
+};
+
+/**
  * GraphQL resolve info from graphql-js
  */
 interface GraphQLResolveInfo {
   fieldName: string;
   parentType: { name: string };
-  returnType: { toString: () => string };
+  returnType: { toString: () => string; ofType?: unknown; getFields?: unknown };
   path: {
     key: string | number;
     prev?: { key: string | number; prev?: unknown };
@@ -238,8 +278,9 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
                 const fieldName = info.fieldName;
                 const returnTypeName = info.returnType.toString();
 
-                // Track for N+1 detection
-                if (n1Detector) {
+                // Track for N+1 detection, for fields that return something
+                // there is more to fetch from. See `N1Detector.recordCall`.
+                if (n1Detector && returnsSomethingFetchable(info)) {
                   n1Detector.recordCall({
                     parentType: parentTypeName,
                     fieldName: fieldName,
