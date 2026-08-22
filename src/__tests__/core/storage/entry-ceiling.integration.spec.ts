@@ -121,6 +121,40 @@ describe('the entry ceiling', () => {
     }
   });
 
+  describe('a cap smaller than the check interval', () => {
+    /**
+     * The check runs every hundred saves, which overshoots by up to a hundred
+     * entries — nothing against the default ten thousand, everything against a
+     * cap set small on purpose. `maxEntries: 3` held 103 rows.
+     */
+    it('stays near the cap rather than a hundred past it', async () => {
+      const small = new SqliteStorage(join(workspace, 'small.db'), 3);
+      await small.initialize();
+
+      for (let i = 0; i < 60; i += 1) {
+        await small.save(entry(i));
+      }
+
+      expect(await small.count()).toBeLessThanOrEqual(6);
+
+      await small.close();
+    });
+
+    it('still keeps the newest', async () => {
+      const small = new SqliteStorage(join(workspace, 'small-newest.db'), 3);
+      await small.initialize();
+
+      for (let i = 0; i < 60; i += 1) {
+        await small.save(entry(i));
+      }
+
+      const page = await small.findWithCursor(undefined, { limit: 10 });
+      expect((page.data[0].payload as { message: string }).message).toBe('m59');
+
+      await small.close();
+    });
+  });
+
   describe('turning it off', () => {
     it('keeps everything at zero', async () => {
       const uncapped = new SqliteStorage(join(workspace, 'uncapped.db'), 0);

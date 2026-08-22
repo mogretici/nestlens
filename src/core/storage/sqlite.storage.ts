@@ -120,12 +120,22 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
    */
   private sinceLimitCheck = 0;
   private static readonly LIMIT_CHECK_EVERY = 100;
+  /**
+   * How many saves pass between limit checks, for this store's cap.
+   *
+   * The amortisation below overshoots by up to a hundred entries, which is
+   * nothing against the ten thousand of the default and everything against a
+   * small cap set on purpose: `maxEntries: 3` held 103 rows. Checking at
+   * whichever is smaller keeps the store within twice what was asked for.
+   */
+  private readonly limitCheckEvery: number;
 
   constructor(
     private readonly filename: string = '.cache/nestlens.db',
     maxEntries = 10_000,
   ) {
     this.maxEntries = Math.max(0, maxEntries);
+    this.limitCheckEvery = Math.max(1, Math.min(SqliteStorage.LIMIT_CHECK_EVERY, this.maxEntries));
 
     // Ensure directory exists
     const dir = path.dirname(filename);
@@ -624,7 +634,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     if (this.maxEntries <= 0) return;
 
     this.sinceLimitCheck += saved;
-    if (this.sinceLimitCheck < SqliteStorage.LIMIT_CHECK_EVERY) return;
+    if (this.sinceLimitCheck < this.limitCheckEvery) return;
     this.sinceLimitCheck = 0;
 
     const { count } = this.db.prepare('SELECT COUNT(*) as count FROM nestlens_entries').get() as {

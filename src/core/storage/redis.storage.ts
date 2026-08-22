@@ -92,12 +92,22 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   /** Saves since the ceiling was last checked. See `enforceEntryLimit`. */
   private sinceLimitCheck = 0;
   private static readonly LIMIT_CHECK_EVERY = 100;
+  /**
+   * How many saves pass between limit checks, for this store's cap.
+   *
+   * The amortisation overshoots by up to a hundred entries, which is nothing
+   * against the ten thousand of the default and everything against a small cap
+   * set on purpose. Checking at whichever is smaller keeps the store within
+   * twice what was asked for.
+   */
+  private readonly limitCheckEvery: number;
   private readonly config: RedisStorageConfig;
 
   constructor(config: RedisStorageConfig = {}) {
     this.config = config;
     this.keyPrefix = config.keyPrefix ?? 'nestlens:';
     this.maxEntries = Math.max(0, config.maxEntries ?? 10_000);
+    this.limitCheckEvery = Math.max(1, Math.min(RedisStorage.LIMIT_CHECK_EVERY, this.maxEntries));
   }
 
   /**
@@ -424,7 +434,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     if (this.maxEntries <= 0) return;
 
     this.sinceLimitCheck += saved;
-    if (this.sinceLimitCheck < RedisStorage.LIMIT_CHECK_EVERY) return;
+    if (this.sinceLimitCheck < this.limitCheckEvery) return;
     this.sinceLimitCheck = 0;
 
     const client = this.getClient();
