@@ -135,6 +135,100 @@ describe('validating an offset-paged query', () => {
     });
   });
 
+  describe('the tag endpoint', () => {
+    /**
+     * It read three raw query parameters and trusted all of them. Measured
+     * against a running application, on a store where 111 entries carried the
+     * tag:
+     *
+     *     /tags/entries                     500  — `undefined.split(',')`
+     *     ?tags=CAPACITY&limit=abc               200, 0 rows    — NaN reached storage
+     *     ?tags=CAPACITY&limit=-5                200, 106 rows  — a negative limit
+     *     ?tags=CAPACITY&limit=1e8               200, 111 rows  — no ceiling
+     *     ?tags=CAPACITY&logic=XOR               200            — treated as OR
+     *
+     * The first reports a caller's missing parameter as a server fault. The
+     * second is worse: an unreadable limit answers with an empty list, which
+     * reads as "nothing carries this tag".
+     */
+    const tagsApi = (path: string) => fetch(`${url}${API}/tags${path}`);
+
+    beforeAll(async () => {
+      // More than any default or cap, so what a limit does is observable. The
+      // limit cases were written before this and proved nothing: the fixture
+      // held fewer entries than the smallest limit under test, so every answer
+      // was the same length whatever the parameter said.
+      const { CollectorService: Collector } = await import('../../core/collector.service');
+      const { STORAGE: storageToken } = await import('../../core/storage/storage.interface');
+      const collector = app.get(Collector);
+
+      for (let i = 0; i < 120; i += 1) {
+        await collector.collectImmediate('log', {
+          level: 'warn',
+          message: `tagged ${i}`,
+          context: 'Tagging',
+        } as never);
+      }
+
+      const storage = app.get(
+        storageToken,
+      ) as import('../../core/storage/storage.interface').StorageInterface;
+      const recent = await storage.find({ type: 'log', limit: 120 });
+
+      for (const entry of recent) {
+        await storage.addTags(entry.id as number, ['CAPACITY']);
+      }
+    });
+
+    it('answers 400 when no tag is named', async () => {
+      expect((await tagsApi('/entries')).status).toBe(400);
+    });
+
+    it('answers 400 when the tag list is empty', async () => {
+      expect((await tagsApi('/entries?tags=')).status).toBe(400);
+    });
+
+    it('answers 400 for a logic it does not have', async () => {
+      expect((await tagsApi('/entries?tags=CAPACITY&logic=XOR')).status).toBe(400);
+    });
+
+    it.each(['AND', 'OR'])('accepts %s', async (logic) => {
+      expect((await tagsApi(`/entries?tags=CAPACITY&logic=${logic}`)).status).toBe(200);
+    });
+
+    it('falls back to the default limit rather than returning nothing', async () => {
+      // The failure: `parseInt('abc')` reached the storage as NaN.
+      const body = (await (await tagsApi('/entries?tags=CAPACITY&limit=abc')).json()) as {
+        data: unknown[];
+      };
+      const asked = (await (await tagsApi('/entries?tags=CAPACITY&limit=50')).json()) as {
+        data: unknown[];
+      };
+
+      expect(body.data.length).toBe(asked.data.length);
+    });
+
+    it('refuses to read a negative limit as "nearly everything"', async () => {
+      const body = (await (await tagsApi('/entries?tags=CAPACITY&limit=-5')).json()) as {
+        data: unknown[];
+      };
+
+      expect(body.data.length).toBeLessThanOrEqual(50);
+    });
+
+    it('caps a limit that asks for everything', async () => {
+      const body = (await (await tagsApi('/entries?tags=CAPACITY&limit=99999999')).json()) as {
+        data: unknown[];
+      };
+
+      expect(body.data.length).toBeLessThanOrEqual(1000);
+    });
+
+    it('still answers an ordinary request', async () => {
+      expect((await tagsApi('/entries?tags=CAPACITY&limit=5')).status).toBe(200);
+    });
+  });
+
   describe('narrowing a list', () => {
     beforeAll(async () => {
       // The matches are the oldest, so nothing on the first page matches
@@ -178,9 +272,15 @@ describe('validating an offset-paged query', () => {
     });
 
     it('still returns everything when nothing is narrowed', async () => {
-      const body = (await (await get('/logs?limit=200')).json()) as { data: unknown[] };
+      // Counted against what the endpoint itself reports rather than against a
+      // number written here, which another test's fixture can move.
+      const body = (await (await get('/logs?limit=1000')).json()) as {
+        data: unknown[];
+        meta: { total: number };
+      };
 
-      expect(body.data).toHaveLength(125);
+      expect(body.data).toHaveLength(body.meta.total);
+      expect(body.meta.total).toBeGreaterThan(120);
     });
 
     it('pages through the matches', async () => {

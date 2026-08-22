@@ -15,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { TagService } from '../core/tag.service';
 import { NESTLENS_API_PREFIX } from '../nestlens.config';
-import { EntryTagsDto, MonitoredTagDto } from './dto';
+import { DEFAULT_LIMIT, EntryTagsDto, MonitoredTagDto, TagEntriesQueryDto } from './dto';
 import { NestLensGuard } from './api.guard';
 import { NestLensApiExceptionFilter } from './filters/api-exception.filter';
 import { NestLensApiResponseInterceptor } from './interceptors/api-response.interceptor';
@@ -48,20 +48,11 @@ export class TagController {
    * Get entries by tag(s)
    */
   @Get('entries')
-  async getEntriesByTags(
-    @Query('tags') tagsParam: string,
-    @Query('logic') logic?: 'AND' | 'OR',
-    @Query('limit') limit?: string,
-    @Res() _res?: unknown,
-  ) {
-    const tags = tagsParam
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
+  async getEntriesByTags(@Query() query: TagEntriesQueryDto, @Res() _res?: unknown) {
     const entries = await this.tagService.findByTags(
-      tags,
-      logic ?? 'OR',
-      limit ? parseInt(limit, 10) : 50,
+      query.tags,
+      query.logic ?? 'OR',
+      query.limit ?? DEFAULT_LIMIT,
     );
     return { data: entries };
   }
