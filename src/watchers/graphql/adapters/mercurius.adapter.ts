@@ -205,8 +205,13 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         }
 
         const query = source;
-        const operationName = extractOperationName(query);
-        const operationType = extractOperationType(query);
+        // What the client named, which is the only answer for a document that
+        // declares more than one operation. Mercurius does not pass it to a
+        // hook; it is on the request body Fastify parsed.
+        const requested = (context.reply?.request as { body?: { operationName?: string } })?.body
+          ?.operationName;
+        const operationName = extractOperationName(query, requested);
+        const operationType = extractOperationType(query, requested);
 
         // Check if should ignore
         if (adapter.shouldIgnoreOperation(operationName, query)) {

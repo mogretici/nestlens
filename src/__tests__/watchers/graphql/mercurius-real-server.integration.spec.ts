@@ -249,6 +249,25 @@ describe('Mercurius, running', () => {
     expect(started.recorded.payloads).toHaveLength(1);
   });
 
+  it('records the operation the client asked for, not the first in the document', async () => {
+    // A document may declare several; only the request says which one ran.
+    const started = await startServer();
+    app = started.app;
+
+    await app.inject({
+      method: 'POST',
+      url: '/graphql',
+      payload: JSON.stringify({
+        query: 'query First { hello }\nquery Second { orders { id } }',
+        operationName: 'Second',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(started.recorded.payloads[0].operationName).toBe('Second');
+  });
+
   it('ignores the operations it was told to', async () => {
     const started = await startServer({ ignoreOperations: ['Hello'] });
     app = started.app;

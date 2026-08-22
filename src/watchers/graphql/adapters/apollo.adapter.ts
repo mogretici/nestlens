@@ -201,8 +201,9 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
         }
 
         // Extract operation info
-        const operationName = request.operationName || extractOperationName(query);
-        const operationType = extractOperationType(query);
+        const operationName = extractOperationName(query, request.operationName);
+        // Which operation ran, for a document that declares more than one.
+        const operationType = extractOperationType(query, request.operationName);
 
         // Check if should ignore
         if (adapter.shouldIgnoreOperation(operationName, query)) {
