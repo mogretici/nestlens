@@ -60,22 +60,30 @@ const formatMs = (ms: number): string => {
  * The first thing a reader looks for is which query, which key, which URL —
  * not the type, which the colour already says.
  */
+const LABEL_FIELDS = [
+  'query',
+  'operationName',
+  'key',
+  'url',
+  'path',
+  'name',
+  'message',
+  'command',
+  'operation',
+] as const;
+
 const labelFor = (entry: Entry): string => {
   const payload = entry.payload as unknown as Record<string, unknown>;
 
+  // Only a field that actually holds text. `query` is a SQL string on a query
+  // entry and the parsed query string — an object — on a request, and taking
+  // it either way labelled every request row `[object Object]`.
   const candidate =
-    (payload.query as string) ??
-    (payload.operationName as string) ??
-    (payload.key as string) ??
-    (payload.url as string) ??
-    (payload.path as string) ??
-    (payload.name as string) ??
-    (payload.message as string) ??
-    (payload.command as string) ??
-    (payload.operation as string) ??
-    entry.type;
+    LABEL_FIELDS.map((field) => payload[field]).find(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    ) ?? entry.type;
 
-  const flat = String(candidate).replace(/\s+/g, ' ').trim();
+  const flat = candidate.replace(/\s+/g, ' ').trim();
   return flat.length > 70 ? `${flat.slice(0, 70)}…` : flat;
 };
 
@@ -135,10 +143,13 @@ export default function RequestTimeline({ request, related }: RequestTimelinePro
 
       <div className="divide-y divide-gray-100 dark:divide-gray-800">
         {spans.map((span) => {
-          const left = (span.offset / window) * 100;
           // A zero-length span would be invisible, so it keeps a sliver: the
           // point of the row is that it happened here, not that it lasted.
-          const width = Math.max((span.duration / window) * 100, 0.75);
+          const width = Math.min(Math.max((span.duration / window) * 100, 0.75), 100);
+          // Pushed back far enough for the sliver to fit rather than trimmed to
+          // nothing against the right edge. The last thing to happen in a
+          // request is usually the request itself, and its row was blank.
+          const left = Math.min((span.offset / window) * 100, 100 - width);
           const colour = BAR_COLOURS[span.entry.type] ?? 'bg-gray-400';
 
           return (
@@ -161,7 +172,7 @@ export default function RequestTimeline({ request, related }: RequestTimelinePro
               <span className="relative w-1/2 shrink-0 h-4 rounded bg-gray-100 dark:bg-gray-800">
                 <span
                   className={`absolute top-0 h-full rounded ${colour}`}
-                  style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
+                  style={{ left: `${left}%`, width: `${width}%` }}
                   data-testid="timeline-bar"
                 />
               </span>

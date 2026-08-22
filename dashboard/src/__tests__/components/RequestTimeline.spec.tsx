@@ -30,8 +30,21 @@ const entry = (
     payload: { duration, ...payload },
   }) as unknown as Entry;
 
-/** A request that took 500ms, with two queries and a log inside it. */
-const request = entry(1, 'request', 500, 500, { method: 'GET', path: '/orders', url: '/orders' });
+/**
+ * A request that took 500ms, with two queries and a log inside it.
+ *
+ * `query` is the parsed query string, which is what a request payload actually
+ * carries — the fixture used to leave it out, and a label picked by field name
+ * read it as the SQL a query entry holds. Every request row on a real page said
+ * `[object Object]`.
+ */
+const request = entry(1, 'request', 500, 500, {
+  method: 'GET',
+  path: '/orders',
+  url: '/orders?page=2',
+  query: { page: '2' },
+  params: {},
+});
 const firstQuery = entry(2, 'query', 150, 100, { query: 'SELECT * FROM orders' });
 const secondQuery = entry(3, 'query', 400, 200, { query: 'SELECT * FROM items' });
 const log = entry(4, 'log', 300, 0, { level: 'info', message: 'halfway' });
@@ -51,6 +64,63 @@ const bars = (container: HTMLElement): { left: number; width: number }[] =>
   }));
 
 describe('RequestTimeline', () => {
+  describe('what a row is called', () => {
+    it('names the request by its URL, not by its query string', () => {
+      draw();
+
+      expect(screen.getByText('/orders?page=2')).toBeInTheDocument();
+      expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+    });
+
+    it('names a query by its SQL', () => {
+      draw();
+
+      expect(screen.getByText('SELECT * FROM orders')).toBeInTheDocument();
+    });
+
+    it('names a log by its message', () => {
+      draw();
+
+      expect(screen.getByText('halfway')).toBeInTheDocument();
+    });
+
+    it('falls back to the type when nothing in the payload reads as a name', () => {
+      draw([entry(5, 'cache', 200, 5, { hit: true, ttl: 30 })]);
+
+      // Twice: the type badge, and the label falling back to it.
+      expect(screen.getAllByText('cache')).toHaveLength(2);
+    });
+
+    it('ignores a field that holds an object rather than text', () => {
+      draw([entry(6, 'model', 200, 5, { name: { first: 'ada' }, entity: 'User' })]);
+
+      expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+      expect(screen.getAllByText('model')).toHaveLength(2);
+    });
+  });
+
+  describe('every row is visible', () => {
+    it('gives a bar to an entry that took no measurable time', () => {
+      // The log finishes mid-request, so it sits in the middle.
+      const { container } = draw();
+
+      expect(bars(container).every((bar) => bar.width > 0)).toBe(true);
+    });
+
+    it('gives a bar to the last thing to happen', () => {
+      // A request ends when everything inside it has ended, so its own row sits
+      // at the right edge. Trimming the sliver against that edge left it at
+      // zero width and the row read as empty.
+      const instant = entry(9, 'log', 500, 0, { message: 'at the very end' });
+      const { container } = draw([instant]);
+
+      const drawn = bars(container);
+      expect(drawn).toHaveLength(2);
+      expect(drawn.every((bar) => bar.width > 0)).toBe(true);
+      expect(drawn.every((bar) => bar.left + bar.width <= 100.001)).toBe(true);
+    });
+  });
+
   it('shows a row for the request and for everything inside it', () => {
     draw();
 
