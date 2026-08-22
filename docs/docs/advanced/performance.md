@@ -755,7 +755,10 @@ export class MetricsController {
   @Get('nestlens/metrics')
   async getMetrics() {
     return {
-      bufferSize: collector.getBufferSize(),
+      // { pending, capacity, dropped } — `pending` near `capacity` means
+      // storage is slower than collection, and `dropped` is what that has
+      // already cost.
+      buffer: collector.getBufferSize(),
       storageSize: await storage.getStorageStats(),
       performance: performanceMonitor.getMetrics(),
     };

@@ -139,6 +139,26 @@ export class CollectorService implements OnModuleDestroy {
   }
 
   /**
+   * Whether NestLens is keeping up.
+   *
+   * `pending` sitting near `capacity` means storage is slower than collection,
+   * and `dropped` says how many entries that has already cost — the buffer
+   * discards its oldest rather than growing without limit, so a rising number
+   * here is the only place that loss is visible.
+   *
+   * The performance page has documented a metrics endpoint calling
+   * `collector.getBufferSize()` for some time and there was no such method: a
+   * reader copying that example got a compile error.
+   */
+  getBufferSize(): { pending: number; capacity: number; dropped: number } {
+    return {
+      pending: this.buffer.length,
+      capacity: this.MAX_BUFFERED_ENTRIES,
+      dropped: this.droppedEntries,
+    };
+  }
+
+  /**
    * Collect an entry
    * Uses discriminated union pattern - the type parameter determines the expected payload type
    */
