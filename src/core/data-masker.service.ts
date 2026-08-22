@@ -134,6 +134,24 @@ const URL_FIELDS = new Set([
 const ARGUMENT_FIELDS = new Set(['arguments', 'argv', 'commandArguments']);
 
 /**
+ * How deep a payload is walked, and what stands in for what is past that.
+ *
+ * Masking recursed without a bound, so two ordinary payloads ended the same
+ * way — `RangeError: Maximum call stack size exceeded`, caught by the
+ * collector, entry dropped:
+ *
+ *     order.items[0].order === order   ->  nothing recorded
+ *     a body nested 20,000 deep        ->  nothing recorded
+ *
+ * The first is a bidirectional relation, which is what an ORM hands to an
+ * event, a job or a cache; the second is what any client can post. Both were
+ * invisible in the dashboard with only a warning line as evidence.
+ */
+const MAX_MASK_DEPTH = 32;
+const CIRCULAR = '[Circular]';
+const TOO_DEEP = '[Max depth exceeded]';
+
+/**
  * The `user:password@` in front of a host.
  *
  * `postgres://app:hunter2@db/orders` and `https://key:secret@api.example.com`
@@ -364,33 +382,134 @@ export class DataMaskerService {
    * Mask sensitive data in request/response body.
    */
   maskBody(body: unknown): unknown {
-    if (body === null || body === undefined) {
+    return this.maskValue(body, 0, new Set<object>(), true);
+  }
+
+  /**
+   * Masks one value, wherever it sits in a payload.
+   *
+   * `path` holds the objects between the payload's root and this value, so a
+   * reference back into that chain is a cycle; a sibling appearing twice is
+   * not, which is why it is removed again on the way out.
+   *
+   * `parseStrings` keeps a long-standing distinction: a body that arrives as
+   * a JSON string is parsed and masked, a string sitting in a field is left
+   * exactly as it was. Parsing the second would rewrite text the application
+   * chose — whitespace and key order included — to mask names that field
+   * never had.
+   */
+  private maskValue(
+    value: unknown,
+    depth: number,
+    path: Set<object>,
+    parseStrings: boolean,
+  ): unknown {
+    if (typeof value === 'string') {
+      return parseStrings ? this.maskJsonString(value, depth, path) : value;
+    }
+
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+
+    if (isSanitized(value)) {
+      return value;
+    }
+
+    if (path.has(value)) {
+      return CIRCULAR;
+    }
+
+    if (depth >= MAX_MASK_DEPTH) {
+      return TOO_DEEP;
+    }
+
+    const described = this.describeObject(value);
+    if (described !== undefined) {
+      return described;
+    }
+
+    path.add(value);
+    try {
+      return Array.isArray(value)
+        ? value.map((item) => this.maskValue(item, depth + 1, path, parseStrings))
+        : this.maskObjectAt(value as Record<string, unknown>, depth, path);
+    } finally {
+      path.delete(value);
+    }
+  }
+
+  /**
+   * A body that arrived as text.
+   *
+   * Only a JSON object or array is masked and written back. A string that
+   * happens to parse — `123`, `true`, `"hello"` — is returned as it came:
+   * walking it as an object recorded `{}` for a number and a map of character
+   * positions for a string, neither of which is what the application sent.
+   */
+  private maskJsonString(body: string, depth: number, path: Set<object>): string {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
       return body;
     }
 
-    if (isSanitized(body)) {
+    if (parsed === null || typeof parsed !== 'object') {
       return body;
     }
 
-    if (typeof body === 'string') {
-      // Try to parse JSON and mask it
-      try {
-        const parsed = JSON.parse(body);
-        return JSON.stringify(this.maskObject(parsed));
-      } catch {
-        return body;
+    return JSON.stringify(this.maskValue(parsed, depth, path, true));
+  }
+
+  /**
+   * What to record for an object that is not a plain one.
+   *
+   * `Object.entries` reads own enumerable properties, and the objects an
+   * application puts in a payload mostly do not keep their contents there:
+   *
+   * ```text
+   * new Date()          ->  {}                      (an entity's createdAt)
+   * Buffer.from(file)   ->  {"0":104,"1":105,...}   (a key per byte)
+   * new Map([...])      ->  {}
+   * an Error            ->  {}                      (a job's failure)
+   * ```
+   *
+   * The Buffer case is the expensive one: a megabyte of upload became an
+   * object of a million keys, masked key by key and then stored.
+   *
+   * Returns `undefined` when the value is an ordinary object to walk.
+   */
+  private describeObject(value: object): unknown {
+    if (ArrayBuffer.isView(value)) {
+      const name = value.constructor?.name ?? 'TypedArray';
+      return `[${name} ${value.byteLength} bytes]`;
+    }
+
+    switch (Object.prototype.toString.call(value)) {
+      case '[object Date]': {
+        const time = (value as Date).getTime();
+        return Number.isNaN(time) ? '[Invalid Date]' : (value as Date).toISOString();
       }
+      case '[object ArrayBuffer]':
+        return `[ArrayBuffer ${(value as ArrayBuffer).byteLength} bytes]`;
+      case '[object Map]':
+        return `[Map ${(value as Map<unknown, unknown>).size} entries]`;
+      case '[object Set]':
+        return `[Set ${(value as Set<unknown>).size} items]`;
+      case '[object RegExp]':
+        return String(value);
+      case '[object Error]': {
+        const error = value as Error;
+        return {
+          name: error.name,
+          message: error.message,
+          stack: this.sanitizeStackTrace(error.stack),
+        };
+      }
+      default:
+        return undefined;
     }
-
-    if (Array.isArray(body)) {
-      return body.map((item) => this.maskBody(item));
-    }
-
-    if (typeof body === 'object') {
-      return this.maskObject(body as Record<string, unknown>);
-    }
-
-    return body;
   }
 
   /**
@@ -510,6 +629,15 @@ export class DataMaskerService {
    * Mask sensitive fields in an object recursively.
    */
   private maskObject(obj: Record<string, unknown>): Record<string, unknown> {
+    return this.maskObjectAt(obj, 0, new Set<object>());
+  }
+
+  /** {@link maskObject}, keeping the depth and the path to the root. */
+  private maskObjectAt(
+    obj: Record<string, unknown>,
+    depth: number,
+    path: Set<object>,
+  ): Record<string, unknown> {
     const masked: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
@@ -525,22 +653,8 @@ export class DataMaskerService {
         // than deep-cloned a second time. Only what `markSanitized` touched
         // qualifies, so the rest of the payload is masked as it always was.
         assignKey(masked, key, value);
-      } else if (value !== null && typeof value === 'object') {
-        if (Array.isArray(value)) {
-          assignKey(
-            masked,
-            key,
-            value.map((item) =>
-              typeof item === 'object' && item !== null
-                ? this.maskObject(item as Record<string, unknown>)
-                : item,
-            ),
-          );
-        } else {
-          assignKey(masked, key, this.maskObject(value as Record<string, unknown>));
-        }
       } else {
-        assignKey(masked, key, value);
+        assignKey(masked, key, this.maskValue(value, depth + 1, path, false));
       }
     }
 
