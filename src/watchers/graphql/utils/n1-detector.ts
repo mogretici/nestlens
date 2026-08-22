@@ -212,29 +212,3 @@ export class N1Detector {
     };
   }
 }
-
-/**
- * Create a new N+1 detector with the given threshold
- */
-export function createN1Detector(threshold: number = 10): N1Detector {
-  return new N1Detector(threshold);
-}
-
-/**
- * Quick detection from a resolver calls map
- */
-export function detectN1FromMap(
-  resolverCalls: Map<string, number>,
-  threshold: number = 10,
-): PotentialN1Warning[] {
-  const detector = new N1Detector(threshold);
-
-  for (const [key, count] of resolverCalls.entries()) {
-    const [parentType, fieldName] = key.split('.');
-    for (let i = 0; i < count; i++) {
-      detector.recordCall({ parentType, fieldName });
-    }
-  }
-
-  return detector.detect().warnings;
-}

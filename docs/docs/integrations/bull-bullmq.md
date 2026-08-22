@@ -145,8 +145,9 @@ There is only one supported way to register queues with NestLens: call the setup
 - **Bull (classic):** `jobWatcher.setupQueue(queue, name)`
 - **BullMQ:** `await jobWatcher.setupBullMQQueue(queue, name)` (auto-creates `QueueEvents`), or `jobWatcher.setupQueueWithEvents(queue, queueEvents, name)` for manual control.
 
-:::note No provider-token registration
-The package exports a `NESTLENS_BULL_QUEUES` symbol, but `JobWatcher` does **not** inject or consume it. Providing queues via this token has no effect and will not enable tracking. Always register queues by calling `setupQueue()` / `setupBullMQQueue()` explicitly.
+:::note Queues are registered by calling, not by providing
+There is no provider token for queues. Register each one by calling
+`setupQueue()` / `setupBullMQQueue()` from an `OnModuleInit` hook.
 :::
 
 ## API Reference

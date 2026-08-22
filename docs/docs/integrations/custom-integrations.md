@@ -133,8 +133,9 @@ Create custom watchers using provider tokens.
 
 ### Registering Bull/BullMQ Queues
 
-:::warning Use `setupQueue()`, not a provider token
-A `NESTLENS_BULL_QUEUES` symbol is exported, but `JobWatcher` does not inject or consume it, so providing queues via that token has **no effect**. Register queues by calling the `JobWatcher` setup methods from an `OnModuleInit` hook instead.
+:::note Queues are registered by calling
+There is no provider token for queues; call the `JobWatcher` setup methods from
+an `OnModuleInit` hook.
 :::
 
 ```typescript

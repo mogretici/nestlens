@@ -57,7 +57,6 @@ function isQueueEvents(value: unknown): value is BullQueueEventsLike {
 }
 
 // Token for injecting Bull queues
-export const NESTLENS_BULL_QUEUES = Symbol('NESTLENS_BULL_QUEUES');
 
 @Injectable()
 export class JobWatcher implements OnModuleInit {

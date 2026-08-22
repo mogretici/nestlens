@@ -212,39 +212,6 @@ export function createFieldTracer(
 }
 
 /**
- * No-op tracer for when tracing is disabled
- */
-export const noopTracer = {
-  isActive: () => false,
-  startField: () => null,
-  endField: () => {},
-  getTraces: () => [],
-  getStats: () => ({
-    totalTraces: 0,
-    totalDuration: 0,
-    avgDuration: 0,
-    maxDuration: 0,
-    slowestField: null,
-  }),
-  clear: () => {},
-};
-
-/**
- * Format trace duration for display
- */
-export function formatTraceDuration(nanoseconds: number): string {
-  if (nanoseconds < 1_000) {
-    return `${nanoseconds}ns`;
-  } else if (nanoseconds < 1_000_000) {
-    return `${(nanoseconds / 1_000).toFixed(2)}µs`;
-  } else if (nanoseconds < 1_000_000_000) {
-    return `${(nanoseconds / 1_000_000).toFixed(2)}ms`;
-  } else {
-    return `${(nanoseconds / 1_000_000_000).toFixed(2)}s`;
-  }
-}
-
-/**
  * Convert nanoseconds to milliseconds
  */
 export function nsToMs(nanoseconds: number): number {
@@ -260,23 +227,4 @@ export interface WaterfallItem {
   durationMs: number;
   percentOfTotal: number;
   depth: number;
-}
-
-export function buildWaterfall(
-  traces: GraphQLFieldTrace[],
-  totalDurationNs: number,
-): WaterfallItem[] {
-  const totalDurationMs = nsToMs(totalDurationNs);
-
-  return traces.map((trace) => {
-    const depth = (trace.path.match(/\./g) ?? []).length;
-
-    return {
-      path: trace.path,
-      startMs: nsToMs(trace.startOffset),
-      durationMs: nsToMs(trace.duration),
-      percentOfTotal: totalDurationMs > 0 ? (nsToMs(trace.duration) / totalDurationMs) * 100 : 0,
-      depth,
-    };
-  });
 }

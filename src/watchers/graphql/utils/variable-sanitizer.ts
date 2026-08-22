@@ -575,16 +575,3 @@ export function sanitizeResponse(
 
   return data;
 }
-
-/**
- * Create a sanitizer function with pre-configured patterns
- */
-export function createSanitizer(sensitivePatterns: string[]) {
-  return {
-    sanitizeVariables: (variables?: Record<string, unknown>) =>
-      sanitizeVariables(variables, sensitivePatterns),
-
-    sanitizeResponse: (data: unknown, maxSize: number) =>
-      sanitizeResponse(data, sensitivePatterns, maxSize),
-  };
-}

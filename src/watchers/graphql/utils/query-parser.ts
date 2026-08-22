@@ -84,35 +84,6 @@ export function extractOperationType(query: string): 'query' | 'mutation' | 'sub
 }
 
 /**
- * Check if a query is an introspection query
- */
-export function isIntrospectionQuery(query: string): boolean {
-  const normalized = query.toLowerCase();
-
-  return (
-    normalized.includes('__schema') ||
-    normalized.includes('__type') ||
-    normalized.includes('introspectionquery')
-  );
-}
-
-/**
- * Count the number of fields in a selection set
- * This is a simplified count - not a full AST traversal
- */
-export function countFields(query: string): number {
-  // Remove strings to avoid false positives
-  const withoutStrings = query.replace(/"[^"]*"/g, '');
-
-  // Count field-like patterns (word followed by optional arguments and selection)
-  // This is a heuristic, not a full parse
-  const fieldPattern = /\b[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\([^)]*\))?\s*(?:{|$)/g;
-  const matches = withoutStrings.match(fieldPattern);
-
-  return matches ? matches.length : 0;
-}
-
-/**
  * Parse a GraphQL query and extract basic information
  */
 export interface ParsedQuery {
@@ -121,18 +92,6 @@ export interface ParsedQuery {
   hash: string;
   fieldCount: number;
   isIntrospection: boolean;
-}
-
-export function parseQuery(query: string, maxSize: number): ParsedQuery {
-  const truncated = truncateQuery(query, maxSize);
-
-  return {
-    operationName: extractOperationName(query),
-    operationType: extractOperationType(query),
-    hash: hashQuery(query),
-    fieldCount: countFields(truncated),
-    isIntrospection: isIntrospectionQuery(query),
-  };
 }
 
 /**

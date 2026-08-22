@@ -78,7 +78,6 @@ export { GraphQLWatcher, GRAPHQL_WATCHER } from './watchers/graphql';
 
 // Watcher tokens (for dependency injection)
 export { NESTLENS_EVENT_EMITTER } from './watchers/event.watcher';
-export { NESTLENS_BULL_QUEUES } from './watchers/job.watcher';
 export { NESTLENS_REDIS_CLIENT } from './watchers/redis.watcher';
 export { NESTLENS_MODEL_SUBSCRIBER } from './watchers/model.watcher';
 export { NESTLENS_NOTIFICATION_SERVICE } from './watchers/notification.watcher';
