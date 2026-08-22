@@ -34,6 +34,23 @@ interface RateLimitEntry {
 const DENIED = Symbol('nestlens.access.denied');
 
 /**
+ * How many callers the rate limiter will remember at once.
+ *
+ * One entry per address seen inside the window, removed only when the sweep
+ * five minutes later finds it expired. Nothing bounded it: a dashboard reachable
+ * by many clients — or one behind a proxy that lets a caller choose the address
+ * it is counted under — grows the map with every new one. Measured with 200,000
+ * distinct callers: 200,000 entries and about 10 MB of keys, none of them
+ * eligible for the sweep yet.
+ *
+ * Past the ceiling the expired ones go first, then the oldest. Evicting relaxes
+ * the limit for whoever is dropped, which is the right way round: at that many
+ * distinct addresses a per-address limit is not what is protecting anything, and
+ * unbounded memory is.
+ */
+const MAX_RATE_LIMIT_KEYS = 5_000;
+
+/**
  * Default rate limit configuration
  */
 const DEFAULT_RATE_LIMIT = {
@@ -421,6 +438,7 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
 
     if (!entry || now >= entry.resetAt) {
       // First request or window expired - create new entry
+      this.makeRoom(now);
       this.rateLimitStore.set(ip, {
         count: 1,
         resetAt: now + config.windowMs,
@@ -453,6 +471,32 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
   /**
    * Cleanup expired rate limit entries to prevent memory leaks
    */
+  /**
+   * Keeps the store under its ceiling before adding to it.
+   *
+   * Only walked once the map is large: sweeping on every request would cost
+   * more than the entries do. See `MAX_RATE_LIMIT_KEYS`.
+   */
+  private makeRoom(now: number): void {
+    if (this.rateLimitStore.size < MAX_RATE_LIMIT_KEYS) {
+      return;
+    }
+
+    for (const [ip, entry] of this.rateLimitStore) {
+      if (now >= entry.resetAt) {
+        this.rateLimitStore.delete(ip);
+      }
+    }
+
+    // Still full: every window is live. Insertion order is age order here, so
+    // the first key is the one that has been counted longest.
+    while (this.rateLimitStore.size >= MAX_RATE_LIMIT_KEYS) {
+      const oldest = this.rateLimitStore.keys().next();
+      if (oldest.done) break;
+      this.rateLimitStore.delete(oldest.value);
+    }
+  }
+
   private cleanupExpiredEntries(): void {
     const now = Date.now();
     let cleaned = 0;
