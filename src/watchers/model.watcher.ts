@@ -11,6 +11,7 @@ import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { WrappedMethods } from './wrap-method';
+import { assignKey } from '../core/safe-assign';
 
 /**
  * The TypeORM subscriber surface this watcher touches.
@@ -424,11 +425,11 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     const masked: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       if (SENSITIVE_FIELDS.some((field) => key.toLowerCase().includes(field.toLowerCase()))) {
-        masked[key] = '***MASKED***';
+        assignKey(masked, key, '***MASKED***');
       } else if (typeof value === 'object' && value !== null) {
-        masked[key] = this.maskSensitiveData(value);
+        assignKey(masked, key, this.maskSensitiveData(value));
       } else {
-        masked[key] = value;
+        assignKey(masked, key, value);
       }
     }
 

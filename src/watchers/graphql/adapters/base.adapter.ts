@@ -8,6 +8,7 @@ import { AddressableRequest, resolveClientIp } from '@/core/client-ip';
 import { CollectorService } from '@/core';
 import { GraphQLPayload } from '@/types';
 import { ResolvedGraphQLConfig } from '../types';
+import { assignKey } from '../../../core/safe-assign';
 
 /**
  * Callback for when an operation is collected
@@ -160,13 +161,13 @@ export abstract class BaseGraphQLAdapter {
 
     for (const [key, value] of Object.entries(headers)) {
       if (sensitiveHeaders.includes(key.toLowerCase())) {
-        result[key] = '***';
+        assignKey(result, key, '***');
       } else if (typeof value === 'string') {
-        result[key] = value;
+        assignKey(result, key, value);
       } else if (typeof value === 'number' || typeof value === 'boolean') {
-        result[key] = String(value);
+        assignKey(result, key, String(value));
       } else if (Array.isArray(value)) {
-        result[key] = value.join(', ');
+        assignKey(result, key, value.join(', '));
       }
     }
 

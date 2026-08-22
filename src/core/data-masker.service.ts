@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { isSanitized } from './sanitized-payload';
+import { assignKey } from './safe-assign';
 import { MaskingTerms, resolveMaskingTerms } from './masking-terms';
 
 /**
@@ -350,9 +351,9 @@ export class DataMaskerService {
 
     for (const [key, value] of Object.entries(headers)) {
       if (this.matchesHeader(key)) {
-        masked[key] = this.maskReplacement;
+        assignKey(masked, key, this.maskReplacement);
       } else {
-        masked[key] = String(value ?? '');
+        assignKey(masked, key, String(value ?? ''));
       }
     }
 
@@ -513,29 +514,33 @@ export class DataMaskerService {
 
     for (const [key, value] of Object.entries(obj)) {
       if (this.matchesParam(key)) {
-        masked[key] = this.maskReplacement;
+        assignKey(masked, key, this.maskReplacement);
       } else if (URL_FIELDS.has(key) && typeof value === 'string') {
-        masked[key] = this.maskUrl(value);
+        assignKey(masked, key, this.maskUrl(value));
       } else if (ARGUMENT_FIELDS.has(key) && Array.isArray(value)) {
-        masked[key] = this.maskArguments(value);
+        assignKey(masked, key, this.maskArguments(value));
       } else if (isSanitized(value)) {
         // A watcher that already produced a clean copy of this subtree — the
         // GraphQL response and its variables — is taken at its word rather
         // than deep-cloned a second time. Only what `markSanitized` touched
         // qualifies, so the rest of the payload is masked as it always was.
-        masked[key] = value;
+        assignKey(masked, key, value);
       } else if (value !== null && typeof value === 'object') {
         if (Array.isArray(value)) {
-          masked[key] = value.map((item) =>
-            typeof item === 'object' && item !== null
-              ? this.maskObject(item as Record<string, unknown>)
-              : item,
+          assignKey(
+            masked,
+            key,
+            value.map((item) =>
+              typeof item === 'object' && item !== null
+                ? this.maskObject(item as Record<string, unknown>)
+                : item,
+            ),
           );
         } else {
-          masked[key] = this.maskObject(value as Record<string, unknown>);
+          assignKey(masked, key, this.maskObject(value as Record<string, unknown>));
         }
       } else {
-        masked[key] = value;
+        assignKey(masked, key, value);
       }
     }
 
@@ -555,11 +560,11 @@ export class DataMaskerService {
 
     for (const [key, value] of Object.entries(userObj)) {
       if (this.matchesUserField(key)) {
-        masked[key] = this.maskReplacement;
+        assignKey(masked, key, this.maskReplacement);
       } else if (value !== null && typeof value === 'object') {
-        masked[key] = this.maskUserInfo(value);
+        assignKey(masked, key, this.maskUserInfo(value));
       } else {
-        masked[key] = value;
+        assignKey(masked, key, value);
       }
     }
 

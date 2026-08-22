@@ -5,6 +5,7 @@
  */
 
 import { markSanitized } from '../../../core/sanitized-payload';
+import { assignKey } from '../../../core/safe-assign';
 
 const MASKED_VALUE = '***';
 
@@ -263,21 +264,25 @@ function sanitizeObject(
 
   for (const [key, value] of Object.entries(obj)) {
     if (matcher.isSensitive(key)) {
-      result[key] = MASKED_VALUE;
+      assignKey(result, key, MASKED_VALUE);
       continue;
     }
 
     if (value === null || value === undefined) {
-      result[key] = value;
+      assignKey(result, key, value);
     } else if (Array.isArray(value)) {
-      result[key] = sanitizeArray(value, matcher, depth + 1, maxDepth);
+      assignKey(result, key, sanitizeArray(value, matcher, depth + 1, maxDepth));
     } else if (typeof value === 'object') {
-      result[key] = sanitizeObject(value as Record<string, unknown>, matcher, depth + 1, maxDepth);
+      assignKey(
+        result,
+        key,
+        sanitizeObject(value as Record<string, unknown>, matcher, depth + 1, maxDepth),
+      );
     } else if (typeof value === 'string' && looksLikeSensitiveValue(value)) {
       // Mask values that look like tokens, keys, etc.
-      result[key] = MASKED_VALUE;
+      assignKey(result, key, MASKED_VALUE);
     } else {
-      result[key] = value;
+      assignKey(result, key, value);
     }
   }
 
