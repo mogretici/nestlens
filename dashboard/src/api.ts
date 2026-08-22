@@ -30,9 +30,28 @@ export async function getStats(): Promise<ApiResponse<Stats>> {
   return fetchApi('/stats');
 }
 
+/**
+ * Deletes every entry, or says why it could not.
+ *
+ * This read the body without looking at the status, so a refusal — a guard
+ * that did not recognise the caller, a storage that could not answer — came
+ * back as an ordinary value and the dashboard reported *All entries cleared*
+ * over a list that still had everything in it.
+ */
 export async function clearEntries(): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE}/entries`, { method: 'DELETE' });
-  return response.json();
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const body = (await response.json()) as ApiResponse<{ message?: string }> & {
+    success?: boolean;
+  };
+  if (body.success === false) {
+    throw new Error(body.error ?? 'The request was refused');
+  }
+
+  return { success: true, message: body.data?.message ?? 'All entries cleared' };
 }
 
 /**
