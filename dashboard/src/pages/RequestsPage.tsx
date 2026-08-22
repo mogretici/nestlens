@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Activity, Globe } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import {
   NewEntriesButton,
   LoadMoreButton,
@@ -40,8 +42,9 @@ export default function RequestsPage() {
     clearAll,
     serverFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('requests');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
@@ -56,7 +59,12 @@ export default function RequestsPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<RequestEntry>({ type: 'request', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<RequestEntry>({
+    type: 'request',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is RequestEntry => isRequestEntry(entry));
@@ -138,7 +146,6 @@ export default function RequestsPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -154,11 +161,12 @@ export default function RequestsPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="requests" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         <EntrySearchInput placeholder="Search by path, method, status, tag, or content..." />
 
         {/* New entries button */}

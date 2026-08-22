@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Layers } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader from '../components/PageHeader';
 import DataTable, { Column, TextCell, DurationCell } from '../components/DataTable';
@@ -15,8 +17,10 @@ export default function BatchesPage() {
   const navigate = useNavigate();
 
   // Use centralized filter hook - all config comes from entryTypes.ts
-  const { addFilter, clearAll, serverFilters, headerFilters, hasFilters } =
+  const { addFilter, clearAll, serverFilters, headerFilters } =
     useEntryFilters('batches');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
@@ -31,7 +35,12 @@ export default function BatchesPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<BatchEntry>({ type: 'batch', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<BatchEntry>({
+    type: 'batch',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is BatchEntry => isBatchEntry(entry));
@@ -136,7 +145,6 @@ export default function BatchesPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -152,11 +160,12 @@ export default function BatchesPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="batches" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         {/* New entries button */}
         <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
 

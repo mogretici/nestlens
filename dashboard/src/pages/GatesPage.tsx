@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Shield } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import {
   NewEntriesButton,
   LoadMoreButton,
@@ -26,8 +28,9 @@ export default function GatesPage() {
     clearAll,
     serverFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('gates');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
@@ -42,7 +45,12 @@ export default function GatesPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<GateEntry>({ type: 'gate', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<GateEntry>({
+    type: 'gate',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is GateEntry => isGateEntry(entry));
@@ -138,7 +146,6 @@ export default function GatesPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -154,11 +161,12 @@ export default function GatesPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="gates" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         {/* New entries button */}
         <NewEntriesButton
           count={newEntriesCount}

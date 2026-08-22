@@ -33,6 +33,15 @@ export interface EntryTypeConfig {
   route: string;
   /** Lucide icon name */
   icon: string;
+  /**
+   * Whether this entry's payload carries a `duration`.
+   *
+   * The duration filter is a bound on that field, and an entry that measures
+   * nothing cannot satisfy one — the storages exclude those rather than letting
+   * them through, so offering the control on a page of exceptions or log lines
+   * would give a reader a filter that can only empty the table.
+   */
+  measuresDuration: boolean;
   /** Filter configurations */
   filters: Record<string, FilterConfig>;
 }
@@ -50,6 +59,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Requests',
     route: 'requests',
     icon: 'Globe',
+    measuresDuration: true,
     filters: {
       methods: {
         urlKey: 'methods',
@@ -92,6 +102,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Queries',
     route: 'queries',
     icon: 'Database',
+    measuresDuration: true,
     filters: {
       types: {
         urlKey: 'queryTypes',
@@ -114,6 +125,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Exceptions',
     route: 'exceptions',
     icon: 'AlertTriangle',
+    measuresDuration: false,
     filters: {
       names: {
         urlKey: 'names',
@@ -141,6 +153,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Logs',
     route: 'logs',
     icon: 'FileText',
+    measuresDuration: false,
     filters: {
       levels: {
         urlKey: 'levels',
@@ -163,6 +176,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Events',
     route: 'events',
     icon: 'Zap',
+    measuresDuration: true,
     filters: {
       names: {
         urlKey: 'eventNames',
@@ -180,6 +194,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Jobs',
     route: 'jobs',
     icon: 'Briefcase',
+    measuresDuration: true,
     filters: {
       names: {
         urlKey: 'jobNames',
@@ -207,6 +222,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Schedule',
     route: 'schedule',
     icon: 'Clock',
+    measuresDuration: true,
     filters: {
       names: {
         urlKey: 'scheduleNames',
@@ -229,6 +245,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Cache',
     route: 'cache',
     icon: 'HardDrive',
+    measuresDuration: true,
     filters: {
       operations: {
         urlKey: 'cacheOperations',
@@ -246,6 +263,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Mail',
     route: 'mail',
     icon: 'Mail',
+    measuresDuration: true,
     filters: {
       statuses: {
         urlKey: 'mailStatuses',
@@ -263,6 +281,7 @@ export const ENTRY_TYPES = {
     pluralName: 'HTTP Client',
     route: 'http-client',
     icon: 'Globe',
+    measuresDuration: true,
     filters: {
       methods: {
         urlKey: 'methods',
@@ -290,6 +309,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Redis',
     route: 'redis',
     icon: 'Database',
+    measuresDuration: true,
     filters: {
       commands: {
         urlKey: 'redisCommands',
@@ -312,6 +332,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Models',
     route: 'models',
     icon: 'Box',
+    measuresDuration: true,
     filters: {
       actions: {
         urlKey: 'modelActions',
@@ -339,6 +360,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Notifications',
     route: 'notifications',
     icon: 'Bell',
+    measuresDuration: true,
     filters: {
       types: {
         urlKey: 'notificationTypes',
@@ -361,6 +383,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Views',
     route: 'views',
     icon: 'Layout',
+    measuresDuration: true,
     filters: {
       formats: {
         urlKey: 'viewFormats',
@@ -383,6 +406,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Commands',
     route: 'commands',
     icon: 'Terminal',
+    measuresDuration: true,
     filters: {
       statuses: {
         urlKey: 'commandStatuses',
@@ -405,6 +429,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Gates',
     route: 'gates',
     icon: 'Shield',
+    measuresDuration: true,
     filters: {
       names: {
         urlKey: 'gateNames',
@@ -427,6 +452,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Batches',
     route: 'batches',
     icon: 'Layers',
+    measuresDuration: true,
     filters: {
       operations: {
         urlKey: 'batchOperations',
@@ -449,6 +475,7 @@ export const ENTRY_TYPES = {
     pluralName: 'Dumps',
     route: 'dumps',
     icon: 'HardDrive',
+    measuresDuration: true,
     filters: {
       operations: {
         urlKey: 'dumpOperations',
@@ -476,6 +503,7 @@ export const ENTRY_TYPES = {
     pluralName: 'GraphQL',
     route: 'graphql',
     icon: 'Hexagon',
+    measuresDuration: true,
     filters: {
       operationTypes: {
         urlKey: 'operationTypes',
@@ -612,6 +640,9 @@ export function validateConfig(): string[] {
     if (!config.displayName) errors.push(`${typeName}: missing displayName`);
     if (!config.route) errors.push(`${typeName}: missing route`);
     if (!config.filters) errors.push(`${typeName}: missing filters`);
+    if (typeof config.measuresDuration !== 'boolean') {
+      errors.push(`${typeName}: missing measuresDuration`);
+    }
 
     for (const [filterName, filter] of Object.entries(config.filters)) {
       if (!filter.urlKey) errors.push(`${typeName}.${filterName}: missing urlKey`);

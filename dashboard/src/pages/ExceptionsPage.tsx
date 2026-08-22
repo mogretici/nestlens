@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { AlertTriangle, CheckCircle, Circle, RefreshCw } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader, { FilterTabs } from '../components/PageHeader';
 import EntrySearchInput from '../components/EntrySearchInput';
@@ -27,8 +29,9 @@ export default function ExceptionsPage() {
     clearAll,
     serverFilters: baseServerFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('exceptions');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   // Add resolved filter to server filters
   const serverFilters = {
@@ -50,7 +53,12 @@ export default function ExceptionsPage() {
     updateEntry,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<ExceptionEntry>({ type: 'exception', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<ExceptionEntry>({
+    type: 'exception',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is ExceptionEntry => isExceptionEntry(entry));
@@ -204,7 +212,6 @@ export default function ExceptionsPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-36' : 'pt-24';
 
   return (
     <div>
@@ -222,16 +229,19 @@ export default function ExceptionsPage() {
         filters={headerFilters}
         onClearAllFilters={clearAll}
         filterControls={
-          <FilterTabs
-            tabs={statusTabs}
-            activeTab={filterStatus}
-            onChange={(id) => setFilterStatus(id as FilterStatus)}
-          />
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <FilterTabs
+              tabs={statusTabs}
+              activeTab={filterStatus}
+              onChange={(id) => setFilterStatus(id as FilterStatus)}
+            />
+            <RangeFilters route="exceptions" />
+          </div>
         }
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         <EntrySearchInput placeholder="Search by exception name, message, tag, or content..." />
 
         {/* New entries button */}

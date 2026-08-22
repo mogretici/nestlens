@@ -15,6 +15,16 @@ interface UsePaginatedEntriesOptions {
   autoRefresh?: boolean;
   autoRefreshInterval?: number;
   filters?: CursorFilters;
+  /**
+   * How far back to look, in minutes, counted from each request.
+   *
+   * A `from` cannot be computed once and kept: "the last five minutes" would
+   * quietly become "the five minutes before you chose it", and after ten
+   * minutes of watching a live page it would be showing fifteen. So the window
+   * travels as a duration and becomes an instant where the request is made,
+   * which also keeps `filters` stable enough to compare.
+   */
+  windowMinutes?: number;
 }
 
 // Stable JSON stringify for filter comparison
@@ -112,12 +122,13 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     autoRefresh: initialAutoRefresh,
     autoRefreshInterval = 5000,
     filters: filtersOption,
+    windowMinutes,
   } = options;
 
   // Serialize filters for dependency comparison using stable stringify
   const filtersKey = stableStringify(filtersOption);
   /** Everything that decides what a fetch returns, in one comparable value. */
-  const requestKey = `${type}|${limit}|${filtersKey}`;
+  const requestKey = `${type}|${limit}|${filtersKey}|${windowMinutes ?? 0}`;
 
   /**
    * The filters, re-identified from their content.
@@ -145,6 +156,23 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     setIdentifiedFilters({ key: filtersKey, value: filtersOption });
   }
   const filters = identifiedFilters.value;
+
+  /**
+   * The filters as they go out, with the window turned into an instant.
+   *
+   * Computed when a request is made rather than when the component renders:
+   * "the last five minutes" has to keep meaning that, and a `from` fixed once
+   * would quietly become "the five minutes before you chose it" — after ten
+   * minutes of watching a live page it would be showing fifteen.
+   */
+  const askedFilters = useCallback((): CursorFilters | undefined => {
+    if (!windowMinutes || windowMinutes <= 0) return filters;
+
+    return {
+      ...filters,
+      from: new Date(Date.now() - windowMinutes * 60_000).toISOString(),
+    };
+  }, [filters, windowMinutes]);
 
   const [entries, setEntries] = useState<T[]>([]);
   /**
@@ -249,7 +277,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
         type,
         limit,
         beforeSequence: meta.oldestSequence,
-        filters,
+        filters: askedFilters(),
       });
 
       setEntries((prev) => {
@@ -265,7 +293,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, meta, filters]);
+  }, [type, limit, meta, askedFilters]);
 
   // Load new entries (manual button click)
   const loadNew = useCallback(async () => {
@@ -281,7 +309,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
         type,
         limit: newEntriesCount || limit,
         afterSequence: newestSequenceRef.current,
-        filters,
+        filters: askedFilters(),
       });
 
       if (response.data.length > 0) {
@@ -302,14 +330,14 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       loadingNewerRef.current = false;
       setRefreshing(false);
     }
-  }, [type, limit, newEntriesCount, filters]);
+  }, [type, limit, newEntriesCount, askedFilters]);
 
   // Refresh all data
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
       setError(null);
-      const response = await getEntriesWithCursor({ type, limit, filters });
+      const response = await getEntriesWithCursor({ type, limit, filters: askedFilters() });
       setEntries(response.data as T[]);
       setMeta(response.meta);
       newestSequenceRef.current = response.meta.newestSequence;
@@ -322,7 +350,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, filters]);
+  }, [type, limit, askedFilters]);
 
   // Check for new entries
   const checkForNew = useCallback(async () => {
@@ -371,7 +399,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     // finished last, which is not what was asked for.
     let current = true;
 
-    getEntriesWithCursor({ type, limit, filters }).then(
+    getEntriesWithCursor({ type, limit, filters: askedFilters() }).then(
       (response) => {
         if (current) applyPage(response);
       },
@@ -383,7 +411,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     return () => {
       current = false;
     };
-  }, [type, limit, filters, applyPage, applyFailure]);
+  }, [type, limit, askedFilters, applyPage, applyFailure]);
 
   // Check if an entry is highlighted (new)
   const isHighlighted = useCallback((id: number): boolean => {
@@ -422,7 +450,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
           type,
           limit: checkResponse.data.count,
           afterSequence: since,
-          filters,
+          filters: askedFilters(),
         });
 
         if (response.data.length > 0) {
@@ -453,7 +481,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       loadingNewerRef.current = false;
     }
-  }, [type, filters]);
+  }, [type, askedFilters]);
 
   // Set up auto-refresh interval
   useEffect(() => {

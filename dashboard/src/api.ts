@@ -103,6 +103,14 @@ export interface CursorFilters {
   // Common
   tags?: string[];
   search?: string;
+  /** ISO 8601 instant; only entries recorded at or after it. */
+  from?: string;
+  /** ISO 8601 instant; only entries recorded at or before it. */
+  to?: string;
+  /** Milliseconds; only entries that took at least this long. */
+  minDuration?: number;
+  /** Milliseconds; only entries that took at most this long. */
+  maxDuration?: number;
 }
 
 /**
@@ -183,6 +191,10 @@ export async function getEntriesWithCursor(params: {
     // Common filters
     if (f.tags && f.tags.length > 0) searchParams.set('tags', f.tags.join(','));
     if (f.search) searchParams.set('search', f.search);
+    if (f.from) searchParams.set('from', f.from);
+    if (f.to) searchParams.set('to', f.to);
+    if (f.minDuration !== undefined) searchParams.set('minDuration', f.minDuration.toString());
+    if (f.maxDuration !== undefined) searchParams.set('maxDuration', f.maxDuration.toString());
   }
 
   return fetchApi(`/entries/cursor?${searchParams.toString()}`);
