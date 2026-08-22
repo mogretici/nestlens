@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
+import { wrapMethodPreservingShape } from './wrap-method';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -154,25 +155,25 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
     this.originalMethods = undefined;
   }
 
+  /**
+   * Wrapped without changing what a caller gets back.
+   *
+   * Written `async`, this turned every command into one that returns a
+   * promise. ioredis returns promises anyway; a client that does not — node's
+   * older callback API, a wrapper an application wrote itself, a test double —
+   * had its return value replaced.
+   */
   private wrapCommand(command: string, originalMethod: RedisCommand): RedisCommand {
-    return async (...args: unknown[]): Promise<unknown> => {
-      const startTime = Date.now();
-      let status: 'success' | 'error' = 'success';
-      let result: unknown;
-      let error: string | undefined;
-
-      try {
-        result = await originalMethod(...args);
-        return result;
-      } catch (err) {
-        status = 'error';
-        error = err instanceof Error ? err.message : String(err);
-        throw err;
-      } finally {
-        const duration = Date.now() - startTime;
-        this.collectEntry(command, args, duration, status, result, error);
-      }
-    };
+    return wrapMethodPreservingShape(originalMethod, ({ args, result, error, durationMs }) => {
+      this.collectEntry(
+        command,
+        args,
+        durationMs,
+        error ? 'error' : 'success',
+        result,
+        error ? (error instanceof Error ? error.message : String(error)) : undefined,
+      );
+    });
   }
 
   private collectEntry(

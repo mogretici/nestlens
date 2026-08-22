@@ -10,7 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
-import { WrappedMethods } from './wrap-method';
+import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * The view engine surface this watcher touches — a single `render` method.
@@ -95,37 +95,34 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
     this.wrapped = undefined;
   }
 
+  /**
+   * Wrapped without changing what a caller gets back.
+   *
+   * This was written `async`, which turns a synchronous `render` into one that
+   * returns a promise — and a template engine's render usually is synchronous:
+   *
+   * ```text
+   * res.send(engine.render('index', data))   ->  sends [object Promise]
+   * ```
+   *
+   * The same mistake the authorization watcher was making, in the one place
+   * where what comes back is written straight into a response.
+   */
   private wrapRenderMethod(originalRender: RenderMethod): RenderMethod {
-    return async (...args: unknown[]): Promise<unknown> => {
-      const startTime = Date.now();
-      let status: 'rendered' | 'error' = 'rendered';
-      let error: string | undefined;
-      let result: unknown;
-
-      // Extract render parameters
+    return wrapMethodPreservingShape(originalRender, ({ args, result, error, durationMs }) => {
       const renderParams = this.extractRenderParams(args);
 
-      try {
-        result = await originalRender(...args);
-        return result;
-      } catch (err) {
-        status = 'error';
-        error = err instanceof Error ? err.message : String(err);
-        throw err;
-      } finally {
-        const duration = Date.now() - startTime;
-        this.collectEntry(
-          renderParams.template,
-          renderParams.format,
-          renderParams.locals,
-          duration,
-          status,
-          result,
-          renderParams.cacheHit,
-          error,
-        );
-      }
-    };
+      this.collectEntry(
+        renderParams.template,
+        renderParams.format,
+        renderParams.locals,
+        durationMs,
+        error ? 'error' : 'rendered',
+        result,
+        renderParams.cacheHit,
+        error ? (error instanceof Error ? error.message : String(error)) : undefined,
+      );
+    });
   }
 
   /**

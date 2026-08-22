@@ -23,6 +23,11 @@ import { EventWatcher } from '../../watchers/event.watcher';
 import { JobWatcher } from '../../watchers/job.watcher';
 import { NotificationWatcher } from '../../watchers/notification.watcher';
 import { RedisWatcher } from '../../watchers/redis.watcher';
+import { BatchWatcher } from '../../watchers/batch.watcher';
+import { DumpWatcher } from '../../watchers/dump.watcher';
+import { GateWatcher } from '../../watchers/gate.watcher';
+import { MailWatcher } from '../../watchers/mail.watcher';
+import { ViewWatcher } from '../../watchers/view.watcher';
 
 const collector = {
   collect: async () => undefined,
@@ -51,6 +56,110 @@ const threeLifecycles = async (make: () => Lifecycle): Promise<void> => {
 /** The own function-valued properties of an object, by name. */
 const methodsOf = (host: object): Record<string, unknown> =>
   Object.fromEntries(Object.entries(host).filter(([, value]) => typeof value === 'function'));
+
+describe('the watchers that wrap methods on a service they are handed', () => {
+  /**
+   * These five borrow through `WrappedMethods` and declare a destroy hook.
+   * Declaring one is not restoring one, and only the six above were ever
+   * checked behaviourally — so the guarantee held for the watchers that had
+   * once been broken and was untested for the rest.
+   */
+  it('gives the mailer back', async () => {
+    const mailer = { sendMail: async () => ({ messageId: '1' }) };
+    const before = methodsOf(mailer);
+
+    await threeLifecycles(
+      () => new MailWatcher(collector, config({ mail: true }), mailer) as unknown as Lifecycle,
+    );
+
+    expect(methodsOf(mailer)).toEqual(before);
+  });
+
+  it('gives the authorization service back', async () => {
+    const gate = {
+      check: () => true,
+      allows: () => true,
+      denies: () => false,
+      authorize: () => true,
+      can: () => true,
+    };
+    const before = methodsOf(gate);
+
+    await threeLifecycles(
+      () => new GateWatcher(collector, config({ gate: true }), gate) as unknown as Lifecycle,
+    );
+
+    expect(methodsOf(gate)).toEqual(before);
+  });
+
+  it('gives the view engine back', async () => {
+    const engine = { render: (..._args: unknown[]) => '<html></html>' };
+    const before = methodsOf(engine);
+
+    await threeLifecycles(
+      () => new ViewWatcher(collector, config({ view: true }), engine) as unknown as Lifecycle,
+    );
+
+    expect(methodsOf(engine)).toEqual(before);
+  });
+
+  it('gives the batch processor back', async () => {
+    const processor = {
+      process: async () => ({ processed: 1 }),
+      processBatch: async () => ({ processed: 1 }),
+      bulk: async () => ({ processed: 1 }),
+      bulkProcess: async () => ({ processed: 1 }),
+    };
+    const before = methodsOf(processor);
+
+    await threeLifecycles(
+      () => new BatchWatcher(collector, config({ batch: true }), processor) as unknown as Lifecycle,
+    );
+
+    expect(methodsOf(processor)).toEqual(before);
+  });
+
+  it('gives the dump service back', async () => {
+    const service = {
+      export: async () => ({ recordCount: 1 }),
+      import: async () => ({ recordCount: 1 }),
+      backup: async () => ({}),
+      restore: async () => ({}),
+      migrate: async () => ({}),
+      dump: async () => ({}),
+    };
+    const before = methodsOf(service);
+
+    await threeLifecycles(
+      () => new DumpWatcher(collector, config({ dump: true }), service) as unknown as Lifecycle,
+    );
+
+    expect(methodsOf(service)).toEqual(before);
+  });
+
+  it('still records through the wrappers it installed', async () => {
+    // A restore that removed the wrapper too early would pass the test above.
+    const collected: string[] = [];
+    const recording = {
+      collect: async (type: string) => void collected.push(type),
+      collectImmediate: async () => null,
+    } as unknown as CollectorService;
+
+    const engine = { render: (..._args: unknown[]) => '<html></html>' };
+    const watcher = new ViewWatcher(
+      recording,
+      config({ view: true }),
+      engine,
+    ) as unknown as Lifecycle;
+
+    await watcher.onModuleInit?.();
+    engine.render();
+
+    expect(collected).toContain('view');
+
+    await watcher.onModuleDestroy?.();
+  });
+});
 
 describe('a watcher that borrows, three times over', () => {
   it('gives the cache manager back', async () => {

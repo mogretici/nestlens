@@ -7,6 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
+import { wrapMethodPreservingShape } from './wrap-method';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -124,35 +125,23 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
     notificationType: 'email' | 'sms' | 'push' | 'socket' | 'webhook',
     originalMethod: NotificationMethod,
   ): NotificationMethod {
-    return async (...args: unknown[]): Promise<unknown> => {
-      const startTime = Date.now();
-      let status: 'sent' | 'failed' = 'sent';
-      let error: string | undefined;
-
-      // Extract notification details from arguments
+    // Wrapped without changing what a caller gets back: written `async`, this
+    // turned a service whose send is synchronous into one that returns a
+    // promise, and the notification services applications write are their own.
+    return wrapMethodPreservingShape(originalMethod, ({ args, error, durationMs }) => {
       const notificationData = this.extractNotificationData(args);
 
-      try {
-        const result = await originalMethod(...args);
-        return result;
-      } catch (err) {
-        status = 'failed';
-        error = err instanceof Error ? err.message : String(err);
-        throw err;
-      } finally {
-        const duration = Date.now() - startTime;
-        this.collectEntry(
-          notificationType,
-          notificationData.recipient,
-          notificationData.title,
-          notificationData.message,
-          notificationData.metadata,
-          status,
-          duration,
-          error,
-        );
-      }
-    };
+      this.collectEntry(
+        notificationType,
+        notificationData.recipient,
+        notificationData.title,
+        notificationData.message,
+        notificationData.metadata,
+        error ? 'failed' : 'sent',
+        durationMs,
+        error ? (error instanceof Error ? error.message : String(error)) : undefined,
+      );
+    });
   }
 
   /**
