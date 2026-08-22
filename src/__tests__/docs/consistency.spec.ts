@@ -9,10 +9,10 @@
  */
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { DEFAULT_CONFIG } from '../nestlens.config';
-import { GRAPHQL_DEFAULTS } from '../watchers/graphql/types';
+import { DEFAULT_CONFIG } from '../../nestlens.config';
+import { GRAPHQL_DEFAULTS } from '../../watchers/graphql/types';
 
-const REPO_ROOT = join(__dirname, '..', '..');
+const REPO_ROOT = join(__dirname, '..', '..', '..');
 const docsDir = join(REPO_ROOT, 'docs', 'docs');
 
 function readDoc(relPath: string): string {

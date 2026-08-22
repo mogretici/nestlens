@@ -69,7 +69,8 @@ async collect<T extends EntryType>(
 **Example:**
 ```typescript
 await this.collector.collect('log', {
-  level: 'info',
+  // 'debug' | 'log' | 'warn' | 'error' | 'verbose'. There is no 'info'.
+  level: 'log',
   message: 'User logged in',
   context: 'AuthService',
 });
@@ -611,7 +612,9 @@ Leverage TypeScript for compile-time safety:
 import { LogEntry } from 'nestlens';
 
 const logPayload: LogEntry['payload'] = {
-  level: 'info',
+  // 'debug' | 'log' | 'warn' | 'error' | 'verbose' — this is what the type
+  // buys you: 'info' does not compile.
+  level: 'log',
   message: 'Custom log',
   context: 'MyService',
 };

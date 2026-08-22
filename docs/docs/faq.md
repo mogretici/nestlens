@@ -617,7 +617,9 @@ collector.collect('event', {
 
 // Use 'log' type for custom logs
 collector.collect('log', {
-  level: 'info',
+  // 'debug' | 'log' | 'warn' | 'error' | 'verbose' — the levels Nest's own
+  // logger uses. There is no 'info'; 'log' is its equivalent.
+  level: 'log',
   message: 'Custom metric',
   metadata: { /* your data */ },
 });
