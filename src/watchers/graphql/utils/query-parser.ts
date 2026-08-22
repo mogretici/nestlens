@@ -174,6 +174,76 @@ export function declaredOperations(query: string): DeclaredOperation[] {
 }
 
 /**
+ * Whether the document asks the server about itself.
+ *
+ * Introspection selects `__schema` or `__type`. This used to be
+ * `query.toLowerCase().includes('__schema')` with two regular expressions
+ * beside it and a check for the word `introspectionquery` anywhere in the
+ * text — a substring test where a field was meant. Measured on the old one:
+ *
+ *     mutation { saveDoc(text: "__schema is a field") { id } }   dropped
+ *     query NotAnIntrospectionQuery { orders { id } }            dropped
+ *     { user { my__schema } }                                    dropped
+ *
+ * Every one of those is an operation somebody wanted to see, absent from the
+ * dashboard with nothing to say it had been skipped — which reads as "it never
+ * ran". Reading whole names also settles `__typename` by construction: it is a
+ * different name, so it is not introspection, which the regular expressions
+ * had to be told separately.
+ */
+export function selectsIntrospection(query: string): boolean {
+  const length = query.length;
+  let index = 0;
+
+  while (index < length) {
+    const character = query[index];
+
+    if (character === '#') {
+      while (index < length && query[index] !== '\n') index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      if (query.startsWith('"""', index)) {
+        const end = query.indexOf('"""', index + 3);
+        index = end === -1 ? length : end + 3;
+        continue;
+      }
+      index += 1;
+      while (index < length) {
+        if (query[index] === '\\') {
+          index += 2;
+          continue;
+        }
+        if (query[index] === '"') {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (NAME_START.test(character)) {
+      let end = index;
+      while (end < length && NAME_PART.test(query[end])) end += 1;
+
+      const word = query.slice(index, end);
+      if (word === '__schema' || word === '__type') {
+        return true;
+      }
+
+      index = end;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return false;
+}
+
+/**
  * Extract operation name from a GraphQL query.
  *
  * `requested` is what the client named in its request, which is the only

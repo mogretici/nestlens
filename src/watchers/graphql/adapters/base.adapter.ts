@@ -8,6 +8,7 @@ import { AddressableRequest, resolveClientIp } from '@/core/client-ip';
 import { CollectorService } from '@/core';
 import { GraphQLPayload } from '@/types';
 import { ResolvedGraphQLConfig } from '../types';
+import { selectsIntrospection } from '../utils/query-parser';
 import { assignKey } from '../../../core/safe-assign';
 
 /**
@@ -69,20 +70,8 @@ export abstract class BaseGraphQLAdapter {
    * Check if an operation should be ignored
    */
   protected shouldIgnoreOperation(operationName?: string, query?: string): boolean {
-    // Check introspection
-    if (this.config.ignoreIntrospection && query) {
-      const lowerQuery = query.toLowerCase();
-      // Check for introspection fields: __schema and __type (but NOT __typename)
-      // __type is followed by ( or whitespace when used as introspection field
-      // __typename is a meta-field that Apollo Client adds for caching - should NOT be ignored
-      if (
-        lowerQuery.includes('__schema') ||
-        /\b__type\s*\(/.test(lowerQuery) ||
-        /\b__type\s*\{/.test(lowerQuery) ||
-        lowerQuery.includes('introspectionquery')
-      ) {
-        return true;
-      }
+    if (this.config.ignoreIntrospection && query && selectsIntrospection(query)) {
+      return true;
     }
 
     // Check ignored operations

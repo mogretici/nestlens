@@ -16,6 +16,7 @@
  */
 import {
   declaredOperations,
+  selectsIntrospection,
   extractOperationName,
   extractOperationType,
   truncateQuery,
@@ -116,6 +117,40 @@ describe('which operation a document declares', () => {
     const elapsed = Number(process.hrtime.bigint() - started) / 1e6;
 
     expect(elapsed).toBeLessThan(150);
+  });
+});
+
+describe('asking the server about itself', () => {
+  it.each([
+    [
+      'the standard introspection query',
+      'query IntrospectionQuery { __schema { types { name } } }',
+    ],
+    ['shorthand introspection', '{ __schema { queryType { name } } }'],
+    ['a type lookup', 'query { __type(name: "Order") { fields { name } } }'],
+    ['one behind a comment', '# looking\n{ __schema { types { name } } }'],
+  ])('recognises %s', (_name, query) => {
+    expect(selectsIntrospection(query)).toBe(true);
+  });
+
+  it.each([
+    ['an ordinary query', '{ orders { id } }'],
+    ['__typename, which every Apollo client adds', '{ orders { __typename id } }'],
+    ['a mutation storing the word', 'mutation { saveDoc(text: "__schema is a field") { id } }'],
+    ['an operation named around it', 'query NotAnIntrospectionQuery { orders { id } }'],
+    ['a field whose name contains it', '{ user { my__schema } }'],
+    ['a default value holding it', 'query Q($t: String = "introspectionquery") { orders { id } }'],
+    ['a block string holding it', 'mutation { save(text: """ __schema """) { id } }'],
+  ])('does not mistake %s for it', (_name, query) => {
+    expect(selectsIntrospection(query)).toBe(false);
+  });
+
+  it('is not slowed down by a long document', () => {
+    const long = `{ orders { ${'a '.repeat(100_000)} } }`;
+
+    const started = process.hrtime.bigint();
+    expect(selectsIntrospection(long)).toBe(false);
+    expect(Number(process.hrtime.bigint() - started) / 1e6).toBeLessThan(150);
   });
 });
 
