@@ -4,6 +4,20 @@ import { Transform, TransformFnParams } from 'class-transformer';
  * Pagination limits to prevent DoS
  */
 export const MAX_LIMIT = 1000;
+/**
+ * How far into the list an offset may reach.
+ *
+ * Offset paging asks the storage for `offset + limit` entries and drops the
+ * ones already shown, which is what an offset costs anywhere — so the work is
+ * set by the offset, not by the page. Against a store keeping everything
+ * (`maxEntries: 0`) nothing bounded that work: `?offset=1000000` read a
+ * million rows with their payloads into memory to answer with fifty.
+ *
+ * Deep paging is what `entries/cursor` is for, and it stays constant-cost at
+ * any depth. This is a refusal rather than a clamp because a clamped offset
+ * answers a different question than the one asked, and looks like an answer.
+ */
+export const MAX_OFFSET = 10_000;
 export const DEFAULT_LIMIT = 50;
 
 /**
@@ -95,8 +109,8 @@ export function TransformSequence() {
 }
 
 /**
- * Transforms offset query parameter, which has no upper bound but no meaning
- * below zero either.
+ * Transforms offset query parameter. Bounded above by {@link MAX_OFFSET} and
+ * meaningless below zero.
  */
 export function TransformOffset() {
   return TransformToInt({ min: 0, default: 0 });

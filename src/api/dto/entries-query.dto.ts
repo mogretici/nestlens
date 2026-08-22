@@ -1,6 +1,7 @@
-import { IsDate, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsDate, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { ENTRY_TYPES } from './entry-types';
 import {
+  MAX_OFFSET,
   TransformDate,
   TransformLimit,
   TransformOffset,
@@ -39,6 +40,9 @@ export class EntriesQueryDto {
   limit?: number;
 
   @IsOptional()
+  @Max(MAX_OFFSET, {
+    message: `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further`,
+  })
   @TransformOffset()
   offset?: number;
 
