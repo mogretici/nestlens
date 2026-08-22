@@ -115,6 +115,8 @@ export default function EntryDetailPage() {
     id?: string;
     entry: Entry | null;
     related: Entry[];
+    /** Set when the request failed for a reason other than the entry not existing. */
+    failure?: Error;
   }>({ entry: null, related: [] });
   const fallbackToolbar = useJsonToolbar();
 
@@ -135,9 +137,15 @@ export default function EntryDetailPage() {
         if (current) setLoaded({ id, entry: response.data, related: response.related ?? [] });
       } catch (error) {
         console.error('Failed to fetch entry:', error);
-        // Settled even so: the spinner has to stop, and "not found" is what
-        // the page shows instead.
-        if (current) setLoaded({ id, entry: null, related: [] });
+        // Settled even so — the spinner has to stop — but not as "not found".
+        // A 403 and a 500 both landed here, and the page told the reader the
+        // entry did not exist: measured identically for 403, 404 and 500 while
+        // the entry was there all along.
+        const failure = error instanceof Error ? error : new Error('Failed to load this entry');
+        const missing = /\b404\b/.test(failure.message);
+        if (current) {
+          setLoaded({ id, entry: null, related: [], failure: missing ? undefined : failure });
+        }
       }
     };
 
@@ -157,11 +165,19 @@ export default function EntryDetailPage() {
   }
 
   if (!entry) {
+    const failure = loaded.failure;
+
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Entry not found
+      <div className="text-center py-12" role={failure ? 'alert' : undefined}>
+        <h2
+          className="text-xl font-semibold text-gray-900 dark:text-white"
+          data-testid={failure ? 'entry-error' : 'entry-missing'}
+        >
+          {failure ? 'Could not load this entry' : 'Entry not found'}
         </h2>
+        {failure && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{failure.message}</p>
+        )}
         <Link to="/" className="text-primary-600 hover:text-primary-700 mt-4 inline-block">
           Go back to dashboard
         </Link>
