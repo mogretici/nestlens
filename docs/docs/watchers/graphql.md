@@ -267,7 +267,8 @@ once the application has started, so it sees every subscription whichever
 server and whichever WebSocket protocol you use — Apollo with `graphql-ws`,
 the older `subscriptions-transport-ws`, or Mercurius.
 
-Three entry kinds are recorded, all sharing one `subscriptionId`:
+Four events can be recorded, three of them by default, all sharing one
+`subscriptionId`:
 
 | Event | When | Recorded by default |
 |---|---|---|

@@ -250,6 +250,26 @@ describe('Documentation consistency with code', () => {
     });
   });
 
+  describe('the README, which is what npm and GitHub show', () => {
+    const readme = readFileSync(join(REPO_ROOT, 'README.md'), 'utf8');
+
+    it('counts the watchers the way the code does', () => {
+      // Written as "requests, queries, exceptions, jobs, and N more".
+      const stated = readme.match(/and (\d+) more watchers/);
+
+      expect(stated).not.toBeNull();
+      expect(Number(stated?.[1]) + 4).toBe(watcherCount);
+    });
+
+    it('links to every watcher', () => {
+      const linked = new Set([...readme.matchAll(/docs\/watchers\/([a-z-]+)"/g)].map((m) => m[1]));
+      linked.delete('overview');
+
+      // The badge strip is the only place a reader sees the whole list.
+      expect(linked.size).toBe(watcherCount);
+    });
+  });
+
   describe('referenced docs exist', () => {
     it.each([
       'getting-started/installation.md',
