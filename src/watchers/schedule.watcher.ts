@@ -72,7 +72,6 @@ function toIsoString(value: unknown): string | undefined {
 export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(ScheduleWatcher.name);
   private readonly config: ScheduleWatcherConfig;
-  private readonly jobTracking = new Map<string, number>(); // jobName -> startTime
   private readonly wrappedJobs = new Set<string>(); // Track which jobs we've already wrapped
   private schedulerRegistry?: SchedulerRegistryLike;
   private wrappedRegistry?: WrappedMethods;
@@ -333,7 +332,6 @@ export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, On
 
     this.wrappedTicks.clear();
     this.wrappedJobs.clear();
-    this.jobTracking.clear();
   }
 
   /**
@@ -368,15 +366,12 @@ export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, On
 
     job.fireOnTick = async (): Promise<void> => {
       const startTime = Date.now();
-      const jobKey = `cron:${name}`;
-      this.jobTracking.set(jobKey, startTime);
       failure = undefined;
 
       this.collectEntry(name, 'started', 0, undefined, this.getCronPattern(job));
 
       const finish = (error: unknown): void => {
         const duration = Date.now() - startTime;
-        this.jobTracking.delete(jobKey);
 
         this.collectEntry(
           name,

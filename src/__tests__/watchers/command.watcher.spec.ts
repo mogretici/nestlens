@@ -739,8 +739,10 @@ describe('CommandWatcher', () => {
   // ============================================================================
 
   describe('Command Tracking', () => {
-    it('should track commands in progress', async () => {
-      // Arrange
+    it('reports a command while it is still running', async () => {
+      // The watcher used to keep a map of commands in flight that nothing ever
+      // read — the durations come from closure variables. What a reader can
+      // actually see is the entry, so that is what this checks.
       let resolveExecute: (value?: unknown) => void;
       const bus = createCommandBus({
         execute: jest.fn().mockImplementation(
@@ -753,37 +755,52 @@ describe('CommandWatcher', () => {
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
 
-      // Act
       const executePromise = bus.execute({});
 
-      // Assert - command should be tracked while in progress
-      expect((watcher as any).commandTracking.size).toBe(1);
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'command',
+        expect.objectContaining({ status: 'executing' }),
+      );
 
-      // Cleanup
       resolveExecute!();
       await executePromise;
 
-      // After completion, tracking should be cleaned up
-      expect((watcher as any).commandTracking.size).toBe(0);
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'command',
+        expect.objectContaining({ status: 'completed' }),
+      );
     });
 
-    it('should cleanup tracking on failure', async () => {
-      // Arrange
+    it('reports one that failed, and lets the failure through', async () => {
       const bus = createCommandBus({
         execute: jest.fn().mockRejectedValue(new Error('Failed')),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
 
-      // Act
-      try {
-        await bus.execute({});
-      } catch {
-        // Expected
-      }
+      await expect(bus.execute({})).rejects.toThrow('Failed');
 
-      // Assert
-      expect((watcher as any).commandTracking.size).toBe(0);
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'command',
+        expect.objectContaining({ status: 'failed', error: 'Failed' }),
+      );
+    });
+
+    it('measures how long it took', async () => {
+      const bus = createCommandBus({
+        execute: jest
+          .fn()
+          .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 12))),
+      });
+      watcher = await createWatcher(mockConfig, bus);
+      watcher.onModuleInit();
+
+      await bus.execute({});
+
+      const completed = (mockCollector.collect as jest.Mock).mock.calls.find(
+        ([, payload]) => (payload as { status?: string }).status === 'completed',
+      );
+      expect((completed?.[1] as { duration: number }).duration).toBeGreaterThanOrEqual(10);
     });
   });
 });

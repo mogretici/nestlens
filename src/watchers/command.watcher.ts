@@ -39,7 +39,6 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
    * one it had.
    */
   private executeBeforeWrapping?: unknown;
-  private readonly commandTracking = new Map<string, number>(); // commandId -> startTime
 
   constructor(
     private readonly collector: CollectorService,
@@ -87,17 +86,12 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
     this.commandBus.execute = async (command: unknown): Promise<unknown> => {
       const startTime = Date.now();
       const commandName = this.getCommandName(command);
-      const commandId = `${commandName}-${startTime}`;
-
-      this.commandTracking.set(commandId, startTime);
-
       // Track command started
       this.collectEntry(commandName, 'executing', 0, command, undefined, undefined);
 
       try {
         const result = await originalExecute(command);
         const duration = Date.now() - startTime;
-        this.commandTracking.delete(commandId);
 
         // Track command completed
         this.collectEntry(commandName, 'completed', duration, command, result, undefined);
@@ -105,7 +99,6 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
         return result;
       } catch (error) {
         const duration = Date.now() - startTime;
-        this.commandTracking.delete(commandId);
 
         // Track command failed
         this.collectEntry(
