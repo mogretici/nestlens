@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import {
   getEntriesWithCursor,
   checkNewEntries,
+  getLatestSequence,
   CursorFilters,
 } from '../api';
 import { Entry, EntryType, CursorPaginationMeta } from '../types';
@@ -213,6 +214,19 @@ export function usePaginatedEntries<T extends Entry = Entry>(
    * apart, so it reuses and drops them unpredictably as the list changes.
    */
   const loadingNewerRef = useRef(false);
+  /**
+   * The newest sequence that has been considered, matching the filters or not.
+   *
+   * Distinct from `newestSequenceRef`, which is the newest entry on screen.
+   * They are the same thing only while every arriving entry matches. When one
+   * does not it is never loaded, so the on-screen cursor stays put — and asking
+   * again from that cursor re-examines a range that grows for as long as the
+   * tab is open. Measured on `/requests?statuses=500` with traffic that did not
+   * match it: the automatic path asked for 32 entries, then 88, then 136,
+   * reaching the API's ceiling of 1,000 within twenty-five seconds and scanning
+   * that far every five seconds afterwards.
+   */
+  const seenSequenceRef = useRef<number | null>(null);
   // Track if this is the initial load (no data yet)
   const isInitialLoadRef = useRef(true);
 
@@ -242,6 +256,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       setEntries(response.data as T[]);
       setMeta(response.meta);
       newestSequenceRef.current = response.meta.newestSequence;
+      seenSequenceRef.current = response.meta.newestSequence;
       setNewEntriesCount(0);
       setError(null);
       isInitialLoadRef.current = false;
@@ -340,6 +355,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       setEntries(response.data as T[]);
       setMeta(response.meta);
       newestSequenceRef.current = response.meta.newestSequence;
+      seenSequenceRef.current = response.meta.newestSequence;
       setNewEntriesCount(0);
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error('Failed to refresh entries');
@@ -472,15 +488,27 @@ export function usePaginatedEntries<T extends Entry = Entry>(
 
     loadingNewerRef.current = true;
     try {
-      const since = newestSequenceRef.current;
-      const checkResponse = await checkNewEntries(since, type);
-      if (checkResponse.data.count > 0) {
+      const since = seenSequenceRef.current ?? newestSequenceRef.current;
+      const latest = await getLatestSequence(type);
+      const newest = latest.data;
+
+      if (typeof newest === 'number' && newest > since) {
+        // A page at a time. The unfiltered count used to be the limit, so a
+        // filtered page asked for entries the filter would drop, and asked for
+        // more of them every time.
         const response = await getEntriesWithCursor({
           type,
-          limit: checkResponse.data.count,
+          limit,
           afterSequence: since,
           filters: askedFilters(),
         });
+
+        // Everything up to `newest` has been considered now, matching or not —
+        // unless the page filled, in which case there is more to come and only
+        // what came back can be counted as seen.
+        seenSequenceRef.current = response.meta.hasMore
+          ? (response.meta.newestSequence ?? since)
+          : newest;
 
         if (response.data.length > 0) {
           // Mark new entries as highlighted
@@ -510,7 +538,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       loadingNewerRef.current = false;
     }
-  }, [type, askedFilters]);
+  }, [type, limit, askedFilters]);
 
   // Set up auto-refresh interval
   useEffect(() => {

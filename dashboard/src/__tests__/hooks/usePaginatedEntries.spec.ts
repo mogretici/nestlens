@@ -408,7 +408,7 @@ describe('Auto-refresh interval behavior', () => {
     localStorage.setItem('nestlens-auto-refresh', 'true');
 
     const newEntries = [{ id: 2, sequence: 101 }];
-    (api.checkNewEntries as any).mockResolvedValue({ data: { count: 1 } });
+    (api.getLatestSequence as any).mockResolvedValue({ data: 101 });
     (api.getEntriesWithCursor as any)
       .mockResolvedValueOnce({
         data: [{ id: 1, sequence: 100 }],
@@ -419,7 +419,7 @@ describe('Auto-refresh interval behavior', () => {
         meta: { total: 2, hasMore: false, newestSequence: 101, oldestSequence: 100 },
       });
 
-    renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
+    const { result } = renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
 
     // Wait for initial load
     await act(async () => {
@@ -431,8 +431,11 @@ describe('Auto-refresh interval behavior', () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Assert
-    expect(api.checkNewEntries).toHaveBeenCalled();
+    // Assert — the new entry is on the list, asked for a page at a time.
+    expect(result.current.entries.map((entry) => entry.id)).toContain(2);
+    const [params] = (api.getEntriesWithCursor as any).mock.calls[1];
+    expect(params.afterSequence).toBe(100);
+    expect(params.limit).toBe(50);
   });
 
   it('handles errors in checkForNew gracefully', async () => {
@@ -458,9 +461,9 @@ describe('Auto-refresh interval behavior', () => {
   it('handles errors in autoLoadNew gracefully', async () => {
     // Arrange
     localStorage.setItem('nestlens-auto-refresh', 'true');
-    (api.checkNewEntries as any).mockRejectedValue(new Error('Network error'));
+    (api.getLatestSequence as any).mockRejectedValue(new Error('Network error'));
 
-    renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
+    const { result } = renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
 
     await act(async () => {
       vi.advanceTimersByTime(100);
@@ -471,8 +474,9 @@ describe('Auto-refresh interval behavior', () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Assert - no error thrown
-    expect(api.checkNewEntries).toHaveBeenCalled();
+    // Assert - no error thrown, and what was on screen stays there
+    expect(api.getLatestSequence).toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
   });
 
   it('clears interval on unmount', async () => {
