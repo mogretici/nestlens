@@ -36,6 +36,8 @@ export default function GatesPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -181,6 +183,8 @@ export default function GatesPage() {
           onRowClick={(entry) => navigate(`/gates/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No gate checks recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Shield className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

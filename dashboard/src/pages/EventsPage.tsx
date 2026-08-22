@@ -37,6 +37,8 @@ export default function EventsPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -149,6 +151,8 @@ export default function EventsPage() {
           onRowClick={(entry) => navigate(`/events/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No events recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Radio className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

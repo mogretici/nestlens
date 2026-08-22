@@ -50,6 +50,8 @@ export default function RequestsPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -182,6 +184,8 @@ export default function RequestsPage() {
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/requests/${entry.id}`)}
           emptyMessage="No requests recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Globe className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
         />

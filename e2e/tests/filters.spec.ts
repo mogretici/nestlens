@@ -1,6 +1,42 @@
 import { test, expect } from '@playwright/test';
 import { EntriesPage } from '../page-objects/entries.page';
 
+test.describe('When NestLens cannot answer', () => {
+  /**
+   * A dashboard reached from an address the guard does not allow gets 403 from
+   * every call. The table used to say "No requests recorded yet" — the same
+   * sentence it shows an application with no traffic.
+   */
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/__nestlens__/api/**', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: '{"statusCode":403,"message":"Forbidden"}',
+      }),
+    );
+  });
+
+  test('says it could not load, not that there is nothing', async ({ page }) => {
+    await page.goto('/requests');
+
+    await expect(page.getByTestId('table-error')).toBeVisible();
+    await expect(page.getByText('No requests recorded yet')).toHaveCount(0);
+  });
+
+  test('names the status it got', async ({ page }) => {
+    await page.goto('/requests');
+
+    await expect(page.getByTestId('table-error')).toContainText('403');
+  });
+
+  test('offers another go', async ({ page }) => {
+    await page.goto('/requests');
+
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+});
+
 test.describe('Filters E2E', () => {
   let entries: EntriesPage;
 

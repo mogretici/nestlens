@@ -37,6 +37,8 @@ export default function DumpsPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -191,6 +193,8 @@ export default function DumpsPage() {
           onRowClick={(entry) => navigate(`/dumps/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No data dumps recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<HardDrive className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

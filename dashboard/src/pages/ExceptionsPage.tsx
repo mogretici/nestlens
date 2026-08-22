@@ -43,6 +43,8 @@ export default function ExceptionsPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -253,6 +255,8 @@ export default function ExceptionsPage() {
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/exceptions/${entry.id}`)}
           emptyMessage="No exceptions recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<AlertTriangle className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
           rowClassName={(entry) => {
             const classes = [];

@@ -268,7 +268,7 @@ function StatCard({
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { stats, refreshStats } = useStats();
+  const { stats, error: statsError, refreshStats } = useStats();
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [pruningStatus, setPruningStatus] = useState<PruningStatus | null>(null);
   const [pruningRunning, setPruningRunning] = useState(false);
@@ -402,6 +402,44 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center h-64" role="status" aria-label="Loading...">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  /**
+   * Nothing is known, and saying so beats saying zero.
+   *
+   * Every number here falls back to `0` when `stats` is absent, and `stats` is
+   * absent whenever the API refuses or cannot be reached. A dashboard opened
+   * from an address the guard does not allow therefore reported: 0 entries
+   * recorded, 0 unresolved exceptions, 0 slow queries — an all-clear from a
+   * monitor that could not see anything, which is the worst thing this page
+   * can do. A refresh that fails later keeps the last numbers instead; those
+   * were true when they were fetched.
+   */
+  if (!stats && statsError) {
+    return (
+      <div
+        className="card flex flex-col items-center justify-center py-16 px-4"
+        role="alert"
+        data-testid="stats-error"
+      >
+        <div className="p-3 rounded-full bg-red-50 dark:bg-red-900/20 mb-4">
+          <AlertTriangle className="h-8 w-8 text-red-500 dark:text-red-400" />
+        </div>
+        <p className="text-base font-medium text-gray-900 dark:text-white">
+          Could not reach NestLens
+        </p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 text-center max-w-md">
+          {statsError.message}. Nothing on this page is known — it is not a
+          report of an idle application.
+        </p>
+        <button
+          onClick={() => void refreshStats()}
+          className="mt-5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          Try again
+        </button>
       </div>
     );
   }

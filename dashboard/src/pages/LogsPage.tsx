@@ -36,6 +36,8 @@ export default function LogsPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -151,6 +153,8 @@ export default function LogsPage() {
           onRowClick={(entry) => navigate(`/logs/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No logs recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<FileText className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

@@ -1,6 +1,31 @@
 import { test, expect } from '@playwright/test';
 import { DashboardPage } from '../page-objects/dashboard.page';
 
+test.describe('When NestLens cannot answer', () => {
+  /**
+   * Every number on the overview falls back to zero when the stats are absent,
+   * and they are absent whenever the API refuses. Measured under 403: "0 total
+   * recorded, 0 unresolved exceptions, 0 slow queries" — an all-clear from a
+   * monitor that could not see anything.
+   */
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/__nestlens__/api/**', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: '{"statusCode":403,"message":"Forbidden"}',
+      }),
+    );
+  });
+
+  test('says it could not reach NestLens instead of reporting zeros', async ({ page }) => {
+    await page.goto('/');
+
+    await expect(page.getByTestId('stats-error')).toBeVisible();
+    await expect(page.getByText('total recorded')).toHaveCount(0);
+  });
+});
+
 test.describe('Dashboard', () => {
   let dashboard: DashboardPage;
 

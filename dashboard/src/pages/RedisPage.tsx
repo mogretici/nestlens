@@ -37,6 +37,8 @@ export default function RedisPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -162,6 +164,8 @@ export default function RedisPage() {
           onRowClick={(entry) => navigate(`/redis/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No Redis commands recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Database className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

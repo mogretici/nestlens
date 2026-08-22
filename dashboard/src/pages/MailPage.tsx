@@ -41,6 +41,8 @@ export default function MailPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -184,6 +186,8 @@ export default function MailPage() {
           onRowClick={(entry) => navigate(`/mail/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No emails recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Mail className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 
