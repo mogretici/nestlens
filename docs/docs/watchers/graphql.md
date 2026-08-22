@@ -262,6 +262,24 @@ NestLensModule.forRoot({
 
 ## Subscription Tracking
 
+Subscription tracking needs no wiring. NestLens instruments the built schema
+once the application has started, so it sees every subscription whichever
+server and whichever WebSocket protocol you use — Apollo with `graphql-ws`,
+the older `subscriptions-transport-ws`, or Mercurius.
+
+Three entry kinds are recorded, all sharing one `subscriptionId`:
+
+| Event | When | Recorded by default |
+|---|---|---|
+| `start` | the client subscribes | yes |
+| `data` | a message is pushed | no — set `trackMessages` |
+| `error` | the stream fails | yes |
+| `complete` | the subscription ends | yes |
+
+Messages are off by default because a busy subscription produces a great many
+of them. `captureMessageData` additionally stores the message body, which goes
+through the same masking as every other payload.
+
 Track WebSocket subscription lifecycle:
 
 ```typescript

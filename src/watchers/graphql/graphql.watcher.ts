@@ -6,7 +6,15 @@
  * based on installed packages.
  */
 
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../../nestlens.config';
 import { ResolvedGraphQLConfig, resolveGraphQLConfig } from './types';
@@ -14,6 +22,7 @@ import { resolveSensitiveParams } from '../../core/data-masker.service';
 import { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter';
 import { createApolloAdapter } from './adapters/apollo.adapter';
 import { createMercuriusAdapter } from './adapters/mercurius.adapter';
+import { instrumentSubscriptions } from './subscription/schema-instrumentation';
 import {
   SubscriptionTracker,
   createSubscriptionTracker,
@@ -46,18 +55,21 @@ export const GRAPHQL_WATCHER = Symbol('GRAPHQL_WATCHER');
 export type RegistrationMode = 'pending' | 'auto' | 'manual';
 
 @Injectable()
-export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
+export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(GraphQLWatcher.name);
   private config!: ResolvedGraphQLConfig;
   private adapter?: BaseGraphQLAdapter;
   private subscriptionTracker?: SubscriptionTracker;
   private initialized = false;
   private registrationMode: RegistrationMode = 'pending';
+  /** Puts the schema's subscription fields back. */
+  private restoreSubscriptions?: () => void;
 
   constructor(
     private readonly collector: CollectorService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
+    private readonly moduleRef: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.graphql;
     // The collector's terms travel with the watcher's: this watcher marks what
@@ -83,6 +95,55 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
       await this.initialize();
     } catch (error) {
       this.logger.error('Failed to initialize GraphQL watcher', error);
+    }
+  }
+
+  /**
+   * Wires subscription tracking, once the schema exists.
+   *
+   * `GraphQLModule` builds the schema during its own initialisation, so there
+   * is nothing to instrument at `onModuleInit`. This runs after every module
+   * has started, which is the first moment the schema is there to be read.
+   */
+  onApplicationBootstrap(): void {
+    if (!this.config.enabled || !this.subscriptionTracker) {
+      return;
+    }
+
+    const schema = this.findSchema();
+    if (!schema) {
+      this.logger.debug(
+        'Subscription tracking is enabled but no GraphQL schema was found to instrument.',
+      );
+      return;
+    }
+
+    this.restoreSubscriptions = instrumentSubscriptions(
+      schema,
+      this.subscriptionTracker,
+      this.nestlensConfig.trustProxy,
+    );
+
+    this.logger.log('GraphQL subscription tracking installed');
+  }
+
+  /**
+   * The built schema, from whichever GraphQL integration is present.
+   *
+   * `@nestjs/graphql` is an optional peer, so it is resolved rather than
+   * imported: a project without it must not fail to start because a watcher
+   * looked for it.
+   */
+  private findSchema(): unknown {
+    try {
+      const { GraphQLSchemaHost } = require('@nestjs/graphql') as {
+        GraphQLSchemaHost: new (...args: never[]) => { schema?: unknown };
+      };
+
+      const host = this.moduleRef.get(GraphQLSchemaHost, { strict: false });
+      return host?.schema;
+    } catch {
+      return undefined;
     }
   }
 
@@ -303,6 +364,9 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
       this.adapter = undefined;
     }
 
+    this.restoreSubscriptions?.();
+    this.restoreSubscriptions = undefined;
+
     if (this.subscriptionTracker) {
       this.subscriptionTracker.clear();
       this.subscriptionTracker = undefined;
@@ -347,6 +411,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
 export function createGraphQLWatcher(
   collector: CollectorService,
   config: NestLensConfig,
+  moduleRef: ModuleRef,
 ): GraphQLWatcher {
-  return new GraphQLWatcher(collector, config);
+  return new GraphQLWatcher(collector, config, moduleRef);
 }
