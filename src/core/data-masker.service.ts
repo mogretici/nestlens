@@ -192,9 +192,25 @@ const MEMO_LIMIT = 1024;
  *
  * The term list belongs to the masker and never changes after construction, so
  * the memo lives as long as the masker and needs nothing to invalidate it.
+ *
+ * Exported because the HTTP client watcher masks its own bodies before the
+ * collector sees them, and had its own rule: a plain `toLowerCase().includes()`,
+ * which compares a term to a field name without normalising either. So a term
+ * only matched the spelling it was written in —
+ *
+ *     term "internal_ref"  field "internalRef"   ->  not masked
+ *     term "internalRef"   field "internal_ref"  ->  not masked
+ *
+ * — while the same two terms here match both. A reader configuring
+ * `sensitiveRequestParams` had no reason to expect a different answer from a
+ * different place in the same product.
  */
-const createTermMatcher = (terms: readonly string[]): ((fieldName: string) => boolean) => {
-  const meaningful = terms.filter((term) => term.length > 0);
+export const createTermMatcher = (terms: readonly string[]): ((fieldName: string) => boolean) => {
+  // Both sides, here. The field name was normalised and the terms were not, so
+  // a caller had to remember to do it — and the one caller added later did
+  // not, which is how `sensitiveRequestParams: ['internal_ref']` stopped
+  // matching anything at all. A comparison owns both of its sides.
+  const meaningful = terms.map(normalizeFieldName).filter((term) => term.length > 0);
   const memo = new Map<string, boolean>();
 
   return (fieldName: string): boolean => {
@@ -306,6 +322,8 @@ export class DataMaskerService {
       config?.sensitiveUserFields,
     );
 
+    // Kept normalised for `isSensitiveKey`'s own use; the matcher normalises
+    // whatever it is given either way.
     this.sensitiveHeaders = headers.map(normalizeFieldName);
     this.sensitiveParams = params.map(normalizeFieldName);
     this.sensitiveUserFields = userFields.map(normalizeFieldName);
