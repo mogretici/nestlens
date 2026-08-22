@@ -27,6 +27,27 @@ import { Entry, EntryType } from '../../../types';
 
 const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
 
+/** How long a reachable Redis is allowed to take to answer the first command. */
+const REDIS_DEADLINE_MS = 5_000;
+
+const withDeadline = async <T>(work: Promise<T>): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`no answer within ${REDIS_DEADLINE_MS}ms`)),
+          REDIS_DEADLINE_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 const entry = (type: EntryType, i: number, extra: Record<string, unknown> = {}): Entry =>
   ({
     type,
@@ -83,12 +104,30 @@ describe('storage backends agree', () => {
       });
 
       try {
-        await redis.initialize();
-        await redis.clear();
+        // `initialize` does not reject on an unreachable server — NestLens does
+        // not get to stop an application from starting — and ioredis retries a
+        // refused connection for as long as it is allowed to. So the check is a
+        // command with a deadline: without one this hung instead of failing,
+        // which is worse than the silence it was meant to replace.
+        await withDeadline(redis.initialize().then(() => redis.clear()));
         redisReachable = true;
         backends.push({ name: 'redis', storage: redis });
-      } catch {
-        // Left out; the two remaining backends still catch a divergence.
+      } catch (error) {
+        // Locally, a developer without a server still gets the two other
+        // backends compared. In CI it is a failure: the suite reports the same
+        // number of green tests whether or not Redis was among them, so a
+        // service that did not come up would take the coverage with it and say
+        // nothing at all.
+        // Nothing left retrying: ioredis reconnects for as long as the
+        // process lives, so a client that never answered still holds the
+        // event loop open and the run hangs after the failure.
+        await redis.close().catch(() => undefined);
+
+        if (process.env.CI) {
+          throw new Error(
+            `Redis was expected at ${REDIS_URL} and could not be reached: ${String(error)}`,
+          );
+        }
       }
     }
 
@@ -130,8 +169,13 @@ describe('storage backends agree', () => {
     }
   };
 
-  it('has at least two backends to compare', () => {
-    expect(backends.length).toBeGreaterThanOrEqual(2);
+  it('has backends to compare, and names them', () => {
+    // Named rather than counted: the suite reports the same number of green
+    // tests whether or not Redis was among them, so the only way to tell what
+    // was actually compared is to say so.
+    expect(backends.map(({ name }) => name)).toEqual(
+      process.env.CI ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
+    );
   });
 
   it('counts everything the same', () => agree((s) => s.count()));

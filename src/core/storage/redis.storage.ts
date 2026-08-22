@@ -105,17 +105,17 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       const commandTimeout = this.config.commandTimeout ?? 5000;
 
-      if (this.config.url) {
-        return new RedisClient(this.config.url, { commandTimeout });
-      }
+      const client = this.config.url
+        ? new RedisClient(this.config.url, { commandTimeout })
+        : new RedisClient({
+            host: this.config.host ?? 'localhost',
+            port: this.config.port ?? 6379,
+            password: this.config.password,
+            db: this.config.db ?? 0,
+            commandTimeout,
+          });
 
-      return new RedisClient({
-        host: this.config.host ?? 'localhost',
-        port: this.config.port ?? 6379,
-        password: this.config.password,
-        db: this.config.db ?? 0,
-        commandTimeout,
-      });
+      return this.quieten(client);
     } catch (error) {
       // The message only fits a missing package, but this catch also covers a
       // failed connection or a bad option — reporting those as "install
@@ -129,6 +129,43 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
           : `Failed to initialize Redis storage: ${reason}`,
       );
     }
+  }
+
+  /**
+   * Stops ioredis writing into the host application's logs.
+   *
+   * With no `error` listener, ioredis prints
+   * `[ioredis] Unhandled error event: Error: connect ECONNREFUSED …` on every
+   * reconnection attempt, forever. So a Redis that goes down does not degrade
+   * NestLens quietly — it floods the logs of the application NestLens is
+   * supposed to be helping somebody read.
+   *
+   * Reported once and then counted: the first failure is the news, and the
+   * hundredth is the same news. The count goes out when the connection comes
+   * back, because "it was down for 4,812 attempts" is worth knowing.
+   */
+  private quieten(client: Redis): Redis {
+    let suppressed = 0;
+
+    client.on('error', (error: Error) => {
+      if (suppressed === 0) {
+        this.logger.warn(
+          `Redis connection error: ${error.message}. ` +
+            'Entries are not being stored; further errors will be counted rather than logged.',
+        );
+      }
+
+      suppressed += 1;
+    });
+
+    client.on('ready', () => {
+      if (suppressed > 0) {
+        this.logger.log(`Redis connection restored after ${suppressed} failed attempts`);
+        suppressed = 0;
+      }
+    });
+
+    return client;
   }
 
   private getClient(): Redis {
@@ -608,11 +645,40 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     this.logger.log(`Storage cleared (${removed} keys)`);
   }
 
+  /**
+   * Closes the connection, whether or not there ever was one.
+   *
+   * `quit()` sends a command and waits for the answer, so against a server
+   * that never accepted the connection it waited out `commandTimeout` and then
+   * *rejected* — from `onModuleDestroy`, where nothing catches it. Shutting
+   * down an application whose Redis was unreachable ended the process on an
+   * unhandled rejection, which is the one thing a debugging tool must never do
+   * to the thing it is watching.
+   *
+   * `disconnect()` closes the socket without asking, which is the only thing
+   * left to do when there is nobody to ask — and asking a client that is not
+   * ready costs the whole command timeout before it fails, five seconds of a
+   * shutdown for a question that cannot be answered.
+   */
   async close(): Promise<void> {
-    if (this.client) {
-      await this.client.quit();
-      this.client = null;
+    const client = this.client;
+    this.client = null;
+
+    if (!client) {
+      this.logger.log('Redis storage closed');
+      return;
     }
+
+    if (client.status === 'ready') {
+      try {
+        await client.quit();
+      } catch {
+        client.disconnect();
+      }
+    } else {
+      client.disconnect();
+    }
+
     this.logger.log('Redis storage closed');
   }
 
