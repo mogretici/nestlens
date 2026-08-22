@@ -7,9 +7,6 @@ import {
   PruningStatus,
   StorageStats,
   CheckNewResponse,
-  TagWithCount,
-  MonitoredTag,
-  GroupedEntry,
 } from './types';
 import { nestlensUrl } from './basePath';
 
@@ -25,43 +22,12 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
-export async function getEntries(params: {
-  type?: EntryType;
-  limit?: number;
-  offset?: number;
-  requestId?: string;
-}): Promise<ApiResponse<Entry[]>> {
-  const searchParams = new URLSearchParams();
-  if (params.type) searchParams.set('type', params.type);
-  if (params.limit) searchParams.set('limit', params.limit.toString());
-  if (params.offset) searchParams.set('offset', params.offset.toString());
-  if (params.requestId) searchParams.set('requestId', params.requestId);
-
-  return fetchApi(`/entries?${searchParams.toString()}`);
-}
-
 export async function getEntry(id: number): Promise<ApiResponse<Entry>> {
   return fetchApi(`/entries/${id}`);
 }
 
 export async function getStats(): Promise<ApiResponse<Stats>> {
   return fetchApi('/stats');
-}
-
-export async function getRequests(limit = 50, offset = 0): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/requests?limit=${limit}&offset=${offset}`);
-}
-
-export async function getQueries(limit = 50, offset = 0, slow = false): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/queries?limit=${limit}&offset=${offset}${slow ? '&slow=true' : ''}`);
-}
-
-export async function getExceptions(limit = 50, offset = 0): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/exceptions?limit=${limit}&offset=${offset}`);
-}
-
-export async function getLogs(limit = 50, offset = 0, level?: string): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/logs?limit=${limit}&offset=${offset}${level ? `&level=${level}` : ''}`);
 }
 
 export async function clearEntries(): Promise<{ success: boolean; message: string }> {
@@ -261,35 +227,6 @@ export async function runPruning(): Promise<{
 // ==================== Tag API Functions ====================
 
 /**
- * Get all tags with their counts
- */
-export async function getAllTags(): Promise<ApiResponse<TagWithCount[]>> {
-  return fetchApi('/tags');
-}
-
-/**
- * Get entries by tags
- */
-export async function getEntriesByTags(
-  tags: string[],
-  logic: 'AND' | 'OR' = 'OR',
-  limit = 50,
-): Promise<ApiResponse<Entry[]>> {
-  const searchParams = new URLSearchParams();
-  searchParams.set('tags', tags.join(','));
-  searchParams.set('logic', logic);
-  searchParams.set('limit', limit.toString());
-  return fetchApi(`/tags/entries?${searchParams.toString()}`);
-}
-
-/**
- * Get tags for a specific entry
- */
-export async function getEntryTags(entryId: number): Promise<ApiResponse<string[]>> {
-  return fetchApi(`/tags/entry/${entryId}`);
-}
-
-/**
  * Add tags to an entry
  */
 export async function addTagsToEntry(
@@ -320,37 +257,6 @@ export async function removeTagsFromEntry(
 // ==================== Monitored Tags ====================
 
 /**
- * Get monitored tags with counts
- */
-export async function getMonitoredTags(): Promise<ApiResponse<MonitoredTag[]>> {
-  return fetchApi('/tags/monitored');
-}
-
-/**
- * Add a monitored tag
- */
-export async function addMonitoredTag(
-  tag: string,
-): Promise<{ success: boolean; data: MonitoredTag }> {
-  return fetchApi('/tags/monitored', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tag }),
-  });
-}
-
-/**
- * Remove a monitored tag
- */
-export async function removeMonitoredTag(tag: string): Promise<{ success: boolean }> {
-  return fetchApi(`/tags/monitored/${encodeURIComponent(tag)}`, {
-    method: 'DELETE',
-  });
-}
-
-// ==================== Resolution ====================
-
-/**
  * Mark an entry as resolved
  */
 export async function resolveEntry(id: number): Promise<{ success: boolean; data: Entry }> {
@@ -365,31 +271,6 @@ export async function unresolveEntry(id: number): Promise<{ success: boolean; da
 }
 
 // ==================== Family Hash (Grouping) ====================
-
-/**
- * Get entries grouped by family hash
- */
-export async function getGroupedEntries(
-  type?: EntryType,
-  limit = 50,
-): Promise<ApiResponse<GroupedEntry[]>> {
-  const searchParams = new URLSearchParams();
-  if (type) searchParams.set('type', type);
-  searchParams.set('limit', limit.toString());
-  return fetchApi(`/entries/grouped?${searchParams.toString()}`);
-}
-
-/**
- * Get entries with the same family hash
- */
-export async function getEntriesByFamilyHash(
-  hash: string,
-  limit = 50,
-): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/entries/family/${hash}?limit=${limit}`);
-}
-
-// ==================== Recording Control ====================
 
 export interface RecordingStatus {
   isPaused: boolean;
