@@ -44,4 +44,4 @@ export { N1Detector } from './utils/n1-detector';
 
 export { calculateDepth } from './utils/depth-calculator';
 
-export { FieldTracer, createFieldTracer, nsToMs } from './utils/field-tracer';
+export { FieldTracer, createFieldTracer } from './utils/field-tracer';

@@ -94,7 +94,11 @@ export class FieldTracer {
       return null;
     }
 
-    const traceId = `${path}:${Date.now()}`;
+    // The path is graphql-js's instance path — `orders.0.items.1.product` —
+    // which is unique within an operation, so it identifies the trace on its
+    // own. It used to carry `Date.now()` as well: a clock read per field, for
+    // a distinction the path already makes.
+    const traceId = path;
     const now = process.hrtime.bigint();
 
     this.activeTraces.set(traceId, {
@@ -157,48 +161,6 @@ export class FieldTracer {
     // Sort by start offset for waterfall display
     return [...this.traces].sort((a, b) => a.startOffset - b.startOffset);
   }
-
-  /**
-   * Get trace statistics
-   */
-  getStats(): {
-    totalTraces: number;
-    totalDuration: number;
-    avgDuration: number;
-    maxDuration: number;
-    slowestField: string | null;
-  } {
-    if (this.traces.length === 0) {
-      return {
-        totalTraces: 0,
-        totalDuration: 0,
-        avgDuration: 0,
-        maxDuration: 0,
-        slowestField: null,
-      };
-    }
-
-    const durations = this.traces.map((t) => t.duration);
-    const totalDuration = durations.reduce((sum, d) => sum + d, 0);
-    const maxDuration = Math.max(...durations);
-    const slowestTrace = this.traces.find((t) => t.duration === maxDuration);
-
-    return {
-      totalTraces: this.traces.length,
-      totalDuration,
-      avgDuration: totalDuration / this.traces.length,
-      maxDuration,
-      slowestField: slowestTrace?.path || null,
-    };
-  }
-
-  /**
-   * Clear all traces
-   */
-  clear(): void {
-    this.traces = [];
-    this.activeTraces.clear();
-  }
 }
 
 /**
@@ -209,22 +171,4 @@ export function createFieldTracer(
   config: Partial<FieldTracerConfig> = {},
 ): FieldTracer {
   return new FieldTracer(requestStartTime, config);
-}
-
-/**
- * Convert nanoseconds to milliseconds
- */
-export function nsToMs(nanoseconds: number): number {
-  return nanoseconds / 1_000_000;
-}
-
-/**
- * Build a waterfall timeline from traces
- */
-export interface WaterfallItem {
-  path: string;
-  startMs: number;
-  durationMs: number;
-  percentOfTotal: number;
-  depth: number;
 }
