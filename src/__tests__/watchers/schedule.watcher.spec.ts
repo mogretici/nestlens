@@ -422,31 +422,34 @@ describe('ScheduleWatcher', () => {
   // Intervals and Timeouts
   // ============================================================================
 
+  /**
+   * These two used to assert that the watcher had put the names of the
+   * intervals and timeouts into a `Set` — which is all it did with them. The
+   * method behind it logged "registered but cannot be wrapped" and returned,
+   * so the tests passed while nothing about an interval or a timeout was ever
+   * recorded.
+   *
+   * They are wrapped one layer above the registry now, on `@nestjs/schedule`'s
+   * orchestrator, where the callback still exists. What that produces is
+   * checked against a running application in
+   * `scheduled-tasks.integration.spec.ts`, because the only convincing
+   * evidence is an entry appearing after a real `@Interval` fires.
+   */
   describe('Intervals and Timeouts', () => {
-    it('should register intervals', async () => {
-      // Arrange
-      const registry = createSchedulerRegistry(new Map(), ['interval1', 'interval2'], []);
+    it('does not fail when the registry reports intervals and timeouts', async () => {
+      const registry = createSchedulerRegistry(new Map(), ['interval1'], ['timeout1']);
       watcher = await createWatcher(mockConfig, registry);
 
-      // Act
-      watcher.onApplicationBootstrap();
-
-      // Assert
-      expect((watcher as any).wrappedJobs.has('interval1')).toBe(true);
-      expect((watcher as any).wrappedJobs.has('interval2')).toBe(true);
+      expect(() => watcher.onApplicationBootstrap()).not.toThrow();
     });
 
-    it('should register timeouts', async () => {
-      // Arrange
-      const registry = createSchedulerRegistry(new Map(), [], ['timeout1', 'timeout2']);
+    it('does nothing when no orchestrator is there to wrap', async () => {
+      // A registry without `@nestjs/schedule`'s orchestrator beside it is what
+      // most of these tests build, and it must not be an error.
+      const registry = createSchedulerRegistry(new Map(), ['interval1'], []);
       watcher = await createWatcher(mockConfig, registry);
 
-      // Act
-      watcher.onApplicationBootstrap();
-
-      // Assert
-      expect((watcher as any).wrappedJobs.has('timeout1')).toBe(true);
-      expect((watcher as any).wrappedJobs.has('timeout2')).toBe(true);
+      expect(() => watcher.onModuleInit()).not.toThrow();
     });
   });
 

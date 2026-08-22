@@ -4,7 +4,7 @@ sidebar_position: 9
 
 # Schedule Watcher
 
-The Schedule Watcher monitors scheduled tasks (cron jobs) in your NestJS application, tracking execution, failures, and timing information.
+The Schedule Watcher monitors scheduled tasks in your NestJS application — `@Cron`, `@Interval` and `@Timeout` alike — tracking execution, failures, and timing information.
 
 ## What Gets Captured
 
@@ -40,9 +40,9 @@ interface ScheduleEntry {
   type: 'schedule';
   payload: {
     name: string;               // Task name
-    cron?: string;              // Cron pattern (for cron jobs)
-    interval?: number;          // Interval in ms (reserved, not currently populated)
-    timeout?: number;           // Timeout in ms (reserved, not currently populated)
+    cron?: string;              // Cron pattern (for @Cron)
+    interval?: number;          // Interval in ms (for @Interval)
+    timeout?: number;           // Delay in ms (for @Timeout)
     status: 'started' | 'completed' | 'failed';
     duration?: number;          // Execution time (ms)
     error?: string;             // Error message if failed
@@ -63,7 +63,13 @@ The Schedule Watcher relies on `@nestjs/schedule` to discover your scheduled tas
 
 2. **Import `ScheduleModule.forRoot()`** in your `AppModule`.
 
-When both are in place, the watcher automatically discovers `@nestjs/schedule`'s `SchedulerRegistry` at application bootstrap (via NestJS `DiscoveryService`) and wraps your registered cron jobs to track their execution. You do **not** need to provide any token, registry, or instance manually — discovery happens for you on `onApplicationBootstrap`, after every module has registered its jobs.
+When both are in place, the watcher discovers `@nestjs/schedule`'s own services through NestJS `DiscoveryService` and follows every scheduled task. You do **not** need to provide any token, registry, or instance manually.
+
+:::note How a failed task appears
+`@nestjs/schedule` wraps every decorated method in its own try/catch and logs the error itself, so nothing downstream can tell a failed run of a `@Cron`, `@Interval` or `@Timeout` method from a successful one — the schedule entry says `completed`, and the failure appears as a **log entry** instead, which the Log Watcher records.
+
+A cron job you register yourself with `SchedulerRegistry.addCronJob()` is not wrapped that way, and its failures are recorded as `failed` with the error message.
+:::
 
 If `@nestjs/schedule` is not installed or `ScheduleModule.forRoot()` is not imported, the watcher quietly stays inactive.
 

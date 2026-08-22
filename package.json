@@ -166,6 +166,7 @@
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "better-sqlite3": "^12.11.1",
+    "cron": "^4.4.0",
     "eslint": "^9.16.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
