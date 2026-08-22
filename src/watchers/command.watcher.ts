@@ -10,6 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /** The @nestjs/cqrs CommandBus surface this watcher touches. */
 interface CommandBusLike {
@@ -184,19 +185,8 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   private captureData(data: unknown): unknown {
-    if (data === undefined || data === null) return undefined;
-
-    try {
-      // Limit size to prevent huge payloads from bloating storage
-      const json = JSON.stringify(data);
-      const maxSize = this.config.maxPayloadSize ?? 64 * 1024; // 64KB default; 0 captures nothing
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return data;
-    } catch {
-      return { _error: 'Unable to serialize data' };
-    }
+    // 64KB default; 0 captures nothing.
+    return capturePayload(data, this.config.maxPayloadSize ?? 64 * 1024);
   }
 
   private extractMetadata(command: unknown): Record<string, unknown> | undefined {

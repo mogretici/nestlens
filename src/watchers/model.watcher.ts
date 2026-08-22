@@ -12,6 +12,7 @@ import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { WrappedMethods } from './wrap-method';
 import { assignKey } from '../core/safe-assign';
+import { capturePayload } from './capture-payload';
 
 /**
  * The TypeORM subscriber surface this watcher touches.
@@ -452,17 +453,6 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * Capture where conditions with size limits
    */
   private captureWhere(where: unknown): unknown {
-    if (!where) return undefined;
-
-    try {
-      const json = JSON.stringify(where);
-      const maxSize = 1024; // 1KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return where;
-    } catch {
-      return { _error: 'Unable to serialize where condition' };
-    }
+    return where ? capturePayload(where, 1024) : undefined;
   }
 }

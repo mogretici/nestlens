@@ -10,6 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 type RedisCommand = (...args: unknown[]) => unknown;
 
@@ -239,17 +240,11 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    try {
-      // Limit size to prevent huge arguments from bloating storage
-      const json = JSON.stringify(args);
-      const maxSize = this.config.maxResultSize ?? 1024; // 1KB default; 0 captures nothing
-      if (json.length > maxSize) {
-        return [{ _truncated: true, _size: json.length }];
-      }
-      return args;
-    } catch {
-      return [{ _error: 'Unable to serialize arguments' }];
-    }
+    // 1KB default; 0 captures nothing.
+    const captured = capturePayload(args, this.config.maxResultSize ?? 1024);
+
+    // The arguments are a list either way, so a truncated one is a list of one.
+    return Array.isArray(captured) ? captured : [captured];
   }
 
   /**
@@ -262,16 +257,7 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
       return '***MASKED***';
     }
 
-    try {
-      // Limit size to prevent huge results from bloating storage
-      const json = JSON.stringify(result);
-      const maxSize = this.config.maxResultSize ?? 1024; // 1KB default; 0 captures nothing
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return result;
-    } catch {
-      return { _error: 'Unable to serialize result' };
-    }
+    // 1KB default; 0 captures nothing.
+    return capturePayload(result, this.config.maxResultSize ?? 1024);
   }
 }

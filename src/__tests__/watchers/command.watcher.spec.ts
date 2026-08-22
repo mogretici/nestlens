@@ -667,7 +667,7 @@ describe('CommandWatcher', () => {
       });
     });
 
-    it('should handle non-serializable payload', async () => {
+    it('keeps a payload that points back at itself', async () => {
       // Arrange
       class CircularCommand {
         self: any;
@@ -686,9 +686,8 @@ describe('CommandWatcher', () => {
       const call = mockCollector.collect.mock.calls.find(
         (c) => (c[1] as any).status === 'completed',
       );
-      expect((call?.[1] as any).payload).toEqual({
-        _error: 'Unable to serialize data',
-      });
+      const payload = (call?.[1] as any).payload as Record<string, unknown>;
+      expect(payload.self).toBe(payload);
     });
   });
 

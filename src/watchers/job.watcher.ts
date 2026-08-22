@@ -3,6 +3,7 @@ import { CollectorService } from '../core/collector.service';
 import { JobWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { JobEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /**
  * The Bull / BullMQ surface this watcher touches.
@@ -409,18 +410,6 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   private captureData(data: unknown): unknown {
-    if (data === undefined || data === null) return undefined;
-
-    try {
-      // Limit size to prevent huge job data from bloating storage
-      const json = JSON.stringify(data);
-      const maxSize = 64 * 1024; // 64KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return data;
-    } catch {
-      return { _error: 'Unable to serialize data' };
-    }
+    return capturePayload(data, 64 * 1024);
   }
 }

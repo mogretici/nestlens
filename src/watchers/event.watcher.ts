@@ -10,6 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /**
  * The EventEmitter2 surface this watcher touches.
@@ -160,19 +161,7 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   private capturePayload(values: unknown[]): unknown {
     if (!values || values.length === 0) return undefined;
 
-    try {
-      // If single value, return it directly
-      const payload = values.length === 1 ? values[0] : values;
-
-      // Limit size to prevent huge payloads from bloating storage
-      const json = JSON.stringify(payload);
-      const maxSize = 64 * 1024; // 64KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return payload;
-    } catch {
-      return { _error: 'Unable to serialize payload' };
-    }
+    // A single value is recorded as itself rather than as a list of one.
+    return capturePayload(values.length === 1 ? values[0] : values, 64 * 1024);
   }
 }

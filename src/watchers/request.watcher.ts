@@ -13,6 +13,7 @@ import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { describeThrown } from './thrown-value';
 import { assignKey } from '../core/safe-assign';
+import { capturePayload } from './capture-payload';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -232,19 +233,8 @@ export class RequestWatcher implements NestInterceptor {
   }
 
   private captureBody(body: unknown): unknown {
-    if (!body) return undefined;
-
-    const maxSize = this.config.maxBodySize ?? 64 * 1024; // 64KB default; 0 captures nothing
-
-    try {
-      const json = JSON.stringify(body);
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return body;
-    } catch {
-      return { _error: 'Unable to serialize body' };
-    }
+    // 64KB default; 0 captures nothing.
+    return body ? capturePayload(body, this.config.maxBodySize ?? 64 * 1024) : undefined;
   }
 
   /**

@@ -518,12 +518,8 @@ describe('JobWatcher', () => {
       eventHandlers['active']?.(mockJob);
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'job',
-        expect.objectContaining({
-          data: { _error: 'Unable to serialize data' },
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.data.self).toBe(collected.data);
     });
 
     it('should handle undefined data', () => {

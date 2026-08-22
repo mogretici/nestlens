@@ -1076,7 +1076,7 @@ describe('HttpClientWatcher', () => {
       );
     });
 
-    it('should return error for truly unserializable body', async () => {
+    it('keeps a body holding a bigint', async () => {
       // Arrange
       const axios = createAxiosInstance();
       watcher = await createWatcher(mockConfig, axios);
@@ -1100,13 +1100,12 @@ describe('HttpClientWatcher', () => {
       // Act
       responseInterceptor.onFulfilled(response);
 
-      // Assert - BigInt causes JSON.stringify to fail
+      // Assert — a bigint is recorded as text by masking rather than
+      // discarded by the watcher.
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'http-client',
         expect.objectContaining({
-          requestBody: expect.objectContaining({
-            _error: 'Unable to serialize body',
-          }),
+          requestBody: expect.objectContaining({ value: BigInt(123) }),
         }),
       );
     });

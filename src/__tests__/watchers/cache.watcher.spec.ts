@@ -470,12 +470,8 @@ describe('CacheWatcher', () => {
       await cacheManager.get('circular');
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'cache',
-        expect.objectContaining({
-          value: { _error: 'Unable to serialize value' },
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.value.self).toBe(collected.value);
     });
 
     it('should return undefined for null values', async () => {

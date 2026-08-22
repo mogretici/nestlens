@@ -823,12 +823,8 @@ describe('ModelWatcher', () => {
       await middleware!(params, next);
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'model',
-        expect.objectContaining({
-          where: { _error: 'Unable to serialize where condition' },
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.where.self).toBe(collected.where);
     });
   });
 

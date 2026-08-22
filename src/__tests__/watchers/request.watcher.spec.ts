@@ -892,7 +892,7 @@ describe('RequestWatcher', () => {
       expect(JSON.stringify(mockCollector.collect.mock.calls)).not.toContain('user@example.com');
     });
 
-    it('should handle non-serializable body', async () => {
+    it('keeps a body that points back at itself', async () => {
       // Arrange - circular reference
       const circularBody: Record<string, unknown> = { name: 'test' };
       circularBody.self = circularBody;
@@ -905,15 +905,9 @@ describe('RequestWatcher', () => {
       await watcher.intercept(context, createMockHandler()).toPromise();
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'request',
-        expect.objectContaining({
-          body: expect.objectContaining({
-            _error: 'Unable to serialize body',
-          }),
-        }),
-        expect.any(String),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.body.name).toBe('test');
+      expect(collected.body.self).toBe(collected.body);
     });
   });
 

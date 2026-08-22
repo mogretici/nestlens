@@ -11,6 +11,7 @@ import { createTermMatcher } from '../core/data-masker.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /**
  * The axios surface this watcher touches.
@@ -377,18 +378,7 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
   private captureBody(body: unknown, matches: (fieldName: string) => boolean): unknown {
     if (body === undefined || body === null) return undefined;
 
-    try {
-      // First mask sensitive data
-      const maskedBody = this.maskSensitiveData(body, matches);
-
-      // Then check size
-      const json = JSON.stringify(maskedBody);
-      if (json.length > this.maxBodySize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return maskedBody;
-    } catch {
-      return { _error: 'Unable to serialize body' };
-    }
+    // Masked first, so what is measured is what would be recorded.
+    return capturePayload(this.maskSensitiveData(body, matches), this.maxBodySize);
   }
 }

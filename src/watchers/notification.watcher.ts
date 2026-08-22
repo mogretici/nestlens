@@ -10,6 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 type NotificationMethod = (...args: unknown[]) => unknown;
 
@@ -275,15 +276,6 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
   private captureMetadata(metadata?: Record<string, unknown>): Record<string, unknown> | undefined {
     if (!metadata) return undefined;
 
-    try {
-      const json = JSON.stringify(metadata);
-      const maxSize = 2048; // 2KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return metadata;
-    } catch {
-      return { _error: 'Unable to serialize metadata' };
-    }
+    return capturePayload(metadata, 2048) as Record<string, unknown>;
   }
 }
