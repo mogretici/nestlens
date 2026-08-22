@@ -478,3 +478,74 @@ describe('ToggleSwitch', () => {
     expect(handleChange).toHaveBeenCalledWith(false);
   });
 });
+
+/**
+ * The header floats, so the page under it needs exactly that much room.
+ *
+ * Every page used to carry its own pair of padding constants for this —
+ * nineteen copies of a number nobody could keep in step with a header that
+ * grows a row when filters appear and another when a page adds controls.
+ */
+describe('PageHeader — room for the header', () => {
+  /** Swapped by assignment: the setup file defines it non-configurable. */
+  const withResizeObserver = <T,>(value: unknown, work: () => T): T => {
+    const saved = window.ResizeObserver;
+    (window as unknown as { ResizeObserver: unknown }).ResizeObserver = value;
+    try {
+      return work();
+    } finally {
+      window.ResizeObserver = saved;
+    }
+  };
+
+  it('reserves space below the bar', () => {
+    render(<PageHeader title="Requests" icon={Activity} />);
+
+    expect(screen.getByTestId('page-header-spacer')).toBeInTheDocument();
+  });
+
+  it('keeps the spacer out of the accessibility tree', () => {
+    render(<PageHeader title="Requests" icon={Activity} />);
+
+    expect(screen.getByTestId('page-header-spacer')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('follows the bar as it grows', () => {
+    // jsdom lays nothing out, so the height comes from a stubbed measurement:
+    // what is checked here is that the spacer takes whatever the bar reports.
+    const observed: Element[] = [];
+    class StubResizeObserver {
+      constructor(private readonly callback: () => void) {}
+      observe(target: Element) {
+        observed.push(target);
+        this.callback();
+      }
+      disconnect() {}
+      unobserve() {}
+    }
+
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ height: 137 } as DOMRect);
+
+    try {
+      withResizeObserver(StubResizeObserver, () => {
+        render(<PageHeader title="Requests" icon={Activity} />);
+      });
+
+      expect(screen.getByTestId('page-header-spacer')).toHaveStyle({ height: '137px' });
+      expect(observed).toHaveLength(1);
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
+  it('renders without a ResizeObserver', () => {
+    // Absent in jsdom by default, and an older browser is the same case.
+    withResizeObserver(undefined, () => {
+      render(<PageHeader title="Requests" icon={Activity} />);
+    });
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
+  });
+});
