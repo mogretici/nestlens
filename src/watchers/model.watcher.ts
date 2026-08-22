@@ -89,10 +89,29 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
   private wrapped?: WrappedMethods;
-  private operationTracking = new Map<
-    string,
-    { startTime: number; entity: string; action: string }
-  >();
+  /**
+   * When each operation in flight began, oldest first, per entity and action.
+   *
+   * It used to be a map keyed `insert-${entityName}-${Date.now()}`, and the
+   * completion looked its partner up with
+   * `Array.from(keys).find(k => k.startsWith(...))`. Two things followed, and
+   * the first is not a race — it is what an ordinary batch does:
+   *
+   * ```text
+   * ten inserts of one entity in the same millisecond
+   *   tracked   1     the key collided nine times
+   *   recorded  1     nine operations vanished
+   * ```
+   *
+   * The second: an operation whose completion never fires — a transaction that
+   * rolls back — left its entry behind for good, and every completion allocated
+   * an array of every key to search it.
+   *
+   * A queue per entity and action pairs them first-in-first-out, which is the
+   * right answer for operations that are interchangeable except for how long
+   * they took, and cannot collide however many are in flight.
+   */
+  private readonly pending = new Map<string, number[]>();
 
   constructor(
     private readonly collector: CollectorService,
@@ -104,6 +123,41 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
     this.config = resolveWatcherConfig(watcherConfig);
+  }
+
+  /**
+   * How many un-finished operations of one kind are remembered.
+   *
+   * An operation that never completes — a rolled-back transaction — leaves its
+   * start behind, so the queue is bounded and drops the oldest rather than
+   * growing. Losing the oldest start costs one duration; not bounding it costs
+   * the process.
+   */
+  private static readonly MAX_PENDING = 1_000;
+
+  private beganAt(action: string, entityName: string): void {
+    const key = `${action}:${entityName}`;
+    const queue = this.pending.get(key) ?? [];
+
+    if (queue.length >= ModelWatcher.MAX_PENDING) {
+      queue.shift();
+    }
+
+    queue.push(Date.now());
+    this.pending.set(key, queue);
+  }
+
+  /** How long the oldest operation of this kind has been running, if any. */
+  private endedAfter(action: string, entityName: string): number | undefined {
+    const key = `${action}:${entityName}`;
+    const queue = this.pending.get(key);
+    const startedAt = queue?.shift();
+
+    if (queue?.length === 0) {
+      this.pending.delete(key);
+    }
+
+    return startedAt === undefined ? undefined : Date.now() - startedAt;
   }
 
   onModuleInit() {
@@ -254,29 +308,15 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleBeforeInsert(event: EntityEventLike): void {
-    const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = `insert-${entityName}-${Date.now()}`;
-
-    this.operationTracking.set(trackingKey, {
-      startTime: Date.now(),
-      entity: entityName,
-      action: 'create',
-    });
+    this.beganAt('insert', event?.metadata?.name || 'unknown');
   }
 
   private handleAfterInsert(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
-      key.startsWith(`insert-${entityName}`),
-    );
+    const duration = this.endedAfter('insert', entityName);
 
-    if (!trackingKey) return;
-
-    const tracking = this.operationTracking.get(trackingKey);
-    if (!tracking) return;
-
-    const duration = Date.now() - tracking.startTime;
-    this.operationTracking.delete(trackingKey);
+    // Nothing began: the watcher attached between the two halves.
+    if (duration === undefined) return;
 
     // Skip if entity should be ignored
     if (this.config.ignoreEntities?.includes(entityName)) {
@@ -294,29 +334,15 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleBeforeUpdate(event: EntityEventLike): void {
-    const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = `update-${entityName}-${Date.now()}`;
-
-    this.operationTracking.set(trackingKey, {
-      startTime: Date.now(),
-      entity: entityName,
-      action: 'update',
-    });
+    this.beganAt('update', event?.metadata?.name || 'unknown');
   }
 
   private handleAfterUpdate(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
-      key.startsWith(`update-${entityName}`),
-    );
+    const duration = this.endedAfter('update', entityName);
 
-    if (!trackingKey) return;
-
-    const tracking = this.operationTracking.get(trackingKey);
-    if (!tracking) return;
-
-    const duration = Date.now() - tracking.startTime;
-    this.operationTracking.delete(trackingKey);
+    // Nothing began: the watcher attached between the two halves.
+    if (duration === undefined) return;
 
     // Skip if entity should be ignored
     if (this.config.ignoreEntities?.includes(entityName)) {
@@ -334,29 +360,15 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleBeforeRemove(event: EntityEventLike): void {
-    const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = `remove-${entityName}-${Date.now()}`;
-
-    this.operationTracking.set(trackingKey, {
-      startTime: Date.now(),
-      entity: entityName,
-      action: 'delete',
-    });
+    this.beganAt('remove', event?.metadata?.name || 'unknown');
   }
 
   private handleAfterRemove(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
-      key.startsWith(`remove-${entityName}`),
-    );
+    const duration = this.endedAfter('remove', entityName);
 
-    if (!trackingKey) return;
-
-    const tracking = this.operationTracking.get(trackingKey);
-    if (!tracking) return;
-
-    const duration = Date.now() - tracking.startTime;
-    this.operationTracking.delete(trackingKey);
+    // Nothing began: the watcher attached between the two halves.
+    if (duration === undefined) return;
 
     // Skip if entity should be ignored
     if (this.config.ignoreEntities?.includes(entityName)) {
