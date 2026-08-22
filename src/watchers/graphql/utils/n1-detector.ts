@@ -12,9 +12,6 @@ import { PotentialN1Warning } from '../../../types';
 export interface ResolverCall {
   parentType: string;
   fieldName: string;
-  returnType?: string;
-  /** Parent object ID if available */
-  parentId?: string | number;
 }
 
 /**
@@ -35,9 +32,6 @@ export interface N1DetectionResult {
 export class N1Detector {
   /** Map of "ParentType.fieldName" -> call count */
   private resolverCalls: Map<string, number> = new Map();
-
-  /** Map of "ParentType.fieldName" -> set of parent IDs */
-  private parentIds: Map<string, Set<string | number>> = new Map();
 
   /** Threshold for N+1 warnings */
   private threshold: number;
@@ -65,31 +59,8 @@ export class N1Detector {
   recordCall(call: ResolverCall): void {
     const key = `${call.parentType}.${call.fieldName}`;
 
-    // Increment call count
     const currentCount = this.resolverCalls.get(key) ?? 0;
     this.resolverCalls.set(key, currentCount + 1);
-
-    // Track parent IDs if available
-    if (call.parentId !== undefined) {
-      const parents = this.parentIds.get(key) ?? new Set<string>();
-      parents.add(call.parentId);
-      this.parentIds.set(key, parents);
-    }
-  }
-
-  /**
-   * Get the count for a specific resolver
-   */
-  getCount(parentType: string, fieldName: string): number {
-    const key = `${parentType}.${fieldName}`;
-    return this.resolverCalls.get(key) ?? 0;
-  }
-
-  /**
-   * Get all resolver counts
-   */
-  getAllCounts(): Map<string, number> {
-    return new Map(this.resolverCalls);
   }
 
   /**
@@ -185,43 +156,5 @@ export class N1Detector {
     ];
 
     return computedPatterns.some((pattern) => pattern.test(fieldName));
-  }
-
-  /**
-   * Reset the detector for a new request
-   */
-  reset(): void {
-    this.resolverCalls.clear();
-    this.parentIds.clear();
-  }
-
-  /**
-   * Get statistics about resolver calls
-   */
-  getStats(): {
-    totalResolvers: number;
-    totalCalls: number;
-    maxCalls: number;
-    avgCalls: number;
-  } {
-    const counts = Array.from(this.resolverCalls.values());
-
-    if (counts.length === 0) {
-      return {
-        totalResolvers: 0,
-        totalCalls: 0,
-        maxCalls: 0,
-        avgCalls: 0,
-      };
-    }
-
-    const totalCalls = counts.reduce((sum, c) => sum + c, 0);
-
-    return {
-      totalResolvers: counts.length,
-      totalCalls,
-      maxCalls: Math.max(...counts),
-      avgCalls: totalCalls / counts.length,
-    };
   }
 }
