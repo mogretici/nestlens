@@ -15,6 +15,7 @@ import ClickableBadge from '../components/ClickableBadge';
 import { ExceptionEntry, isExceptionEntry } from '../types';
 import { resolveEntry, unresolveEntry } from '../api';
 import { useStats } from '../contexts/useStats';
+import toast from 'react-hot-toast';
 
 type FilterStatus = 'all' | 'unresolved' | 'resolved';
 
@@ -98,7 +99,10 @@ export default function ExceptionsPage() {
         // Refresh stats to update sidebar badge count
         await refreshStats();
       } catch (error) {
+        // The circle stayed as it was and nothing said why, so the reader
+        // clicks again — and again — against an API that is refusing.
         console.error('Failed to toggle resolution:', error);
+        toast.error(`Could not change this exception: ${(error as Error).message}`);
       } finally {
         setResolvingId(null);
       }

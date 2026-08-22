@@ -1,15 +1,21 @@
 /**
  * EntryTags Component Tests
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import toast from 'react-hot-toast';
 import { EntryTags } from '../../components/EntryTags';
 import { getBadgeColor as getTagColor } from '../../components/badgeColors';
+import * as api from '../../api';
 
 // Mock API
 vi.mock('../../api', () => ({
   addTagsToEntry: vi.fn().mockResolvedValue({ data: ['existing', 'new'] }),
   removeTagsFromEntry: vi.fn().mockResolvedValue({ data: ['remaining'] }),
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: { error: vi.fn(), success: vi.fn() },
 }));
 
 // ============================================================================
@@ -340,5 +346,52 @@ describe('getTagColor additional cases', () => {
 
   it('returns cyan for UPDATE', () => {
     expect(getTagColor('UPDATE')).toContain('bg-cyan');
+  });
+});
+
+/**
+ * An action that failed has to say so.
+ *
+ * Adding and removing a tag only wrote to the console. The tag not appearing
+ * and the tag being saved looked the same from the outside, so against an API
+ * that was refusing the reader would try again, and again.
+ */
+describe('EntryTags — when the API refuses', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('says an added tag did not stick', async () => {
+    vi.mocked(api.addTagsToEntry).mockRejectedValue(new Error('API error: 403'));
+
+    render(<EntryTags entryId={1} tags={[]} editable />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Tag' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'slow' } });
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls[0][0]).toContain('403');
+  });
+
+  it('says a removed tag is still there', async () => {
+    vi.mocked(api.removeTagsFromEntry).mockRejectedValue(new Error('API error: 500'));
+
+    render(<EntryTags entryId={1} tags={['slow']} editable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove tag slow' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(vi.mocked(toast.error).mock.calls[0][0]).toContain('500');
+  });
+
+  it('says nothing when it worked', async () => {
+    vi.mocked(api.addTagsToEntry).mockResolvedValue({ data: ['slow'] } as never);
+
+    render(<EntryTags entryId={1} tags={[]} editable />);
+    fireEvent.click(screen.getByRole('button', { name: '+ Tag' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'slow' } });
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
+
+    await waitFor(() => expect(screen.getByText('SLOW')).toBeInTheDocument());
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

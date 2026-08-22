@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { addTagsToEntry, removeTagsFromEntry } from '../api';
 import { getBadgeColor } from './badgeColors';
 
@@ -35,7 +36,10 @@ export function EntryTags({
       setNewTag('');
       setIsAdding(false);
     } catch (error) {
+      // The tag simply did not appear, and nothing said why: the API refusing
+      // and the tag being saved looked the same to the reader.
       console.error('Failed to add tag:', error);
+      toast.error(`Could not add the tag: ${(error as Error).message}`);
     }
   };
 
@@ -46,6 +50,7 @@ export function EntryTags({
       onTagsChange?.(result.data);
     } catch (error) {
       console.error('Failed to remove tag:', error);
+      toast.error(`Could not remove the tag: ${(error as Error).message}`);
     }
   };
 
@@ -67,6 +72,7 @@ export function EntryTags({
                 e.stopPropagation();
                 handleRemoveTag(tag);
               }}
+              aria-label={`Remove tag ${tag}`}
               className="ml-1 hover:text-red-600 dark:hover:text-red-400"
             >
               &times;
@@ -88,17 +94,20 @@ export function EntryTags({
                   if (e.key === 'Escape') setIsAdding(false);
                 }}
                 placeholder="New tag..."
+                aria-label="New tag"
                 className="px-2 py-0.5 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 w-24"
                 autoFocus
               />
               <button
                 onClick={handleAddTag}
+                aria-label="Save tag"
                 className="text-green-600 hover:text-green-700 text-xs"
               >
                 +
               </button>
               <button
                 onClick={() => setIsAdding(false)}
+                aria-label="Cancel adding a tag"
                 className="text-gray-400 hover:text-gray-600 text-xs"
               >
                 &times;
