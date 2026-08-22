@@ -57,7 +57,11 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     const savedEntry: StoredEntry = {
       ...entry,
       id,
-      createdAt: new Date().toISOString(),
+      // What the collector stamped when the thing happened, or now for a
+      // caller that supplied nothing. The buffer holds entries for up to a
+      // second, so stamping them here recorded the flush rather than the
+      // event.
+      createdAt: entry.createdAt ?? new Date().toISOString(),
     };
 
     this.entries.set(id, savedEntry);

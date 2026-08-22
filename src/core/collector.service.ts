@@ -176,6 +176,12 @@ export class CollectorService implements OnModuleDestroy {
     const entry = {
       type,
       payload,
+      // Stamped here, where the thing happened, rather than wherever it is
+      // eventually written. The buffer holds entries for up to a second, so a
+      // storage that stamped them on the way in recorded the flush rather than
+      // the event: measured at a full second of drift, which puts every entry
+      // of a busy second at the same instant and every timeline out of order.
+      createdAt: new Date().toISOString(),
       // A watcher that knows the request says so; the rest are attributed from
       // the ambient context, which is how a query recorded by TypeORM's logger
       // ends up on the detail page of the request that ran it.
@@ -231,6 +237,7 @@ export class CollectorService implements OnModuleDestroy {
     const entry = {
       type,
       payload,
+      createdAt: new Date().toISOString(),
       requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
 

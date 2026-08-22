@@ -292,8 +292,13 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
 
     const id = await client.incr(this.key('entries', 'sequence'));
-    const createdAt = new Date().toISOString();
-    const timestamp = Date.now();
+    // The collector stamps an entry when the thing happened; the buffer holds
+    // it for up to a second, so stamping it here recorded the flush instead.
+    const createdAt = entry.createdAt ?? new Date().toISOString();
+    // The index pruning asks its time question of, from the same stamp the
+    // entry carries — otherwise an entry that happened before a flush was
+    // pruned as though it had happened at the flush.
+    const timestamp = Date.parse(createdAt);
 
     const savedEntry: Entry = {
       ...entry,
@@ -359,12 +364,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     // Pre-fetch IDs
     const startId = await client.incrby(this.key('entries', 'sequence'), entries.length);
-    const timestamp = Date.now();
-
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const id = startId - entries.length + 1 + i;
-      const createdAt = new Date().toISOString();
+      const createdAt = entry.createdAt ?? new Date().toISOString();
 
       const savedEntry: Entry = { ...entry, id, createdAt };
       results.push(savedEntry);
@@ -389,7 +392,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       pipeline.zadd(this.key('entries', 'all'), id, String(id));
       pipeline.zadd(this.key('entries', 'type', entry.type), id, String(id));
-      pipeline.zadd(this.key('entries', 'createdAt'), timestamp + i, String(id));
+      // From the entry's own stamp. `+ i` keeps two entries of the same
+      // millisecond apart, which the score has to do to be a total order.
+      pipeline.zadd(this.key('entries', 'createdAt'), Date.parse(createdAt) + i, String(id));
 
       if (entry.requestId) {
         pipeline.sadd(this.key('entries', 'request', entry.requestId), String(id));

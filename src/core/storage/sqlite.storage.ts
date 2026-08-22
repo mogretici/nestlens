@@ -352,7 +352,9 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       VALUES (?, ?, ?, ?)
     `);
 
-    const createdAt = new Date().toISOString();
+    // The collector stamps an entry when the thing happened; the buffer holds
+    // it for up to a second, so stamping it here recorded the flush instead.
+    const createdAt = entry.createdAt ?? new Date().toISOString();
     const result = stmt.run(
       entry.type,
       entry.requestId || null,
@@ -379,7 +381,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     const insertMany = this.db.transaction((items: Entry[]) => {
       for (const entry of items) {
-        const createdAt = new Date().toISOString();
+        const createdAt = entry.createdAt ?? new Date().toISOString();
         const result = stmt.run(
           entry.type,
           entry.requestId || null,
