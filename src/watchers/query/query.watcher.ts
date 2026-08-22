@@ -169,8 +169,30 @@ export class QueryWatcher implements OnApplicationBootstrap {
     );
   }
 
+  /**
+   * Whether a configured pattern covers this query.
+   *
+   * `lastIndex` is reset first. A `RegExp` carrying `g` or `y` remembers where
+   * its last match ended, and `test` resumes from there — so
+   * `ignorePatterns: [/health/g]` ignored every *other* health check and
+   * recorded the ones in between. The flag is one character and the failure is
+   * invisible: the list is a user's, written however they write regular
+   * expressions elsewhere.
+   */
+  private isIgnored(query: string): boolean {
+    const patterns = this.config.ignorePatterns;
+    if (!patterns?.length) {
+      return false;
+    }
+
+    return patterns.some((pattern) => {
+      pattern.lastIndex = 0;
+      return pattern.test(query);
+    });
+  }
+
   private handleQuery(data: QueryData): void {
-    if (this.config.ignorePatterns?.some((p) => p.test(data.query))) {
+    if (this.isIgnored(data.query)) {
       return;
     }
     const slowThreshold = this.config.slowThreshold ?? 100;
