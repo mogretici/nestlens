@@ -129,6 +129,19 @@ describe('the overview when NestLens cannot be reached', () => {
       await waitFor(() => expect(screen.getByText('total recorded')).toBeInTheDocument());
     });
 
+    it('does not print the default retention as the deployment’s setting', async () => {
+      vi.mocked(api.getPruningStatus).mockRejectedValue(new Error('API error: 500'));
+      vi.mocked(api.getEntriesWithCursor).mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, total: 0 },
+      } as never);
+
+      draw();
+
+      await waitFor(() => expect(screen.getByText('Retention')).toBeInTheDocument());
+      expect(screen.queryByText('24h')).not.toBeInTheDocument();
+    });
+
     it('says nothing about activity when the list is genuinely empty', async () => {
       vi.mocked(api.getEntriesWithCursor).mockResolvedValue({
         data: [],

@@ -726,7 +726,10 @@ export default function DashboardPage() {
                   <span className="text-sm">Retention</span>
                 </div>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {pruningStatus?.maxAge ?? 24}h
+                  {/* The window in force, or nothing: the default was printed
+                      as `24h` whenever the status could not be fetched, which
+                      is a guess about the deployment presented as its setting. */}
+                  {pruningStatus?.maxAge !== undefined ? `${pruningStatus.maxAge}h` : 'N/A'}
                 </span>
               </div>
 
