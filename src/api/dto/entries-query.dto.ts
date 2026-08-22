@@ -80,3 +80,17 @@ export class CheckNewQueryDto {
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 }
+
+/**
+ * Query of `GET entries/latest-sequence`, which the live tail polls beside
+ * `check-new`.
+ *
+ * The two took the same parameter and answered differently: `check-new`
+ * refused a type that does not exist and this one accepted it, looked for a
+ * type index that cannot be there, and answered `null`. One API, one answer.
+ */
+export class LatestSequenceQueryDto {
+  @IsOptional()
+  @IsIn(ENTRY_TYPES)
+  type?: EntryType;
+}

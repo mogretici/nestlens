@@ -114,6 +114,26 @@ describe('validating an offset-paged query', () => {
     });
   });
 
+  describe('the type the live tail asks about', () => {
+    // `check-new` refused a type that does not exist while `latest-sequence`
+    // accepted it and answered null. One API, one answer.
+    it.each(['/entries/check-new?afterSequence=0', '/entries/latest-sequence'])(
+      'answers 400 for a type that does not exist: %s',
+      async (path) => {
+        expect((await get(`${path}${path.includes('?') ? '&' : '?'}type=nonsense`)).status).toBe(
+          400,
+        );
+      },
+    );
+
+    it.each(['/entries/check-new?afterSequence=0', '/entries/latest-sequence'])(
+      'answers 200 for one that does: %s',
+      async (path) => {
+        expect((await get(`${path}${path.includes('?') ? '&' : '?'}type=log`)).status).toBe(200);
+      },
+    );
+  });
+
   describe('the sequence the live tail polls with', () => {
     it('answers 400 when it is missing', async () => {
       // `parseInt(undefined)` is NaN, and NaN reached the storage — Redis was

@@ -545,7 +545,7 @@ describe('NestLensApiController', () => {
     it('should return latest sequence', async () => {
       mockStorage.getLatestSequence.mockResolvedValue(100);
 
-      const result = await controller.getLatestSequence();
+      const result = await controller.getLatestSequence({});
 
       expect(mockStorage.getLatestSequence).toHaveBeenCalledWith(undefined);
       expect(result).toEqual({ data: 100 });
@@ -554,7 +554,7 @@ describe('NestLensApiController', () => {
     it('should filter by type', async () => {
       mockStorage.getLatestSequence.mockResolvedValue(50);
 
-      const result = await controller.getLatestSequence('query' as EntryType);
+      const result = await controller.getLatestSequence({ type: 'query' as EntryType });
 
       expect(mockStorage.getLatestSequence).toHaveBeenCalledWith('query');
       expect(result).toEqual({ data: 50 });

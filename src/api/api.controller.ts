@@ -27,6 +27,7 @@ import {
   CursorQueryDto,
   DEFAULT_LIMIT,
   EntriesQueryDto,
+  LatestSequenceQueryDto,
   LogsQueryDto,
   PauseRecordingDto,
   QueriesQueryDto,
@@ -140,8 +141,8 @@ export class NestLensApiController {
   }
 
   @Get('entries/latest-sequence')
-  async getLatestSequence(@Query('type') type?: EntryType, @Res() _res?: unknown) {
-    const sequence = await this.storage.getLatestSequence(type);
+  async getLatestSequence(@Query() query: LatestSequenceQueryDto, @Res() _res?: unknown) {
+    const sequence = await this.storage.getLatestSequence(query.type);
     return { data: sequence };
   }
 
@@ -174,6 +175,8 @@ export class NestLensApiController {
    */
   @Get('entries/family/:hash')
   async getEntriesByFamilyHash(
+    // A family hash is a fixed-width digest; the parameter is a path segment a
+    // caller writes, and it becomes part of a Redis key.
     @Param('hash') hash: string,
     @Query() query: EntriesQueryDto,
     @Res() _res?: unknown,
