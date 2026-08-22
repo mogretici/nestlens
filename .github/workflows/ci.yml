@@ -199,7 +199,15 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            docs/package-lock.json
+
+      # The API reference is generated from `src/` by typedoc. Without the
+      # library's own dependencies it cannot resolve a single import, produces
+      # nothing, and the build fails on the links into it.
+      - name: Install library dependencies
+        run: npm ci --ignore-scripts
 
       - name: Install documentation dependencies
         run: npm ci

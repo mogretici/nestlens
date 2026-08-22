@@ -599,8 +599,8 @@ export interface NestLensConfig {
   // Rate Limiting
   /**
    * Rate limiting configuration for API endpoints.
-   * Set to false to disable rate limiting (default).
-   * Set to an object to enable: { windowMs: 60000, maxRequests: 100 }
+   * Set to `false` to disable rate limiting (default).
+   * Set to an object to enable: `{ windowMs: 60000, maxRequests: 100 }`.
    * Default: disabled (NestLens is a development/debugging tool)
    */
   rateLimit?: RateLimitConfig | false;

@@ -43,7 +43,7 @@ test-results/
 docs/build/
 docs/.docusaurus/
 docs/node_modules/
-docs/api/
+docs/docs/api-reference/
 
 # Misc
 *.tgz

@@ -12,8 +12,10 @@
  * application needs to read — and the wrong answer by accident, which is why
  * it is not what a bare array means.
  *
- *     sensitiveParams: ['iban']                 // the defaults, plus iban
- *     sensitiveParams: { replace: ['iban'] }    // iban, and nothing else
+ * ```ts
+ * sensitiveParams: ['iban']                 // the defaults, plus iban
+ * sensitiveParams: { replace: ['iban'] }    // iban, and nothing else
+ * ```
  */
 export type MaskingTerms = string[] | { replace: string[] };
 
