@@ -8,6 +8,7 @@ import { STORAGE, StorageInterface } from './storage/storage.interface';
 import { TagService } from './tag.service';
 import { FamilyHashService } from './family-hash.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
+import { settled } from './thenable';
 
 /**
  * How long the final flush may take before shutdown proceeds without it.
@@ -96,7 +97,7 @@ export class CollectorService implements OnModuleDestroy {
     if (!this.config.filter) return true;
     try {
       const result = this.config.filter(entry);
-      return result instanceof Promise ? await result : result;
+      return await settled(result);
     } catch (error) {
       this.logger.warn(`Filter callback error: ${error}`);
       return true; // Fail-open - don't block collection on filter errors
@@ -362,7 +363,7 @@ export class CollectorService implements OnModuleDestroy {
     if (this.config.filterBatch) {
       try {
         const result = this.config.filterBatch(entries);
-        entries = result instanceof Promise ? await result : result;
+        entries = await settled(result);
       } catch (error) {
         this.logger.warn(`Batch filter callback error: ${error}`);
         // Fail-open - continue with original entries on filter error

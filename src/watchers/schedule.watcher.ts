@@ -12,6 +12,7 @@ import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestl
 import { ScheduleEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { WrappedMethods } from './wrap-method';
+import { isThenable } from '../core/thenable';
 
 /** One scheduled callback, as `@nestjs/schedule`'s orchestrator stores it. */
 interface ScheduledTarget {
@@ -205,7 +206,7 @@ export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, On
         try {
           const result = original(...args);
 
-          if (result instanceof Promise) {
+          if (isThenable(result)) {
             return result.then(
               (value) => {
                 finish();

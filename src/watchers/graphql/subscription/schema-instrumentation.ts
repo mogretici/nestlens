@@ -25,6 +25,7 @@ import { Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveClientIp, AddressableRequest } from '../../../core/client-ip';
 import { SubscriptionTracker } from './subscription.tracker';
+import { isThenable } from '../../../core/thenable';
 
 const logger = new Logger('GraphQLSubscriptions');
 
@@ -147,7 +148,7 @@ export const instrumentSubscriptions = (
       // A `subscribe` may return a promise for the iterable, or the iterable,
       // or an error result the server turns into a response. Only the last of
       // those is not a subscription.
-      if (source instanceof Promise) {
+      if (isThenable(source)) {
         return source.then((resolved) =>
           isAsyncIterable(resolved) ? track(resolved, context, info) : resolved,
         );

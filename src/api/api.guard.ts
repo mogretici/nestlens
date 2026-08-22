@@ -14,6 +14,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import type { Request } from 'express';
 import { AddressableRequest, resolveClientIp } from '../core/client-ip';
 import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
+import { settled } from '../core/thenable';
 
 /**
  * Extended Request type with NestLens auth user
@@ -315,7 +316,7 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
 
     try {
       const returned = canAccess(request);
-      result = returned instanceof Promise ? await returned : returned;
+      result = await settled(returned);
     } catch (error) {
       this.logger.error(`Error in canAccess function: ${error}`);
       return DENIED;
