@@ -85,15 +85,16 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
   /**
    * Initialize the watcher on module init
    */
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     if (!this.config.enabled) {
       this.logger.log('GraphQL watcher is disabled');
       return;
     }
 
     try {
-      await this.initialize();
+      this.initialize();
     } catch (error) {
+      // A watcher that cannot start must not stop the application.
       this.logger.error('Failed to initialize GraphQL watcher', error);
     }
   }
@@ -150,19 +151,26 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
   /**
    * Cleanup on module destroy
    */
-  async onModuleDestroy(): Promise<void> {
+  onModuleDestroy(): void {
     this.destroy();
   }
 
   /**
-   * Initialize the GraphQL watcher
+   * Initialize the GraphQL watcher.
+   *
+   * There were two of these, one `async` and one not, running the same eight
+   * steps — and they had already drifted: the lazy one, reached through
+   * `getPlugin()`, returned silently when no GraphQL server was found. A
+   * project wiring the plugin by hand against a server NestLens could not
+   * detect got an empty plugin object and no reason for it, which presents as
+   * "the watcher is on and records nothing". Nothing here awaits, so the one
+   * that remains does not pretend to.
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       return;
     }
 
-    // Detect server if auto
     const serverType = this.config.server === 'auto' ? this.detectServer() : this.config.server;
 
     if (serverType === 'none' || !serverType) {
@@ -172,7 +180,6 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
       return;
     }
 
-    // Create adapter
     this.adapter = this.createAdapter(serverType);
 
     if (!this.adapter) {
@@ -180,10 +187,8 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
       return;
     }
 
-    // Initialize adapter
     this.adapter.initialize(this.config, this.collector);
 
-    // Create subscription tracker
     if (this.config.subscriptions.enabled) {
       this.subscriptionTracker = createSubscriptionTracker(this.collector, this.config);
     }
@@ -246,7 +251,7 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
   getPlugin(): unknown {
     // Lazy initialization - ensure adapter is created when plugin is requested
     if (!this.adapter && this.config.enabled) {
-      this.initializeSync();
+      this.initialize();
     }
 
     if (!this.adapter) {
@@ -255,40 +260,6 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
     }
 
     return this.adapter.getPlugin();
-  }
-
-  /**
-   * Synchronous initialization for lazy plugin creation
-   */
-  private initializeSync(): void {
-    if (this.initialized) {
-      return;
-    }
-
-    // Detect server if auto
-    const serverType = this.config.server === 'auto' ? this.detectServer() : this.config.server;
-
-    if (serverType === 'none' || !serverType) {
-      return;
-    }
-
-    // Create adapter
-    this.adapter = this.createAdapter(serverType);
-
-    if (!this.adapter) {
-      return;
-    }
-
-    // Initialize adapter
-    this.adapter.initialize(this.config, this.collector);
-
-    // Create subscription tracker
-    if (this.config.subscriptions.enabled) {
-      this.subscriptionTracker = createSubscriptionTracker(this.collector, this.config);
-    }
-
-    this.initialized = true;
-    this.logger.log(`GraphQL watcher initialized with ${serverType} adapter`);
   }
 
   /**
