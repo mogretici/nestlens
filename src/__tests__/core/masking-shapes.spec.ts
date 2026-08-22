@@ -86,6 +86,52 @@ describe('masking a payload deeper than the limit', () => {
   });
 });
 
+describe('masking a payload whose values are shared at every level', () => {
+  /**
+   * Depth alone does not bound the work. An object a payload reaches twice is
+   * not a cycle and is walked twice — right for a list of orders sharing one
+   * customer, exponential when the sharing repeats at every level:
+   *
+   * ```text
+   * 20 levels of { a: shared, b: shared }  ->  568ms and 25MB of masked output
+   * ```
+   *
+   * Payloads here are live objects rather than parsed JSON, so shared
+   * references are ordinary.
+   */
+  const shared = (levels: number): Record<string, unknown> => {
+    let node: Record<string, unknown> = { leaf: true };
+    for (let i = 0; i < levels; i += 1) {
+      node = { a: node, b: node };
+    }
+    return node;
+  };
+
+  it('finishes quickly', () => {
+    const started = Date.now();
+
+    mask(shared(30));
+
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('produces an output of bounded size', () => {
+    expect(JSON.stringify(mask(shared(30))).length).toBeLessThan(1_000_000);
+  });
+
+  it('says where it stopped', () => {
+    expect(JSON.stringify(mask(shared(30)))).toContain('[Truncated]');
+  });
+
+  it('leaves an ordinary shared value alone', () => {
+    const customer = { id: 7, name: 'Ada' };
+
+    expect(mask({ orders: [{ customer }, { customer }] })).toEqual({
+      orders: [{ customer: { id: 7, name: 'Ada' } }, { customer: { id: 7, name: 'Ada' } }],
+    });
+  });
+});
+
 describe('masking objects that do not keep their contents in properties', () => {
   it('records a date as its timestamp', () => {
     expect(mask({ createdAt: new Date('2020-01-01T00:00:00Z') })).toEqual({

@@ -148,8 +148,34 @@ const ARGUMENT_FIELDS = new Set(['arguments', 'argv', 'commandArguments']);
  * invisible in the dashboard with only a warning line as evidence.
  */
 const MAX_MASK_DEPTH = 32;
+/**
+ * How many values one payload may be walked through.
+ *
+ * Depth alone does not bound the work. Objects a payload reaches twice are not
+ * a cycle and are walked twice, which is right for the ordinary case — a list
+ * of orders sharing one customer — and exponential when the sharing repeats at
+ * every level:
+ *
+ * ```text
+ * 20 levels of { a: shared, b: shared }  ->  568ms and 25MB of masked output
+ * ```
+ *
+ * Payloads are live objects here, not parsed JSON, so shared references are
+ * ordinary. The budget stops the walk long before either number matters; ten
+ * thousand values is far past any payload worth reading.
+ */
+const MAX_MASK_NODES = 10_000;
 const CIRCULAR = '[Circular]';
 const TOO_DEEP = '[Max depth exceeded]';
+const TRUNCATED = '[Truncated]';
+
+/** The state one `maskBody` walk carries: the path to the root, and what is left of the budget. */
+interface Walk {
+  readonly path: Set<object>;
+  remaining: number;
+}
+
+const newWalk = (): Walk => ({ path: new Set<object>(), remaining: MAX_MASK_NODES });
 
 /**
  * The `user:password@` in front of a host.
@@ -382,7 +408,7 @@ export class DataMaskerService {
    * Mask sensitive data in request/response body.
    */
   maskBody(body: unknown): unknown {
-    return this.maskValue(body, 0, new Set<object>(), true);
+    return this.maskValue(body, 0, newWalk(), true);
   }
 
   /**
@@ -398,14 +424,9 @@ export class DataMaskerService {
    * chose — whitespace and key order included — to mask names that field
    * never had.
    */
-  private maskValue(
-    value: unknown,
-    depth: number,
-    path: Set<object>,
-    parseStrings: boolean,
-  ): unknown {
+  private maskValue(value: unknown, depth: number, walk: Walk, parseStrings: boolean): unknown {
     if (typeof value === 'string') {
-      return parseStrings ? this.maskJsonString(value, depth, path) : value;
+      return parseStrings ? this.maskJsonString(value, depth, walk) : value;
     }
 
     // The one primitive `JSON.stringify` refuses rather than skips, and the
@@ -426,9 +447,15 @@ export class DataMaskerService {
       return value;
     }
 
-    if (path.has(value)) {
+    if (walk.path.has(value)) {
       return CIRCULAR;
     }
+
+    if (walk.remaining <= 0) {
+      return TRUNCATED;
+    }
+
+    walk.remaining -= 1;
 
     if (depth >= MAX_MASK_DEPTH) {
       return TOO_DEEP;
@@ -439,13 +466,13 @@ export class DataMaskerService {
       return described;
     }
 
-    path.add(value);
+    walk.path.add(value);
     try {
       return Array.isArray(value)
-        ? value.map((item) => this.maskValue(item, depth + 1, path, parseStrings))
-        : this.maskObjectAt(value as Record<string, unknown>, depth, path);
+        ? value.map((item) => this.maskValue(item, depth + 1, walk, parseStrings))
+        : this.maskObjectAt(value as Record<string, unknown>, depth, walk);
     } finally {
-      path.delete(value);
+      walk.path.delete(value);
     }
   }
 
@@ -457,7 +484,7 @@ export class DataMaskerService {
    * walking it as an object recorded `{}` for a number and a map of character
    * positions for a string, neither of which is what the application sent.
    */
-  private maskJsonString(body: string, depth: number, path: Set<object>): string {
+  private maskJsonString(body: string, depth: number, walk: Walk): string {
     let parsed: unknown;
     try {
       parsed = JSON.parse(body);
@@ -469,7 +496,7 @@ export class DataMaskerService {
       return body;
     }
 
-    return JSON.stringify(this.maskValue(parsed, depth, path, true));
+    return JSON.stringify(this.maskValue(parsed, depth, walk, true));
   }
 
   /**
@@ -639,14 +666,14 @@ export class DataMaskerService {
    * Mask sensitive fields in an object recursively.
    */
   private maskObject(obj: Record<string, unknown>): Record<string, unknown> {
-    return this.maskObjectAt(obj, 0, new Set<object>());
+    return this.maskObjectAt(obj, 0, newWalk());
   }
 
   /** {@link maskObject}, keeping the depth and the path to the root. */
   private maskObjectAt(
     obj: Record<string, unknown>,
     depth: number,
-    path: Set<object>,
+    walk: Walk,
   ): Record<string, unknown> {
     const masked: Record<string, unknown> = {};
 
@@ -664,7 +691,7 @@ export class DataMaskerService {
         // qualifies, so the rest of the payload is masked as it always was.
         assignKey(masked, key, value);
       } else {
-        assignKey(masked, key, this.maskValue(value, depth + 1, path, false));
+        assignKey(masked, key, this.maskValue(value, depth + 1, walk, false));
       }
     }
 
