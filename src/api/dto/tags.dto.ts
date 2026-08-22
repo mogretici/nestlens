@@ -14,6 +14,7 @@ import {
   TransformCommaSeparatedArray,
   TransformLimit,
 } from './transformers';
+import { MAX_TAG_LENGTH } from '@/core/storage/tag-normalization';
 
 /** Body of the endpoints that add or remove an entry's tags. */
 export class EntryTagsDto {
@@ -29,7 +30,7 @@ export class EntryTagsDto {
   // this side took five thousand in one request and wrote every one of them.
   @ArrayMaxSize(MAX_FILTER_VALUES)
   @IsString({ each: true })
-  @MaxLength(100, { each: true })
+  @MaxLength(MAX_TAG_LENGTH, { each: true })
   tags!: string[];
 }
 
@@ -37,7 +38,7 @@ export class EntryTagsDto {
 export class MonitoredTagDto {
   @IsString()
   @IsNotEmpty()
-  @MaxLength(100)
+  @MaxLength(MAX_TAG_LENGTH)
   tag!: string;
 }
 
@@ -62,7 +63,7 @@ export class TagEntriesQueryDto {
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   @ArrayNotEmpty({ message: 'tags is required and must name at least one tag' })
-  @MaxLength(100, { each: true })
+  @MaxLength(MAX_TAG_LENGTH, { each: true })
   tags!: string[];
 
   @IsOptional()
