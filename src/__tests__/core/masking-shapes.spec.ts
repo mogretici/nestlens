@@ -151,6 +151,59 @@ describe('masking objects that do not keep their contents in properties', () => 
   });
 });
 
+describe('masking a value the storage cannot serialise', () => {
+  /**
+   * The file and Redis drivers write `JSON.stringify(payload)`, which refuses
+   * a bigint rather than skipping it. A bigint column read through Prisma, a
+   * job id, a balance — anywhere in a payload — made `save` throw, and the
+   * collector reads a throwing save as storage being down: the entry goes back
+   * in the buffer and fails every flush after it, taking the entries behind it
+   * with it until the buffer's ceiling drops it a thousand entries later.
+   */
+  it('records a bigint as it is printed', () => {
+    expect(mask({ orderId: 10n })).toEqual({ orderId: '10n' });
+  });
+
+  it('records one past what a number can hold', () => {
+    expect(mask({ id: 9007199254740993n })).toEqual({ id: '9007199254740993n' });
+  });
+
+  it('records one nested in an array', () => {
+    expect(mask({ ids: [1n, 2n] })).toEqual({ ids: ['1n', '2n'] });
+  });
+
+  it.each([
+    ['a bigint', { id: 1n }],
+    [
+      'a cycle',
+      (() => {
+        const node: Record<string, unknown> = { id: 1 };
+        node.self = node;
+        return node;
+      })(),
+    ],
+    ['a buffer', { file: Buffer.alloc(8) }],
+    ['a date', { at: new Date() }],
+    ['a map', { m: new Map([['a', 1n]]) }],
+    [
+      'a deep payload',
+      (() => {
+        const root: Record<string, unknown> = {};
+        let node = root;
+        for (let i = 0; i < 200; i += 1) {
+          const next: Record<string, unknown> = {};
+          node.next = next;
+          node = next;
+        }
+        return root;
+      })(),
+    ],
+  ])('leaves %s in a shape the storage can write', (_name, payload) => {
+    // The invariant the file and Redis drivers depend on.
+    expect(() => JSON.stringify(mask(payload))).not.toThrow();
+  });
+});
+
 describe('masking a body that arrived as text', () => {
   it.each([
     ['a number', '123'],

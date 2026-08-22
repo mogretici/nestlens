@@ -408,6 +408,16 @@ export class DataMaskerService {
       return parseStrings ? this.maskJsonString(value, depth, path) : value;
     }
 
+    // The one primitive `JSON.stringify` refuses rather than skips, and the
+    // file and Redis drivers serialise every payload: a bigint column read
+    // through Prisma, a job id, a balance — anywhere in a payload — made
+    // `save` throw. The collector reads that as storage being down and puts
+    // the entry back, so the same value failed every flush after it and took
+    // the entries behind it down with it. Written the way it is printed.
+    if (typeof value === 'bigint') {
+      return `${value}n`;
+    }
+
     if (value === null || typeof value !== 'object') {
       return value;
     }

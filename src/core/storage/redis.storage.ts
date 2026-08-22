@@ -16,6 +16,7 @@ import { hasFilters, matchesEntryFilters } from './entry-filter';
 import { StorageInterface } from './storage.interface';
 import { normalizeTag } from './tag-normalization';
 import { RedisStorageConfig } from '../../nestlens.config';
+import { serializePayload } from './serialize-payload';
 
 /**
  * Redis storage implementation for NestLens.
@@ -331,7 +332,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       'requestId',
       entry.requestId ?? '',
       'payload',
-      JSON.stringify(entry.payload),
+      serializePayload(entry.payload),
       'createdAt',
       createdAt,
       'familyHash',
@@ -391,7 +392,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         'requestId',
         entry.requestId ?? '',
         'payload',
-        JSON.stringify(entry.payload),
+        serializePayload(entry.payload),
         'createdAt',
         createdAt,
         'familyHash',

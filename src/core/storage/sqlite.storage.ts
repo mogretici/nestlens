@@ -16,6 +16,7 @@ import {
 } from '../../types';
 import { StorageInterface } from './storage.interface';
 import { normalizeTag } from './tag-normalization';
+import { serializePayload } from './serialize-payload';
 
 /**
  * Database row type for nestlens_entries table
@@ -368,7 +369,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     const result = stmt.run(
       entry.type,
       entry.requestId || null,
-      JSON.stringify(entry.payload),
+      serializePayload(entry.payload),
       createdAt,
     );
 
@@ -395,7 +396,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         const result = stmt.run(
           entry.type,
           entry.requestId || null,
-          JSON.stringify(entry.payload),
+          serializePayload(entry.payload),
           createdAt,
         );
         savedEntries.push({
