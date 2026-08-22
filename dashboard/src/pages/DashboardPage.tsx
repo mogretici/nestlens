@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import toast from 'react-hot-toast';
 import { parseDate } from '../utils/date';
 import {
   Activity,
@@ -313,18 +314,25 @@ export default function DashboardPage() {
     setPruningRunning(true);
     try {
       const result = await runPruning();
-      if (result.success) {
-        // Refresh data after pruning
-        const [storageRes, pruningRes] = await Promise.all([
-          getStorageStats(),
-          getPruningStatus(),
-        ]);
-        setStorageStats(storageRes.data);
-        setPruningStatus(pruningRes.data);
-        refreshStats();
-      }
+
+      const [storageRes, pruningRes] = await Promise.all([getStorageStats(), getPruningStatus()]);
+      setStorageStats(storageRes.data);
+      setPruningStatus(pruningRes.data);
+      refreshStats();
+
+      // Said out loud, because the usual outcome is that nothing was old
+      // enough to delete — and a button that changes nothing and says nothing
+      // reads as a button that did not work.
+      const deleted = result.data?.deleted ?? 0;
+      toast.success(
+        deleted === 0
+          ? 'Nothing was old enough to prune'
+          : `Pruned ${deleted.toLocaleString()} ${deleted === 1 ? 'entry' : 'entries'}`,
+      );
     } catch (error) {
-      console.error('Failed to run pruning:', error);
+      toast.error(
+        `Could not prune: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setPruningRunning(false);
     }
