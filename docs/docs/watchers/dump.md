@@ -61,7 +61,35 @@ interface DumpEntry {
 
 ## Usage Example
 
+### Automatic Tracking
+
+Provide the service that performs your dumps under `NESTLENS_DUMP_SERVICE` and
+the watcher wraps its `export`, `import`, `backup`, `restore`, `migrate` and
+`dump` methods, recording each call with its duration and outcome:
+
+```typescript
+import { NESTLENS_DUMP_SERVICE } from 'nestlens';
+
+@Module({
+  providers: [
+    BackupService,
+    {
+      provide: NESTLENS_DUMP_SERVICE,
+      useExisting: BackupService,
+    },
+  ],
+})
+export class BackupModule {}
+```
+
+A wrapped method keeps its own shape: a synchronous one stays synchronous, its
+arguments are forwarded unchanged, and a failure it raises still reaches the
+caller.
+
 ### Manual Tracking
+
+Where the work is not on one service — or the interesting numbers are only
+known inside the method — record it yourself:
 
 ```typescript
 import { DumpWatcher } from 'nestlens';
