@@ -99,7 +99,8 @@ The dashboard uses clean, route-based URLs:
 Filters are encoded in the URL query string, so filtered views are shareable and survive a refresh:
 
 ```
-/nestlens/requests?status=500&method=POST
+/nestlens/requests?statuses=500&methods=POST
+/nestlens/requests?window=1h&slower=500
 /nestlens/queries?slow=true
 ```
 
