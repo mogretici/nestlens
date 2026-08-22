@@ -21,6 +21,15 @@ const DEFAULT_THROTTLE_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 /**
+ * The longest delay a timer can hold.
+ *
+ * Past it Node aborts after 1ms instead of after the configured wait, so a
+ * `timeoutMs` written too large cancelled every delivery immediately and no
+ * alert was ever sent.
+ */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
+/**
  * How many throttle keys are remembered at once.
  *
  * The map holds one entry per distinct alert seen inside the throttle window,
@@ -181,7 +190,7 @@ export class AlertingService implements OnModuleInit, OnModuleDestroy {
   private async send(webhook: AlertingWebhook, entry: Entry): Promise<void> {
     const summary = this.summarize(entry);
     const body = this.formatPayload(webhook.type ?? 'generic', summary, entry);
-    const timeoutMs = this.config?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs = Math.min(this.config?.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);

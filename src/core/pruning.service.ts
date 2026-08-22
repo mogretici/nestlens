@@ -18,7 +18,8 @@ export class PruningService implements OnModuleInit, OnModuleDestroy {
     const pruningConfig = this.config.pruning;
 
     if (pruningConfig?.enabled !== false) {
-      const intervalMinutes = this.positiveOrDefault(pruningConfig?.interval, 60, 'interval');
+      const configured = this.positiveOrDefault(pruningConfig?.interval, 60, 'interval');
+      const intervalMinutes = this.withinTimerRange(configured);
       this.startPruning(intervalMinutes);
       this.logger.log(`Pruning service started (interval: ${intervalMinutes} minutes)`);
     }
@@ -46,6 +47,36 @@ export class PruningService implements OnModuleInit, OnModuleDestroy {
     );
 
     return fallback;
+  }
+
+  /**
+   * The longest delay a timer can hold, in minutes.
+   *
+   * `setInterval` keeps its delay in a signed 32-bit integer, and Node's
+   * answer to a larger one is to fire after 1ms — every time. So an interval
+   * meant to prune monthly ran continuously instead:
+   *
+   * ```text
+   * pruning.interval: 43200   ->  39 prunes in 50ms, each a full scan
+   * ```
+   *
+   * Clamping keeps the intent — prune rarely — where falling back to the
+   * hourly default would not.
+   */
+  private static readonly MAX_INTERVAL_MINUTES = Math.floor(2 ** 31 / 60_000);
+
+  /** {@link MAX_INTERVAL_MINUTES}. */
+  private withinTimerRange(intervalMinutes: number): number {
+    if (intervalMinutes <= PruningService.MAX_INTERVAL_MINUTES) {
+      return intervalMinutes;
+    }
+
+    this.logger.warn(
+      `pruning.interval: ${intervalMinutes} is longer than a timer can hold. ` +
+        `Pruning every ${PruningService.MAX_INTERVAL_MINUTES} minutes instead.`,
+    );
+
+    return PruningService.MAX_INTERVAL_MINUTES;
   }
 
   private startPruning(intervalMinutes: number): void {
