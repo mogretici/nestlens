@@ -63,7 +63,17 @@ function isQueueEvents(value: unknown): value is BullQueueEventsLike {
 export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(JobWatcher.name);
   private readonly config: JobWatcherConfig;
-  private readonly jobTracking = new Map<string, number>(); // jobId -> startTime
+  /**
+   * Jobs seen going active, so a completion can be given a duration — and a
+   * name, when the job itself is gone by the time the event arrives.
+   *
+   * Bounded: an entry is added when a job goes active and removed when it
+   * completes or fails, and a job that does neither — stalled, removed,
+   * an event lost with a connection — would otherwise stay for the life of the
+   * process.
+   */
+  private readonly jobTracking = new Map<string, { startedAt: number; name: string }>();
+  private static readonly MAX_TRACKED_JOBS = 10_000;
   private readonly managedQueueEvents: BullQueueEventsLike[] = []; // QueueEvents created by setupBullMQQueue
   /** Every listener installed, so `onModuleDestroy` can remove it. */
   private readonly listeners: {
@@ -252,7 +262,7 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
       'completed',
       async (args: { jobId: string; returnvalue: string }) => {
         try {
-          const job = await getJob(args.jobId);
+          const job = (await getJob(args.jobId)) ?? this.rememberedJob(args.jobId);
           if (!job) return;
 
           // Parse returnvalue (BullMQ sends it as JSON string)
@@ -277,7 +287,7 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
       'failed',
       async (args: { jobId: string; failedReason: string }) => {
         try {
-          const job = await getJob(args.jobId);
+          const job = (await getJob(args.jobId)) ?? this.rememberedJob(args.jobId);
           if (!job) return;
 
           // Convert failedReason string to Error object for existing handler
@@ -296,6 +306,39 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(`BullMQ job interceptors installed for queue: ${name}`);
+  }
+
+  /** Remembers a job that has started, dropping the oldest if too many are open. */
+  private track(jobId: string, name: string): void {
+    if (this.jobTracking.size >= JobWatcher.MAX_TRACKED_JOBS) {
+      const oldest = this.jobTracking.keys().next();
+      if (!oldest.done) this.jobTracking.delete(oldest.value);
+    }
+
+    this.jobTracking.set(jobId, { startedAt: Date.now(), name });
+  }
+
+  /** What was remembered about a job that has just ended, and forgets it. */
+  private finish(jobId: string): { startedAt: number; name: string } | undefined {
+    const tracked = this.jobTracking.get(jobId);
+    this.jobTracking.delete(jobId);
+
+    return tracked;
+  }
+
+  /**
+   * A job BullMQ has already removed, as far as this watcher remembers it.
+   *
+   * `removeOnComplete` is the ordinary production setting, and with it the job
+   * is gone before the `completed` event is handled — `getJob` answers with
+   * nothing. The handler returned there, so nothing was ever recorded past
+   * `active`: every job on the page sat unfinished forever, and the entry
+   * remembering it was never removed either.
+   */
+  private rememberedJob(jobId: string): BullJobLike | undefined {
+    const tracked = this.jobTracking.get(jobId);
+
+    return tracked ? { id: jobId, name: tracked.name } : undefined;
   }
 
   private async handleJobWaiting(
@@ -324,7 +367,7 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   private handleJobActive(queueName: string, job: BullJobLike): void {
     try {
       const jobId = String(job.id ?? job);
-      this.jobTracking.set(jobId, Date.now());
+      this.track(jobId, job.name || 'unknown');
 
       const payload: JobEntry['payload'] = {
         name: job.name || 'unknown',
@@ -343,9 +386,8 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   private handleJobCompleted(queueName: string, job: BullJobLike, result: unknown): void {
     try {
       const jobId = String(job.id ?? job);
-      const startTime = this.jobTracking.get(jobId);
-      const duration = startTime ? Date.now() - startTime : undefined;
-      this.jobTracking.delete(jobId);
+      const tracked = this.finish(jobId);
+      const duration = tracked ? Date.now() - tracked.startedAt : undefined;
 
       const payload: JobEntry['payload'] = {
         name: job.name || 'unknown',
@@ -366,9 +408,8 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   private handleJobFailed(queueName: string, job: BullJobLike, error: Error): void {
     try {
       const jobId = String(job.id ?? job);
-      const startTime = this.jobTracking.get(jobId);
-      const duration = startTime ? Date.now() - startTime : undefined;
-      this.jobTracking.delete(jobId);
+      const tracked = this.finish(jobId);
+      const duration = tracked ? Date.now() - tracked.startedAt : undefined;
 
       const payload: JobEntry['payload'] = {
         name: job.name || 'unknown',
