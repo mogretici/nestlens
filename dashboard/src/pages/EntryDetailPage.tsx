@@ -31,6 +31,7 @@ import Tabs from '../components/Tabs';
 import { ControlledInlineJson } from '../components/JsonViewerWithToolbar';
 import { useJsonToolbar } from '../components/useJsonToolbar';
 import ClickableBadge from '../components/ClickableBadge';
+import { getEntryTypeConfig } from '../config/entryTypes';
 
 /**
  * One chunk per detail view, fetched when an entry of that type is opened.
@@ -253,13 +254,26 @@ export default function EntryDetailPage() {
     );
   };
 
+  /**
+   * Where the arrow goes: the list this entry belongs to.
+   *
+   * It was `<Link to={-1 as unknown as string}>` — a cast around the fact that
+   * `Link` takes a path and history deltas belong to `useNavigate`. Clicking it
+   * did go back, but the href it rendered was the page the reader was already
+   * on, so opening it in a new tab or copying the address gave them that. And
+   * a detail page reached from a shared link has nothing behind it to go back
+   * to: the entry type does, always.
+   */
+  const listRoute = `/${getEntryTypeConfig(entry.type)?.route ?? 'requests'}`;
+
   return (
     <div>
       {/* Fixed Header */}
       <div className="fixed top-0 left-0 right-0 lg:left-64 z-30 h-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center space-x-4 px-4 lg:px-6 h-full">
           <Link
-            to={-1 as unknown as string}
+            to={listRoute}
+            aria-label={`Back to ${listRoute.slice(1)}`}
             className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
             <ArrowLeft className="h-5 w-5 text-gray-500" />

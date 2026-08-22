@@ -375,29 +375,32 @@ describe('Auto-refresh interval behavior', () => {
     expect(api.checkNewEntries).toHaveBeenCalled();
   });
 
-  it('gets latest sequence when no entries exist', async () => {
-    // Arrange
+  it('fills an empty list in rather than offering a button that cannot work', async () => {
+    // There is no cursor to count from when nothing is on screen. It used to
+    // ask whether any entry of this type existed anywhere and, if one did, show
+    // "Load 1 new entry" — under a filter that matched none of them, and with
+    // `loadNew` returning immediately for want of that same cursor, so the
+    // badge could not be dismissed.
     localStorage.setItem('nestlens-auto-refresh', 'false');
     (api.getEntriesWithCursor as any).mockResolvedValue({
       data: [],
       meta: { total: 0, hasMore: false, newestSequence: null, oldestSequence: null },
     });
-    (api.getLatestSequence as any).mockResolvedValue({ data: { sequence: 1 } });
 
-    renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
+    const { result } = renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
 
-    // Wait for initial load
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
+    const afterFirstLoad = (api.getEntriesWithCursor as any).mock.calls.length;
 
-    // Act - trigger interval
     await act(async () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Assert - should try to get latest sequence since no entries
-    expect(api.getLatestSequence).toHaveBeenCalled();
+    expect((api.getEntriesWithCursor as any).mock.calls.length).toBeGreaterThan(afterFirstLoad);
+    expect(api.getLatestSequence).not.toHaveBeenCalled();
+    expect(result.current.newEntriesCount).toBe(0);
   });
 
   it('auto-loads new entries when auto-refresh enabled and new entries exist', async () => {

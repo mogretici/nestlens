@@ -78,6 +78,12 @@ running whatever version was installed first — it was found sitting three
 releases behind, which silently made every E2E run test stale code. Delete
 `example/node_modules/nestlens` first.
 
+**A running example has to be restarted.** `DashboardController` reads the
+built dashboard once, at bootstrap, so a rebuilt bundle reaches a live server
+only after `npm start` runs again. Measuring a dashboard change against a
+server that was already up reports the previous build — three times in one
+session, each time looking like the fix had not worked.
+
 ## Architecture
 
 ### Monorepo Structure

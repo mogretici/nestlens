@@ -110,6 +110,26 @@ test.describe('Entry Details', () => {
     }).toPass({ timeout: 20_000 });
   });
 
+  test('the arrow in the header goes to the list', async ({ page }) => {
+    // The arrow used to be a history delta wearing a link's clothes: clicking
+    // it went back, but its href was the detail page itself, and a detail page
+    // reached from a shared link has nothing behind it to go back to.
+    await page.goto('/requests');
+    await page.waitForSelector('main', { state: 'visible' });
+    await page.locator('tbody tr').first().click();
+    await page.waitForURL(/\/requests\/\d+$/);
+
+    const detailUrl = page.url();
+    const arrow = page.getByLabel('Back to requests');
+
+    await expect(arrow).toHaveAttribute('href', /\/requests$/);
+    expect(await arrow.getAttribute('href')).not.toBe(new URL(detailUrl).pathname);
+
+    await arrow.click();
+
+    await expect(page).toHaveURL(/\/requests$/);
+  });
+
   test('back navigation returns to list', async ({ page }) => {
     // Through the list, not straight to the detail — going back from the first
     // page in a fresh context lands on about:blank, which says nothing about

@@ -3,7 +3,6 @@ import toast from 'react-hot-toast';
 import {
   getEntriesWithCursor,
   checkNewEntries,
-  getLatestSequence,
   CursorFilters,
 } from '../api';
 import { Entry, EntryType, CursorPaginationMeta } from '../types';
@@ -352,28 +351,58 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     }
   }, [type, limit, askedFilters]);
 
-  // Check for new entries
+  /** Whether anything is being narrowed, which decides how new entries are counted. */
+  const narrowed = (asked: CursorFilters | undefined): boolean =>
+    Boolean(
+      asked &&
+        Object.values(asked).some((value) =>
+          Array.isArray(value) ? value.length > 0 : value !== undefined && value !== '',
+        ),
+    );
+
+  /**
+   * How many new entries the reader would actually see.
+   *
+   * `entries/check-new` counts by sequence and type and knows nothing about
+   * filters, so under one it counted rows the list would never show. Measured
+   * on `/requests?statuses=500` with no 500s arriving: "Load 147 new entries",
+   * and clicking it loaded none of them.
+   *
+   * With a filter active the count comes from asking for the entries
+   * themselves, which is the same request the automatic path already makes —
+   * so it is capped at a page, which is also all one click brings in.
+   */
   const checkForNew = useCallback(async () => {
     if (!newestSequenceRef.current) {
-      // If no entries yet, get latest sequence
-      try {
-        const response = await getLatestSequence(type);
-        if (response.data) {
-          setNewEntriesCount(1);
-        }
-      } catch {
-        // Ignore errors
-      }
+      // Nothing on screen, so there is no cursor to count from — and the badge
+      // used to say "Load 1 new entry" here whenever an entry of this type
+      // existed anywhere, filter or no filter, while `loadNew` returned
+      // immediately for want of that same cursor. The button could not be
+      // dismissed. An empty list has nothing to lose by filling itself in.
+      await refresh();
       return;
     }
 
+    const asked = askedFilters();
+
     try {
-      const response = await checkNewEntries(newestSequenceRef.current, type);
-      setNewEntriesCount(response.data.count);
+      if (!narrowed(asked)) {
+        const response = await checkNewEntries(newestSequenceRef.current, type);
+        setNewEntriesCount(response.data.count);
+        return;
+      }
+
+      const response = await getEntriesWithCursor({
+        type,
+        limit,
+        afterSequence: newestSequenceRef.current,
+        filters: asked,
+      });
+      setNewEntriesCount(response.data.length);
     } catch {
       // Ignore errors
     }
-  }, [type]);
+  }, [type, limit, askedFilters, refresh]);
 
   // Toggle auto-refresh
   const setAutoRefresh = useCallback((enabled: boolean) => {
