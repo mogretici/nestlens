@@ -1,4 +1,5 @@
 import { ConsoleLogger, Inject, Injectable } from '@nestjs/common';
+import { inspect } from 'node:util';
 import { CollectorService } from '../core/collector.service';
 import { LogWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { LogEntry } from '../types';
@@ -134,10 +135,41 @@ export class NestLensLogger extends ConsoleLogger {
     return {};
   }
 
+  /**
+   * What an object logged as a message is recorded as.
+   *
+   * This ran `JSON.stringify` on it, inside the application's own logging
+   * call, and threw straight back out of it:
+   *
+   * ```text
+   * logger.log(order)          TypeError: Converting circular structure to JSON
+   * logger.log({ total: 9n })  TypeError: Do not know how to serialize a BigInt
+   * ```
+   *
+   * An entity with a relation pointing back at its parent, and a bigint column
+   * — both ordinary, both printed without complaint by the logger NestLens
+   * replaces. A watcher must not be able to throw where the thing it watches
+   * would not have.
+   *
+   * `inspect` is what the console logger itself uses, so the recorded text is
+   * the text that was printed, and it is bounded on every axis a payload can
+   * grow along.
+   */
   private toMessageString(message: unknown): string {
     if (typeof message === 'string') {
       return message;
     }
-    return JSON.stringify(message);
+
+    try {
+      return inspect(message, {
+        depth: 3,
+        breakLength: Infinity,
+        maxArrayLength: 100,
+        maxStringLength: 1_000,
+      });
+    } catch {
+      // A custom inspector of the application's own that throws.
+      return '[unrecordable]';
+    }
   }
 }
