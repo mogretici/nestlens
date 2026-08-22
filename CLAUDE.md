@@ -202,8 +202,12 @@ it is no longer required for Apollo or Mercurius.
 - Lint, type check, library tests and dashboard tests run on every push and
   pull request (`.github/workflows/ci.yml`) — about two minutes
 - E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
-  any pull request touching `src/api/`, `dashboard/`, `e2e/` or `example/`, and
-  on pushes to main. All three browsers run nightly at 03:00 UTC. Actions tab →
+  any pull request touching `src/`, `dashboard/`, `e2e/`, `example/` or
+  `package.json`, and on pushes to main. The filter used to name `src/api/`
+  alone; what the suite drives is the example application, which runs the whole
+  library, and on one branch of forty-five commits thirty changed none of the
+  listed paths — including the Redis rewrite and the watcher wrapping fix,
+  which are exactly the changes that produce a blank dashboard. All three browsers run nightly at 03:00 UTC. Actions tab →
   **E2E** → *Run workflow* still runs it on demand, with `all` as a browser
   option.
 - It used to be manual only, on the grounds that it is slow on a two-core

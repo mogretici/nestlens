@@ -17,23 +17,35 @@ name: E2E
 # thing that exercises the bytes the package ships. Firefox and WebKit earn
 # their time overnight — the races they catch are real, but they are also the
 # slowest way to learn about a broken selector.
+#
+# The path filter used to name `src/api/**` and stop there, on the reasoning
+# that the dashboard talks to the API. What the suite actually drives is the
+# example application, and that runs the whole library — every watcher, the
+# collector, all three storages. Measured against one branch of forty-five
+# commits, thirty of them changed none of the listed paths and so would not
+# have run it: the GraphQL subscription support, the Redis rewrite, the watcher
+# wrapping fix, the collector's shutdown behaviour. Those are precisely the
+# changes that produce a blank dashboard, which is what this suite exists to
+# catch. `src/**` now, because the library is what is under test.
 on:
   pull_request:
     paths:
-      - 'src/api/**'
+      - 'src/**'
       - 'dashboard/**'
       - 'e2e/**'
       - 'example/**'
+      - 'package.json'
       - 'playwright.config.ts'
       - '.github/workflows/e2e.yml'
   push:
     branches: [main]
     # Same list as above: GitHub Actions does not resolve YAML anchors.
     paths:
-      - 'src/api/**'
+      - 'src/**'
       - 'dashboard/**'
       - 'e2e/**'
       - 'example/**'
+      - 'package.json'
       - 'playwright.config.ts'
       - '.github/workflows/e2e.yml'
   schedule:
