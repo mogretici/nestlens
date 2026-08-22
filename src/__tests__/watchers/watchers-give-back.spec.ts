@@ -39,7 +39,26 @@ const borrowsFromHost = (source: string): boolean =>
   /\.interceptors\.(?:request|response)\.use\(/.test(source) ||
   /\bonAny\(/.test(source) ||
   /this\.listen\(/.test(source) ||
-  /\b\w+\.on\('/.test(source);
+  /\b\w+\.on\('/.test(source) ||
+  // Assigning a method straight onto an injected object: `commandBus.execute =
+  // …`, which matched none of the shapes above.
+  /^\s*this\.\w+\.\w+\s*=\s/m.test(source);
+
+/**
+ * Whether the watcher was handed an object the application owns.
+ *
+ * The surer rule, and the one that needs no pattern for each way of writing to
+ * it: a watcher given something through `@Inject` has something to give back.
+ * The three that are not — request, exception and log — are Nest globals and
+ * hold nothing of anybody's.
+ *
+ * The textual rule above catches a watcher that borrows without being injected
+ * anything; this one catches a way of writing that nobody has thought of yet.
+ */
+const isHandedSomething = (source: string): boolean =>
+  // `NESTLENS_CONFIG` is ours and every watcher takes it; the rest name
+  // something the application provided.
+  /@Inject\((?:NESTLENS_(?!CONFIG\))\w+|CACHE_MANAGER)\)/.test(source);
 
 const declaresDestroy = (source: string): boolean =>
   /onModuleDestroy\s*\(/.test(source) && /implements[^{]*OnModuleDestroy/.test(source);
@@ -47,6 +66,21 @@ const declaresDestroy = (source: string): boolean =>
 describe('watchers that borrow', () => {
   it('has watchers to check', () => {
     expect(watcherFiles().length).toBeGreaterThan(10);
+  });
+
+  it('every watcher handed an object gives it back', () => {
+    const handed = watcherFiles().filter((file) =>
+      isHandedSomething(readFileSync(join(WATCHERS, file), 'utf8')),
+    );
+
+    // If this drops to nothing the check has stopped checking.
+    expect(handed.length).toBeGreaterThan(6);
+
+    const withoutDestroy = handed.filter(
+      (file) => !declaresDestroy(readFileSync(join(WATCHERS, file), 'utf8')),
+    );
+
+    expect(withoutDestroy).toEqual([]);
   });
 
   it('every one that writes to a host object gives it back', () => {

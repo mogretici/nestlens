@@ -117,12 +117,16 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      // Store original method
-      const original = (existing as RedisCommand).bind(client);
+      // What was there, and a bound copy to call through. Storing the bound
+      // one was storing something the application never wrote: `destroy` put
+      // that back instead, so three module lifecycles against one client left
+      // `[Function bound bound bound get]` where `get` had been. The other
+      // watchers that do this keep the two apart; these two did not.
+      const original = existing as RedisCommand;
       this.originalMethods.set(command, original);
 
       // Wrap the command
-      client[command] = this.wrapCommand(command, original);
+      client[command] = this.wrapCommand(command, original.bind(client));
     }
 
     this.logger.log('Redis interceptors installed');

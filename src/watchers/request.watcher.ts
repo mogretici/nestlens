@@ -12,6 +12,7 @@ import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { describeThrown } from './thrown-value';
+import { assignKey } from '../core/safe-assign';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -314,11 +315,16 @@ export class RequestWatcher implements NestInterceptor {
       const session = (request as Request & { session?: Record<string, unknown> }).session;
       if (!session) return undefined;
 
-      // Filter out internal session properties
+      // Filter out internal session properties.
+      //
+      // Written through `assignKey` because a session is deserialised from a
+      // store, and what it holds came from the application's users — so
+      // `__proto__` is a name it can carry, unlike a header, which Node drops
+      // before a handler ever sees it.
       const filtered: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(session)) {
         if (!key.startsWith('_') && key !== 'cookie') {
-          filtered[key] = value;
+          assignKey(filtered, key, value);
         }
       }
 

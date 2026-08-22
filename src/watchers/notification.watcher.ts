@@ -84,12 +84,14 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      // Store original method
-      const original = (existing as NotificationMethod).bind(service);
+      // What was there, and a bound copy to call through. See the same note in
+      // `redis.watcher.ts`: storing the bound one meant `destroy` put back
+      // something the application never wrote.
+      const original = existing as NotificationMethod;
       this.originalMethods.set(name, original);
 
       // Wrap the method
-      service[name] = this.wrapNotificationMethod(name, type, original);
+      service[name] = this.wrapNotificationMethod(name, type, original.bind(service));
     }
 
     this.logger.log('Notification interceptors installed');
