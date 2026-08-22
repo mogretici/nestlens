@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsIn,
@@ -9,6 +10,7 @@ import {
 } from 'class-validator';
 import {
   IsCommaSeparatedStrings,
+  MAX_FILTER_VALUES,
   TransformCommaSeparatedArray,
   TransformLimit,
 } from './transformers';
@@ -23,6 +25,9 @@ export class EntryTagsDto {
    */
   @IsArray()
   @ArrayNotEmpty()
+  // The query side of tagging has been bounded by the same number all along;
+  // this side took five thousand in one request and wrote every one of them.
+  @ArrayMaxSize(MAX_FILTER_VALUES)
   @IsString({ each: true })
   @MaxLength(100, { each: true })
   tags!: string[];
