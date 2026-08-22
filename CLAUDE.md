@@ -199,8 +199,13 @@ it is no longer required for Apollo or Mercurius.
   release (`.github/workflows/release.yml`); nothing else in the repository
   tests what npm actually serves, which is how 0.8.0 shipped a dashboard that
   was blank in a browser with every suite green.
-- Lint, type check, library tests and dashboard tests run on every push and
-  pull request (`.github/workflows/ci.yml`) — about two minutes
+- Lint, type check, **build**, library tests and dashboard tests run on every
+  push and pull request (`.github/workflows/ci.yml`) — about two minutes. The
+  build step is not optional: five integration suites serve the real bundle and
+  skip themselves when `dist/dashboard/public/index.html` is missing, and
+  without it 54 tests skipped in CI and nowhere else — the ones covering the
+  dashboard arriving as HTML rather than as a JSON string, which is the failure
+  that shipped in 0.8.0
 - E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
   any pull request touching `src/`, `dashboard/`, `e2e/`, `example/` or
   `package.json`, and on pushes to main. The filter used to name `src/api/`

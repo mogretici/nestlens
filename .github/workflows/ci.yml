@@ -77,6 +77,14 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Five integration suites serve the real bundle and skip themselves when
+      # it is not on disk. Without this step they skipped in CI and nowhere
+      # else: 54 tests, covering the dashboard arriving as HTML rather than as
+      # a JSON string, SPA routes, asset compression and adapter differences —
+      # which is the exact failure that shipped in 0.8.0 with every suite green.
+      - name: Build
+        run: npm run build
+
       - name: Run library tests
         run: npm test
         env:
