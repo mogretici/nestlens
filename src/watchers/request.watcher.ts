@@ -7,6 +7,7 @@ import { tap } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
 import { CollectorService } from '../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
+import { AddressableRequest, resolveClientIp } from '../core/client-ip';
 import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -245,13 +246,19 @@ export class RequestWatcher implements NestInterceptor {
     }
   }
 
+  /**
+   * The client's address, by the same rule the guard authorizes with.
+   *
+   * This used to read `X-Forwarded-For` whatever the configuration said, while
+   * the guard read it only under `trustProxy` — so with the defaults the
+   * dashboard displayed an address the caller had chosen and the whitelist
+   * checked a different one.
+   */
   private getClientIp(request: Request): string | undefined {
-    const forwardedFor = request.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-      return ips.trim();
-    }
-    return request.ip || request.socket?.remoteAddress;
+    return resolveClientIp(
+      request as unknown as AddressableRequest,
+      this.nestlensConfig.trustProxy,
+    );
   }
 
   private captureControllerInfo(context: ExecutionContext): {

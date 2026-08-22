@@ -66,6 +66,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     this.config = resolveGraphQLConfig(
       watcherConfig,
       resolveSensitiveParams(nestlensConfig.security?.dataMasking?.sensitiveParams),
+      nestlensConfig.trustProxy,
     );
   }
 

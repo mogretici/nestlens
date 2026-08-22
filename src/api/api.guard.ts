@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import type { Request } from 'express';
+import { AddressableRequest, resolveClientIp } from '../core/client-ip';
 import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 
 /**
@@ -321,28 +322,9 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
   /**
    * Get client IP from request
    */
+  /** The client's address, by the same rule the request watcher records. */
   private getClientIp(request: Request): string {
-    // `X-Forwarded-For` is written by whoever sends the request, and nothing
-    // strips it unless something in front does. Read unconditionally it turned
-    // the IP whitelist into a formality: a header claiming an allowed address
-    // was enough to reach the dashboard, and the dashboard is where every
-    // recorded Authorization header, cookie and request body ends up.
-    //
-    // Behind a proxy the socket address is the proxy's and the header is the
-    // only way to see the client — so it is read once the application says it
-    // is behind one, the same line `X-Forwarded-Prefix` is held to.
-    if (this.config.trustProxy) {
-      const forwardedFor = request.headers['x-forwarded-for'];
-      if (forwardedFor) {
-        const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-        return ips.trim();
-      }
-    }
-
-    // Express fills `request.ip` from the forwarding header itself when the
-    // host application enables its own `trust proxy`, which is the host's
-    // decision to make and is honoured here.
-    return request.ip || request.socket?.remoteAddress || '';
+    return resolveClientIp(request as unknown as AddressableRequest, this.config.trustProxy) ?? '';
   }
 
   /**

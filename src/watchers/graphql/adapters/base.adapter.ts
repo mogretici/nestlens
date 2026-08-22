@@ -4,6 +4,7 @@
  * Abstract interface that all GraphQL server adapters must implement.
  */
 
+import { AddressableRequest, resolveClientIp } from '@/core/client-ip';
 import { CollectorService } from '@/core';
 import { GraphQLPayload } from '@/types';
 import { ResolvedGraphQLConfig } from '../types';
@@ -116,37 +117,19 @@ export abstract class BaseGraphQLAdapter {
   /**
    * Get the client IP from a request
    */
+  /**
+   * The client's address, by the same rule the guard authorizes with.
+   *
+   * This used to read `X-Forwarded-For` whatever the configuration said, so a
+   * GraphQL operation was recorded against whatever address its caller typed
+   * into a header. See `resolveClientIp`.
+   */
   protected getClientIp(request: unknown): string | undefined {
     if (!request || typeof request !== 'object') {
       return undefined;
     }
 
-    const req = request as Record<string, unknown>;
-
-    // Check x-forwarded-for header
-    const headers = req.headers as Record<string, unknown> | undefined;
-    if (headers) {
-      const forwarded = headers['x-forwarded-for'];
-      if (typeof forwarded === 'string') {
-        return forwarded.split(',')[0].trim();
-      }
-      if (Array.isArray(forwarded) && forwarded.length > 0) {
-        return String(forwarded[0]).trim();
-      }
-    }
-
-    // Check direct IP properties
-    if (typeof req.ip === 'string') {
-      return req.ip;
-    }
-
-    // Check socket
-    const socket = req.socket as Record<string, unknown> | undefined;
-    if (socket && typeof socket.remoteAddress === 'string') {
-      return socket.remoteAddress;
-    }
-
-    return undefined;
+    return resolveClientIp(request as unknown as AddressableRequest, this.config?.trustProxy);
   }
 
   /**

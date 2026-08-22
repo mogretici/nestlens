@@ -25,6 +25,13 @@ export interface ResolvedGraphQLConfig {
   captureResponse: boolean;
   maxResponseSize: number;
   tags?: GraphQLWatcherConfig['tags'];
+  /**
+   * Whether a forwarding header may be believed.
+   *
+   * Carried here because the adapters record the client's address and have to
+   * answer that the same way the guard authorizes with. See `resolveClientIp`.
+   */
+  trustProxy?: boolean;
 }
 
 /**
@@ -145,11 +152,13 @@ function mergeSensitiveVariables(collectorTerms: string[], configured?: MaskingT
 export function resolveGraphQLConfig(
   config?: boolean | GraphQLWatcherConfig,
   collectorTerms: string[] = [],
+  trustProxy?: boolean,
 ): ResolvedGraphQLConfig {
   if (config === false) {
     return {
       ...GRAPHQL_DEFAULTS,
       enabled: false,
+      trustProxy,
       sensitiveVariables: mergeSensitiveVariables(collectorTerms),
       subscriptions: { ...GRAPHQL_DEFAULTS.subscriptions },
     };
@@ -159,6 +168,7 @@ export function resolveGraphQLConfig(
     return {
       ...GRAPHQL_DEFAULTS,
       enabled: true,
+      trustProxy,
       sensitiveVariables: mergeSensitiveVariables(collectorTerms),
       subscriptions: { ...GRAPHQL_DEFAULTS.subscriptions },
     };
@@ -168,6 +178,7 @@ export function resolveGraphQLConfig(
 
   return {
     enabled: config.enabled !== false,
+    trustProxy,
     server: config.server ?? GRAPHQL_DEFAULTS.server,
     maxQuerySize: config.maxQuerySize ?? GRAPHQL_DEFAULTS.maxQuerySize,
     captureVariables: config.captureVariables ?? GRAPHQL_DEFAULTS.captureVariables,
