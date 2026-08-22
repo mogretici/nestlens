@@ -1,9 +1,16 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ScheduleEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { WrappedMethods } from './wrap-method';
 
 /**
  * The part of a `cron` job this watcher touches.
@@ -53,12 +60,15 @@ function toIsoString(value: unknown): string | undefined {
 }
 
 @Injectable()
-export class ScheduleWatcher implements OnApplicationBootstrap {
+export class ScheduleWatcher implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(ScheduleWatcher.name);
   private readonly config: ScheduleWatcherConfig;
   private readonly jobTracking = new Map<string, number>(); // jobName -> startTime
   private readonly wrappedJobs = new Set<string>(); // Track which jobs we've already wrapped
   private schedulerRegistry?: SchedulerRegistryLike;
+  private wrappedRegistry?: WrappedMethods;
+  /** Every cron job whose tick was replaced, so it can be put back. */
+  private readonly wrappedTicks = new Map<CronJobLike, () => unknown>();
 
   constructor(
     private readonly collector: CollectorService,
@@ -146,16 +156,38 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
    * bootstrap-time sweep alone would never see.
    */
   private interceptRegistrations(registry: SchedulerRegistryLike): void {
-    const addCronJob = registry.addCronJob;
-    if (typeof addCronJob !== 'function') return;
+    this.wrappedRegistry = new WrappedMethods(registry as unknown as Record<string, unknown>);
 
-    const original = addCronJob.bind(registry);
+    this.wrappedRegistry.replace('addCronJob', (original) => {
+      return (name: string, job: CronJobLike, ...rest: unknown[]): unknown => {
+        const result = (original as (...args: unknown[]) => unknown)(name, job, ...rest);
+        this.wrapCronJob(name, job);
+        return result;
+      };
+    });
+  }
 
-    registry.addCronJob = (name: string, job: CronJobLike, ...rest: unknown[]): unknown => {
-      const result = original(name, job, ...rest);
-      this.wrapCronJob(name, job);
-      return result;
-    };
+  /**
+   * Puts the registry and every job back the way they were.
+   *
+   * The registry is a singleton the application owns, and the cron jobs on it
+   * outlive the module: without this a closed application goes on ticking
+   * through a watcher whose collector is gone, and a process that builds the
+   * module more than once against the same registry — tests, `nest start
+   * --hmr` — wraps each round on top of the last. Measured at three lifecycles:
+   * one tick, six entries.
+   */
+  onModuleDestroy(): void {
+    this.wrappedRegistry?.restore();
+    this.wrappedRegistry = undefined;
+
+    for (const [job, fireOnTick] of this.wrappedTicks) {
+      job.fireOnTick = fireOnTick as CronJobLike['fireOnTick'];
+    }
+
+    this.wrappedTicks.clear();
+    this.wrappedJobs.clear();
+    this.jobTracking.clear();
   }
 
   private wrapCronJob(name: string, job: CronJobLike | undefined): void {
@@ -165,6 +197,7 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     if (!job || typeof job.fireOnTick !== 'function') return;
 
     const originalFireOnTick = job.fireOnTick.bind(job);
+    this.wrappedTicks.set(job, job.fireOnTick as () => unknown);
 
     job.fireOnTick = async (): Promise<void> => {
       const startTime = Date.now();
