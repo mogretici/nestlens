@@ -155,6 +155,114 @@ describe('validating an offset-paged query', () => {
     });
   });
 
+  describe('narrowing by when and by how long', () => {
+    /**
+     * Neither was possible. `entries/cursor` is what every dashboard list is
+     * paged through and it took no window at all, so "what happened at 14:03"
+     * had no answer — while `logs` and `queries` accepted `from` and ignored
+     * it, and `entries`, `requests` and `exceptions` accepted `minDuration`
+     * and ignored that. Two paths answered the same question, so the two came
+     * to disagree.
+     *
+     * Every list endpoint goes through one of them now.
+     */
+    const LISTS = [
+      '/entries/cursor?type=request',
+      '/entries?type=request',
+      '/logs?',
+      '/queries?',
+      '/requests?',
+      '/exceptions?',
+    ];
+
+    beforeAll(async () => {
+      // Every list needs something in it, or "honours a window that excludes
+      // everything" passes on a list that was empty to begin with.
+      const { CollectorService: Collector } = await import('../../core/collector.service');
+      const collector = app.get(Collector);
+
+      for (let i = 0; i < 5; i += 1) {
+        await collector.collectImmediate('request', {
+          method: 'GET',
+          url: `/seeded/${i}`,
+          path: `/seeded/${i}`,
+          statusCode: 200,
+          duration: i * 100,
+        } as never);
+        await collector.collectImmediate('query', {
+          query: `SELECT ${i}`,
+          source: 'seed',
+          duration: i * 100,
+        } as never);
+        await collector.collectImmediate('exception', {
+          name: 'SeededError',
+          message: `boom ${i}`,
+        } as never);
+        await collector.collectImmediate('log', {
+          level: 'info',
+          message: `seeded ${i}`,
+          context: 'Seed',
+        } as never);
+      }
+    });
+
+    const rows = async (path: string): Promise<number> => {
+      const body = (await (await get(path)).json()) as { data: unknown[] };
+      return body.data.length;
+    };
+
+    const withParams = (list: string, extra: string): string =>
+      `${list}${list.includes('?') ? '&' : '?'}limit=40${extra}`;
+
+    it.each(LISTS)('%s has something to narrow', async (list) => {
+      expect(await rows(withParams(list, ''))).toBeGreaterThan(0);
+    });
+
+    it.each(LISTS)('%s honours a window that excludes everything', async (list) => {
+      expect(await rows(withParams(list, '&from=2099-01-01T00:00:00Z'))).toBe(0);
+    });
+
+    it.each(LISTS)('%s honours a window that includes everything', async (list) => {
+      const all = await rows(withParams(list, ''));
+
+      expect(await rows(withParams(list, '&from=2000-01-01T00:00:00Z'))).toBe(all);
+    });
+
+    it.each(LISTS)('%s honours an upper bound on the window', async (list) => {
+      expect(await rows(withParams(list, '&to=2000-01-01T00:00:00Z'))).toBe(0);
+    });
+
+    it.each(LISTS)('%s honours a duration bound nothing can meet', async (list) => {
+      expect(await rows(withParams(list, '&minDuration=99999999'))).toBe(0);
+    });
+
+    it.each(LISTS)('%s honours a duration bound everything meets', async (list) => {
+      // Entries that measure nothing cannot be inside a bound on a duration,
+      // so this is not always the unfiltered count — only never more than it.
+      const all = await rows(withParams(list, ''));
+
+      expect(await rows(withParams(list, '&minDuration=0'))).toBeLessThanOrEqual(all);
+    });
+
+    it('refuses a window it cannot read', async () => {
+      expect((await get('/entries/cursor?type=log&from=yesterday')).status).toBe(400);
+    });
+
+    it('refuses a duration that is not a number', async () => {
+      expect((await get('/entries/cursor?type=log&minDuration=slow')).status).toBe(400);
+    });
+
+    it('counts what fell inside the window, not the type', async () => {
+      const body = (await (
+        await get('/entries/cursor?type=log&from=2099-01-01T00:00:00Z')
+      ).json()) as {
+        meta: { total: number };
+      };
+
+      expect(body.meta.total).toBe(0);
+    });
+  });
+
   describe('the tag endpoint', () => {
     /**
      * It read three raw query parameters and trusted all of them. Measured

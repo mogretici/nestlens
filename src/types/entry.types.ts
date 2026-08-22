@@ -382,6 +382,28 @@ export interface CursorPaginationParams {
   afterSequence?: number;
   // Filter fields - all arrays use OR logic within, AND logic between categories
   filters?: {
+    /**
+     * The window an entry has to fall inside, as ISO 8601 instants.
+     *
+     * Strings rather than Dates: these arrive from a query string, they are
+     * compared against `createdAt` which is a string, and SQLite compares them
+     * as text. Turning them into Dates and back was a conversion in both
+     * directions for no gain.
+     */
+    from?: string;
+    to?: string;
+    /**
+     * How long the thing took, in milliseconds.
+     *
+     * Every entry that measures anything carries `duration`, and there was no
+     * way to ask about it: the only related filter was `slow`, a boolean the
+     * query watcher sets from its own threshold, so "requests over 500ms" —
+     * the first question anybody asks a debugging tool — had no answer.
+     */
+    minDuration?: number;
+    maxDuration?: number;
+    /** Everything one request produced. */
+    requestId?: string;
     // Logs
     levels?: string[];
     contexts?: string[];

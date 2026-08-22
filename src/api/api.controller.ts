@@ -71,22 +71,7 @@ export class NestLensApiController {
 
   @Get('entries')
   async getEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
-    const limit = query.limit ?? DEFAULT_LIMIT;
-    const offset = query.offset ?? 0;
-
-    const entries = await this.storage.find({
-      type: query.type,
-      requestId: query.requestId,
-      limit,
-      offset,
-      from: query.from,
-      to: query.to,
-    });
-
-    return {
-      data: entries,
-      meta: { total: await this.storage.count(query.type), limit, offset },
-    };
+    return this.filteredPage(query.type, query);
   }
 
   /**
@@ -102,18 +87,33 @@ export class NestLensApiController {
    * backend, and counts what matches. Offset paging on top of it asks for
    * `offset + limit` matches and drops the ones already shown, which is what
    * an offset costs anywhere.
+   *
+   * Every list endpoint goes through here now. `entries`, `requests` and
+   * `exceptions` used `find`, which takes no filters at all, so they accepted
+   * `minDuration` and ignored it — the same silence, one path over. Two ways
+   * to answer the same question is how the two came to disagree.
    */
   private async filteredPage(
-    type: EntryType,
+    type: EntryType | undefined,
     query: EntriesQueryDto,
-    filters: CursorPaginationParams['filters'],
+    filters?: CursorPaginationParams['filters'],
   ) {
     const limit = query.limit ?? DEFAULT_LIMIT;
     const offset = query.offset ?? 0;
 
     const result = await this.storage.findWithCursor(type, {
       limit: offset + limit,
-      filters,
+      filters: {
+        // The window and the duration bounds these endpoints accept. The
+        // window reached the storage on the `entries` path and not on this
+        // one, so `logs` and `queries` took a `from` and ignored it.
+        from: query.from?.toISOString(),
+        to: query.to?.toISOString(),
+        minDuration: query.minDuration,
+        maxDuration: query.maxDuration,
+        requestId: query.requestId,
+        ...filters,
+      },
     });
 
     return {

@@ -52,15 +52,27 @@ export function TransformStringToBoolean() {
 }
 
 /**
- * Transforms string to bounded integer with default
+ * Transforms a string into a bounded integer.
+ *
+ * A value that cannot be read falls back to the default where there is one —
+ * `limit` documents that, and a page of fifty is a better answer than an error
+ * for a parameter the reader can only have got wrong by hand. Where there is
+ * no default it is left as it arrived, so the validator beside it refuses it:
+ * dropping it instead meant `?minDuration=slow` narrowed nothing and said
+ * nothing, which reads as "no entry is that slow".
  */
 export function TransformToInt(options?: { min?: number; max?: number; default?: number }) {
   return Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null || value === '') {
       return options?.default;
     }
+
     const parsed = parseInt(String(value), 10);
-    if (isNaN(parsed)) return options?.default;
+
+    if (isNaN(parsed)) {
+      return options?.default ?? value;
+    }
+
     let result = parsed;
     if (options?.min !== undefined) result = Math.max(result, options.min);
     if (options?.max !== undefined) result = Math.min(result, options.max);

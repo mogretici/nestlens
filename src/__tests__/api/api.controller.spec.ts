@@ -101,73 +101,105 @@ describe('NestLensApiController', () => {
     });
   });
 
+  /**
+   * Every list endpoint goes through `findWithCursor` now. They used to be two
+   * paths — `find`, which takes no filters, and the cursor one, which does —
+   * so `entries`, `requests` and `exceptions` accepted `minDuration` and
+   * ignored it while `logs` and `queries` accepted `from` and ignored that.
+   * Two ways to answer one question is how the two came to disagree.
+   */
   describe('getEntries', () => {
-    it('should return entries with default pagination', async () => {
-      const entries = [createMockEntry()];
-      mockStorage.find.mockResolvedValue(entries);
-      mockStorage.count.mockResolvedValue(1);
+    const emptyPage = {
+      data: [],
+      meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+    };
+
+    it('asks for a page with the default limit', async () => {
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
       const result = await controller.getEntries({});
 
-      expect(mockStorage.find).toHaveBeenCalledWith({
-        type: undefined,
-        requestId: undefined,
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(undefined, {
         limit: 50,
-        offset: 0,
-        from: undefined,
-        to: undefined,
+        filters: expect.any(Object),
       });
-      expect(result.data).toEqual(entries);
-      expect(result.meta).toEqual({ total: 1, limit: 50, offset: 0 });
+      expect(result.meta).toEqual({ total: 0, limit: 50, offset: 0 });
     });
 
-    it('should filter by entry type', async () => {
-      const entries = [createMockEntry({ type: 'query' as EntryType })];
-      mockStorage.find.mockResolvedValue(entries);
-      mockStorage.count.mockResolvedValue(1);
+    it('passes the type through', async () => {
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
-      const result = await controller.getEntries({ type: 'query' as EntryType });
+      await controller.getEntries({ type: 'query' as EntryType });
 
-      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'query' }));
-      expect(result.data).toEqual(entries);
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('query', expect.any(Object));
     });
 
-    it('should filter by requestId', async () => {
-      const requestId = 'req-456';
-      mockStorage.find.mockResolvedValue([]);
-      mockStorage.count.mockResolvedValue(0);
+    it('passes a requestId through as a filter', async () => {
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
-      await controller.getEntries({ requestId });
+      await controller.getEntries({ requestId: 'req-456' });
 
-      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ requestId }));
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ filters: expect.objectContaining({ requestId: 'req-456' }) }),
+      );
     });
 
-    it('should handle custom pagination', async () => {
-      mockStorage.find.mockResolvedValue([]);
-      mockStorage.count.mockResolvedValue(100);
+    it('asks for enough matches to reach the offset', async () => {
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
       const result = await controller.getEntries({ limit: 25, offset: 50 });
 
-      expect(mockStorage.find).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 25, offset: 50 }),
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ limit: 75 }),
       );
-      expect(result.meta).toEqual({ total: 100, limit: 25, offset: 50 });
+      expect(result.meta).toEqual({ total: 0, limit: 25, offset: 50 });
     });
 
-    it('should filter by date range', async () => {
-      const from = '2024-01-01T00:00:00Z';
-      const to = '2024-01-31T23:59:59Z';
-      mockStorage.find.mockResolvedValue([]);
-      mockStorage.count.mockResolvedValue(0);
+    it('passes the window through as a filter', async () => {
+      const from = new Date('2024-01-01T00:00:00Z');
+      const to = new Date('2024-01-31T23:59:59Z');
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
-      await controller.getEntries({ from: new Date(from), to: new Date(to) });
+      await controller.getEntries({ from, to });
 
-      expect(mockStorage.find).toHaveBeenCalledWith(
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        undefined,
         expect.objectContaining({
-          from: new Date(from),
-          to: new Date(to),
+          filters: expect.objectContaining({
+            from: from.toISOString(),
+            to: to.toISOString(),
+          }),
         }),
       );
+    });
+
+    it('passes the duration bounds through as filters', async () => {
+      // These were accepted and ignored: `find` has no filters to put them in.
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
+
+      await controller.getEntries({ minDuration: 500, maxDuration: 5000 });
+
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({
+          filters: expect.objectContaining({ minDuration: 500, maxDuration: 5000 }),
+        }),
+      );
+    });
+
+    it('reports the count of what matched', async () => {
+      mockStorage.findWithCursor.mockResolvedValue({
+        ...emptyPage,
+        meta: { ...emptyPage.meta, total: 7 },
+      });
+
+      const result = await controller.getEntries({ minDuration: 500 });
+
+      // It used to be `count(type)` — everything of that type, whatever the
+      // filters said.
+      expect(result.meta.total).toBe(7);
     });
   });
 
@@ -718,9 +750,14 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue(entries);
       mockStorage.count.mockResolvedValue(1);
 
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
+
       await controller.getRequests({});
 
-      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'request' }));
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('request', expect.any(Object));
     });
   });
 
@@ -746,7 +783,7 @@ describe('NestLensApiController', () => {
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith('query', {
         limit: 50,
-        filters: undefined,
+        filters: expect.any(Object),
       });
     });
 
@@ -758,10 +795,10 @@ describe('NestLensApiController', () => {
 
       await controller.getQueries({ slow: 'true' });
 
-      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('query', {
-        limit: 50,
-        filters: { slow: true },
-      });
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        'query',
+        expect.objectContaining({ limit: 50, filters: expect.objectContaining({ slow: true }) }),
+      );
     });
 
     it('reports the count of what matched, not of the type', async () => {
@@ -789,7 +826,7 @@ describe('NestLensApiController', () => {
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith('log', {
         limit: 50,
-        filters: undefined,
+        filters: expect.any(Object),
       });
     });
 
@@ -801,10 +838,10 @@ describe('NestLensApiController', () => {
 
       await controller.getLogs({ level: 'error' });
 
-      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('log', {
-        limit: 50,
-        filters: { levels: ['error'] },
-      });
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        'log',
+        expect.objectContaining({ filters: expect.objectContaining({ levels: ['error'] }) }),
+      );
     });
 
     it('asks for enough matches to reach the offset', async () => {
@@ -815,10 +852,13 @@ describe('NestLensApiController', () => {
 
       await controller.getLogs({ level: 'error', limit: 20, offset: 40 });
 
-      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('log', {
-        limit: 60,
-        filters: { levels: ['error'] },
-      });
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        'log',
+        expect.objectContaining({
+          limit: 60,
+          filters: expect.objectContaining({ levels: ['error'] }),
+        }),
+      );
     });
 
     it('returns the page the offset asks for', async () => {
@@ -840,9 +880,14 @@ describe('NestLensApiController', () => {
       mockStorage.find.mockResolvedValue([]);
       mockStorage.count.mockResolvedValue(0);
 
+      mockStorage.findWithCursor.mockResolvedValue({
+        data: [],
+        meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+      });
+
       await controller.getExceptions({});
 
-      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ type: 'exception' }));
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith('exception', expect.any(Object));
     });
   });
 
@@ -1065,22 +1110,31 @@ describe('NestLensApiController', () => {
    * `entries-query-validation.spec.ts` runs the pipe.
    */
   describe('Edge Cases', () => {
+    const emptyPage = {
+      data: [],
+      meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
+    };
+
     it('uses the limit the DTO settled on', async () => {
-      mockStorage.find.mockResolvedValue([]);
-      mockStorage.count.mockResolvedValue(0);
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
       await controller.getEntries({ limit: 1000 });
 
-      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 1000 }));
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ limit: 1000 }),
+      );
     });
 
     it('falls back to the default when the DTO left it out', async () => {
-      mockStorage.find.mockResolvedValue([]);
-      mockStorage.count.mockResolvedValue(0);
+      mockStorage.findWithCursor.mockResolvedValue(emptyPage);
 
       await controller.getEntries({});
 
-      expect(mockStorage.find).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+      expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ limit: 50 }),
+      );
     });
   });
 });

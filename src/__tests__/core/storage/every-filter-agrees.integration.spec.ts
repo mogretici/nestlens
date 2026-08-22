@@ -66,6 +66,18 @@ interface Case {
 }
 
 const CASES: Record<string, Case> = {
+  minDuration: {
+    filters: { minDuration: 500 },
+    type: 'request',
+    keep: { method: 'GET', path: '/slow', url: '/slow', statusCode: 200, duration: 900 },
+    drop: { method: 'GET', path: '/fast', url: '/fast', statusCode: 200, duration: 5 },
+  },
+  maxDuration: {
+    filters: { maxDuration: 50 },
+    type: 'request',
+    keep: { method: 'GET', path: '/fast', url: '/fast', statusCode: 200, duration: 5 },
+    drop: { method: 'GET', path: '/slow', url: '/slow', statusCode: 200, duration: 900 },
+  },
   levels: {
     filters: { levels: ['error'] },
     type: 'log',

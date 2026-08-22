@@ -1,6 +1,12 @@
 import { IsDate, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { ENTRY_TYPES } from './entry-types';
-import { TransformDate, TransformLimit, TransformOffset, TransformSequence } from './transformers';
+import {
+  TransformDate,
+  TransformLimit,
+  TransformOffset,
+  TransformSequence,
+  TransformToInt,
+} from './transformers';
 import { EntryType } from '@/types';
 
 /**
@@ -45,6 +51,19 @@ export class EntriesQueryDto {
   @IsDate({ message: 'to must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   to?: Date;
+
+  /** Bounds on `duration`, in milliseconds. See `CursorQueryDto`. */
+  @IsOptional()
+  @IsInt({ message: 'minDuration must be a whole number of milliseconds' })
+  @Min(0)
+  @TransformToInt({ min: 0 })
+  minDuration?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'maxDuration must be a whole number of milliseconds' })
+  @Min(0)
+  @TransformToInt({ min: 0 })
+  maxDuration?: number;
 }
 
 /** `GET logs`, which narrows by level. */

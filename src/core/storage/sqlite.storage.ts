@@ -620,6 +620,36 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       return { conditions, params };
     }
 
+    // The window, compared against the column directly so the index on
+    // `created_at` can answer it. Both sides are `toISOString()`.
+    if (filters.from) {
+      conditions.push('e.created_at >= ?');
+      params.push(filters.from);
+    }
+
+    if (filters.to) {
+      conditions.push('e.created_at <= ?');
+      params.push(filters.to);
+    }
+
+    if (filters.requestId) {
+      conditions.push('e.request_id = ?');
+      params.push(filters.requestId);
+    }
+
+    // How long it took. `json_extract` gives NULL for an entry that measures
+    // nothing, and a NULL comparison is not true, so those are excluded — the
+    // same answer the other two backends give.
+    if (filters.minDuration !== undefined) {
+      conditions.push("json_extract(e.payload, '$.duration') >= ?");
+      params.push(filters.minDuration);
+    }
+
+    if (filters.maxDuration !== undefined) {
+      conditions.push("json_extract(e.payload, '$.duration') <= ?");
+      params.push(filters.maxDuration);
+    }
+
     // Logs: levels filter
     if (filters.levels && filters.levels.length > 0) {
       const placeholders = filters.levels.map(() => '?').join(', ');

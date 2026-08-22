@@ -90,6 +90,25 @@ export const matchesEntryFilters = (
 
   const payload = entry.payload as Record<string, unknown>;
 
+  // The window. Compared as text, which is what `createdAt` is and what the
+  // parameter is: a fixed-width UTC instant whose lexical order is its
+  // chronological order. See `migrateTimestampFormat`.
+  if (filters.from && entry.createdAt < filters.from) return false;
+  if (filters.to && entry.createdAt > filters.to) return false;
+
+  if (filters.requestId && entry.requestId !== filters.requestId) return false;
+
+  // How long it took. An entry that measures nothing — a log line, a cache
+  // read that records no duration — cannot satisfy a bound on one, so asking
+  // for a duration excludes it rather than letting it through unexamined.
+  if (filters.minDuration !== undefined || filters.maxDuration !== undefined) {
+    const duration = payload.duration;
+
+    if (typeof duration !== 'number') return false;
+    if (filters.minDuration !== undefined && duration < filters.minDuration) return false;
+    if (filters.maxDuration !== undefined && duration > filters.maxDuration) return false;
+  }
+
   // Log filters
   if (filters.levels?.length && entry.type === 'log') {
     if (!filters.levels.includes(payload.level as string)) return false;
