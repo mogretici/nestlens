@@ -20,6 +20,20 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('NestLensApi');
   private readonly isDevelopment = process.env.NODE_ENV !== 'production';
 
+  /**
+   * Whether this response may carry a stack trace.
+   *
+   * Only a fault of ours, and only outside production. A 403 from the guard
+   * used to answer a refused caller with fifty frames of it — the deployment's
+   * absolute paths, the framework versions, the middleware chain — which is
+   * precisely what `stackTraceSanitization` exists to keep out of recorded
+   * entries, handed to the one caller who has been told they may not look.
+   * Nothing a caller did wrong needs a stack to explain it.
+   */
+  private mayIncludeStack(status: number): boolean {
+    return this.isDevelopment && status >= HttpStatus.INTERNAL_SERVER_ERROR;
+  }
+
   constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
   /**
@@ -69,7 +83,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
         details: exceptionResponse.details,
       };
 
-      if (this.isDevelopment && exception.stack) {
+      if (this.mayIncludeStack(status) && exception.stack) {
         apiError.stack = exception.stack;
       }
     } else if (exception instanceof HttpException || this.isHttpExceptionLike(exception)) {
@@ -100,7 +114,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
         details,
       };
 
-      if (this.isDevelopment && exception.stack) {
+      if (this.mayIncludeStack(status) && exception.stack) {
         apiError.stack = exception.stack;
       }
     } else if (exception instanceof Error) {
@@ -111,7 +125,7 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
         message: this.isDevelopment ? exception.message : ERROR_MESSAGES[ErrorCode.INTERNAL_ERROR],
       };
 
-      if (this.isDevelopment && exception.stack) {
+      if (this.mayIncludeStack(status) && exception.stack) {
         apiError.stack = exception.stack;
       }
 
@@ -148,6 +162,13 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
     switch (status) {
       case HttpStatus.BAD_REQUEST:
         return ErrorCode.BAD_REQUEST;
+      case HttpStatus.UNAUTHORIZED:
+        return ErrorCode.UNAUTHORIZED;
+      case HttpStatus.FORBIDDEN:
+        // The guard's refusal used to arrive as `ERR_INTERNAL`, so a caller
+        // reading the code could not tell "you are not allowed" from "we
+        // broke" without also reading the status.
+        return ErrorCode.FORBIDDEN;
       case HttpStatus.NOT_FOUND:
         return ErrorCode.NOT_FOUND;
       case HttpStatus.TOO_MANY_REQUESTS:
