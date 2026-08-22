@@ -7,13 +7,43 @@ import { DEFAULT_CONFIG, NESTLENS_API_PREFIX } from '../nestlens.config';
  * `path` — which the docs write as `/nestlens` or `/admin/monitoring` — has to
  * be stripped before it can be used as a route prefix.
  */
+/**
+ * What a mount path may be made of.
+ *
+ * The same alphabet the forwarding header is held to, minus the leading slash,
+ * which `toRoutePrefix` strips anyway. A path outside it cannot be a URL path,
+ * and NestLens puts this value into an HTML document and a route pattern, so
+ * "cannot" has to be enforced rather than assumed.
+ */
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9\-._~]+$/;
+
+/**
+ * The configured mount path, as route prefix.
+ *
+ * An unusable path is refused rather than passed on. It is the application's
+ * own configuration and not a caller's, so this is not a security boundary —
+ * but `path` is exactly the kind of setting that comes out of an environment
+ * variable, and what it produced when it was wrong was a dashboard that served
+ * a broken page with nothing said about why. Refusing at startup names the
+ * setting instead.
+ */
 export const toRoutePrefix = (path: string | undefined): string => {
   const candidate = (path ?? DEFAULT_CONFIG.path ?? '').trim();
 
-  return candidate
-    .split('/')
-    .filter((segment) => segment.length > 0)
-    .join('/');
+  const segments = candidate.split('/').filter((segment) => segment.length > 0);
+
+  for (const segment of segments) {
+    // `.` and `..` are made of allowed characters and are still not a place to
+    // mount something; the forwarding header refuses them for the same reason.
+    if (!SAFE_PATH_SEGMENT.test(segment) || segment === '.' || segment === '..') {
+      throw new Error(
+        `NestLens: \`path\` must be a URL path made of letters, digits, "-", ".", "_" or "~" ` +
+          `separated by "/". Received ${JSON.stringify(path)}.`,
+      );
+    }
+  }
+
+  return segments.join('/');
 };
 
 /**
