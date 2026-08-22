@@ -32,6 +32,21 @@ export class NestLensValidationPipe implements PipeTransform {
       return value;
     }
 
+    // A body has to be an object before a DTO can say anything about it.
+    // `plainToInstance` maps an array into an array of instances, which carries
+    // none of the DTO's properties and fails no rule — so `[]` posted to a
+    // tagging endpoint passed validation and arrived at the storage as
+    // `undefined`: `TypeError: tags is not iterable`, answered as a 500 with a
+    // stack trace, for what is a caller's mistake.
+    if (
+      Array.isArray(value) ||
+      (value !== undefined && value !== null && typeof value !== 'object')
+    ) {
+      throw new BadRequestException([
+        `${metadata.type === 'body' ? 'body' : metadata.type} must be an object`,
+      ]);
+    }
+
     const entity = plainToInstance(metatype, value ?? {}, {
       enableImplicitConversion: true,
     });
