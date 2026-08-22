@@ -237,6 +237,38 @@ describe('masking a payload that carries a URL', () => {
     expect(masked.message).toBe('is this a token=abc123 ?');
   });
 
+  /**
+   * An outgoing call records the URL twice: whole in `url`, and split into
+   * `path`, which keeps the query string. The same key was masked in one field
+   * and printed in the next, in one entry:
+   *
+   * ```text
+   * url    https://api.example.com/v1/charge?api_key=***REDACTED***
+   * path   /v1/charge?api_key=SECRET123
+   * ```
+   */
+  it('masks the query string in a path field', () => {
+    const masked = masker.maskBody({
+      url: 'https://api.example.com/v1/charge?api_key=SECRET123',
+      path: '/v1/charge?api_key=SECRET123',
+    }) as Record<string, unknown>;
+
+    expect(masked.path).not.toContain('SECRET123');
+    expect(masked.url).not.toContain('SECRET123');
+  });
+
+  it('leaves a request path alone, which carries no query string', () => {
+    const masked = masker.maskBody({ path: '/orders/42' }) as Record<string, unknown>;
+
+    expect(masked.path).toBe('/orders/42');
+  });
+
+  it('leaves a path that is not a string alone', () => {
+    const masked = masker.maskBody({ path: 12 }) as Record<string, unknown>;
+
+    expect(masked.path).toBe(12);
+  });
+
   it('masks authorization wherever it appears', () => {
     // Masked as a header since the beginning, and as a field only now.
     const masked = masker.maskBody({

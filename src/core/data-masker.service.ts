@@ -118,6 +118,15 @@ const URL_FIELDS = new Set([
   'href',
   'requestUrl',
   'fullUrl',
+  // An outgoing call records the URL twice: whole in `url`, and split into
+  // `path` — which keeps the query string. So the same request had its key
+  // masked in one field and printed in the next:
+  //
+  //     url    https://api.example.com/v1/charge?api_key=***REDACTED***
+  //     path   /v1/charge?api_key=SECRET123
+  //
+  // A request's own `path` carries no query string, so this costs it nothing.
+  'path',
   // Connection strings are URLs whose password sits in the userinfo, and they
   // are recorded whenever a driver is configured or an outgoing call is made.
   'connectionString',
