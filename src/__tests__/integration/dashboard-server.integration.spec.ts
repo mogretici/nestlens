@@ -134,6 +134,17 @@ describe('Dashboard on a listener of its own', () => {
       expect(routeExists(apiRoute.status, apiRoute.body)).toBe(false);
     });
 
+    it('does not serve the stream or the tag API on the application either', async () => {
+      // Four controllers make up NestLens's surface and the isolation is only
+      // as good as its least-remembered one. The three above are the ones a
+      // reader thinks of.
+      const stream = await request(app.getHttpServer()).get('/nestlens/__nestlens__/stream');
+      const tags = await request(app.getHttpServer()).get('/nestlens/__nestlens__/api/tags');
+
+      expect(routeExists(stream.status, stream.body)).toBe(false);
+      expect(routeExists(tags.status, tags.body)).toBe(false);
+    });
+
     it('leaves the application itself untouched', async () => {
       const response = await request(app.getHttpServer()).get('/demo');
 
