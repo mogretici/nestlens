@@ -24,6 +24,23 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
+/**
+ * Field traces are recorded in nanoseconds; everything else here is in
+ * milliseconds.
+ *
+ * `GraphQLFieldTrace` says so on both of its numbers and `GraphQLPayload.duration`
+ * says milliseconds on its own, and the waterfall divided one by the other.
+ * Measured against the example application on an operation that took 3.44ms:
+ *
+ *     orders   1213.04 s      (1,213,042 ns)
+ *     product   164.92 s
+ *     id          7.00 s
+ *
+ * — every number a million times too large, and every bar positioned at some
+ * tens of millions of percent, which is to say off the right-hand edge.
+ */
+const NS_PER_MS = 1_000_000;
+
 
 // Timing breakdown visualization
 function TimingBreakdown({
@@ -164,11 +181,24 @@ function ResolverWaterfall({ traces, totalDuration }: { traces: GraphQLEntry['pa
   // Sort by start offset
   const sortedTraces = [...traces].sort((a, b) => a.startOffset - b.startOffset);
 
+  // The operation's own duration is what the bars are drawn against, and a
+  // resolver can finish after it — a fire-and-forget write, a trailing log —
+  // so the window is whichever is longer.
+  const windowMs = Math.max(
+    totalDuration,
+    ...sortedTraces.map((trace) => (trace.startOffset + trace.duration) / NS_PER_MS),
+  );
+
   return (
     <div className="space-y-1">
       {sortedTraces.map((trace, i) => {
-        const leftPercent = (trace.startOffset / totalDuration) * 100;
-        const widthPercent = Math.max((trace.duration / totalDuration) * 100, 0.5);
+        const startMs = trace.startOffset / NS_PER_MS;
+        const durationMs = trace.duration / NS_PER_MS;
+        const leftPercent = windowMs > 0 ? (startMs / windowMs) * 100 : 0;
+        const widthPercent = Math.min(
+          Math.max(windowMs > 0 ? (durationMs / windowMs) * 100 : 0, 0.5),
+          100 - leftPercent,
+        );
 
         return (
           <div key={i} className="flex items-center gap-2 text-xs">
@@ -179,11 +209,11 @@ function ResolverWaterfall({ traces, totalDuration }: { traces: GraphQLEntry['pa
               <div
                 className="absolute h-full bg-primary-400 dark:bg-primary-500 rounded"
                 style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
-                title={`${trace.path}: ${formatDuration(trace.duration)}`}
+                title={`${trace.path}: ${formatDuration(durationMs)}`}
               />
             </div>
             <div className="w-16 text-right text-gray-500 dark:text-gray-400 tabular-nums">
-              {formatDuration(trace.duration)}
+              {formatDuration(durationMs)}
             </div>
           </div>
         );
