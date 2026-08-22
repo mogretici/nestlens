@@ -404,14 +404,3 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
     return stats;
   }
 }
-
-/**
- * Factory function for creating a GraphQL watcher
- */
-export function createGraphQLWatcher(
-  collector: CollectorService,
-  config: NestLensConfig,
-  moduleRef: ModuleRef,
-): GraphQLWatcher {
-  return new GraphQLWatcher(collector, config, moduleRef);
-}

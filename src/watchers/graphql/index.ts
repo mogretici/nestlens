@@ -10,7 +10,7 @@
  */
 
 // Main watcher
-export { GraphQLWatcher, GRAPHQL_WATCHER, createGraphQLWatcher } from './graphql.watcher';
+export { GraphQLWatcher, GRAPHQL_WATCHER } from './graphql.watcher';
 
 // Types
 export * from './types';
