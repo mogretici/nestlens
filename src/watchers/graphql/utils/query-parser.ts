@@ -51,7 +51,9 @@ const BOUNDARY_REACH = 50;
  * `substring(0, -1)` is the empty string, so a small `maxQuerySize` recorded
  * the marker and none of the query:
  *
- *     truncateQuery('{ hello world abc }', 10) -> '\n... [truncated]'
+ * ```text
+ * truncateQuery('{ hello world abc }', 10) -> '\n... [truncated]'
+ * ```
  */
 export function truncateQuery(query: string, maxSize: number): string {
   if (query.length <= maxSize) {
@@ -85,10 +87,12 @@ const NAME_PART = /[a-zA-Z0-9_]/;
  * a selection set — which is what the two regular expressions this replaced
  * could not do. Measured on the old ones:
  *
- *     '# a note\nmutation AddOrder { … }'      -> type query
- *     'fragment F on Order { id } mutation M …' -> type query
- *     '# mutation Ghost { x }\n{ hello }'       -> name Ghost
- *     '{ user { query name } }'                 -> name name
+ * ```text
+ * '# a note\nmutation AddOrder { … }'      -> type query
+ * 'fragment F on Order { id } mutation M …' -> type query
+ * '# mutation Ghost { x }\n{ hello }'       -> name Ghost
+ * '{ user { query name } }'                 -> name name
+ * ```
  *
  * A mutation recorded as a query is the one operation a reader is most often
  * looking for, filed under the wrong type.
@@ -181,9 +185,11 @@ export function declaredOperations(query: string): DeclaredOperation[] {
  * beside it and a check for the word `introspectionquery` anywhere in the
  * text — a substring test where a field was meant. Measured on the old one:
  *
- *     mutation { saveDoc(text: "__schema is a field") { id } }   dropped
- *     query NotAnIntrospectionQuery { orders { id } }            dropped
- *     { user { my__schema } }                                    dropped
+ * ```text
+ * mutation { saveDoc(text: "__schema is a field") { id } }   dropped
+ * query NotAnIntrospectionQuery { orders { id } }            dropped
+ * { user { my__schema } }                                    dropped
+ * ```
  *
  * Every one of those is an operation somebody wanted to see, absent from the
  * dashboard with nothing to say it had been skipped — which reads as "it never

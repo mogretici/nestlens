@@ -4,9 +4,11 @@
  * Every watcher option in NestLens is written either as a switch or as a block
  * of settings, and each watcher used to unpack that itself:
  *
- *     this.config = typeof configured === 'object'
- *       ? configured
- *       : { enabled: configured !== false };
+ * ```text
+ * this.config = typeof configured === 'object'
+ *   ? configured
+ *   : { enabled: configured !== false };
+ * ```
  *
  * Which reads correctly and is wrong. A block of settings has no `enabled` in
  * it — nobody writes `{ enabled: true, maxBodySize: 0 }`, they write

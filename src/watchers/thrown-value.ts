@@ -3,9 +3,11 @@
  *
  * JavaScript lets you throw anything, and applications do:
  *
- *     throw 'not found'          // a string
- *     throw { code: 'E_LIMIT' }  // a bare object
- *     throw null                 // a rejected promise with no reason
+ * ```text
+ * throw 'not found'          // a string
+ * throw { code: 'E_LIMIT' }  // a bare object
+ * throw null                 // a rejected promise with no reason
+ * ```
  *
  * NestJS hands all of those to an exception filter and an interceptor's error
  * handler as-is. Reading `.status`, `.message` or `.name` off them is fine for

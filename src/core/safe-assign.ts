@@ -7,7 +7,9 @@
  * `Object.prototype` and sets the prototype instead of adding a member. A body
  * a client is free to send —
  *
- *     {"__proto__": {"isAdmin": true}, "orderId": 7}
+ * ```text
+ * {"__proto__": {"isAdmin": true}, "orderId": 7}
+ * ```
  *
  * — therefore came out of the masker as `{"orderId": 7}`, with the part a
  * reader most wanted to see gone from the entry, and with the payload object

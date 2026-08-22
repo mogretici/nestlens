@@ -25,9 +25,11 @@ import { describeThrown } from './thrown-value';
  * Nest deliberately does not. Measured on one application with the watcher and
  * one without:
  *
- *     without   413  {"statusCode":413,"message":"request entity too large"}
- *     with      500  {"statusCode":500,"message":"request entity too large",
- *                     "error":"Internal Server Error"}
+ * ```text
+ * without   413  {"statusCode":413,"message":"request entity too large"}
+ * with      500  {"statusCode":500,"message":"request entity too large",
+ *                 "error":"Internal Server Error"}
+ * ```
  *
  * A payload-too-large became an internal error, and the internal message of
  * every other unknown failure reached the client. Installing a debugging tool

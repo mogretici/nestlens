@@ -282,7 +282,9 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
    * a count. Each of those used to grant access, because the check was
    * `result === false` and nothing else was refused — so a hook written as
    *
-   *     canAccess: (req) => { if (!req.user) return false; }
+   * ```text
+   * canAccess: (req) => { if (!req.user) return false; }
+   * ```
    *
    * let everyone in through the branch its author forgot to write. An
    * authorization hook is the one place where an unrecognised answer has to
