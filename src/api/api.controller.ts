@@ -53,9 +53,6 @@ import { NestLensApiException } from '@/api/exceptions';
 @UseInterceptors(NestLensApiResponseInterceptor)
 @UsePipes(new NestLensValidationPipe())
 export class NestLensApiController {
-  private lastPruneRun: Date | null = null;
-  private nextPruneRun: Date | null = null;
-
   constructor(
     @Inject(STORAGE)
     private readonly storage: StorageInterface,
@@ -63,11 +60,7 @@ export class NestLensApiController {
     private readonly config: NestLensConfig,
     private readonly pruningService: PruningService,
     private readonly collectorService: CollectorService,
-  ) {
-    // Calculate next prune run
-    const intervalMinutes = this.config.pruning?.interval ?? 60;
-    this.nextPruneRun = new Date(Date.now() + intervalMinutes * 60 * 1000);
-  }
+  ) {}
 
   @Get('entries')
   async getEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
@@ -249,16 +242,19 @@ export class NestLensApiController {
    */
   @Get('pruning/status')
   async getPruningStatus(@Res() _res?: unknown) {
-    const config = this.config.pruning;
     const storageStats = await this.storage.getStorageStats();
+    // Read from the service rather than from the configuration: a setting it
+    // refused or clamped is not the one in effect, and reporting the written
+    // value would describe pruning that is not happening.
+    const { lastRun, nextRun } = this.pruningService.schedule;
 
     return {
       data: {
-        enabled: config?.enabled !== false,
-        maxAge: config?.maxAge ?? 24,
-        interval: config?.interval ?? 60,
-        lastRun: this.lastPruneRun?.toISOString() ?? null,
-        nextRun: this.nextPruneRun?.toISOString() ?? null,
+        enabled: this.config.pruning?.enabled !== false,
+        maxAge: this.pruningService.maxAgeHours,
+        interval: this.pruningService.intervalMinutes,
+        lastRun: lastRun?.toISOString() ?? null,
+        nextRun: nextRun?.toISOString() ?? null,
         totalEntries: storageStats.total,
         oldestEntry: storageStats.oldestEntry,
         newestEntry: storageStats.newestEntry,
@@ -267,23 +263,25 @@ export class NestLensApiController {
     };
   }
 
+  /**
+   * Prunes now, by the same rules as the timer.
+   *
+   * This used to compute its own window from `config.pruning.maxAge`, which
+   * the service refuses to take at face value: `maxAge: 0` is ignored there
+   * and was honoured here, so pressing *Run pruning* with it set deleted every
+   * entry the application had recorded.
+   */
   @Post('pruning/run')
   async runPruning(@Res() _res?: unknown) {
-    const maxAgeHours = this.config.pruning?.maxAge ?? 24;
-    const before = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
-
-    const deleted = await this.storage.prune(before);
-    this.lastPruneRun = new Date();
-
-    const intervalMinutes = this.config.pruning?.interval ?? 60;
-    this.nextPruneRun = new Date(Date.now() + intervalMinutes * 60 * 1000);
+    const deleted = await this.pruningService.pruneNow();
+    const { lastRun, nextRun } = this.pruningService.schedule;
 
     return {
       success: true,
       data: {
         deleted,
-        lastRun: this.lastPruneRun.toISOString(),
-        nextRun: this.nextPruneRun.toISOString(),
+        lastRun: lastRun?.toISOString() ?? null,
+        nextRun: nextRun?.toISOString() ?? null,
       },
     };
   }

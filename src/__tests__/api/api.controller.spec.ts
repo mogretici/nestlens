@@ -21,7 +21,7 @@ describe('NestLensApiController', () => {
   let controller: NestLensApiController;
   let mockStorage: jest.Mocked<StorageInterface>;
   let mockConfig: NestLensConfig;
-  let mockPruningService: jest.Mocked<PruningService>;
+  let mockPruningService: PruningService;
   let mockCollectorService: jest.Mocked<CollectorService>;
 
   const createMockEntry = (overrides: Partial<Entry> = {}): Entry =>
@@ -63,9 +63,9 @@ describe('NestLensApiController', () => {
       },
     };
 
-    mockPruningService = {
-      prune: jest.fn(),
-    } as any;
+    // The real service: the endpoint's window and schedule come from it now,
+    // and a stub would let the two drift apart again.
+    mockPruningService = new PruningService(mockConfig, mockStorage);
 
     mockCollectorService = {
       pause: jest.fn(),
@@ -95,9 +95,18 @@ describe('NestLensApiController', () => {
       expect(controller).toBeDefined();
     });
 
-    it('should calculate next prune run based on interval', () => {
-      expect(controller['nextPruneRun']).toBeDefined();
-      expect(controller['nextPruneRun']!.getTime()).toBeGreaterThan(Date.now());
+    it('reports no run until pruning has run', async () => {
+      mockStorage.getStorageStats.mockResolvedValue({
+        total: 0,
+        byType: {} as never,
+        oldestEntry: null,
+        newestEntry: null,
+      });
+
+      const status = await controller.getPruningStatus();
+
+      expect(status.data.lastRun).toBeNull();
+      expect(status.data.nextRun).toBeNull();
     });
   });
 
@@ -964,15 +973,15 @@ describe('NestLensApiController', () => {
       expect(result.data.nextRun).toBeDefined();
     });
 
-    it('should update lastPruneRun and nextPruneRun', async () => {
+    it('should update lastRun and nextRun', async () => {
       mockStorage.prune.mockResolvedValue(10);
       const beforeRun = Date.now();
 
-      await controller.runPruning();
+      const result = await controller.runPruning();
 
-      expect(controller['lastPruneRun']!.getTime()).toBeGreaterThanOrEqual(beforeRun);
-      expect(controller['nextPruneRun']!.getTime()).toBeGreaterThan(
-        controller['lastPruneRun']!.getTime(),
+      expect(new Date(result.data.lastRun as string).getTime()).toBeGreaterThanOrEqual(beforeRun);
+      expect(new Date(result.data.nextRun as string).getTime()).toBeGreaterThan(
+        new Date(result.data.lastRun as string).getTime(),
       );
     });
 
