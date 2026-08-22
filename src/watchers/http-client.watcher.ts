@@ -1,4 +1,11 @@
-import { Inject, Injectable, OnModuleInit, Optional, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnModuleInit,
+  Optional,
+  Logger,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { createTermMatcher } from '../core/data-masker.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
@@ -36,6 +43,8 @@ interface RequestErrorLike {
 
 interface InterceptorManager<T> {
   use(onFulfilled: (value: T) => T, onRejected: (error: unknown) => unknown): unknown;
+  /** axios returns an id from `use` and removes it here. */
+  eject?(id: unknown): void;
 }
 
 interface AxiosLike {
@@ -43,6 +52,13 @@ interface AxiosLike {
     request: InterceptorManager<RequestConfigLike>;
     response: InterceptorManager<ResponseLike>;
   };
+}
+
+/** An interceptor this watcher installed, and where to take it off. */
+interface InstalledInterceptor {
+  instance: AxiosLike;
+  kind: 'request' | 'response';
+  id: unknown;
 }
 
 function hasInterceptors(value: unknown): value is AxiosLike {
@@ -62,10 +78,12 @@ function hasInterceptors(value: unknown): value is AxiosLike {
 export const NESTLENS_HTTP_CLIENT = Symbol('NESTLENS_HTTP_CLIENT');
 
 @Injectable()
-export class HttpClientWatcher implements OnModuleInit {
+export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HttpClientWatcher.name);
   private readonly config: HttpClientWatcherConfig;
   private readonly maxBodySize: number;
+  /** Every interceptor installed, so `onModuleDestroy` can eject them. */
+  private readonly installed: InstalledInterceptor[] = [];
   private matchesRequestParam?: (fieldName: string) => boolean;
   private matchesResponseParam?: (fieldName: string) => boolean;
 
@@ -114,33 +132,60 @@ export class HttpClientWatcher implements OnModuleInit {
     }
 
     // Request interceptor - capture start time
-    candidate.interceptors.request.use(
-      (config) => {
-        config.metadata = {
-          ...config.metadata,
-          nestlensStartTime: Date.now(),
-        };
-        return config;
-      },
-      (error: unknown) => Promise.reject(error),
-    );
+    this.installed.push({
+      instance: candidate,
+      kind: 'request',
+      id: candidate.interceptors.request.use(
+        (config) => {
+          config.metadata = {
+            ...config.metadata,
+            nestlensStartTime: Date.now(),
+          };
+          return config;
+        },
+        (error: unknown) => Promise.reject(error),
+      ),
+    });
 
     // Response interceptor - capture response and log
-    candidate.interceptors.response.use(
-      (response) => {
-        this.collectEntry(response.config, response.status, response.headers, response.data);
-        return response;
-      },
-      (error: unknown) => {
-        const { config, response, message } = (error ?? {}) as RequestErrorLike;
+    this.installed.push({
+      instance: candidate,
+      kind: 'response',
+      id: candidate.interceptors.response.use(
+        (response) => {
+          this.collectEntry(response.config, response.status, response.headers, response.data);
+          return response;
+        },
+        (error: unknown) => {
+          const { config, response, message } = (error ?? {}) as RequestErrorLike;
 
-        this.collectEntry(config, response?.status, response?.headers, response?.data, message);
+          this.collectEntry(config, response?.status, response?.headers, response?.data, message);
 
-        return Promise.reject(error);
-      },
-    );
+          return Promise.reject(error);
+        },
+      ),
+    });
 
     this.logger.log('HTTP Client interceptors installed');
+  }
+
+  /**
+   * Takes the interceptors back off.
+   *
+   * They live on an axios instance the application owns and keeps, so closing
+   * the module has to remove them. Otherwise the host goes on recording
+   * through a watcher whose collector is gone — and a process that builds the
+   * module more than once against the same instance, as tests and
+   * `nest start --hmr` do, installs another pair each round: measured at three
+   * lifecycles, three request interceptors and three response interceptors on
+   * one instance.
+   */
+  onModuleDestroy(): void {
+    for (const { instance, kind, id } of this.installed) {
+      instance.interceptors[kind].eject?.(id);
+    }
+
+    this.installed.length = 0;
   }
 
   private collectEntry(

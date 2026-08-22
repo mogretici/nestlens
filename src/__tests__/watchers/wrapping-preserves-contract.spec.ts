@@ -21,17 +21,29 @@
  * accepted only the first parameter, so the callback never reached the
  * transport and its continuation never ran.
  *
- * **Three watchers never gave the methods back.** Closing the module left the
- * host calling through a watcher whose collector was gone, and a process that
- * builds the module twice against the same object — tests, `nest start --hmr`
- * — wrapped each round on top of the last.
+ * **Eight watchers never gave back what they took.** Closing the module left
+ * the host calling through a watcher whose collector was gone, and a process
+ * that builds the module twice against the same object — tests, `nest start
+ * --hmr` — stacked each round on the last. Measured at three lifecycles:
+ *
+ *     axios instance      3 request and 3 response interceptors
+ *     view engine         one render recorded 3 entries
+ *     TypeORM subscriber  `afterLoad` never restored
+ *     Bull queue          5 listeners per round, never removed
+ *
+ * The model watcher had one more: it called its own handler *before* the
+ * application's, outside a `try`. An entry that could not be built threw out
+ * of the subscriber, and the hook the application wrote never ran at all.
  */
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { BatchWatcher, NESTLENS_BATCH_PROCESSOR } from '../../watchers/batch.watcher';
 import { DumpWatcher, NESTLENS_DUMP_SERVICE } from '../../watchers/dump.watcher';
 import { GateWatcher, NESTLENS_GATE_SERVICE } from '../../watchers/gate.watcher';
+import { HttpClientWatcher } from '../../watchers/http-client.watcher';
 import { MailWatcher } from '../../watchers/mail.watcher';
+import { ModelWatcher } from '../../watchers/model.watcher';
+import { ViewWatcher } from '../../watchers/view.watcher';
 
 void NESTLENS_BATCH_PROCESSOR;
 void NESTLENS_DUMP_SERVICE;
@@ -340,5 +352,167 @@ describe('a wrapped dump service', () => {
     watcher.onModuleDestroy();
 
     expect(target.export).toBe(before);
+  });
+});
+
+describe('a wrapped axios instance', () => {
+  /** An interceptor manager that behaves like axios's: `use` returns an id. */
+  const manager = () => {
+    const handlers: unknown[] = [];
+    return {
+      handlers,
+      use(onFulfilled: unknown, onRejected: unknown) {
+        handlers.push([onFulfilled, onRejected]);
+        return handlers.length - 1;
+      },
+      eject(id: number) {
+        if (handlers[id]) handlers[id] = null;
+      },
+      get installed() {
+        return handlers.filter(Boolean).length;
+      },
+    };
+  };
+
+  const instance = () => ({ interceptors: { request: manager(), response: manager() } });
+
+  const watch = (axios: object) => {
+    const watcher = new HttpClientWatcher(collector, config({ httpClient: true }), axios);
+    watcher.onModuleInit();
+    return watcher;
+  };
+
+  it('installs one interceptor of each kind', () => {
+    const axios = instance();
+    watch(axios);
+
+    expect(axios.interceptors.request.installed).toBe(1);
+    expect(axios.interceptors.response.installed).toBe(1);
+  });
+
+  it('takes them off when the module closes', () => {
+    const axios = instance();
+
+    watch(axios).onModuleDestroy();
+
+    expect(axios.interceptors.request.installed).toBe(0);
+    expect(axios.interceptors.response.installed).toBe(0);
+  });
+
+  it('does not stack across lifecycles', () => {
+    const axios = instance();
+
+    for (let i = 0; i < 3; i += 1) {
+      watch(axios).onModuleDestroy();
+    }
+    watch(axios);
+
+    expect(axios.interceptors.request.installed).toBe(1);
+  });
+});
+
+describe('a wrapped view engine', () => {
+  const engine = () => ({
+    render: (view: string, options: unknown, callback: (e: unknown, html: string) => void) =>
+      callback(null, `<${view}/>`),
+  });
+
+  const watch = (target: object) => {
+    const watcher = new ViewWatcher(collector, config({ view: true }), target);
+    watcher.onModuleInit();
+    return watcher;
+  };
+
+  it('gives the render method back when the module closes', () => {
+    const target = engine();
+    const before = target.render;
+
+    watch(target).onModuleDestroy();
+
+    expect(target.render).toBe(before);
+  });
+
+  it('records one entry per render, not one per lifecycle', async () => {
+    const target = engine();
+
+    for (let i = 0; i < 3; i += 1) {
+      watch(target).onModuleDestroy();
+    }
+    const watcher = watch(target);
+
+    collected.length = 0;
+    target.render('page', {}, () => undefined);
+    await settle();
+
+    expect(collected).toHaveLength(1);
+    watcher.onModuleDestroy();
+  });
+});
+
+describe('a wrapped TypeORM subscriber', () => {
+  const subscriber = () => ({
+    afterLoad: jest.fn(),
+    afterInsert: jest.fn(),
+  });
+
+  const watch = (target: object) => {
+    const watcher = new ModelWatcher(collector, config({ model: true }), target);
+    watcher.onModuleInit();
+    return watcher;
+  };
+
+  it('gives the hooks back when the module closes', () => {
+    const target = subscriber();
+    const before = target.afterLoad;
+
+    watch(target).onModuleDestroy();
+
+    expect(target.afterLoad).toBe(before);
+  });
+
+  it("still calls the application's own hook", () => {
+    const target = subscriber();
+    // Held before wrapping: `target.afterLoad` is the wrapper afterwards, and
+    // asserting on that would be asserting on our own function.
+    const applicationHook = target.afterLoad;
+    const watcher = watch(target);
+
+    (target.afterLoad as unknown as (entity: unknown, event: unknown) => void)(
+      { id: 1 },
+      { metadata: { name: 'Order' } },
+    );
+
+    expect(applicationHook).toHaveBeenCalledTimes(1);
+    watcher.onModuleDestroy();
+  });
+
+  it("calls the application's hook even when recording fails", () => {
+    // The failure: recording ran first and outside a `try`, so an entry that
+    // could not be built threw out of the subscriber and the application's own
+    // hook never ran.
+    const exploding = {
+      collect: () => {
+        throw new Error('storage is gone');
+      },
+      collectImmediate: async () => null,
+    } as unknown as CollectorService;
+
+    const called: string[] = [];
+    const target = {
+      afterInsert: () => called.push('application'),
+    };
+
+    const watcher = new ModelWatcher(exploding, config({ model: true }), target);
+    watcher.onModuleInit();
+
+    expect(() =>
+      (target.afterInsert as unknown as (event: unknown) => void)({
+        metadata: { name: 'Order' },
+        entity: {},
+      }),
+    ).not.toThrow();
+    expect(called).toEqual(['application']);
+
+    watcher.onModuleDestroy();
   });
 });

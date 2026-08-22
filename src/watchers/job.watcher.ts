@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { JobWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { JobEntry } from '../types';
@@ -59,11 +59,17 @@ function isQueueEvents(value: unknown): value is BullQueueEventsLike {
 // Token for injecting Bull queues
 
 @Injectable()
-export class JobWatcher implements OnModuleInit {
+export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(JobWatcher.name);
   private readonly config: JobWatcherConfig;
   private readonly jobTracking = new Map<string, number>(); // jobId -> startTime
   private readonly managedQueueEvents: BullQueueEventsLike[] = []; // QueueEvents created by setupBullMQQueue
+  /** Every listener installed, so `onModuleDestroy` can remove it. */
+  private readonly listeners: {
+    emitter: EmittingQueue;
+    event: string;
+    listener: (...args: never[]) => void;
+  }[] = [];
 
   constructor(
     private readonly collector: CollectorService,
@@ -96,30 +102,15 @@ export class JobWatcher implements OnModuleInit {
 
     const name = queueName || queue.name || 'unknown';
 
-    // Track when jobs are added
-    queue.on('waiting', (jobId: string) => {
-      this.handleJobWaiting(name, jobId, queue);
-    });
-
-    // Track when jobs start processing
-    queue.on('active', (job: BullJobLike) => {
-      this.handleJobActive(name, job);
-    });
-
-    // Track when jobs complete
-    queue.on('completed', (job: BullJobLike, result: unknown) => {
-      this.handleJobCompleted(name, job, result);
-    });
-
-    // Track when jobs fail
-    queue.on('failed', (job: BullJobLike, error: Error) => {
-      this.handleJobFailed(name, job, error);
-    });
-
-    // Track delayed jobs
-    queue.on('delayed', (jobId: string) => {
-      this.handleJobDelayed(name, jobId, queue);
-    });
+    this.listen(queue, 'waiting', (jobId: string) => this.handleJobWaiting(name, jobId, queue));
+    this.listen(queue, 'active', (job: BullJobLike) => this.handleJobActive(name, job));
+    this.listen(queue, 'completed', (job: BullJobLike, result: unknown) =>
+      this.handleJobCompleted(name, job, result),
+    );
+    this.listen(queue, 'failed', (job: BullJobLike, error: Error) =>
+      this.handleJobFailed(name, job, error),
+    );
+    this.listen(queue, 'delayed', (jobId: string) => this.handleJobDelayed(name, jobId, queue));
 
     this.logger.log(`Job interceptors installed for queue: ${name}`);
   }
@@ -160,8 +151,43 @@ export class JobWatcher implements OnModuleInit {
   }
 
   /**
+   * Adds a listener and remembers it, so it can be taken off again.
+   *
+   * A queue belongs to the application and outlives this module. Listeners
+   * left on it go on recording through a collector that is gone, and a process
+   * that registers the same queue more than once — tests, `nest start --hmr`,
+   * or simply calling `setupQueue` twice — records one entry per listener per
+   * job.
+   */
+  private listen(
+    emitter: EmittingQueue,
+    event: string,
+    listener: (...args: never[]) => void,
+  ): void {
+    this.listeners.push({ emitter, event, listener });
+    emitter.on(event, listener);
+  }
+
+  /**
+   * Takes every listener off and closes what `setupBullMQQueue` opened.
+   *
+   * `closeQueueEvents` used to be the caller's job — the documentation asked
+   * for it to be called from their own `onModuleDestroy`, which is a step that
+   * is easy not to know about and easy to forget. It still exists and is still
+   * safe to call; it simply does not have to be.
+   */
+  async onModuleDestroy(): Promise<void> {
+    for (const { emitter, event, listener } of this.listeners) {
+      (emitter as { off?: (e: string, l: unknown) => void }).off?.(event, listener);
+    }
+    this.listeners.length = 0;
+
+    await this.closeQueueEvents();
+  }
+
+  /**
    * Close all QueueEvents instances created by setupBullMQQueue.
-   * Call this in onModuleDestroy to clean up connections.
+   * Called automatically when the module closes; safe to call yourself.
    */
   async closeQueueEvents(): Promise<void> {
     for (const queueEvents of this.managedQueueEvents) {
@@ -199,60 +225,72 @@ export class JobWatcher implements OnModuleInit {
 
     // Track when jobs are added (BullMQ signature: { jobId: string })
     // Reuse existing handler - same signature
-    queueEvents.on('waiting', (args: { jobId: string }) => {
+    this.listen(queueEvents as unknown as EmittingQueue, 'waiting', (args: { jobId: string }) => {
       this.handleJobWaiting(name, args.jobId, queue);
     });
 
     // Track when jobs start processing (BullMQ signature: { jobId: string })
     // Need to fetch job first, then call existing handler
-    queueEvents.on('active', async (args: { jobId: string }) => {
-      try {
-        const job = await getJob(args.jobId);
-        if (job) this.handleJobActive(name, job);
-      } catch (error) {
-        this.logger.debug(`Failed to track BullMQ active job: ${error}`);
-      }
-    });
+    this.listen(
+      queueEvents as unknown as EmittingQueue,
+      'active',
+      async (args: { jobId: string }) => {
+        try {
+          const job = await getJob(args.jobId);
+          if (job) this.handleJobActive(name, job);
+        } catch (error) {
+          this.logger.debug(`Failed to track BullMQ active job: ${error}`);
+        }
+      },
+    );
 
     // Track when jobs complete (BullMQ signature: { jobId: string, returnvalue: string })
     // Need to fetch job and parse returnvalue
-    queueEvents.on('completed', async (args: { jobId: string; returnvalue: string }) => {
-      try {
-        const job = await getJob(args.jobId);
-        if (!job) return;
-
-        // Parse returnvalue (BullMQ sends it as JSON string)
-        let result: unknown;
+    this.listen(
+      queueEvents as unknown as EmittingQueue,
+      'completed',
+      async (args: { jobId: string; returnvalue: string }) => {
         try {
-          result = args.returnvalue ? JSON.parse(args.returnvalue) : undefined;
-        } catch {
-          result = args.returnvalue;
-        }
+          const job = await getJob(args.jobId);
+          if (!job) return;
 
-        this.handleJobCompleted(name, job, result);
-      } catch (error) {
-        this.logger.debug(`Failed to track BullMQ completed job: ${error}`);
-      }
-    });
+          // Parse returnvalue (BullMQ sends it as JSON string)
+          let result: unknown;
+          try {
+            result = args.returnvalue ? JSON.parse(args.returnvalue) : undefined;
+          } catch {
+            result = args.returnvalue;
+          }
+
+          this.handleJobCompleted(name, job, result);
+        } catch (error) {
+          this.logger.debug(`Failed to track BullMQ completed job: ${error}`);
+        }
+      },
+    );
 
     // Track when jobs fail (BullMQ signature: { jobId: string, failedReason: string })
     // Need to fetch job and convert failedReason to Error
-    queueEvents.on('failed', async (args: { jobId: string; failedReason: string }) => {
-      try {
-        const job = await getJob(args.jobId);
-        if (!job) return;
+    this.listen(
+      queueEvents as unknown as EmittingQueue,
+      'failed',
+      async (args: { jobId: string; failedReason: string }) => {
+        try {
+          const job = await getJob(args.jobId);
+          if (!job) return;
 
-        // Convert failedReason string to Error object for existing handler
-        const error = new Error(args.failedReason || 'Unknown error');
-        this.handleJobFailed(name, job, error);
-      } catch (error) {
-        this.logger.debug(`Failed to track BullMQ failed job: ${error}`);
-      }
-    });
+          // Convert failedReason string to Error object for existing handler
+          const error = new Error(args.failedReason || 'Unknown error');
+          this.handleJobFailed(name, job, error);
+        } catch (error) {
+          this.logger.debug(`Failed to track BullMQ failed job: ${error}`);
+        }
+      },
+    );
 
     // Track delayed jobs (BullMQ signature: { jobId: string, delay: number })
     // Reuse existing handler - same signature
-    queueEvents.on('delayed', (args: { jobId: string }) => {
+    this.listen(queueEvents as unknown as EmittingQueue, 'delayed', (args: { jobId: string }) => {
       this.handleJobDelayed(name, args.jobId, queue);
     });
 

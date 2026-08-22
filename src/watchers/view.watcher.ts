@@ -1,8 +1,16 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { WrappedMethods } from './wrap-method';
 
 /**
  * The view engine surface this watcher touches — a single `render` method.
@@ -25,10 +33,10 @@ export const NESTLENS_VIEW_ENGINE = Symbol('NESTLENS_VIEW_ENGINE');
  * cache hits, and output size metrics for various template formats.
  */
 @Injectable()
-export class ViewWatcher implements OnModuleInit {
+export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ViewWatcher.name);
   private readonly config: ViewWatcherConfig;
-  private originalRender?: RenderMethod;
+  private wrapped?: WrappedMethods;
 
   constructor(
     private readonly collector: CollectorService,
@@ -62,15 +70,29 @@ export class ViewWatcher implements OnModuleInit {
   private setupInterceptors(): void {
     if (!this.viewEngine) return;
 
-    // Wrap the render method
-    if (typeof this.viewEngine.render === 'function') {
-      const boundRender = this.viewEngine.render.bind(this.viewEngine);
-      this.originalRender = boundRender;
-      this.viewEngine.render = this.wrapRenderMethod(boundRender);
-      this.logger.log('View interceptors installed');
-    } else {
+    if (typeof this.viewEngine.render !== 'function') {
       this.logger.warn('ViewWatcher: View engine does not have a render method');
+      return;
     }
+
+    this.wrapped = new WrappedMethods(this.viewEngine as unknown as Record<string, unknown>);
+    this.wrapped.replace('render', (original) => this.wrapRenderMethod(original as RenderMethod));
+
+    this.logger.log('View interceptors installed');
+  }
+
+  /**
+   * Gives the engine its render method back.
+   *
+   * The engine belongs to the application and outlives this module, so without
+   * this the host renders through a watcher whose collector is gone — and a
+   * process that builds the module more than once against the same engine, as
+   * tests and `nest start --hmr` do, wraps each round on top of the last:
+   * measured at three lifecycles, one render recorded three entries.
+   */
+  onModuleDestroy(): void {
+    this.wrapped?.restore();
+    this.wrapped = undefined;
   }
 
   private wrapRenderMethod(originalRender: RenderMethod): RenderMethod {

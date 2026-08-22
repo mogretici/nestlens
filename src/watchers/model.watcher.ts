@@ -1,8 +1,16 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { WrappedMethods } from './wrap-method';
 
 /**
  * The TypeORM subscriber surface this watcher touches.
@@ -76,9 +84,10 @@ const SENSITIVE_FIELDS = [
  * masking sensitive fields.
  */
 @Injectable()
-export class ModelWatcher implements OnModuleInit {
+export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
+  private wrapped?: WrappedMethods;
   private operationTracking = new Map<
     string,
     { startTime: number; entity: string; action: string }
@@ -121,81 +130,52 @@ export class ModelWatcher implements OnModuleInit {
     const subscriber = this.entitySubscriber as EntitySubscriberLike | undefined;
     if (!subscriber) return;
 
-    // Track entity loading (find operations)
-    if (typeof subscriber.afterLoad === 'function') {
-      const originalAfterLoad = subscriber.afterLoad.bind(subscriber);
-      subscriber.afterLoad = (entity: unknown, event: EntityEventLike) => {
-        this.handleAfterLoad(entity, event);
-        if (originalAfterLoad) {
-          originalAfterLoad(entity, event);
-        }
-      };
-    }
+    this.wrapped = new WrappedMethods(subscriber as unknown as Record<string, unknown>);
 
-    // Track entity insertion (create operations)
-    if (typeof subscriber.beforeInsert === 'function') {
-      const originalBeforeInsert = subscriber.beforeInsert.bind(subscriber);
-      subscriber.beforeInsert = (event: EntityEventLike) => {
-        this.handleBeforeInsert(event);
-        if (originalBeforeInsert) {
-          originalBeforeInsert(event);
-        }
-      };
-    }
+    // `afterLoad` is handed the entity as well; the rest take only the event.
+    const record: Record<string, (event: EntityEventLike, entity?: unknown) => void> = {
+      afterLoad: (event, entity) => this.handleAfterLoad(entity, event),
+      beforeInsert: (event) => this.handleBeforeInsert(event),
+      afterInsert: (event) => this.handleAfterInsert(event),
+      beforeUpdate: (event) => this.handleBeforeUpdate(event),
+      afterUpdate: (event) => this.handleAfterUpdate(event),
+      beforeRemove: (event) => this.handleBeforeRemove(event),
+      afterRemove: (event) => this.handleAfterRemove(event),
+    };
 
-    if (typeof subscriber.afterInsert === 'function') {
-      const originalAfterInsert = subscriber.afterInsert.bind(subscriber);
-      subscriber.afterInsert = (event: EntityEventLike) => {
-        this.handleAfterInsert(event);
-        if (originalAfterInsert) {
-          originalAfterInsert(event);
-        }
-      };
-    }
+    for (const [hook, note] of Object.entries(record)) {
+      this.wrapped.replace(hook, (original) => {
+        return (...args: unknown[]): unknown => {
+          // Recording first used to mean recording *instead*: an entry that
+          // could not be built threw out of the subscriber, and the
+          // application's own hook never ran. It is the application's hook.
+          try {
+            const event = (hook === 'afterLoad' ? args[1] : args[0]) as EntityEventLike;
+            note(event, args[0]);
+          } catch (error) {
+            this.logger.debug(`Failed to record a model event: ${error}`);
+          }
 
-    // Track entity updates
-    if (typeof subscriber.beforeUpdate === 'function') {
-      const originalBeforeUpdate = subscriber.beforeUpdate.bind(subscriber);
-      subscriber.beforeUpdate = (event: EntityEventLike) => {
-        this.handleBeforeUpdate(event);
-        if (originalBeforeUpdate) {
-          originalBeforeUpdate(event);
-        }
-      };
-    }
-
-    if (typeof subscriber.afterUpdate === 'function') {
-      const originalAfterUpdate = subscriber.afterUpdate.bind(subscriber);
-      subscriber.afterUpdate = (event: EntityEventLike) => {
-        this.handleAfterUpdate(event);
-        if (originalAfterUpdate) {
-          originalAfterUpdate(event);
-        }
-      };
-    }
-
-    // Track entity deletion
-    if (typeof subscriber.beforeRemove === 'function') {
-      const originalBeforeRemove = subscriber.beforeRemove.bind(subscriber);
-      subscriber.beforeRemove = (event: EntityEventLike) => {
-        this.handleBeforeRemove(event);
-        if (originalBeforeRemove) {
-          originalBeforeRemove(event);
-        }
-      };
-    }
-
-    if (typeof subscriber.afterRemove === 'function') {
-      const originalAfterRemove = subscriber.afterRemove.bind(subscriber);
-      subscriber.afterRemove = (event: EntityEventLike) => {
-        this.handleAfterRemove(event);
-        if (originalAfterRemove) {
-          originalAfterRemove(event);
-        }
-      };
+          return (original as (...a: unknown[]) => unknown)(...args);
+        };
+      });
     }
 
     this.logger.log('Model interceptors installed for TypeORM');
+  }
+
+  /**
+   * Puts the subscriber's hooks back.
+   *
+   * The subscriber belongs to the application and outlives this module, so
+   * without this the host goes on recording through a watcher whose collector
+   * is gone — and a process that builds the module more than once against the
+   * same subscriber, as tests and `nest start --hmr` do, wraps each round on
+   * top of the last.
+   */
+  onModuleDestroy(): void {
+    this.wrapped?.restore();
+    this.wrapped = undefined;
   }
 
   /**
