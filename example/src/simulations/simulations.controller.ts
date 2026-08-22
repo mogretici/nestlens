@@ -511,6 +511,69 @@ export class SimulationsController {
         return { success: true };
     }
 
+    @Post('endpoint')
+    @ApiOperation({ summary: 'Simulate one realistic endpoint, so the timeline has something to draw' })
+    async testEndpoint(): Promise<{ success: boolean; orders: number }> {
+        // The shape a real endpoint has: a lookup, a cache read, a fan-out of
+        // queries and a call to somebody else — each taking its own time and
+        // following the last. Every other simulation records one entry, so a
+        // request produced a request and a single child and there was nothing
+        // for a waterfall to show.
+        //
+        // Each step waits as long as it claims to have taken. A timeline puts a
+        // row at `createdAt - duration`, so a simulation that reported a
+        // duration it had not spent would draw steps overlapping each other and
+        // teach a reader to distrust the chart.
+        const took = async <T>(ms: number, record: (duration: number) => Promise<T>): Promise<T> => {
+            const started = Date.now();
+            await new Promise((resolve) => setTimeout(resolve, ms));
+            return record(Date.now() - started);
+        };
+
+        await took(2, (duration) =>
+            this.collector.collect('cache', {
+                operation: 'get', key: 'orders:user:42', hit: false, duration,
+            }),
+        );
+
+        await took(6, (duration) =>
+            this.collector.collect('query', {
+                query: 'SELECT * FROM users WHERE id = $1', parameters: [42],
+                duration, slow: false, source: 'typeorm', connection: 'default',
+            }),
+        );
+
+        for (const status of ['pending', 'shipped', 'delivered']) {
+            await took(11, (duration) =>
+                this.collector.collect('query', {
+                    query: 'SELECT * FROM orders WHERE user_id = $1 AND status = $2',
+                    parameters: [42, status], duration, slow: false,
+                    source: 'typeorm', connection: 'default',
+                }),
+            );
+        }
+
+        await took(48, (duration) =>
+            this.collector.collect('http-client', {
+                method: 'GET', url: 'https://shipping.example.com/v1/rates',
+                hostname: 'shipping.example.com', path: '/v1/rates',
+                statusCode: 200, duration,
+            }),
+        );
+
+        await took(3, (duration) =>
+            this.collector.collect('cache', {
+                operation: 'set', key: 'orders:user:42', duration,
+            }),
+        );
+
+        await this.collector.collect('log', {
+            level: 'log', message: 'Served 3 orders for user 42', context: 'OrdersService',
+        });
+
+        return { success: true, orders: 3 };
+    }
+
     @Post('all')
     @ApiOperation({ summary: 'Run all simulations at once' })
     async testAll(): Promise<{ success: boolean }> {
