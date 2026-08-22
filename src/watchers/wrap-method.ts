@@ -85,16 +85,35 @@ export const wrapMethodPreservingShape = <T extends AnyMethod, C = undefined>(
       return result;
     }
 
-    return Promise.resolve(result).then(
-      (value) => {
-        report({ args, result: value, durationMs: Date.now() - started, context });
-        return value;
-      },
-      (error: unknown) => {
-        report({ args, error, durationMs: Date.now() - started, context });
-        throw error;
-      },
-    );
+    // Watched, not replaced.
+    //
+    // This used to return `Promise.resolve(result).then(…)`, which is a native
+    // promise — so a method answering with a thenable that carries an API of
+    // its own handed the caller something else entirely:
+    //
+    //     repo.find()          a QueryBuilder: thenable, and `.tap`, `.where`…
+    //     wrapped repo.find()  a Promise: thenable, and nothing else
+    //
+    // The outcome is read by attaching to it and giving back what the method
+    // returned, so a caller keeps whatever it was written to receive. The
+    // handlers here are attached first, so recording still happens before the
+    // caller's own continuation, and the derived promise this creates is
+    // settled by both of them — the caller's rejection is still the caller's
+    // to handle.
+    try {
+      (result as PromiseLike<unknown>).then(
+        (value) => {
+          report({ args, result: value, durationMs: Date.now() - started, context });
+        },
+        (error: unknown) => {
+          report({ args, error, durationMs: Date.now() - started, context });
+        },
+      );
+    } catch (error) {
+      logger.debug(`Failed to watch a wrapped call: ${error}`);
+    }
+
+    return result;
   } as unknown as T;
 };
 
