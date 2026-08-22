@@ -494,14 +494,25 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
   }
 
   /**
-   * Register resolver tracking hook (called externally if needed)
+   * Records one field resolution, and returns what to call when it ends.
+   *
+   * Mercurius has no per-field hook of its own, so this is driven from the
+   * schema by `instrumentFieldResolvers`. It used to be driven by nothing at
+   * all — the comment below said it "would need to be integrated via custom
+   * wrapper" — which left `resolverCount`, `detectN1Queries` and
+   * `traceFieldResolvers` recording nothing on this server. The trace's end
+   * used to be stored on the context under a key nobody read, so every trace
+   * stayed open even if the method had been called.
    */
-  trackResolver(event: MercuriusResolutionEvent, context: MercuriusContext): void {
+  trackResolver(
+    event: MercuriusResolutionEvent,
+    context: MercuriusContext,
+  ): (() => void) | undefined {
     const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
       RequestTrackingData | undefined;
 
     if (!tracking) {
-      return;
+      return undefined;
     }
 
     tracking.resolverCount++;
@@ -517,25 +528,18 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
     // Field tracing
     const fieldTracer = tracking.fieldTracer;
-    if (fieldTracer?.isActive()) {
-      const path = this.buildFieldPath(event.info.path);
-      const traceId = fieldTracer.startField(
-        path,
-        event.info.parentType.name,
-        event.info.fieldName,
-        event.info.returnType.toString(),
-      );
-
-      // Return cleanup function (caller should invoke when resolver completes)
-      // Note: Mercurius doesn't have built-in resolver tracing hooks,
-      // so this would need to be integrated via custom wrapper
-      if (traceId) {
-        // Store for later cleanup
-        (context as Record<string, unknown>)[`_trace_${traceId}`] = () => {
-          fieldTracer.endField(traceId);
-        };
-      }
+    if (!fieldTracer?.isActive()) {
+      return undefined;
     }
+
+    const traceId = fieldTracer.startField(
+      this.buildFieldPath(event.info.path),
+      event.info.parentType.name,
+      event.info.fieldName,
+      event.info.returnType.toString(),
+    );
+
+    return traceId ? () => fieldTracer.endField(traceId) : undefined;
   }
 
   /**

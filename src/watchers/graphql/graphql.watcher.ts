@@ -23,6 +23,8 @@ import { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter'
 import { createApolloAdapter } from './adapters/apollo.adapter';
 import { createMercuriusAdapter } from './adapters/mercurius.adapter';
 import { instrumentSubscriptions } from './subscription/schema-instrumentation';
+import { instrumentFieldResolvers } from './field-instrumentation';
+import { MercuriusAdapter } from './adapters/mercurius.adapter';
 import {
   SubscriptionTracker,
   createSubscriptionTracker,
@@ -64,6 +66,8 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
   private registrationMode: RegistrationMode = 'pending';
   /** Puts the schema's subscription fields back. */
   private restoreSubscriptions?: () => void;
+  /** Puts the schema's field resolvers back. */
+  private restoreFields?: () => void;
 
   constructor(
     private readonly collector: CollectorService,
@@ -107,25 +111,44 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
    * has started, which is the first moment the schema is there to be read.
    */
   onApplicationBootstrap(): void {
-    if (!this.config.enabled || !this.subscriptionTracker) {
+    if (!this.config.enabled) {
+      return;
+    }
+
+    // Mercurius has no per-field hook — Apollo's `willResolveField` has no
+    // counterpart — so the resolver count, the N+1 detector and the field
+    // tracer are fed from the schema instead. Apollo does not need this and
+    // would count everything twice.
+    const adapter = this.adapter;
+    const needsFieldInstrumentation = adapter instanceof MercuriusAdapter;
+
+    if (!this.subscriptionTracker && !needsFieldInstrumentation) {
       return;
     }
 
     const schema = this.findSchema();
     if (!schema) {
-      this.logger.debug(
-        'Subscription tracking is enabled but no GraphQL schema was found to instrument.',
-      );
+      this.logger.debug('GraphQL tracking is enabled but no schema was found to instrument.');
       return;
     }
 
-    this.restoreSubscriptions = instrumentSubscriptions(
-      schema,
-      this.subscriptionTracker,
-      this.nestlensConfig.trustProxy,
-    );
+    if (this.subscriptionTracker) {
+      this.restoreSubscriptions = instrumentSubscriptions(
+        schema,
+        this.subscriptionTracker,
+        this.nestlensConfig.trustProxy,
+      );
+      this.logger.log('GraphQL subscription tracking installed');
+    }
 
-    this.logger.log('GraphQL subscription tracking installed');
+    if (needsFieldInstrumentation) {
+      this.restoreFields = instrumentFieldResolvers(schema, (info, context) =>
+        adapter.trackResolver(
+          { info } as Parameters<MercuriusAdapter['trackResolver']>[0],
+          context as Parameters<MercuriusAdapter['trackResolver']>[1],
+        ),
+      );
+    }
   }
 
   /**
@@ -337,6 +360,9 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
 
     this.restoreSubscriptions?.();
     this.restoreSubscriptions = undefined;
+
+    this.restoreFields?.();
+    this.restoreFields = undefined;
 
     if (this.subscriptionTracker) {
       this.subscriptionTracker.clear();

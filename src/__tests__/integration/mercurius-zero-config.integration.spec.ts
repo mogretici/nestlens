@@ -17,12 +17,18 @@ import { MercuriusDriver, MercuriusDriverConfig } from '@nestjs/mercurius';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensModule } from '../../nestlens.module';
 import { STORAGE, StorageInterface } from '../../core/storage/storage.interface';
+import { GraphQLWatcher } from '../../watchers/graphql/graphql.watcher';
 import { Entry } from '../../types';
 
 const SCHEMA = `
+  type Product { name: String! }
+  type Item { id: ID!, product: Product! }
+  type Order { id: ID!, items: [Item!]! }
+
   type Query {
     hello(name: String): String!
     boom: String!
+    orders: [Order!]!
   }
 `;
 
@@ -32,13 +38,31 @@ const RESOLVERS = {
     boom: () => {
       throw new Error('resolver said no');
     },
+    orders: () =>
+      Array.from({ length: 5 }, (_unused, index) => ({
+        id: String(index),
+        items: Array.from({ length: 4 }, (_i, j) => ({
+          id: `${index}-${j}`,
+          product: { name: `p${j}` },
+        })),
+      })),
   },
 };
 
 @Module({
   imports: [
     NestLensModule.forRoot({
-      watchers: { graphql: true, request: false, exception: false, log: false },
+      watchers: {
+        graphql: {
+          traceFieldResolvers: true,
+          resolverTracingSampleRate: 1,
+          detectN1Queries: true,
+          n1Threshold: 2,
+        },
+        request: false,
+        exception: false,
+        log: false,
+      },
     }),
     GraphQLModule.forRoot<MercuriusDriverConfig>({
       driver: MercuriusDriver,
@@ -106,6 +130,74 @@ describe('Mercurius with nothing wired by hand', () => {
     const payload = entries[0].payload as { hasErrors?: boolean; errors?: { message: string }[] };
     expect(payload.hasErrors).toBe(true);
     expect(payload.errors?.[0].message).toContain('resolver said no');
+  });
+
+  describe('what it records about resolvers', () => {
+    /**
+     * Mercurius has no per-field hook — Apollo's `willResolveField` has no
+     * counterpart — so the adapter's `trackResolver` was written and then
+     * called by nothing. Measured on this same query before the schema was
+     * instrumented, with both options on:
+     *
+     *     resolverCount  0        (seventy-one resolvers ran)
+     *     fieldTraces    0
+     *     potentialN1    undefined
+     */
+    const RESOLVING_QUERY = '{ orders { id items { id product { name } } } }';
+
+    it('counts the resolvers that ran', async () => {
+      const entries = await ask(RESOLVING_QUERY);
+      const payload = entries[0].payload as { resolverCount?: number };
+
+      // Five orders, four items each, a product and a name for every item.
+      expect(payload.resolverCount).toBeGreaterThan(40);
+    });
+
+    it('traces them', async () => {
+      const entries = await ask(RESOLVING_QUERY);
+      const payload = entries[0].payload as {
+        fieldTraces?: { fieldName: string; duration: number; startOffset: number }[];
+      };
+
+      expect(payload.fieldTraces?.length).toBeGreaterThan(10);
+      expect(payload.fieldTraces?.map((trace) => trace.fieldName)).toContain('product');
+      expect(payload.fieldTraces?.every((trace) => trace.duration >= 0)).toBe(true);
+    });
+
+    it('notices the N+1', async () => {
+      const entries = await ask(RESOLVING_QUERY);
+      const payload = entries[0].payload as {
+        potentialN1?: { field: string; count: number }[];
+      };
+
+      // `product` resolves once per item; that is the shape of an N+1.
+      expect(payload.potentialN1?.map((warning) => warning.field)).toContain('product');
+    });
+
+    it('counts a leaf field too, as Apollo does', async () => {
+      // Fields with no resolver of their own are served by graphql-js's
+      // default. Leaving them out would make the two servers disagree about
+      // how many resolvers an operation ran.
+      const entries = await ask('{ hello }');
+      const payload = entries[0].payload as { resolverCount?: number };
+
+      expect(payload.resolverCount).toBeGreaterThan(0);
+    });
+
+    it('gives the schema back when the watcher is destroyed', async () => {
+      const watcher = app.get(GraphQLWatcher);
+      const before = ((await ask(RESOLVING_QUERY))[0].payload as { resolverCount?: number })
+        .resolverCount;
+
+      watcher.destroy();
+      const after = ((await ask(RESOLVING_QUERY))[0].payload as { resolverCount?: number })
+        .resolverCount;
+
+      expect(before).toBeGreaterThan(0);
+      // Nothing is recorded once it has been taken apart, but the query still
+      // answers — the resolvers are the application's, not ours.
+      expect(after ?? 0).toBe(0);
+    });
   });
 
   it('records one entry per operation', async () => {
