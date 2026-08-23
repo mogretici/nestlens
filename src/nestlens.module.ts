@@ -209,6 +209,9 @@ export class NestLensModule implements NestModule, OnModuleInit {
 
   private static readonly logger = new Logger('NestLens');
 
+  /** Where a previous `forRoot` put the dashboard, if there was one. */
+  private static mountedAt?: string;
+
   static forRoot(config: NestLensConfig = {}): DynamicModule {
     const mergedConfig = this.mergeConfig(config);
 
@@ -392,6 +395,29 @@ export class NestLensModule implements NestModule, OnModuleInit {
    */
   private static mountControllersAt(path: string | undefined): void {
     const prefix = toRoutePrefix(path);
+
+    /*
+     * Said out loud when a second call moves it.
+     *
+     * The prefix is metadata on the controller classes, so the last `forRoot`
+     * wins — and where two modules each called it, the dashboard silently
+     * answered at one path and 404'd at the other:
+     *
+     *     forRoot({ path: '/first' })  in one module
+     *     forRoot({ path: '/second' }) in another   ->  only /second exists
+     *
+     * `forRoot` belongs in the root module once, which is what this says.
+     */
+    const mounted = this.mountedAt;
+    this.mountedAt = prefix;
+
+    if (mounted !== undefined && mounted !== prefix) {
+      this.logger.warn(
+        `NestLensModule.forRoot() was called again with a different path: the dashboard moves ` +
+          `from "/${mounted}" to "/${prefix}". Call it once, in the root module.`,
+      );
+    }
+
     const withPrefix = (suffix: string): string =>
       [prefix, suffix].filter((part) => part.length > 0).join('/');
 
