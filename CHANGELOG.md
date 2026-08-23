@@ -1,3 +1,15 @@
+# [0.13.0](https://github.com/mogretici/nestlens/compare/v0.12.0...v0.13.0) (2026-08-23)
+
+
+### Bug Fixes
+
+* **storage:** `redis.db` decides the database, url or no url ([0077de4](https://github.com/mogretici/nestlens/commit/0077de4c974a8388e632b8cc894058aefdafa646))
+
+
+### Features
+
+* a production stance in one setting, and a startup line that shows it ([8225420](https://github.com/mogretici/nestlens/commit/82254200dfb5c161d5afab4c8753b2b0f30d2b1d))
+
 # [0.12.0](https://github.com/mogretici/nestlens/compare/v0.11.0...v0.12.0) (2026-08-23)
 
 
