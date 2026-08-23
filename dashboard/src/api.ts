@@ -14,9 +14,28 @@ import { nestlensUrl } from './basePath';
 // prefix that keeps it from colliding with the dashboard's own SPA routes.
 const API_BASE = nestlensUrl('/api');
 
+/**
+ * An entry the store no longer has.
+ *
+ * Pruning deletes by age and every store evicts by size, so an entry can go
+ * while the page listing it is still open. Distinguished from any other
+ * failure because there is something sensible to do about it — say it is gone
+ * and stop showing it — where a 500 only means try again.
+ */
+export class EntryGoneError extends Error {
+  constructor() {
+    super('This entry is no longer stored');
+    this.name = 'EntryGoneError';
+  }
+}
+
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, options);
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new EntryGoneError();
+    }
+
     throw new Error(`API error: ${response.status}`);
   }
   return response.json();
