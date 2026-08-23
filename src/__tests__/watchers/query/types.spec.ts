@@ -1,7 +1,6 @@
 import {
   isLikelyTypeORMDataSource,
   isPrismaClient,
-  isModuleAvailable,
   PrismaClient,
 } from '../../../watchers/query/types';
 
@@ -67,21 +66,6 @@ describe('Query type guards and module helpers', () => {
       expect(isPrismaClient(null)).toBe(false);
       expect(isPrismaClient(undefined)).toBe(false);
       expect(isPrismaClient([])).toBe(false);
-    });
-  });
-
-  describe('isModuleAvailable', () => {
-    it('returns true for built-in Node modules', () => {
-      expect(isModuleAvailable('fs')).toBe(true);
-      expect(isModuleAvailable('path')).toBe(true);
-    });
-
-    it('returns true for installed packages', () => {
-      expect(isModuleAvailable('@nestjs/common')).toBe(true);
-    });
-
-    it('returns false for unknown modules', () => {
-      expect(isModuleAvailable('definitely-not-a-real-module-xyz')).toBe(false);
     });
   });
 });

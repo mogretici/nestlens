@@ -106,16 +106,3 @@ export function isPrismaClient(obj: unknown): obj is PrismaClient {
   const candidate = obj as Record<string, unknown>;
   return typeof candidate.$on === 'function' || typeof candidate.$use === 'function';
 }
-
-// ---------------------------------------------------------------------------
-// Module loader helpers
-// ---------------------------------------------------------------------------
-
-export function isModuleAvailable(moduleName: string): boolean {
-  try {
-    require.resolve(moduleName);
-    return true;
-  } catch {
-    return false;
-  }
-}
