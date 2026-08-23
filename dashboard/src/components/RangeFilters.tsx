@@ -26,7 +26,10 @@ const WRAPPER_CLASS =
  */
 const SELECT_CLASS =
   'appearance-none bg-transparent text-xs font-medium text-gray-700 dark:text-gray-200 ' +
-  'border-0 p-0 pr-1 focus:outline-none cursor-pointer';
+  // The browser's own outline is replaced, not removed: without the ring these
+  // two were the only controls in the dashboard a keyboard could reach and not
+  // see, against a page that says focus indicators are visible throughout.
+  'border-0 p-0 pr-1 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer';
 
 /**
  * The two range filters, side by side above the table.
