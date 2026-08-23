@@ -104,6 +104,13 @@ export class NestLensApiExceptionFilter implements ExceptionFilter {
           message = resp.message.join(', ');
           details = { validationErrors: resp.message };
         }
+        // What the thrower attached for the caller. The rate limit's
+        // `retryAfter` was documented as part of the body and arrived in none
+        // of it: everything but `message` was dropped here, so a client
+        // reading the documented field found nothing and had to guess.
+        if (resp.details && typeof resp.details === 'object') {
+          details = { ...details, ...(resp.details as Record<string, unknown>) };
+        }
       } else {
         message = exception.message;
       }

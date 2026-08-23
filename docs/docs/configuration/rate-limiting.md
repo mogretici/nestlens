@@ -185,16 +185,25 @@ When a client exceeds the rate limit, they receive:
 
 **HTTP Status**: `429 Too Many Requests`
 
-**Response Body**:
+**Response Headers**: `Retry-After: 60`
+
+**Response Body** — the same envelope every NestLens endpoint answers with:
 ```json
 {
-  "statusCode": 429,
-  "message": "Too many requests. Please try again later.",
-  "retryAfter": 60
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "ERR_RATE_LIMITED",
+    "message": "Too many requests. Please try again later.",
+    "details": { "retryAfter": 60 }
+  },
+  "meta": { "timestamp": "2026-01-01T00:00:00.000Z", "duration": 0 }
 }
 ```
 
-The `retryAfter` field indicates how many seconds until the rate limit resets.
+`retryAfter` is how many seconds until the limit resets. It is in the
+`Retry-After` header as well, which is what a generic HTTP client will look
+at.
 
 ## Configuration Examples
 

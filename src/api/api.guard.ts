@@ -132,6 +132,10 @@ export class NestLensGuard implements CanActivate, OnModuleDestroy {
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Too many requests. Please try again later.',
+          // In `details` as well, which is the envelope's place for it: the
+          // API's filter keeps the message and drops the rest, so a client
+          // reading the documented `retryAfter` found nothing in the body.
+          details: { retryAfter },
           retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,
