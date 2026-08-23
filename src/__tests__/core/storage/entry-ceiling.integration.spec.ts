@@ -155,18 +155,45 @@ describe('the entry ceiling', () => {
     });
   });
 
+  /**
+   * Zero is documented as "keep everything and rely on age alone", and this
+   * asked only SQLite. The in-memory driver — the default one, the one an
+   * application gets without configuring anything — read it as a limit and
+   * evicted every entry as it arrived: 250 saved, 0 kept, against SQLite's 250.
+   */
   describe('turning it off', () => {
-    it('keeps everything at zero', async () => {
-      const uncapped = new SqliteStorage(join(workspace, 'uncapped.db'), 0);
-      await uncapped.initialize();
+    /** Built here rather than reused: the shared ones carry a ceiling. */
+    const uncapped = async (name: string): Promise<StorageInterface | undefined> => {
+      if (name === 'memory') return new MemoryStorage({ maxEntries: 0 });
+      if (name === 'sqlite') return new SqliteStorage(join(workspace, 'uncapped.db'), 0);
+
+      if (!REDIS_URL) return undefined;
+      const url = new URL(REDIS_URL);
+
+      return new RedisStorage({
+        host: url.hostname,
+        port: Number(url.port || 6379),
+        db: 11,
+        keyPrefix: 'nestlens-uncapped-test:',
+        maxEntries: 0,
+      });
+    };
+
+    it.each([['memory'], ['sqlite'], ['redis']])('keeps everything at zero on %s', async (name) => {
+      const storage = await uncapped(name);
+      if (!storage) return;
+
+      await storage.initialize();
+      await storage.clear();
 
       for (let written = 0; written < 600; written += 50) {
-        await uncapped.saveBatch(Array.from({ length: 50 }, (_, i) => entry(written + i)));
+        await storage.saveBatch(Array.from({ length: 50 }, (_, i) => entry(written + i)));
       }
 
-      expect(await uncapped.count()).toBe(600);
+      expect(await storage.count()).toBe(600);
 
-      await uncapped.close();
+      await storage.clear();
+      await storage.close();
     });
   });
 

@@ -717,9 +717,13 @@ export const DEFAULT_CONFIG: Required<
       db: 0,
       keyPrefix: 'nestlens:',
     },
-    memory: {
-      maxEntries: 10000,
-    },
+    // No `memory` block here on purpose. The merge below is shallow, so a
+    // default written here would be present for every application — and
+    // `resolveMaxEntries` prefers `storage.memory.maxEntries`, the place this
+    // could be set before there was a driver-wide one. The default therefore
+    // won against the option it is the default for: `storage.maxEntries` was
+    // silently ignored on every driver, including `0`, which is documented as
+    // "keep everything".
   },
   pruning: {
     enabled: true,
