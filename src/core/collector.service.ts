@@ -399,8 +399,25 @@ export class CollectorService implements OnModuleDestroy {
     // Apply batch filter if configured
     if (this.config.filterBatch) {
       try {
-        const result = this.config.filterBatch(entries);
-        entries = await settled(result);
+        const result = await settled(this.config.filterBatch(entries));
+
+        // A callback that returns something other than a list is the same kind
+        // of mistake as one that throws, and `filterBatch` is documented as
+        // failing open. It did the opposite: `entries` became `undefined`,
+        // reading its length threw out of `flush()`, and every entry in the
+        // batch was gone — the buffer had already been emptied. A `forEach`
+        // where a `filter` was meant returns `undefined`, and NestLens then
+        // recorded nothing at all for as long as the callback stayed.
+        if (Array.isArray(result)) {
+          entries = result;
+        } else {
+          this.warnOnce(
+            'filter-batch-shape',
+            `\`filterBatch\` returned ${result === null ? 'null' : typeof result} rather than an ` +
+              'array of entries, so it was ignored and every entry kept. Return the entries to ' +
+              'keep — an empty array keeps none.',
+          );
+        }
       } catch (error) {
         this.logger.warn(`Batch filter callback error: ${error}`);
         // Fail-open - continue with original entries on filter error
@@ -440,6 +457,16 @@ export class CollectorService implements OnModuleDestroy {
       this.buffer = [...entries, ...this.buffer];
       this.enforceBufferLimit();
     }
+  }
+
+  /** Reported once: a callback that is wrong is wrong on every flush. */
+  private readonly warned = new Set<string>();
+
+  private warnOnce(key: string, message: string): void {
+    if (this.warned.has(key)) return;
+
+    this.warned.add(key);
+    this.logger.warn(message);
   }
 
   /**
