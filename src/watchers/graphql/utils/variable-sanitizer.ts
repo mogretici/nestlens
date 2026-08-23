@@ -268,7 +268,18 @@ function sanitizeObject(
       continue;
     }
 
-    if (value === null || value === undefined) {
+    if (typeof value === 'function') {
+      // A function is dropped by `JSON.stringify` and kept by the in-memory
+      // driver, so the same payload takes two shapes — and one carried across
+      // is one that runs later: an own `toJSON` that throws makes the
+      // sanitised copy unwritable, which costs the whole entry. The masker
+      // records functions the same way.
+      assignKey(result, key, '[Function]');
+    } else if (typeof value === 'bigint') {
+      // The one primitive `JSON.stringify` refuses rather than skips. Written
+      // the way it is printed, as the masker writes it.
+      assignKey(result, key, `${value}n`);
+    } else if (value === null || value === undefined) {
       assignKey(result, key, value);
     } else if (Array.isArray(value)) {
       assignKey(result, key, sanitizeArray(value, matcher, depth + 1, maxDepth));
@@ -303,6 +314,14 @@ function sanitizeArray(
   }
 
   return arr.map((item) => {
+    if (typeof item === 'function') {
+      return '[Function]';
+    }
+
+    if (typeof item === 'bigint') {
+      return `${item}n`;
+    }
+
     if (item === null || item === undefined) {
       return item;
     }
