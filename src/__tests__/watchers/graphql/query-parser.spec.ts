@@ -24,6 +24,44 @@ import {
   hashQuery,
 } from '../../../watchers/graphql/utils/query-parser';
 
+describe('hashing a very large query', () => {
+  /**
+   * Hashing normalises first — four passes with a regular expression each —
+   * and it runs on every operation, on the event loop of the application being
+   * watched:
+   *
+   * ```text
+   * 100 KB query  ->    5 ms
+   *   1 MB query  ->   47 ms
+   *   5 MB query  ->  226 ms
+   * ```
+   *
+   * What is stored is truncated at `maxQuerySize`, so reading further only
+   * refines the grouping of queries nobody can see in full.
+   */
+  const long = (characters: number): string => `query { ${'a '.repeat(characters / 2)}}`;
+
+  it('is quick', () => {
+    const started = Date.now();
+
+    hashQuery(long(5_000_000));
+
+    expect(Date.now() - started).toBeLessThan(100);
+  });
+
+  it('gives one query one hash', () => {
+    expect(hashQuery(long(1_000_000))).toBe(hashQuery(long(1_000_000)));
+  });
+
+  it('tells two long queries of different length apart', () => {
+    expect(hashQuery(long(1_000_000))).not.toBe(hashQuery(long(1_200_000)));
+  });
+
+  it('leaves an ordinary query hashing as it always did', () => {
+    expect(hashQuery('{ hello }')).toBe(hashQuery('{ hello  }'));
+  });
+});
+
 describe('which operation a document declares', () => {
   describe('the type', () => {
     it.each([

@@ -8,13 +8,39 @@
  * Hash a GraphQL query string for deduplication and grouping
  * Uses a simple but effective hash algorithm (djb2)
  */
+/**
+ * How much of a query is read to identify it.
+ *
+ * Hashing normalises first, which is four passes over the text with a regular
+ * expression each, and it runs on every operation — on the event loop of the
+ * application being watched:
+ *
+ * ```text
+ * 100 KB query  ->    5 ms
+ *   1 MB query  ->   47 ms
+ *   5 MB query  ->  226 ms
+ * ```
+ *
+ * What is stored is truncated at `maxQuerySize` (8KB by default), so reading
+ * further only refines the grouping of queries nobody can see in full. The
+ * length goes into the hash as well, so two long operations sharing a prefix
+ * are still told apart unless they are the same size too.
+ */
+const MAX_HASHED_QUERY = 8192;
+
 export function hashQuery(query: string): string {
   // Normalize the query before hashing
-  const normalized = normalizeQuery(query);
+  const normalized = normalizeQuery(
+    query.length > MAX_HASHED_QUERY ? query.slice(0, MAX_HASHED_QUERY) : query,
+  );
 
   let hash = 5381;
   for (let i = 0; i < normalized.length; i++) {
     hash = (hash * 33) ^ normalized.charCodeAt(i);
+  }
+
+  if (query.length > MAX_HASHED_QUERY) {
+    hash = (hash * 33) ^ query.length;
   }
 
   // Convert to unsigned 32-bit integer and then to hex
