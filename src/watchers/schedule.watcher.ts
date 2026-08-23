@@ -360,14 +360,39 @@ export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, On
 
     /** Set by the error handler below, read by the tick that caused it. */
     let failure: unknown;
+    /**
+     * How many runs of this job are going at once.
+     *
+     * `cron` fires on schedule whether or not the previous tick has finished,
+     * so a job that takes longer than its interval overlaps itself — and the
+     * error handler is per job, not per run. With one failure shared between
+     * them, the run that finished first took the other's error and the run
+     * that actually failed was recorded as completed. Where nothing can say
+     * which run an error belongs to, it is recorded on its own instead.
+     */
+    let inFlight = 0;
 
     this.chainErrorHandler(job, (error) => {
-      failure = error;
+      if (inFlight <= 1) {
+        failure = error;
+        return;
+      }
+
+      this.collectEntry(
+        name,
+        'failed',
+        0,
+        error instanceof Error ? error.message : String(error),
+        this.getCronPattern(job),
+      );
     });
 
     job.fireOnTick = async (): Promise<void> => {
       const startTime = Date.now();
-      failure = undefined;
+      inFlight += 1;
+      if (inFlight === 1) {
+        failure = undefined;
+      }
 
       this.collectEntry(name, 'started', 0, undefined, this.getCronPattern(job));
 
@@ -386,14 +411,19 @@ export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, On
 
       try {
         await originalFireOnTick();
-        finish(failure);
+        // Only this run's failure: with another in flight, the error handler
+        // has already recorded whatever it saw.
+        finish(inFlight === 1 ? failure : undefined);
       } catch (error) {
         // Only reachable where something else calls the tick directly, since
         // `cron` does not let one out of its own.
         finish(error);
         throw error;
       } finally {
-        failure = undefined;
+        inFlight -= 1;
+        if (inFlight === 0) {
+          failure = undefined;
+        }
       }
     };
   }
