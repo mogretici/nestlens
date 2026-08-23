@@ -329,8 +329,14 @@ export const matchesEntryFilters = (
     if (payload.hasErrors !== filters.hasErrors) return false;
   }
   if (filters.hasN1 !== undefined && entry.type === 'graphql') {
-    const n1Array = payload.potentialN1 as unknown[] | undefined;
-    const hasN1 = n1Array && n1Array.length > 0;
+    // An operation with no N+1 warnings carries no `potentialN1` at all, and
+    // `undefined && ...` is `undefined`, not `false`. Compared against the
+    // filter that meant it left `hasN1=false` matching nothing on the two
+    // backends that answer here, while SQLite — which answers this in SQL, and
+    // does treat a missing array as none — returned the operations. The filter
+    // asking for clean operations returned none of them.
+    const n1Warnings = payload.potentialN1;
+    const hasN1 = Array.isArray(n1Warnings) && n1Warnings.length > 0;
     if (hasN1 !== filters.hasN1) return false;
   }
 

@@ -335,7 +335,16 @@ const CASES: Record<string, Case> = {
     filters: { hasN1: true },
     type: 'graphql',
     keep: { operationType: 'query', query: 'x', duration: 1, potentialN1: [{ field: 'a' }] },
-    drop: { operationType: 'query', query: 'x', duration: 1, potentialN1: [] },
+    // The shape an operation without warnings really has: the watcher writes
+    // `potentialN1` only when there is something in it, so the empty array this
+    // used to drop was a shape nothing produces.
+    drop: { operationType: 'query', query: 'x', duration: 1 },
+  },
+  hasN1False: {
+    filters: { hasN1: false },
+    type: 'graphql',
+    keep: { operationType: 'query', query: 'x', duration: 1 },
+    drop: { operationType: 'query', query: 'x', duration: 1, potentialN1: [{ field: 'a' }] },
   },
   tags: {
     filters: { tags: ['SLOW'] },
