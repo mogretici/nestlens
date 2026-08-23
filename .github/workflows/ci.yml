@@ -147,8 +147,13 @@ jobs:
           # installed` and six of the nine jobs failed on a pairing no
           # application would ever have. 14 is the last release that runs on
           # Fastify 4, which is what an application on NestJS 9 or 10 installs.
+          # Schedule 4, not 3: its 3.x calls `util.isString`, which Node removed
+          # in 23, so the decorator itself throws on the Node 24 row —
+          # `TypeError: (0 , util_1.isString) is not a function` before a test
+          # runs. 4 is also what npm installs for an application on NestJS 9
+          # today, since 5 requires NestJS 10.
           - nestjs: 9
-            schedule: 3
+            schedule: 4
             mercurius: 14
           - nestjs: 10
             schedule: 4
