@@ -279,7 +279,7 @@ describe('ExceptionWatcher', () => {
 
     it('should skip NestLens API paths', async () => {
       // Arrange
-      const request = createMockRequest({ path: '/__nestlens-api/entries' });
+      const request = createMockRequest({ path: '/__nestlens__/api/entries' });
       const host = createMockHost(request, mockResponse);
       const error = new Error('API error');
 
@@ -288,6 +288,23 @@ describe('ExceptionWatcher', () => {
 
       // Assert
       expect(mockCollector.collectImmediate).not.toHaveBeenCalled();
+    });
+
+    // This asserted `/__nestlens-api/entries` — a path NestLens has never
+    // served — and passed because the mount point was compared with
+    // `startsWith`. It is the application's route, and its failures are the
+    // ones a reader came here to see.
+    it('records a failure on a route that starts with the mount point', async () => {
+      // Arrange
+      const request = createMockRequest({ path: '/__nestlens-api/entries' });
+      const host = createMockHost(request, mockResponse);
+      const error = new Error('API error');
+
+      // Act
+      watcher.catch(error, host);
+
+      // Assert
+      expect(mockCollector.collectImmediate).toHaveBeenCalled();
     });
 
     it('should collect exceptions on regular paths', async () => {
