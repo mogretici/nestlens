@@ -29,6 +29,7 @@ import {
 } from '../types';
 import Tabs from '../components/Tabs';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { EntryTags } from '../components/EntryTags';
 import JsonViewer from '../components/JsonViewer';
 import { ControlledInlineJson } from '../components/JsonViewerWithToolbar';
 import { useJsonToolbar } from '../components/useJsonToolbar';
@@ -286,6 +287,33 @@ function EntryHeading({ entry }: { entry: Entry }) {
                   );
                 })()
               )}
+    </div>
+  );
+}
+
+/**
+ * An entry's tags, and the one way to change them.
+ *
+ * `EntryTags` was rendered nowhere: the endpoints, the service and all three
+ * storage drivers implement tagging, with tests, and a reader had no way to
+ * reach any of it. The read-only side was inconsistent as well — five of the
+ * nineteen detail views listed an entry's tags and the other fourteen showed
+ * them nowhere.
+ *
+ * Here they are once, above the view, for every type. The five views that
+ * list them as well are left as they are: what they show is read-only and
+ * correct, and rewriting five components to remove a duplicate row is a
+ * tidy-up, not a fix.
+ */
+function EntryTagsCard({ entry }: { entry: Entry }) {
+  const [tags, setTags] = useState<string[]>(entry.tags ?? []);
+
+  return (
+    <div className="card" data-testid="entry-tags">
+      <div className="p-4 flex items-center gap-3 flex-wrap">
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Tags</span>
+        <EntryTags entryId={entry.id} tags={tags} editable onTagsChange={setTags} />
+      </div>
     </div>
   );
 }
@@ -585,6 +613,9 @@ export default function EntryDetailPage() {
 
       {/* Content with top padding to account for fixed header */}
       <div className="pt-16 space-y-6">
+
+      {/* Tags — one place, for every type */}
+      <EntryTagsCard entry={entry} />
 
       {/* Type-specific Detail View */}
       <ErrorBoundary key={entry.id} fallback={<RawPayload entry={entry} />}>

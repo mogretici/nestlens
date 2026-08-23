@@ -365,7 +365,7 @@ describe('EntryTags — when the API refuses', () => {
     vi.mocked(api.addTagsToEntry).mockRejectedValue(new Error('API error: 403'));
 
     render(<EntryTags entryId={1} tags={[]} editable />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Tag' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a tag' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'slow' } });
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
 
@@ -387,7 +387,7 @@ describe('EntryTags — when the API refuses', () => {
     vi.mocked(api.addTagsToEntry).mockResolvedValue({ data: ['slow'] } as never);
 
     render(<EntryTags entryId={1} tags={[]} editable />);
-    fireEvent.click(screen.getByRole('button', { name: '+ Tag' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a tag' }));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'slow' } });
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' });
 

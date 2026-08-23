@@ -119,6 +119,10 @@ export function EntryTags({
                 e.stopPropagation();
                 setIsAdding(true);
               }}
+              // The others in this component are labelled; this one read as
+              // "+ Tag", where the plus is decoration and the noun is not a
+              // verb.
+              aria-label="Add a tag"
               className={`inline-flex items-center rounded-lg font-medium ${sizeClasses} bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600`}
             >
               + Tag
