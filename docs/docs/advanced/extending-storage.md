@@ -669,7 +669,7 @@ describe('PostgresStorage', () => {
     const entry: Entry = {
       type: 'log',
       payload: {
-        level: 'info',
+        level: 'log',
         message: 'Test log',
       },
     };

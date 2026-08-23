@@ -132,13 +132,6 @@ export class ConnectionStore {
   }
 
   /**
-   * Get all active connections
-   */
-  getAllConnections(): SubscriptionConnection[] {
-    return Array.from(this.connections.values());
-  }
-
-  /**
    * Get statistics
    */
   getStats(): {
@@ -178,39 +171,19 @@ export class ConnectionStore {
   }
 
   /**
-   * Evict the oldest connection
+   * Evict the connection that arrived first.
+   *
+   * A `Map` iterates in insertion order and connections are inserted as they
+   * arrive, so the first key is the oldest — this used to scan all thousand of
+   * them comparing timestamps to reach the same answer, once per new connection
+   * for as long as the ceiling was held.
    */
   private evictOldestConnection(): void {
-    let oldest: { id: string; date: Date } | null = null;
+    const oldest = this.connections.keys().next();
 
-    for (const [id, connection] of this.connections.entries()) {
-      if (!oldest || connection.connectedAt < oldest.date) {
-        oldest = { id, date: connection.connectedAt };
-      }
+    if (!oldest.done) {
+      this.connections.delete(oldest.value);
     }
-
-    if (oldest) {
-      this.connections.delete(oldest.id);
-    }
-  }
-
-  /**
-   * Find subscription by request ID
-   */
-  findByRequestId(requestId: string):
-    | {
-        connection: SubscriptionConnection;
-        subscription: ActiveSubscription;
-      }
-    | undefined {
-    for (const connection of this.connections.values()) {
-      for (const subscription of connection.activeSubscriptions.values()) {
-        if (subscription.requestId === requestId) {
-          return { connection, subscription };
-        }
-      }
-    }
-    return undefined;
   }
 }
 

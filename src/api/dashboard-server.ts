@@ -202,17 +202,25 @@ export class NestLensDashboardServer implements OnApplicationBootstrap, OnModule
     } catch (error) {
       await application.close().catch(() => undefined);
 
-      // Thrown, not logged and swallowed. Carrying on would leave the dashboard
-      // unreachable at the address that was asked for while the application
-      // starts normally — and the failure mode this option exists to prevent is
-      // exactly a dashboard that is somewhere other than where it was thought
-      // to be.
-      throw new Error(
-        `NestLens could not bind its dashboard listener to ${this.server.host}:${this.server.port} — ` +
-          `${error instanceof Error ? error.message : String(error)}. The dashboard is not mounted on ` +
-          'the application either, so it would not be reachable at all; fix the address or remove ' +
-          '`server` from the NestLens configuration.',
+      // Reported, not thrown. A port already taken or an address the host does
+      // not hold is a deployment's condition rather than a mistake in its
+      // code, and this used to end the application's startup over it — a
+      // debugging tool stopping a production deployment from booting, which is
+      // the worst available outcome and the one `SqliteStorage` already
+      // refuses to cause when its file will not open.
+      //
+      // Nothing is exposed by carrying on: with `server` configured the
+      // dashboard is not registered on the application at all, so the failure
+      // costs the dashboard and nothing else. Said at error level, because a
+      // reader who asked for it at an address has to be told it is not there.
+      this.logger.error(
+        `Could not bind the dashboard listener to ${this.server.host}:${this.server.port} — ` +
+          `${error instanceof Error ? error.message : String(error)}. The dashboard is not mounted ` +
+          'on the application either, so it is not reachable at all; fix the address or remove ' +
+          '`server` from the NestLens configuration. The application is starting without it.',
       );
+
+      return;
     }
 
     this.application = application;

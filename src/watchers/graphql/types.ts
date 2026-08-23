@@ -10,6 +10,7 @@ export interface ResolvedGraphQLConfig {
   server: 'apollo' | 'mercurius' | 'auto';
   maxQuerySize: number;
   captureVariables: boolean;
+  maxVariablesSize: number;
   sensitiveVariables: string[];
   captureHeaders: boolean;
   sensitiveHeaders: string[];
@@ -25,6 +26,13 @@ export interface ResolvedGraphQLConfig {
   captureResponse: boolean;
   maxResponseSize: number;
   tags?: GraphQLWatcherConfig['tags'];
+  /**
+   * Whether a forwarding header may be believed.
+   *
+   * Carried here because the adapters record the client's address and have to
+   * answer that the same way the guard authorizes with. See `resolveClientIp`.
+   */
+  trustProxy?: boolean;
 }
 
 /**
@@ -57,6 +65,7 @@ export const GRAPHQL_DEFAULTS = {
   server: 'auto' as const,
   maxQuerySize: 8192, // 8KB
   captureVariables: true,
+  maxVariablesSize: 64 * 1024, // 64KB, as for a response
   sensitiveVariables: [
     'password',
     'token',
@@ -145,11 +154,13 @@ function mergeSensitiveVariables(collectorTerms: string[], configured?: MaskingT
 export function resolveGraphQLConfig(
   config?: boolean | GraphQLWatcherConfig,
   collectorTerms: string[] = [],
+  trustProxy?: boolean,
 ): ResolvedGraphQLConfig {
   if (config === false) {
     return {
       ...GRAPHQL_DEFAULTS,
       enabled: false,
+      trustProxy,
       sensitiveVariables: mergeSensitiveVariables(collectorTerms),
       subscriptions: { ...GRAPHQL_DEFAULTS.subscriptions },
     };
@@ -159,6 +170,7 @@ export function resolveGraphQLConfig(
     return {
       ...GRAPHQL_DEFAULTS,
       enabled: true,
+      trustProxy,
       sensitiveVariables: mergeSensitiveVariables(collectorTerms),
       subscriptions: { ...GRAPHQL_DEFAULTS.subscriptions },
     };
@@ -168,8 +180,10 @@ export function resolveGraphQLConfig(
 
   return {
     enabled: config.enabled !== false,
+    trustProxy,
     server: config.server ?? GRAPHQL_DEFAULTS.server,
     maxQuerySize: config.maxQuerySize ?? GRAPHQL_DEFAULTS.maxQuerySize,
+    maxVariablesSize: config.maxVariablesSize ?? GRAPHQL_DEFAULTS.maxVariablesSize,
     captureVariables: config.captureVariables ?? GRAPHQL_DEFAULTS.captureVariables,
     sensitiveVariables: mergeSensitiveVariables(collectorTerms, config.sensitiveVariables),
     captureHeaders: config.captureHeaders ?? GRAPHQL_DEFAULTS.captureHeaders,

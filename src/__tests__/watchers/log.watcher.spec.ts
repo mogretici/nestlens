@@ -494,7 +494,12 @@ describe('NestLensLogger', () => {
       );
     });
 
-    it('should stringify object messages', async () => {
+    /**
+     * The printed form, not the JSON one: `JSON.stringify` threw out of the
+     * application's own log call on a circular value or a bigint, and the
+     * recorded text is now the text the console logger writes.
+     */
+    it('should record object messages as they are printed', async () => {
       // Arrange & Act
       logger.log({ key: 'value', nested: { data: 123 } } as any);
 
@@ -502,12 +507,12 @@ describe('NestLensLogger', () => {
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'log',
         expect.objectContaining({
-          message: '{"key":"value","nested":{"data":123}}',
+          message: "{ key: 'value', nested: { data: 123 } }",
         }),
       );
     });
 
-    it('should stringify array messages', async () => {
+    it('should record array messages as they are printed', async () => {
       // Arrange & Act
       logger.log([1, 2, 3] as any);
 
@@ -515,7 +520,7 @@ describe('NestLensLogger', () => {
       expect(mockCollector.collect).toHaveBeenCalledWith(
         'log',
         expect.objectContaining({
-          message: '[1,2,3]',
+          message: '[ 1, 2, 3 ]',
         }),
       );
     });

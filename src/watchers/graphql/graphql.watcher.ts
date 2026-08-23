@@ -6,7 +6,15 @@
  * based on installed packages.
  */
 
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../../nestlens.config';
 import { ResolvedGraphQLConfig, resolveGraphQLConfig } from './types';
@@ -14,6 +22,9 @@ import { resolveSensitiveParams } from '../../core/data-masker.service';
 import { BaseGraphQLAdapter, isPackageAvailable } from './adapters/base.adapter';
 import { createApolloAdapter } from './adapters/apollo.adapter';
 import { createMercuriusAdapter } from './adapters/mercurius.adapter';
+import { instrumentSubscriptions } from './subscription/schema-instrumentation';
+import { instrumentFieldResolvers } from './field-instrumentation';
+import { MercuriusAdapter } from './adapters/mercurius.adapter';
 import {
   SubscriptionTracker,
   createSubscriptionTracker,
@@ -46,18 +57,23 @@ export const GRAPHQL_WATCHER = Symbol('GRAPHQL_WATCHER');
 export type RegistrationMode = 'pending' | 'auto' | 'manual';
 
 @Injectable()
-export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
+export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(GraphQLWatcher.name);
   private config!: ResolvedGraphQLConfig;
   private adapter?: BaseGraphQLAdapter;
   private subscriptionTracker?: SubscriptionTracker;
   private initialized = false;
   private registrationMode: RegistrationMode = 'pending';
+  /** Puts the schema's subscription fields back. */
+  private restoreSubscriptions?: () => void;
+  /** Puts the schema's field resolvers back. */
+  private restoreFields?: () => void;
 
   constructor(
     private readonly collector: CollectorService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
+    private readonly moduleRef: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.graphql;
     // The collector's terms travel with the watcher's: this watcher marks what
@@ -66,41 +82,118 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     this.config = resolveGraphQLConfig(
       watcherConfig,
       resolveSensitiveParams(nestlensConfig.security?.dataMasking?.sensitiveParams),
+      nestlensConfig.trustProxy,
     );
   }
 
   /**
    * Initialize the watcher on module init
    */
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     if (!this.config.enabled) {
       this.logger.log('GraphQL watcher is disabled');
       return;
     }
 
     try {
-      await this.initialize();
+      this.initialize();
     } catch (error) {
+      // A watcher that cannot start must not stop the application.
       this.logger.error('Failed to initialize GraphQL watcher', error);
+    }
+  }
+
+  /**
+   * Wires subscription tracking, once the schema exists.
+   *
+   * `GraphQLModule` builds the schema during its own initialisation, so there
+   * is nothing to instrument at `onModuleInit`. This runs after every module
+   * has started, which is the first moment the schema is there to be read.
+   */
+  onApplicationBootstrap(): void {
+    if (!this.config.enabled) {
+      return;
+    }
+
+    // Mercurius has no per-field hook — Apollo's `willResolveField` has no
+    // counterpart — so the resolver count, the N+1 detector and the field
+    // tracer are fed from the schema instead. Apollo does not need this and
+    // would count everything twice.
+    const adapter = this.adapter;
+    const needsFieldInstrumentation = adapter instanceof MercuriusAdapter;
+
+    if (!this.subscriptionTracker && !needsFieldInstrumentation) {
+      return;
+    }
+
+    const schema = this.findSchema();
+    if (!schema) {
+      this.logger.debug('GraphQL tracking is enabled but no schema was found to instrument.');
+      return;
+    }
+
+    if (this.subscriptionTracker) {
+      this.restoreSubscriptions = instrumentSubscriptions(
+        schema,
+        this.subscriptionTracker,
+        this.nestlensConfig.trustProxy,
+      );
+      this.logger.log('GraphQL subscription tracking installed');
+    }
+
+    if (needsFieldInstrumentation) {
+      this.restoreFields = instrumentFieldResolvers(schema, (info, context) =>
+        adapter.trackResolver(
+          { info } as Parameters<MercuriusAdapter['trackResolver']>[0],
+          context as Parameters<MercuriusAdapter['trackResolver']>[1],
+        ),
+      );
+    }
+  }
+
+  /**
+   * The built schema, from whichever GraphQL integration is present.
+   *
+   * `@nestjs/graphql` is an optional peer, so it is resolved rather than
+   * imported: a project without it must not fail to start because a watcher
+   * looked for it.
+   */
+  private findSchema(): unknown {
+    try {
+      const { GraphQLSchemaHost } = require('@nestjs/graphql') as {
+        GraphQLSchemaHost: new (...args: never[]) => { schema?: unknown };
+      };
+
+      const host = this.moduleRef.get(GraphQLSchemaHost, { strict: false });
+      return host?.schema;
+    } catch {
+      return undefined;
     }
   }
 
   /**
    * Cleanup on module destroy
    */
-  async onModuleDestroy(): Promise<void> {
+  onModuleDestroy(): void {
     this.destroy();
   }
 
   /**
-   * Initialize the GraphQL watcher
+   * Initialize the GraphQL watcher.
+   *
+   * There were two of these, one `async` and one not, running the same eight
+   * steps — and they had already drifted: the lazy one, reached through
+   * `getPlugin()`, returned silently when no GraphQL server was found. A
+   * project wiring the plugin by hand against a server NestLens could not
+   * detect got an empty plugin object and no reason for it, which presents as
+   * "the watcher is on and records nothing". Nothing here awaits, so the one
+   * that remains does not pretend to.
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (this.initialized) {
       return;
     }
 
-    // Detect server if auto
     const serverType = this.config.server === 'auto' ? this.detectServer() : this.config.server;
 
     if (serverType === 'none' || !serverType) {
@@ -110,7 +203,6 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    // Create adapter
     this.adapter = this.createAdapter(serverType);
 
     if (!this.adapter) {
@@ -118,10 +210,8 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    // Initialize adapter
     this.adapter.initialize(this.config, this.collector);
 
-    // Create subscription tracker
     if (this.config.subscriptions.enabled) {
       this.subscriptionTracker = createSubscriptionTracker(this.collector, this.config);
     }
@@ -184,7 +274,7 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
   getPlugin(): unknown {
     // Lazy initialization - ensure adapter is created when plugin is requested
     if (!this.adapter && this.config.enabled) {
-      this.initializeSync();
+      this.initialize();
     }
 
     if (!this.adapter) {
@@ -193,40 +283,6 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     return this.adapter.getPlugin();
-  }
-
-  /**
-   * Synchronous initialization for lazy plugin creation
-   */
-  private initializeSync(): void {
-    if (this.initialized) {
-      return;
-    }
-
-    // Detect server if auto
-    const serverType = this.config.server === 'auto' ? this.detectServer() : this.config.server;
-
-    if (serverType === 'none' || !serverType) {
-      return;
-    }
-
-    // Create adapter
-    this.adapter = this.createAdapter(serverType);
-
-    if (!this.adapter) {
-      return;
-    }
-
-    // Initialize adapter
-    this.adapter.initialize(this.config, this.collector);
-
-    // Create subscription tracker
-    if (this.config.subscriptions.enabled) {
-      this.subscriptionTracker = createSubscriptionTracker(this.collector, this.config);
-    }
-
-    this.initialized = true;
-    this.logger.log(`GraphQL watcher initialized with ${serverType} adapter`);
   }
 
   /**
@@ -302,6 +358,12 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
       this.adapter = undefined;
     }
 
+    this.restoreSubscriptions?.();
+    this.restoreSubscriptions = undefined;
+
+    this.restoreFields?.();
+    this.restoreFields = undefined;
+
     if (this.subscriptionTracker) {
       this.subscriptionTracker.clear();
       this.subscriptionTracker = undefined;
@@ -338,14 +400,4 @@ export class GraphQLWatcher implements OnModuleInit, OnModuleDestroy {
 
     return stats;
   }
-}
-
-/**
- * Factory function for creating a GraphQL watcher
- */
-export function createGraphQLWatcher(
-  collector: CollectorService,
-  config: NestLensConfig,
-): GraphQLWatcher {
-  return new GraphQLWatcher(collector, config);
 }

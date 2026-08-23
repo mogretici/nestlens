@@ -72,17 +72,23 @@ listening on everything: an address the host does not hold fails at startup.
 
 ## It fails loudly
 
-If the address cannot be bound, the application does not start:
+If the address cannot be bound, the dashboard does not start and says so:
 
 ```
-Error: NestLens could not bind its dashboard listener to 100.64.0.5:3001 —
-listen EADDRNOTAVAIL: address not available 100.64.0.5:3001. The dashboard is
-not mounted on the application either, so it would not be reachable at all; fix
-the address or remove `server` from the NestLens configuration.
+[NestLens] Could not bind the dashboard listener to 100.64.0.5:3001 — listen
+EADDRNOTAVAIL: address not available 100.64.0.5:3001. The dashboard is not
+mounted on the application either, so it is not reachable at all; fix the
+address or remove `server` from the NestLens configuration. The application is
+starting without it.
 ```
+
+Your application starts either way. A port already taken or an address the host
+does not hold is a deployment's condition rather than a mistake in its code,
+and a debugging tool is never a reason for a deployment not to boot.
 
 There is deliberately no fallback to mounting on the application. A silent
-fallback is precisely how a private dashboard becomes a public one.
+fallback is precisely how a private dashboard becomes a public one — so the
+cost of a bad address is the dashboard, and only the dashboard.
 
 On a successful start NestLens logs where it went, so the mode in force is
 visible without reading code:

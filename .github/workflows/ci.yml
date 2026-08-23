@@ -38,6 +38,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # Redis is a supported storage backend whose tests were written against a
+    # mock, so they agreed with the implementation rather than checking it: tag
+    # counts drifted on every path — `ALPHA:2` for one entry, `NEVER:-1` for a
+    # tag that never existed — and every mocked test passed throughout. The
+    # parity suite runs against this and compares the three backends' answers.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -61,8 +77,18 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Five integration suites serve the real bundle and skip themselves when
+      # it is not on disk. Without this step they skipped in CI and nowhere
+      # else: 54 tests, covering the dashboard arriving as HTML rather than as
+      # a JSON string, SPA routes, asset compression and adapter differences —
+      # which is the exact failure that shipped in 0.8.0 with every suite green.
+      - name: Build
+        run: npm run build
+
       - name: Run library tests
         run: npm test
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
 
       # The dependencies a consumer actually receives, and only those.
       #
@@ -113,12 +139,28 @@ jobs:
           # Companion packages have their own peer ranges, so each NestJS
           # version is paired with the release an application on that version
           # would actually install.
+          #
+          # Mercurius is here for the same reason and a sharper one: NestJS 9
+          # and 10 bring Fastify 4, and Mercurius has needed Fastify 5 since
+          # its 15.0.0. The repository's own dependency is 16, so on those rows
+          # the GraphQL suites met `expected '5.x' fastify version, '4.28.1' is
+          # installed` and six of the nine jobs failed on a pairing no
+          # application would ever have. 14 is the last release that runs on
+          # Fastify 4, which is what an application on NestJS 9 or 10 installs.
+          # Schedule 4, not 3: its 3.x calls `util.isString`, which Node removed
+          # in 23, so the decorator itself throws on the Node 24 row —
+          # `TypeError: (0 , util_1.isString) is not a function` before a test
+          # runs. 4 is also what npm installs for an application on NestJS 9
+          # today, since 5 requires NestJS 10.
           - nestjs: 9
-            schedule: 3
+            schedule: 4
+            mercurius: 14
           - nestjs: 10
             schedule: 4
+            mercurius: 14
           - nestjs: 11
             schedule: 6
+            mercurius: 16
 
     steps:
       - name: Checkout
@@ -140,7 +182,8 @@ jobs:
             @nestjs/platform-express@${{ matrix.nestjs }} \
             @nestjs/platform-fastify@${{ matrix.nestjs }} \
             @nestjs/testing@${{ matrix.nestjs }} \
-            @nestjs/schedule@${{ matrix.schedule }}
+            @nestjs/schedule@${{ matrix.schedule }} \
+            mercurius@${{ matrix.mercurius }}
 
       # Installing a companion package can drag NestJS back up through peer
       # resolution, which would quietly test the wrong version.
@@ -173,7 +216,15 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            docs/package-lock.json
+
+      # The API reference is generated from `src/` by typedoc. Without the
+      # library's own dependencies it cannot resolve a single import, produces
+      # nothing, and the build fails on the links into it.
+      - name: Install library dependencies
+        run: npm ci --ignore-scripts
 
       - name: Install documentation dependencies
         run: npm ci

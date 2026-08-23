@@ -9,10 +9,11 @@
  */
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { DEFAULT_CONFIG } from '../nestlens.config';
-import { GRAPHQL_DEFAULTS } from '../watchers/graphql/types';
+import { DEFAULT_CONFIG } from '../../nestlens.config';
+import { GRAPHQL_DEFAULTS } from '../../watchers/graphql/types';
+import { DataMaskerService } from '../../core/data-masker.service';
 
-const REPO_ROOT = join(__dirname, '..', '..');
+const REPO_ROOT = join(__dirname, '..', '..', '..');
 const docsDir = join(REPO_ROOT, 'docs', 'docs');
 
 function readDoc(relPath: string): string {
@@ -174,6 +175,63 @@ describe('Documentation consistency with code', () => {
     });
   });
 
+  describe('the limits of masking are documented', () => {
+    const masking = () => readDoc('security/data-masking.md');
+
+    /**
+     * The overview promised *credit card numbers and personal data*. Card
+     * numbers are masked by name; an email address, a phone number and a date
+     * of birth are not — and a reader deploying this in production reads that
+     * line as a promise about their users' data.
+     */
+    it('does not claim to mask personal data in general', () => {
+      const masker = new DataMaskerService({});
+      const masked = masker.maskBody({
+        email: 'ada@example.com',
+        phone: '+44 7700 900000',
+        dateOfBirth: '1990-01-01',
+      }) as Record<string, string>;
+
+      // What the code does.
+      expect(masked.email).toBe('ada@example.com');
+      expect(masked.phone).toBe('+44 7700 900000');
+      expect(masked.dateOfBirth).toBe('1990-01-01');
+
+      // What the page says about it.
+      const page = readDoc(join('security', 'data-masking.md'));
+      expect(page).not.toMatch(/Credit card numbers and personal data/);
+      expect(page).toMatch(/What it does not protect/);
+      expect(page).toMatch(/sensitiveParams/);
+    });
+
+    it('says what masking cannot reach', () => {
+      // Anyone storing production traffic needs to know which watchers record
+      // values that no rule here can redact.
+      expect(masking()).toMatch(/cannot be masked|Cannot Reach/i);
+    });
+
+    it('names the watchers whose values carry no field name', () => {
+      const text = masking();
+
+      for (const watcher of ['Query', 'Command', 'Redis', 'Cache', 'Mail']) {
+        expect(text).toContain(watcher);
+      }
+    });
+
+    it('says webhooks are sent the masked entry', () => {
+      // Alerting sends data out of the process; a reader has to know whether
+      // what leaves is redacted.
+      expect(masking()).toMatch(/webhooks[\s\S]{0,120}after.{0,20}masking/i);
+    });
+
+    it('says that URLs and connection strings are masked', () => {
+      const text = masking();
+
+      expect(text).toContain('connectionString');
+      expect(text).toMatch(/query strings inside urls/i);
+    });
+  });
+
   describe('the cost of leaving NestLens running is documented', () => {
     const performance = () => readDoc('advanced/performance.md');
 
@@ -202,11 +260,40 @@ describe('Documentation consistency with code', () => {
       expect(performance()).toMatch(/never turns a watcher off/i);
     });
 
+    it('documents the shutdown deadline', () => {
+      // An application that leaves NestLens on needs to know its shutdown is
+      // bounded, and by how much.
+      const text = performance();
+
+      expect(text).toMatch(/shutting down/i);
+      expect(text).toContain('three-second');
+    });
+
     it('explains why per-request memory is off by default', () => {
       const text = performance();
 
       expect(text).toContain('captureMemory');
       expect(text).toMatch(/negative/i);
+    });
+  });
+
+  describe('the README, which is what npm and GitHub show', () => {
+    const readme = readFileSync(join(REPO_ROOT, 'README.md'), 'utf8');
+
+    it('counts the watchers the way the code does', () => {
+      // Written as "requests, queries, exceptions, jobs, and N more".
+      const stated = readme.match(/and (\d+) more watchers/);
+
+      expect(stated).not.toBeNull();
+      expect(Number(stated?.[1]) + 4).toBe(watcherCount);
+    });
+
+    it('links to every watcher', () => {
+      const linked = new Set([...readme.matchAll(/docs\/watchers\/([a-z-]+)"/g)].map((m) => m[1]));
+      linked.delete('overview');
+
+      // The badge strip is the only place a reader sees the whole list.
+      expect(linked.size).toBe(watcherCount);
     });
   });
 

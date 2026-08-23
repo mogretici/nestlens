@@ -881,12 +881,9 @@ describe('RedisWatcher', () => {
       await client.set('cache:item', circularObj);
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'redis',
-        expect.objectContaining({
-          args: [expect.objectContaining({ _error: 'Unable to serialize arguments' })],
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      const [, argument] = collected.args as unknown[];
+      expect((argument as Record<string, unknown>).self).toBe(argument);
     });
 
     it('should handle non-serializable result', async () => {
@@ -903,12 +900,8 @@ describe('RedisWatcher', () => {
       await client.hgetall('hash');
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'redis',
-        expect.objectContaining({
-          result: expect.objectContaining({ _error: 'Unable to serialize result' }),
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.result.self).toBe(collected.result);
     });
   });
 });

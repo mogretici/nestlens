@@ -78,6 +78,12 @@ running whatever version was installed first — it was found sitting three
 releases behind, which silently made every E2E run test stale code. Delete
 `example/node_modules/nestlens` first.
 
+**A running example has to be restarted.** `DashboardController` reads the
+built dashboard once, at bootstrap, so a rebuilt bundle reaches a live server
+only after `npm start` runs again. Measuring a dashboard change against a
+server that was already up reports the previous build — three times in one
+session, each time looking like the fix had not worked.
+
 ## Architecture
 
 ### Monorepo Structure
@@ -192,6 +198,13 @@ it is no longer required for Apollo or Mercurius.
   production project can check is that the bytes leaving the package are
   correct — 0.8.0 served every script as `{"type":"Buffer","data":[…]}` and
   not one existing test noticed.
+- The Redis-backed suites are skipped unless `REDIS_URL` is set (CI sets one
+  up as a service). They run locally against any Redis:
+  `REDIS_URL=redis://127.0.0.1:6379 npm test`. They use database 12 and 13 with
+  a `nestlens-*-test:` key prefix and delete their own keys afterwards, so they
+  are safe against a Redis holding something else — but they are the only thing
+  that exercises `redis.storage.ts`, and running without them leaves a
+  supported backend measured only by its unit tests.
 - `npm run test:smoke` installs the **published** package into a throwaway
   project, boots a real NestJS application against it and checks the dashboard,
   an asset and the API. `--tarball <path>` runs it against a local
@@ -199,11 +212,20 @@ it is no longer required for Apollo or Mercurius.
   release (`.github/workflows/release.yml`); nothing else in the repository
   tests what npm actually serves, which is how 0.8.0 shipped a dashboard that
   was blank in a browser with every suite green.
-- Lint, type check, library tests and dashboard tests run on every push and
-  pull request (`.github/workflows/ci.yml`) — about two minutes
+- Lint, type check, **build**, library tests and dashboard tests run on every
+  push and pull request (`.github/workflows/ci.yml`) — about two minutes. The
+  build step is not optional: five integration suites serve the real bundle and
+  skip themselves when `dist/dashboard/public/index.html` is missing, and
+  without it 54 tests skipped in CI and nowhere else — the ones covering the
+  dashboard arriving as HTML rather than as a JSON string, which is the failure
+  that shipped in 0.8.0
 - E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
-  any pull request touching `src/api/`, `dashboard/`, `e2e/` or `example/`, and
-  on pushes to main. All three browsers run nightly at 03:00 UTC. Actions tab →
+  any pull request touching `src/`, `dashboard/`, `e2e/`, `example/` or
+  `package.json`, and on pushes to main. The filter used to name `src/api/`
+  alone; what the suite drives is the example application, which runs the whole
+  library, and on one branch of forty-five commits thirty changed none of the
+  listed paths — including the Redis rewrite and the watcher wrapping fix,
+  which are exactly the changes that produce a blank dashboard. All three browsers run nightly at 03:00 UTC. Actions tab →
   **E2E** → *Run workflow* still runs it on demand, with `all` as a browser
   option.
 - It used to be manual only, on the grounds that it is slow on a two-core

@@ -12,10 +12,11 @@ import {
   MonitoredTag,
   TagWithCount,
 } from '../../types';
-import { matchesEntryFilters } from './entry-filter';
+import { hasFilters, matchesEntryFilters } from './entry-filter';
 import { StorageInterface } from './storage.interface';
 import { normalizeTag } from './tag-normalization';
 import { RedisStorageConfig } from '../../nestlens.config';
+import { serializePayload } from './serialize-payload';
 
 /**
  * Redis storage implementation for NestLens.
@@ -38,21 +39,86 @@ import { RedisStorageConfig } from '../../nestlens.config';
  * - {prefix}family:{hash} - Set of entry IDs with this family hash
  */
 /**
- * Bumped when the meaning of an index score changes, so an existing database is
+ * Bumped when the meaning of an index changes, so an existing database is
  * rewritten once rather than read with the wrong assumption.
+ *
+ *   4  entries scored by id rather than by save time
+ *   5  the set of tag names `getAllTags` reads
+ *
+ * Five exists because four did not: the tag list moved from a counts hash to a
+ * set of names without a bump, so a store written by the version before it
+ * skipped the migration and answered with no tags at all — a dashboard whose
+ * tag filter was empty while every entry still carried its tags.
  */
-const INDEX_SCHEMA_VERSION = '2';
+const INDEX_SCHEMA_VERSION = '5';
+
+/**
+ * How many ids one pipeline carries.
+ *
+ * A pipeline is one round trip whatever its length, but the whole reply is
+ * held in memory at both ends, so an unbounded one turns a large prune into a
+ * large allocation. Five hundred keeps the reply small while spending one
+ * round trip per five hundred entries instead of one per entry.
+ */
+const PIPELINE_CHUNK = 500;
+
+/**
+ * Whether an entry belongs on the Requests page.
+ *
+ * A GraphQL operation arrives over HTTP, so the request watcher records it as a
+ * request as well, flagged; it belongs to the GraphQL page instead. Excluding
+ * it after a page of ids had already been read meant a page of fifty came back
+ * with however many were left — and the count above the list was of the whole
+ * type index, so it disagreed with the list under it. The entries that belong
+ * on the page have an index of their own, so paging and counting both read the
+ * answer directly.
+ */
+const isPlainRequest = (entry: Pick<Entry, 'type' | 'payload'>): boolean =>
+  entry.type === 'request' && (entry.payload as { isGraphQL?: boolean })?.isGraphQL !== true;
+
+/** Splits ids into pipeline-sized runs. */
+const inChunks = <T>(items: T[], size = PIPELINE_CHUNK): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
 
 @Injectable()
 export class RedisStorage implements StorageInterface, OnModuleDestroy {
   private readonly logger = new Logger(RedisStorage.name);
   private client: Redis | null = null;
+  /** Set by `close()`, and never unset: a closed storage stays closed. */
+  private closed = false;
   private readonly keyPrefix: string;
+  /**
+   * The most entries to keep, or `0` to keep everything.
+   *
+   * Age was the only bound this driver had, and Redis holds everything in
+   * memory: a busy application filled the instance long before anything
+   * reached `pruning.maxAge`.
+   */
+  private readonly maxEntries: number;
+  /** Saves since the ceiling was last checked. See `enforceEntryLimit`. */
+  private sinceLimitCheck = 0;
+  private static readonly LIMIT_CHECK_EVERY = 100;
+  /**
+   * How many saves pass between limit checks, for this store's cap.
+   *
+   * The amortisation overshoots by up to a hundred entries, which is nothing
+   * against the ten thousand of the default and everything against a small cap
+   * set on purpose. Checking at whichever is smaller keeps the store within
+   * twice what was asked for.
+   */
+  private readonly limitCheckEvery: number;
   private readonly config: RedisStorageConfig;
 
   constructor(config: RedisStorageConfig = {}) {
     this.config = config;
     this.keyPrefix = config.keyPrefix ?? 'nestlens:';
+    this.maxEntries = Math.max(0, config.maxEntries ?? 10_000);
+    this.limitCheckEvery = Math.max(1, Math.min(RedisStorage.LIMIT_CHECK_EVERY, this.maxEntries));
   }
 
   /**
@@ -72,17 +138,17 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       const commandTimeout = this.config.commandTimeout ?? 5000;
 
-      if (this.config.url) {
-        return new RedisClient(this.config.url, { commandTimeout });
-      }
+      const client = this.config.url
+        ? new RedisClient(this.config.url, { commandTimeout })
+        : new RedisClient({
+            host: this.config.host ?? 'localhost',
+            port: this.config.port ?? 6379,
+            password: this.config.password,
+            db: this.config.db ?? 0,
+            commandTimeout,
+          });
 
-      return new RedisClient({
-        host: this.config.host ?? 'localhost',
-        port: this.config.port ?? 6379,
-        password: this.config.password,
-        db: this.config.db ?? 0,
-        commandTimeout,
-      });
+      return this.quieten(client);
     } catch (error) {
       // The message only fits a missing package, but this catch also covers a
       // failed connection or a bad option — reporting those as "install
@@ -98,6 +164,43 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
   }
 
+  /**
+   * Stops ioredis writing into the host application's logs.
+   *
+   * With no `error` listener, ioredis prints
+   * `[ioredis] Unhandled error event: Error: connect ECONNREFUSED …` on every
+   * reconnection attempt, forever. So a Redis that goes down does not degrade
+   * NestLens quietly — it floods the logs of the application NestLens is
+   * supposed to be helping somebody read.
+   *
+   * Reported once and then counted: the first failure is the news, and the
+   * hundredth is the same news. The count goes out when the connection comes
+   * back, because "it was down for 4,812 attempts" is worth knowing.
+   */
+  private quieten(client: Redis): Redis {
+    let suppressed = 0;
+
+    client.on('error', (error: Error) => {
+      if (suppressed === 0) {
+        this.logger.warn(
+          `Redis connection error: ${error.message}. ` +
+            'Entries are not being stored; further errors will be counted rather than logged.',
+        );
+      }
+
+      suppressed += 1;
+    });
+
+    client.on('ready', () => {
+      if (suppressed > 0) {
+        this.logger.log(`Redis connection restored after ${suppressed} failed attempts`);
+        suppressed = 0;
+      }
+    });
+
+    return client;
+  }
+
   private getClient(): Redis {
     if (!this.client) {
       throw new Error('Redis client not initialized. Call initialize() first.');
@@ -106,7 +209,20 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   async initialize(): Promise<void> {
-    this.client = await this.loadRedisClient();
+    const client = await this.loadRedisClient();
+
+    // Closed while this was still running, which is what happens when a caller
+    // gives up on an unreachable server and shuts down: `close()` had nothing
+    // to close yet, and the client created here afterwards was never closed —
+    // a socket retrying for as long as the process lives, and a process that
+    // therefore never ends. An application that stops while its Redis is
+    // unreachable has to stop.
+    if (this.closed) {
+      client.disconnect();
+      return;
+    }
+
+    this.client = client;
 
     // ioredis connects in the background, so this is the first command anything
     // sends — and the first chance for an unreachable Redis to throw. NestLens
@@ -117,6 +233,14 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Could not prepare the entry indexes: ${reason}`);
+    }
+
+    // And again, because the await above is the long one: a five-second command
+    // timeout is five seconds in which a shutdown can arrive.
+    if (this.closed) {
+      client.disconnect();
+      this.client = null;
+      return;
     }
 
     this.logger.log('Redis storage initialized');
@@ -144,19 +268,22 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
 
     const ids = await client.zrange(this.key('entries', 'all'), 0, -1);
+    let rescored = 0;
 
-    if (ids.length > 0) {
+    // Chunked: reading every entry ever stored into one reply is an allocation
+    // that grows with the store, on the path an application takes to start.
+    for (const chunk of inChunks(ids)) {
       const reader = client.pipeline();
-      for (const id of ids) {
+      for (const id of chunk) {
         reader.hgetall(this.key('entries', id));
       }
       const hashes = (await reader.exec()) ?? [];
 
       const writer = client.pipeline();
-      let rescored = 0;
 
-      ids.forEach((id, index) => {
-        const hash = hashes[index]?.[1] as Record<string, string> | undefined;
+      chunk.forEach((id, index) => {
+        const [error, value] = hashes[index] ?? [];
+        const hash = error ? undefined : (value as Record<string, string> | undefined);
         if (!hash?.type) {
           return;
         }
@@ -170,14 +297,69 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
           Number.isNaN(createdAt) ? Number(id) : createdAt,
           id,
         );
+
+        // The flag was only ever kept inside the payload, so entries stored
+        // before this version have to be read once to build the index the
+        // Requests page now pages and counts against.
+        if (hash.type === 'request' && !this.wasGraphQL(hash.payload)) {
+          writer.zadd(this.key('entries', 'type', 'request', 'rest'), Number(id), id);
+        }
+
         rescored += 1;
       });
 
       await writer.exec();
+    }
+
+    if (rescored > 0) {
       this.logger.log(`Rescored ${rescored} entries onto the sequence index`);
     }
 
+    await this.rebuildTagNames();
+
     await client.set(schemaKey, INDEX_SCHEMA_VERSION);
+  }
+
+  /**
+   * Rebuilds the set of tag names from the indexes that already exist.
+   *
+   * A tag is in use when something has its index set, which is what the tag
+   * list is derived from; the set of names is only how they are enumerated
+   * without scanning the keyspace on every read.
+   */
+  private async rebuildTagNames(): Promise<void> {
+    const client = this.getClient();
+    const prefix = this.key('tags', 'index', '');
+    const names: string[] = [];
+    let cursor = '0';
+
+    do {
+      const [next, keys] = await client.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 500);
+      cursor = next;
+
+      for (const key of keys) {
+        const name = key.slice(prefix.length);
+        if (name.length > 0) names.push(name);
+      }
+    } while (cursor !== '0');
+
+    for (const chunk of inChunks(names)) {
+      await client.sadd(this.key('tags', 'names'), ...chunk);
+    }
+
+    if (names.length > 0) {
+      this.logger.log(`Rebuilt the tag list from ${names.length} tag(s) already stored`);
+    }
+  }
+
+  /** Reads the GraphQL flag out of a stored payload, which may be anything. */
+  private wasGraphQL(payload: string | undefined): boolean {
+    if (!payload) return false;
+    try {
+      return (JSON.parse(payload) as { isGraphQL?: boolean })?.isGraphQL === true;
+    } catch {
+      return false;
+    }
   }
 
   // ==================== Core CRUD Operations ====================
@@ -186,8 +368,13 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
 
     const id = await client.incr(this.key('entries', 'sequence'));
-    const createdAt = new Date().toISOString();
-    const timestamp = Date.now();
+    // The collector stamps an entry when the thing happened; the buffer holds
+    // it for up to a second, so stamping it here recorded the flush instead.
+    const createdAt = entry.createdAt ?? new Date().toISOString();
+    // The index pruning asks its time question of, from the same stamp the
+    // entry carries — otherwise an entry that happened before a flush was
+    // pruned as though it had happened at the flush.
+    const timestamp = Date.parse(createdAt);
 
     const savedEntry: Entry = {
       ...entry,
@@ -195,8 +382,13 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       createdAt,
     };
 
-    // Store entry as hash
-    await client.hset(
+    // One pipeline rather than five awaits. Every write below is independent of
+    // the others' replies, and `save` is what the exception filter calls
+    // directly — six sequential round trips cost 15 ms per entry against a
+    // Redis one millisecond away, where the whole set costs one.
+    const writes = client.pipeline();
+
+    writes.hset(
       this.key('entries', String(id)),
       'id',
       String(id),
@@ -205,7 +397,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       'requestId',
       entry.requestId ?? '',
       'payload',
-      JSON.stringify(entry.payload),
+      serializePayload(entry.payload),
       'createdAt',
       createdAt,
       'familyHash',
@@ -219,15 +411,22 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     // millisecond clock — every page after the first came back empty — and gave
     // entries saved in the same millisecond equal scores, so an exclusive range
     // would have skipped them.
-    await client.zadd(this.key('entries', 'all'), id, String(id));
-    await client.zadd(this.key('entries', 'type', entry.type), id, String(id));
+    writes.zadd(this.key('entries', 'all'), id, String(id));
+    writes.zadd(this.key('entries', 'type', entry.type), id, String(id));
     // Pruning is the one thing that genuinely asks a time question.
-    await client.zadd(this.key('entries', 'createdAt'), timestamp, String(id));
+    writes.zadd(this.key('entries', 'createdAt'), timestamp, String(id));
 
     // Add to request index if applicable
     if (entry.requestId) {
-      await client.sadd(this.key('entries', 'request', entry.requestId), String(id));
+      writes.sadd(this.key('entries', 'request', entry.requestId), String(id));
     }
+
+    if (isPlainRequest(entry)) {
+      writes.zadd(this.key('entries', 'type', 'request', 'rest'), id, String(id));
+    }
+
+    await writes.exec();
+    await this.enforceEntryLimit(1);
 
     return savedEntry;
   }
@@ -241,12 +440,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     // Pre-fetch IDs
     const startId = await client.incrby(this.key('entries', 'sequence'), entries.length);
-    const timestamp = Date.now();
-
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
       const id = startId - entries.length + 1 + i;
-      const createdAt = new Date().toISOString();
+      const createdAt = entry.createdAt ?? new Date().toISOString();
 
       const savedEntry: Entry = { ...entry, id, createdAt };
       results.push(savedEntry);
@@ -260,7 +457,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
         'requestId',
         entry.requestId ?? '',
         'payload',
-        JSON.stringify(entry.payload),
+        serializePayload(entry.payload),
         'createdAt',
         createdAt,
         'familyHash',
@@ -271,15 +468,49 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
       pipeline.zadd(this.key('entries', 'all'), id, String(id));
       pipeline.zadd(this.key('entries', 'type', entry.type), id, String(id));
-      pipeline.zadd(this.key('entries', 'createdAt'), timestamp + i, String(id));
+      // From the entry's own stamp. `+ i` keeps two entries of the same
+      // millisecond apart, which the score has to do to be a total order.
+      pipeline.zadd(this.key('entries', 'createdAt'), Date.parse(createdAt) + i, String(id));
 
       if (entry.requestId) {
         pipeline.sadd(this.key('entries', 'request', entry.requestId), String(id));
       }
+
+      if (isPlainRequest(entry)) {
+        pipeline.zadd(this.key('entries', 'type', 'request', 'rest'), id, String(id));
+      }
     }
 
     await pipeline.exec();
+    await this.enforceEntryLimit(entries.length);
+
     return results;
+  }
+
+  /**
+   * Keeps the newest `maxEntries` and deletes the rest.
+   *
+   * `zcard` is O(1) and the oldest ids come straight off the front of the same
+   * sorted set, so the cost is one command plus whatever is actually over the
+   * line. Amortised anyway: checking on every write would be a round trip per
+   * entry, and overshooting by up to a hundred out of thousands is not worth
+   * one.
+   */
+  private async enforceEntryLimit(saved: number): Promise<void> {
+    if (this.maxEntries <= 0) return;
+
+    this.sinceLimitCheck += saved;
+    if (this.sinceLimitCheck < this.limitCheckEvery) return;
+    this.sinceLimitCheck = 0;
+
+    const client = this.getClient();
+    const total = await client.zcard(this.key('entries', 'all'));
+    const overflow = total - this.maxEntries;
+
+    if (overflow <= 0) return;
+
+    const oldest = await client.zrange(this.key('entries', 'all'), 0, overflow - 1);
+    await this.deleteEntries(oldest);
   }
 
   async find(filter: EntryFilter): Promise<Entry[]> {
@@ -289,29 +520,18 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
     if (filter.requestId) {
       ids = await client.smembers(this.key('entries', 'request', filter.requestId));
-    } else if (filter.type) {
-      const start = filter.offset ?? 0;
-      const end = start + (filter.limit ?? 100) - 1;
-      ids = await client.zrevrange(this.key('entries', 'type', filter.type), start, end);
     } else {
+      // Through `indexFor`, so a page of requests is a page of the entries the
+      // Requests page lists. Reading the type index and dropping the GraphQL
+      // operations afterwards returned however many of the fifty were left.
       const start = filter.offset ?? 0;
       const end = start + (filter.limit ?? 100) - 1;
-      ids = await client.zrevrange(this.key('entries', 'all'), start, end);
+      ids = await client.zrevrange(this.indexFor(filter.type), start, end);
     }
 
     if (ids.length === 0) return [];
 
-    let entries = await this.fetchEntriesByIds(ids);
-
-    // Exclude GraphQL requests from regular requests list
-    // GraphQL requests should only appear in the GraphQL watcher
-    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
-    if (filter.type === 'request') {
-      entries = entries.filter((e) => {
-        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
-        return !isGraphQL;
-      });
-    }
+    const entries = await this.fetchEntriesByIds(ids);
 
     // Apply date filters
     let filtered = entries;
@@ -331,34 +551,27 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     type: EntryType | undefined,
     params: CursorPaginationParams,
   ): Promise<CursorPaginatedResponse<Entry>> {
+    const indexKey = this.indexFor(type);
+
+    return hasFilters(params.filters)
+      ? this.findFiltered(indexKey, params)
+      : this.findPage(indexKey, params);
+  }
+
+  /**
+   * A page with no filter on it: one ranged read of the index.
+   *
+   * The common case, and the one the live tail polls, so it stays proportional
+   * to the page rather than to the store.
+   */
+  private async findPage(
+    indexKey: string,
+    params: CursorPaginationParams,
+  ): Promise<CursorPaginatedResponse<Entry>> {
     const client = this.getClient();
     const limit = params.limit ?? 50;
 
-    const indexKey = type ? this.key('entries', 'type', type) : this.key('entries', 'all');
-
-    let ids: string[];
-
-    if (params.beforeSequence !== undefined) {
-      ids = await client.zrevrangebyscore(
-        indexKey,
-        `(${params.beforeSequence}`,
-        '-inf',
-        'LIMIT',
-        '0',
-        String(limit + 1),
-      );
-    } else if (params.afterSequence !== undefined) {
-      ids = await client.zrangebyscore(
-        indexKey,
-        `(${params.afterSequence}`,
-        '+inf',
-        'LIMIT',
-        '0',
-        String(limit + 1),
-      );
-    } else {
-      ids = await client.zrevrange(indexKey, 0, limit);
-    }
+    let ids = await this.readIds(indexKey, params, limit + 1);
 
     const hasMore = ids.length > limit;
     if (hasMore) ids = ids.slice(0, limit);
@@ -367,34 +580,119 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       ids.reverse();
     }
 
-    let entries = await this.fetchEntriesByIds(ids);
-
-    // Exclude GraphQL requests from regular requests list
-    // GraphQL requests should only appear in the GraphQL watcher
-    // Uses isGraphQL flag set by request.watcher.ts based on robust detection
-    if (type === 'request') {
-      entries = entries.filter((e) => {
-        const isGraphQL = (e.payload as { isGraphQL?: boolean }).isGraphQL;
-        return !isGraphQL;
-      });
-    }
-
-    // Hydrate tags before filtering so tag-aware filters (e.g. search) work
-    let hydratedEntries = await this.hydrateEntriesWithTags(entries);
-
-    // Apply advanced filters
-    if (params.filters) {
-      hydratedEntries = this.applyAdvancedFilters(hydratedEntries, params.filters);
-    }
+    const entries = await this.hydrateEntriesWithTags(await this.fetchEntriesByIds(ids));
     const total = await client.zcard(indexKey);
 
+    return this.pageOf(entries, hasMore, total);
+  }
+
+  /**
+   * A page with a filter on it.
+   *
+   * The filter used to be applied to the page after it had been read, so it
+   * removed rows from the fifty that happened to be newest instead of choosing
+   * fifty from the rows that match. Anything whose matches were not in the
+   * newest page came back empty — measured at 0 rows where the other two
+   * backends returned 5 — and `total` counted the whole index, so the heading
+   * said 205 above an empty list.
+   *
+   * Both numbers need the same walk, so one pass does both: it reads the index
+   * in chunks from the cursor outwards, keeps the first `limit` matches and
+   * counts the rest. That is proportional to the store, which is what the other
+   * two backends also pay for a filtered view — `countWithFilters` scans in
+   * memory, and SQLite counts with a `WHERE`. Only here does the walk cross a
+   * network, so it goes out in pipelines rather than one command at a time.
+   */
+  private async findFiltered(
+    indexKey: string,
+    params: CursorPaginationParams,
+  ): Promise<CursorPaginatedResponse<Entry>> {
+    const limit = params.limit ?? 50;
+    const ascending = params.afterSequence !== undefined;
+
+    const candidates = await this.readIds(indexKey, params);
+    const matches: StoredEntry[] = [];
+    let total = 0;
+
+    // Only two filters read an entry's tags. Reading them for every candidate
+    // is a second command per entry across the network, spent on rows that are
+    // about to be discarded: measured at 115ms for a status filter over ten
+    // thousand entries against 24ms without.
+    const walkNeedsTags = Boolean(params.filters?.tags?.length) || Boolean(params.filters?.search);
+
+    for (const chunk of inChunks(candidates)) {
+      const fetched = await this.fetchEntriesByIds(chunk);
+      const entries = walkNeedsTags ? await this.hydrateEntriesWithTags(fetched) : fetched;
+
+      for (const entry of entries) {
+        if (!matchesEntryFilters(entry, params.filters)) continue;
+        total += 1;
+        if (matches.length < limit + 1) matches.push(entry);
+      }
+    }
+
+    const hasMore = matches.length > limit;
+    const page = matches.slice(0, limit);
+
+    if (ascending) page.reverse();
+
+    // The page carries its tags either way; only the walk skipped them.
+    return this.pageOf(
+      walkNeedsTags ? page : await this.hydrateEntriesWithTags(page),
+      hasMore,
+      total,
+    );
+  }
+
+  /**
+   * The ids the cursor selects, newest first unless it asks for what is newer.
+   *
+   * `count` bounds the read where the caller only needs a page; a filtered walk
+   * leaves it out, because it cannot know how far it has to go.
+   */
+  private async readIds(
+    indexKey: string,
+    params: CursorPaginationParams,
+    count?: number,
+  ): Promise<string[]> {
+    const client = this.getClient();
+    const window: [string, string, string] | [] =
+      count === undefined ? [] : ['LIMIT', '0', String(count)];
+
+    if (params.beforeSequence !== undefined) {
+      return client.zrevrangebyscore(
+        indexKey,
+        `(${params.beforeSequence}`,
+        '-inf',
+        ...(window as ['LIMIT', string, string]),
+      );
+    }
+
+    if (params.afterSequence !== undefined) {
+      return client.zrangebyscore(
+        indexKey,
+        `(${params.afterSequence}`,
+        '+inf',
+        ...(window as ['LIMIT', string, string]),
+      );
+    }
+
+    return count === undefined
+      ? client.zrevrange(indexKey, 0, -1)
+      : client.zrevrange(indexKey, 0, count - 1);
+  }
+
+  private pageOf(
+    entries: StoredEntry[],
+    hasMore: boolean,
+    total: number,
+  ): CursorPaginatedResponse<Entry> {
     return {
-      data: hydratedEntries,
+      data: entries,
       meta: {
         hasMore,
-        oldestSequence:
-          hydratedEntries.length > 0 ? hydratedEntries[hydratedEntries.length - 1].id : null,
-        newestSequence: hydratedEntries.length > 0 ? hydratedEntries[0].id : null,
+        oldestSequence: entries.length > 0 ? entries[entries.length - 1].id : null,
+        newestSequence: entries.length > 0 ? entries[0].id : null,
         total,
       },
     };
@@ -415,28 +713,145 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async count(type?: EntryType): Promise<number> {
     const client = this.getClient();
-    const key = type ? this.key('entries', 'type', type) : this.key('entries', 'all');
-    return client.zcard(key);
+
+    if (!type) {
+      return client.zcard(this.key('entries', 'all'));
+    }
+
+    // A GraphQL operation arrives over HTTP, so the request watcher records it
+    // as a request too, flagged. It belongs to the GraphQL page and not to the
+    // Requests page, and `find` and `findWithCursor` have excluded it here for
+    // some time — this did not, so the badge above the list disagreed with the
+    // list under it.
+    if (type !== 'request') {
+      return client.zcard(this.key('entries', 'type', type));
+    }
+
+    // The index the Requests page pages against, so the badge cannot disagree
+    // with the list under it. This used to read the payload of every request
+    // entry ever recorded and parse each one — a reply that grew with the
+    // store, for a number the dashboard polls.
+    return client.zcard(this.indexFor('request'));
   }
 
+  /**
+   * The sorted set a type is listed and counted from.
+   *
+   * Requests have two: the type index, which includes the GraphQL operations
+   * the request watcher also records, and the one the Requests page means.
+   */
+  private indexFor(type?: EntryType): string {
+    if (!type) return this.key('entries', 'all');
+    if (type === 'request') return this.key('entries', 'type', 'request', 'rest');
+    return this.key('entries', 'type', type);
+  }
+
+  /**
+   * Removes everything NestLens has stored.
+   *
+   * Scanned rather than listed. `KEYS` walks the entire keyspace in one
+   * uninterruptible step, so on a Redis shared with the application — the
+   * ordinary arrangement — a reader pressing Clear stalled every other client
+   * for as long as the walk took. This is reachable from the dashboard, so it
+   * must not be able to do that. `SCAN` gives the server its loop back between
+   * batches, and the deletes go out in pipelines rather than as one `DEL` with
+   * a million arguments.
+   */
   async clear(): Promise<void> {
     const client = this.getClient();
-    const keys = await client.keys(this.keyPrefix + '*');
-    if (keys.length > 0) {
-      await client.del(...keys);
-    }
-    this.logger.log('Storage cleared');
+    let cursor = '0';
+    let removed = 0;
+
+    do {
+      const [next, keys] = await client.scan(cursor, 'MATCH', `${this.keyPrefix}*`, 'COUNT', 500);
+      cursor = next;
+
+      if (keys.length > 0) {
+        const deletes = client.pipeline();
+        for (const key of keys) {
+          deletes.del(key);
+        }
+        await deletes.exec();
+        removed += keys.length;
+      }
+    } while (cursor !== '0');
+
+    this.logger.log(`Storage cleared (${removed} keys)`);
   }
 
+  /**
+   * Closes the connection, whether or not there ever was one.
+   *
+   * `quit()` sends a command and waits for the answer, so against a server
+   * that never accepted the connection it waited out `commandTimeout` and then
+   * *rejected* — from `onModuleDestroy`, where nothing catches it. Shutting
+   * down an application whose Redis was unreachable ended the process on an
+   * unhandled rejection, which is the one thing a debugging tool must never do
+   * to the thing it is watching.
+   *
+   * `disconnect()` closes the socket without asking, which is the only thing
+   * left to do when there is nobody to ask — and asking a client that is not
+   * ready costs the whole command timeout before it fails, five seconds of a
+   * shutdown for a question that cannot be answered.
+   */
   async close(): Promise<void> {
-    if (this.client) {
-      await this.client.quit();
-      this.client = null;
+    // Set before anything is awaited, so an `initialize()` still in flight
+    // finds it and closes what it created rather than leaving it connected.
+    this.closed = true;
+
+    const client = this.client;
+    this.client = null;
+
+    if (!client) {
+      this.logger.log('Redis storage closed');
+      return;
     }
+
+    if (client.status === 'ready') {
+      try {
+        await client.quit();
+      } catch {
+        client.disconnect();
+      }
+    } else {
+      client.disconnect();
+    }
+
     this.logger.log('Redis storage closed');
   }
 
   // ==================== Statistics ====================
+
+  /**
+   * How many entries each type holds, in one round trip.
+   *
+   * Eighteen sequential `zcard` calls were 50 ms of a dashboard refresh against
+   * a Redis one millisecond away, for eighteen numbers that do not depend on
+   * each other.
+   */
+  private async countByType(
+    types: EntryType[],
+  ): Promise<{ byType: Record<EntryType, number>; total: number }> {
+    const reader = this.getClient().pipeline();
+    for (const type of types) {
+      reader.zcard(this.key('entries', 'type', type));
+    }
+
+    const results = (await reader.exec()) ?? [];
+    const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
+    let total = 0;
+
+    types.forEach((type, index) => {
+      const [error, value] = results[index] ?? [];
+      const count = error ? 0 : Number(value ?? 0);
+      if (count > 0) {
+        byType[type] = count;
+        total += count;
+      }
+    });
+
+    return { byType, total };
+  }
 
   async getLatestSequence(type?: EntryType): Promise<number | null> {
     const client = this.getClient();
@@ -453,8 +868,6 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   async getStats(): Promise<EntryStats> {
-    const client = this.getClient();
-
     // Get counts by type
     const types: EntryType[] = [
       'request',
@@ -477,28 +890,100 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       'dump',
     ];
 
-    const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
-    let total = 0;
+    const { byType, total } = await this.countByType(types);
 
-    for (const type of types) {
-      const count = await client.zcard(this.key('entries', 'type', type));
-      if (count > 0) {
-        byType[type] = count;
-        total += count;
-      }
-    }
-
-    // For avgResponseTime and slowQueries, we'd need to iterate over entries
-    // which is expensive in Redis. Return undefined for now.
+    const [unresolvedExceptions, slowQueries, avgResponseTime] = await Promise.all([
+      this.countUnresolvedExceptions(),
+      this.countSlowQueries(),
+      this.averageRequestDuration(),
+    ]);
 
     return {
       total,
       byType,
-      avgResponseTime: undefined,
-      slowQueries: 0,
+      avgResponseTime,
+      slowQueries,
       exceptions: byType.exception || 0,
-      unresolvedExceptions: 0,
+      unresolvedExceptions,
     };
+  }
+
+  /**
+   * The three figures the dashboard puts at the top of its first page.
+   *
+   * They were `0`, `0` and `undefined` here, under a comment saying that
+   * working them out would mean reading entries. So a deployment on Redis —
+   * the driver the documentation recommends for production — opened on
+   * *no unresolved exceptions*, *no slow queries* and no latency at all, next
+   * to a list of the exceptions it had just recorded.
+   *
+   * They are read the way the other two drivers read them, and cost what that
+   * costs: measured at 25ms against ten thousand entries, once every thirty
+   * seconds, and only while somebody has the dashboard open.
+   */
+  private async countUnresolvedExceptions(): Promise<number> {
+    const client = this.getClient();
+    const ids = await client.zrange(this.key('entries', 'type', 'exception'), 0, -1);
+    let unresolved = 0;
+
+    for (const chunk of inChunks(ids)) {
+      const reader = client.pipeline();
+      // Kept as a field of its own, so this never reads a payload.
+      for (const id of chunk) reader.hget(this.key('entries', id), 'resolvedAt');
+
+      for (const [error, value] of (await reader.exec()) ?? []) {
+        if (!error && !value) unresolved += 1;
+      }
+    }
+
+    return unresolved;
+  }
+
+  private async countSlowQueries(): Promise<number> {
+    let slow = 0;
+
+    await this.eachPayload('query', (payload) => {
+      if ((payload as { slow?: boolean }).slow === true) slow += 1;
+    });
+
+    return slow;
+  }
+
+  private async averageRequestDuration(): Promise<number | undefined> {
+    let total = 0;
+    let counted = 0;
+
+    await this.eachPayload('request', (payload) => {
+      const duration = (payload as { duration?: number }).duration;
+      if (typeof duration === 'number') {
+        total += duration;
+        counted += 1;
+      }
+    });
+
+    return counted > 0 ? total / counted : undefined;
+  }
+
+  /** Reads every stored payload of one type, a pipeline at a time. */
+  private async eachPayload(type: EntryType, read: (payload: unknown) => void): Promise<void> {
+    const client = this.getClient();
+    const ids = await client.zrange(this.key('entries', 'type', type), 0, -1);
+
+    for (const chunk of inChunks(ids)) {
+      const reader = client.pipeline();
+      for (const id of chunk) reader.hget(this.key('entries', id), 'payload');
+
+      for (const [error, value] of (await reader.exec()) ?? []) {
+        if (error || typeof value !== 'string') continue;
+
+        try {
+          read(JSON.parse(value));
+        } catch {
+          // A payload that cannot be parsed is one entry missing from a
+          // figure, not a reason for the figure to fail.
+        }
+      }
+    }
   }
 
   async getStorageStats(): Promise<StorageStats> {
@@ -525,32 +1010,23 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       'dump',
     ];
 
-    const byType: Record<EntryType, number> = {} as Record<EntryType, number>;
-    let total = 0;
+    const { byType, total } = await this.countByType(types);
 
-    for (const type of types) {
-      const count = await client.zcard(this.key('entries', 'type', type));
-      if (count > 0) {
-        byType[type] = count;
-        total += count;
-      }
-    }
+    const [oldest, newest] = await client
+      .pipeline()
+      .zrange(this.key('entries', 'all'), 0, 0)
+      .zrevrange(this.key('entries', 'all'), 0, 0)
+      .exec()
+      .then((results) => (results ?? []).map(([, value]) => (value as string[]) ?? []));
 
-    // Get oldest and newest entries
-    const oldest = await client.zrange(this.key('entries', 'all'), 0, 0);
-    const newest = await client.zrevrange(this.key('entries', 'all'), 0, 0);
+    const ends = client.pipeline();
+    if (oldest.length > 0) ends.hget(this.key('entries', oldest[0]), 'createdAt');
+    if (newest.length > 0) ends.hget(this.key('entries', newest[0]), 'createdAt');
+    const stamps = (await ends.exec()) ?? [];
 
-    let oldestEntry: string | null = null;
-    let newestEntry: string | null = null;
-
-    if (oldest.length > 0) {
-      const hash = await client.hget(this.key('entries', oldest[0]), 'createdAt');
-      oldestEntry = hash ?? null;
-    }
-    if (newest.length > 0) {
-      const hash = await client.hget(this.key('entries', newest[0]), 'createdAt');
-      newestEntry = hash ?? null;
-    }
+    const oldestEntry = oldest.length > 0 ? ((stamps[0]?.[1] as string) ?? null) : null;
+    const newestEntry =
+      newest.length > 0 ? ((stamps[oldest.length > 0 ? 1 : 0]?.[1] as string) ?? null) : null;
 
     return {
       total,
@@ -567,15 +1043,49 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const maxScore = before.getTime();
 
-    const ids = await client.zrangebyscore(this.key('entries', 'createdAt'), '-inf', maxScore);
+    const older = await client.zrangebyscore(this.key('entries', 'createdAt'), '-inf', maxScore);
+    if (older.length === 0) return 0;
+
+    const kept = await this.monitoredEntryIds();
+    const ids = older.filter((id) => !kept.has(id));
     if (ids.length === 0) return 0;
 
-    for (const id of ids) {
-      await this.deleteEntry(parseInt(id, 10));
-    }
+    await this.deleteEntries(ids);
 
     this.logger.log(`Pruned ${ids.length} entries older than ${before.toISOString()}`);
     return ids.length;
+  }
+
+  /**
+   * The entries a monitored tag is keeping.
+   *
+   * Monitoring a tag is how a reader says *do not let these go*, which is what
+   * it means in Telescope and what nothing here did with it: the tag was
+   * stored, listed and counted, and pruning deleted its entries with the rest.
+   *
+   * Age is what it protects against. The store's `maxEntries` ceiling still
+   * applies — that is what bounds how much of the instance NestLens takes, and
+   * a monitored tag on a busy route would otherwise have no bound at all.
+   */
+  private async monitoredEntryIds(): Promise<Set<string>> {
+    const client = this.getClient();
+    const monitored = await client.hkeys(this.key('monitored'));
+    const kept = new Set<string>();
+
+    if (monitored.length === 0) return kept;
+
+    const reader = client.pipeline();
+    for (const tag of monitored) {
+      reader.smembers(this.key('tags', 'index', normalizeTag(tag)));
+    }
+
+    for (const [error, ids] of (await reader.exec()) ?? []) {
+      if (error || !Array.isArray(ids)) continue;
+
+      for (const id of ids as string[]) kept.add(id);
+    }
+
+    return kept;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
@@ -591,14 +1101,24 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     // The type index is scored by id now, so it can no longer answer a time
     // question on its own; membership is what it is asked for instead.
     const typeKey = this.key('entries', 'type', type);
-    const membership = await Promise.all(olderThanCutoff.map((id) => client.zscore(typeKey, id)));
-    const ids = olderThanCutoff.filter((_, index) => membership[index] !== null);
+    const membership: (string | null)[] = [];
+
+    for (const chunk of inChunks(olderThanCutoff)) {
+      const reader = client.pipeline();
+      for (const id of chunk) {
+        reader.zscore(typeKey, id);
+      }
+      for (const [error, score] of (await reader.exec()) ?? []) {
+        membership.push(error ? null : ((score as string | null) ?? null));
+      }
+    }
+
+    const kept = await this.monitoredEntryIds();
+    const ids = olderThanCutoff.filter((id, index) => membership[index] !== null && !kept.has(id));
 
     if (ids.length === 0) return 0;
 
-    for (const id of ids) {
-      await this.deleteEntry(parseInt(id, 10));
-    }
+    await this.deleteEntries(ids);
 
     return ids.length;
   }
@@ -607,6 +1127,15 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
     const client = this.getClient();
+
+    // An entry that is not there cannot be tagged — the same rule the other
+    // two backends follow. The collector tags an entry just after saving it,
+    // and pruning or the entry cap can remove it in between; storing the tag
+    // anyway left it counted for an id nothing else knows about.
+    if (!(await client.exists(this.key('entries', String(entryId))))) {
+      return;
+    }
+
     const pipeline = client.pipeline();
 
     for (const rawTag of tags) {
@@ -614,22 +1143,27 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       const tag = rawTag.toUpperCase();
       pipeline.sadd(this.key('tags', String(entryId)), tag);
       pipeline.sadd(this.key('tags', 'index', tag), String(entryId));
-      pipeline.hincrby(this.key('tags', 'counts'), tag, 1);
+      // The tag's name, so `getAllTags` knows which sets to measure. How many
+      // entries carry it is not recorded here — see `getAllTags`.
+      pipeline.sadd(this.key('tags', 'names'), tag);
     }
 
     await pipeline.exec();
   }
 
   async removeTags(entryId: number, tags: string[]): Promise<void> {
-    const client = this.getClient();
+    if (tags.length === 0) return;
+
+    const pipeline = this.getClient().pipeline();
 
     for (const rawTag of tags) {
       // Normalize to uppercase for consistent lookup
       const tag = rawTag.toUpperCase();
-      await client.srem(this.key('tags', String(entryId)), tag);
-      await client.srem(this.key('tags', 'index', tag), String(entryId));
-      await client.hincrby(this.key('tags', 'counts'), tag, -1);
+      pipeline.srem(this.key('tags', String(entryId)), tag);
+      pipeline.srem(this.key('tags', 'index', tag), String(entryId));
     }
+
+    await pipeline.exec();
   }
 
   async getEntryTags(entryId: number): Promise<string[]> {
@@ -638,14 +1172,45 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     return tags.sort();
   }
 
+  /**
+   * Every tag in use, and how many entries carry it.
+   *
+   * Counted from the sets that hold the answer rather than from a running
+   * total kept alongside them. The total was maintained by three call sites,
+   * none of which could see whether the set had actually changed: tagging an
+   * entry twice counted it twice, removing a tag left the count behind, and
+   * removing one that was never there drove it negative — `NEVER: -1`, hidden
+   * from this list only by the filter below. A second source of truth for
+   * something already recorded exactly once can only ever drift from it.
+   *
+   * One round trip: the names in one read, the sizes in one pipeline.
+   */
   async getAllTags(): Promise<TagWithCount[]> {
     const client = this.getClient();
-    const counts = await client.hgetall(this.key('tags', 'counts'));
+    const names = await client.smembers(this.key('tags', 'names'));
 
-    return Object.entries(counts)
-      .map(([tag, count]) => ({ tag, count: parseInt(count, 10) }))
-      .filter((t) => t.count > 0)
-      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    if (names.length === 0) {
+      return [];
+    }
+
+    const pipeline = client.pipeline();
+    for (const tag of names) {
+      pipeline.scard(this.key('tags', 'index', tag));
+    }
+
+    const results = (await pipeline.exec()) ?? [];
+
+    return (
+      names
+        .map((tag, index) => {
+          const [error, size] = results[index] ?? [null, 0];
+          return { tag, count: error ? 0 : Number(size ?? 0) };
+        })
+        // A tag whose last entry was pruned keeps its name here and no members;
+        // it is not in use, so it is not listed.
+        .filter((t) => t.count > 0)
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+    );
   }
 
   async findByTags(tags: string[], logic: 'AND' | 'OR' = 'OR', limit = 50): Promise<Entry[]> {
@@ -827,52 +1392,89 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     }
   }
 
+  /**
+   * Attaches each entry's tags.
+   *
+   * One round trip for the page. It used to be one per row, which a list of
+   * fifty paid fifty times over on every poll — 146 ms of a 257 ms dashboard
+   * refresh against a Redis one millisecond away, nearly all of it waiting.
+   */
   private async hydrateEntriesWithTags(entries: StoredEntry[]): Promise<StoredEntry[]> {
+    if (entries.length === 0) return [];
+
     const client = this.getClient();
-    const result: StoredEntry[] = [];
+    const reader = client.pipeline();
 
     for (const entry of entries) {
-      const tags = await client.smembers(this.key('tags', String(entry.id)));
-      result.push({ ...entry, tags: tags.sort() });
+      reader.smembers(this.key('tags', String(entry.id)));
     }
 
-    return result;
+    const results = (await reader.exec()) ?? [];
+
+    return entries.map((entry, index) => {
+      const [error, tags] = results[index] ?? [];
+      return {
+        ...entry,
+        tags: error || !Array.isArray(tags) ? [] : (tags as string[]).slice().sort(),
+      };
+    });
   }
 
-  private async deleteEntry(id: number): Promise<void> {
+  /**
+   * Removes entries and every index that mentions them.
+   *
+   * In pipelines, because this is what pruning does and pruning is the only
+   * thing keeping the store bounded. One entry at a time cost eight sequential
+   * round trips — 22 ms an entry against a Redis one millisecond away, so an
+   * hourly prune of ten thousand entries took nearly four minutes of solid
+   * traffic. Past a few hundred entries an hour it could not keep up at all,
+   * and a store nothing removes from grows until Redis runs out of memory.
+   */
+  private async deleteEntries(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
     const client = this.getClient();
 
-    // Get entry to find its type
-    const hash = await client.hgetall(this.key('entries', String(id)));
-    if (!hash?.type) return;
+    for (const chunk of inChunks(ids)) {
+      // What each entry belongs to has to be read before it can be unlinked.
+      const reader = client.pipeline();
+      for (const id of chunk) {
+        reader.hgetall(this.key('entries', id));
+        reader.smembers(this.key('tags', id));
+      }
+      const read = (await reader.exec()) ?? [];
 
-    // Remove from indexes
-    await client.del(this.key('entries', String(id)));
-    await client.zrem(this.key('entries', 'all'), String(id));
-    await client.zrem(this.key('entries', 'type', hash.type), String(id));
-    await client.zrem(this.key('entries', 'createdAt'), String(id));
+      const writer = client.pipeline();
 
-    if (hash.requestId) {
-      await client.srem(this.key('entries', 'request', hash.requestId), String(id));
+      chunk.forEach((id, index) => {
+        const [hashError, hashValue] = read[index * 2] ?? [];
+        const [tagError, tagValue] = read[index * 2 + 1] ?? [];
+
+        const hash = hashError ? undefined : (hashValue as Record<string, string> | undefined);
+        if (!hash?.type) return;
+
+        writer.del(this.key('entries', id));
+        writer.zrem(this.key('entries', 'all'), id);
+        writer.zrem(this.key('entries', 'type', hash.type), id);
+        writer.zrem(this.key('entries', 'createdAt'), id);
+        writer.zrem(this.key('entries', 'type', 'request', 'rest'), id);
+
+        if (hash.requestId) {
+          writer.srem(this.key('entries', 'request', hash.requestId), id);
+        }
+
+        if (hash.familyHash) {
+          writer.srem(this.key('family', hash.familyHash), id);
+        }
+
+        const tags = tagError ? [] : ((tagValue as string[]) ?? []);
+        for (const tag of tags) {
+          writer.srem(this.key('tags', 'index', tag), id);
+        }
+        writer.del(this.key('tags', id));
+      });
+
+      await writer.exec();
     }
-
-    if (hash.familyHash) {
-      await client.srem(this.key('family', hash.familyHash), String(id));
-    }
-
-    // Remove tags
-    const tags = await client.smembers(this.key('tags', String(id)));
-    for (const tag of tags) {
-      await client.srem(this.key('tags', 'index', tag), String(id));
-      await client.hincrby(this.key('tags', 'counts'), tag, -1);
-    }
-    await client.del(this.key('tags', String(id)));
-  }
-
-  private applyAdvancedFilters(
-    entries: StoredEntry[],
-    filters: CursorPaginationParams['filters'],
-  ): StoredEntry[] {
-    return entries.filter((entry) => matchesEntryFilters(entry, filters));
   }
 }

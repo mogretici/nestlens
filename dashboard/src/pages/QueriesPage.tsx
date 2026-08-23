@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Database, Zap } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import {
   NewEntriesButton,
   LoadMoreButton,
@@ -30,8 +32,9 @@ export default function QueriesPage() {
     clearAll,
     serverFilters: baseServerFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('queries');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   // Add slow filter
   const serverFilters = {
@@ -43,6 +46,8 @@ export default function QueriesPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -52,7 +57,12 @@ export default function QueriesPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<QueryEntry>({ type: 'query', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<QueryEntry>({
+    type: 'query',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is QueryEntry => isQueryEntry(entry));
@@ -138,7 +148,6 @@ export default function QueriesPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -154,6 +163,7 @@ export default function QueriesPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="queries" />}
         onClearAllFilters={clearAll}
         actions={
           <ToggleSwitch
@@ -166,7 +176,7 @@ export default function QueriesPage() {
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         <EntrySearchInput placeholder="Search by SQL, table, source, tag, or content..." />
 
         {/* New entries button */}
@@ -183,6 +193,8 @@ export default function QueriesPage() {
           onRowClick={(entry) => navigate(`/queries/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No queries recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Database className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

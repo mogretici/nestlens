@@ -116,13 +116,27 @@ describe('MailWatcher', () => {
     it('should setup interceptors when mailer is available', async () => {
       // Arrange
       const mailer = createMailerService();
+      const before = mailer.sendMail;
       watcher = await createWatcher(mockConfig, mailer);
 
       // Act
       watcher.onModuleInit();
 
-      // Assert
-      expect((watcher as any).originalSendMail).toBeDefined();
+      // Assert: what a caller would see, rather than a private field. This
+      // read `originalSendMail`, which meant it kept passing while the
+      // wrapper it stood for dropped the callback argument.
+      expect(mailer.sendMail).not.toBe(before);
+    });
+
+    it('gives sendMail back when the module closes', async () => {
+      const mailer = createMailerService();
+      const before = mailer.sendMail;
+      watcher = await createWatcher(mockConfig, mailer);
+
+      watcher.onModuleInit();
+      watcher.onModuleDestroy();
+
+      expect(mailer.sendMail).toBe(before);
     });
 
     it('should handle mailer without sendMail method', async () => {

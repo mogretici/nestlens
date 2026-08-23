@@ -700,12 +700,8 @@ describe('NotificationWatcher', () => {
       });
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'notification',
-        expect.objectContaining({
-          metadata: { _error: 'Unable to serialize metadata' },
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.metadata.self).toBe(collected.metadata);
     });
   });
 

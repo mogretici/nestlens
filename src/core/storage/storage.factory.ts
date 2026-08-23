@@ -21,9 +21,21 @@ function resolveDriver(config: StorageConfig): StorageDriver {
  * Creates an in-memory storage instance.
  * No external dependencies required.
  */
+/**
+ * The entry ceiling, wherever it was configured.
+ *
+ * `storage.maxEntries` applies to every driver. `storage.memory.maxEntries`
+ * was the only place it could be set for years and still means the same
+ * thing, so it wins where both are given: a reader who set it there set it on
+ * purpose.
+ */
+export function resolveMaxEntries(config: StorageConfig): number {
+  return config.memory?.maxEntries ?? config.maxEntries ?? 10_000;
+}
+
 async function createMemoryStorage(config: StorageConfig): Promise<StorageInterface> {
   const { MemoryStorage } = await import('./memory.storage');
-  const storage = new MemoryStorage(config.memory);
+  const storage = new MemoryStorage({ maxEntries: resolveMaxEntries(config) });
   await storage.initialize();
   logger.log('Using in-memory storage');
   warnIfClustered();
@@ -69,7 +81,7 @@ async function createSqliteStorage(config: StorageConfig): Promise<StorageInterf
 
     const filename = config.sqlite?.filename ?? '.cache/nestlens.db';
 
-    const storage = new SqliteStorage(filename);
+    const storage = new SqliteStorage(filename, resolveMaxEntries(config));
     await storage.initialize();
     logger.log(`Using SQLite storage: ${filename}`);
     return storage;
@@ -89,7 +101,26 @@ async function createSqliteStorage(config: StorageConfig): Promise<StorageInterf
       );
     }
 
-    throw error;
+    // Anything else is the file itself: a directory that cannot be written, a
+    // path that is not a database, a disk with nothing left on it.
+    //
+    // Not fatal. A debugging tool must not be the reason a deployment fails to
+    // start, and the application has nothing to do with why the file would not
+    // open — a read-only container filesystem is the common case, and the
+    // default path (`.cache/nestlens.db`) sits inside the project directory.
+    // Redis already behaves this way: an unreachable server does not stop the
+    // application, so SQLite doing the opposite was the odd one out.
+    //
+    // Loud, though. Falling back silently would leave a reader wondering why
+    // nothing survives a restart.
+    logger.error(
+      `Could not open the SQLite database at ${config.sqlite?.filename ?? '.cache/nestlens.db'}: ` +
+        `${err.message}. Falling back to in-memory storage — entries will be kept for this ` +
+        'process only and lost on restart. Point `storage.sqlite.filename` somewhere writable, ' +
+        "or set `storage.driver: 'memory'` to make that the intent.",
+    );
+
+    return createMemoryStorage(config);
   }
 }
 
@@ -101,7 +132,7 @@ async function createRedisStorage(config: StorageConfig): Promise<StorageInterfa
   try {
     // Lazy load to avoid importing ioredis until needed
     const { RedisStorage } = await import('./redis.storage');
-    const storage = new RedisStorage(config.redis);
+    const storage = new RedisStorage({ ...config.redis, maxEntries: resolveMaxEntries(config) });
     await storage.initialize();
 
     const redisConfig = config.redis ?? {};

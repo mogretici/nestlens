@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "framework": "docusaurus-2",
-  "installCommand": "npm install",
+  "installCommand": "cd .. && npm ci --ignore-scripts && cd docs && npm ci",
   "devCommand": "npm run start",
   "cleanUrls": true,
   "github": {

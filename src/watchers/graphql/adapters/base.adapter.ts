@@ -4,9 +4,12 @@
  * Abstract interface that all GraphQL server adapters must implement.
  */
 
+import { AddressableRequest, resolveClientIp } from '@/core/client-ip';
 import { CollectorService } from '@/core';
 import { GraphQLPayload } from '@/types';
 import { ResolvedGraphQLConfig } from '../types';
+import { selectsIntrospection } from '../utils/query-parser';
+import { assignKey } from '../../../core/safe-assign';
 
 /**
  * Callback for when an operation is collected
@@ -67,20 +70,8 @@ export abstract class BaseGraphQLAdapter {
    * Check if an operation should be ignored
    */
   protected shouldIgnoreOperation(operationName?: string, query?: string): boolean {
-    // Check introspection
-    if (this.config.ignoreIntrospection && query) {
-      const lowerQuery = query.toLowerCase();
-      // Check for introspection fields: __schema and __type (but NOT __typename)
-      // __type is followed by ( or whitespace when used as introspection field
-      // __typename is a meta-field that Apollo Client adds for caching - should NOT be ignored
-      if (
-        lowerQuery.includes('__schema') ||
-        /\b__type\s*\(/.test(lowerQuery) ||
-        /\b__type\s*\{/.test(lowerQuery) ||
-        lowerQuery.includes('introspectionquery')
-      ) {
-        return true;
-      }
+    if (this.config.ignoreIntrospection && query && selectsIntrospection(query)) {
+      return true;
     }
 
     // Check ignored operations
@@ -116,37 +107,19 @@ export abstract class BaseGraphQLAdapter {
   /**
    * Get the client IP from a request
    */
+  /**
+   * The client's address, by the same rule the guard authorizes with.
+   *
+   * This used to read `X-Forwarded-For` whatever the configuration said, so a
+   * GraphQL operation was recorded against whatever address its caller typed
+   * into a header. See `resolveClientIp`.
+   */
   protected getClientIp(request: unknown): string | undefined {
     if (!request || typeof request !== 'object') {
       return undefined;
     }
 
-    const req = request as Record<string, unknown>;
-
-    // Check x-forwarded-for header
-    const headers = req.headers as Record<string, unknown> | undefined;
-    if (headers) {
-      const forwarded = headers['x-forwarded-for'];
-      if (typeof forwarded === 'string') {
-        return forwarded.split(',')[0].trim();
-      }
-      if (Array.isArray(forwarded) && forwarded.length > 0) {
-        return String(forwarded[0]).trim();
-      }
-    }
-
-    // Check direct IP properties
-    if (typeof req.ip === 'string') {
-      return req.ip;
-    }
-
-    // Check socket
-    const socket = req.socket as Record<string, unknown> | undefined;
-    if (socket && typeof socket.remoteAddress === 'string') {
-      return socket.remoteAddress;
-    }
-
-    return undefined;
+    return resolveClientIp(request as unknown as AddressableRequest, this.config?.trustProxy);
   }
 
   /**
@@ -177,13 +150,13 @@ export abstract class BaseGraphQLAdapter {
 
     for (const [key, value] of Object.entries(headers)) {
       if (sensitiveHeaders.includes(key.toLowerCase())) {
-        result[key] = '***';
+        assignKey(result, key, '***');
       } else if (typeof value === 'string') {
-        result[key] = value;
+        assignKey(result, key, value);
       } else if (typeof value === 'number' || typeof value === 'boolean') {
-        result[key] = String(value);
+        assignKey(result, key, String(value));
       } else if (Array.isArray(value)) {
-        result[key] = value.join(', ');
+        assignKey(result, key, value.join(', '));
       }
     }
 

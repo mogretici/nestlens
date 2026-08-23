@@ -37,6 +37,18 @@ const escapeHtmlAttribute = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**
+ * A JSON value that is safe between `<script>` tags.
+ *
+ * `JSON.stringify` escapes what a JavaScript string needs and nothing an HTML
+ * parser cares about, so a value containing `</script>` closes the block it is
+ * written into whatever the JSON says. Nothing can reach this today — the mount
+ * path is validated at startup and the forwarding header is matched against an
+ * alphabet — but the escaping costs one replacement and does not depend on
+ * those two staying correct.
+ */
+const escapeForScript = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
+
+/**
  * Content-Type lookup for the static dashboard assets.
  * Kept explicit so file serving stays adapter-agnostic (no reliance on
  * Express' `res.sendFile`, which Fastify does not implement).
@@ -317,7 +329,7 @@ export class DashboardController {
     const baseHref = this.mountPoint(forwardedPrefix);
     const injection =
       `<base href="${escapeHtmlAttribute(`${baseHref}/`)}" />` +
-      `<script>window.__NESTLENS_BASE__=${JSON.stringify(baseHref)}</script>`;
+      `<script>window.__NESTLENS_BASE__=${escapeForScript(baseHref)}</script>`;
 
     return html.replace('<head>', `<head>${injection}`);
   }

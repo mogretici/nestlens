@@ -1,4 +1,5 @@
 import {
+  Inject,
   MiddlewareConsumer,
   NestModule,
   DynamicModule,
@@ -180,18 +181,36 @@ class NestLensScheduleModule {
 
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
+  constructor(
+    @Inject(NESTLENS_CONFIG)
+    private readonly config: NestLensConfig,
+  ) {}
+
   /**
    * Opens a request context around every request.
    *
    * Middleware rather than an interceptor: it calls into the rest of the
    * request synchronously, so a query or cache read recorded deep inside the
    * handler still knows which request it belongs to. See request-context.ts.
+   *
+   * Not applied when NestLens is switched off. `forRoot` returns an empty
+   * module for `enabled: false`, but this hook belongs to the class rather
+   * than to what `forRoot` returned, so it ran anyway: a uuid and an
+   * `AsyncLocalStorage.run` on every request of an application that had turned
+   * the library off, plus a property written onto every request object.
    */
   configure(consumer: MiddlewareConsumer): void {
+    if (this.config.enabled === false) {
+      return;
+    }
+
     consumer.apply(RequestContextMiddleware).forRoutes('*');
   }
 
   private static readonly logger = new Logger('NestLens');
+
+  /** Where a previous `forRoot` put the dashboard, if there was one. */
+  private static mountedAt?: string;
 
   static forRoot(config: NestLensConfig = {}): DynamicModule {
     const mergedConfig = this.mergeConfig(config);
@@ -376,6 +395,29 @@ export class NestLensModule implements NestModule, OnModuleInit {
    */
   private static mountControllersAt(path: string | undefined): void {
     const prefix = toRoutePrefix(path);
+
+    /*
+     * Said out loud when a second call moves it.
+     *
+     * The prefix is metadata on the controller classes, so the last `forRoot`
+     * wins — and where two modules each called it, the dashboard silently
+     * answered at one path and 404'd at the other:
+     *
+     *     forRoot({ path: '/first' })  in one module
+     *     forRoot({ path: '/second' }) in another   ->  only /second exists
+     *
+     * `forRoot` belongs in the root module once, which is what this says.
+     */
+    const mounted = this.mountedAt;
+    this.mountedAt = prefix;
+
+    if (mounted !== undefined && mounted !== prefix) {
+      this.logger.warn(
+        `NestLensModule.forRoot() was called again with a different path: the dashboard moves ` +
+          `from "/${mounted}" to "/${prefix}". Call it once, in the root module.`,
+      );
+    }
+
     const withPrefix = (suffix: string): string =>
       [prefix, suffix].filter((part) => part.length > 0).join('/');
 

@@ -20,9 +20,18 @@ import { STORAGE, StorageInterface } from '@/core';
 import { PruningService } from '@/core';
 import { CollectorService } from '@/core';
 import { NestLensConfig, NESTLENS_API_PREFIX, NESTLENS_CONFIG } from '@/nestlens.config';
-import { EntryType, CursorPaginatedResponse, Entry } from '@/types';
+import { EntryType, CursorPaginatedResponse, CursorPaginationParams, Entry } from '@/types';
 import { NestLensGuard } from './api.guard';
-import { CursorQueryDto, DEFAULT_LIMIT, MAX_LIMIT, PauseRecordingDto } from './dto';
+import {
+  CheckNewQueryDto,
+  CursorQueryDto,
+  DEFAULT_LIMIT,
+  EntriesQueryDto,
+  LatestSequenceQueryDto,
+  LogsQueryDto,
+  PauseRecordingDto,
+  QueriesQueryDto,
+} from './dto';
 import { NestLensApiExceptionFilter } from '@/api/filters';
 import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
@@ -44,28 +53,6 @@ import { NestLensApiException } from '@/api/exceptions';
 @UseInterceptors(NestLensApiResponseInterceptor)
 @UsePipes(new NestLensValidationPipe())
 export class NestLensApiController {
-  private lastPruneRun: Date | null = null;
-  private nextPruneRun: Date | null = null;
-
-  /**
-   * Safely parse and bound pagination limit
-   */
-  private parseLimit(limit?: string): number {
-    if (!limit) return DEFAULT_LIMIT;
-    const parsed = parseInt(limit, 10);
-    if (isNaN(parsed) || parsed < 1) return DEFAULT_LIMIT;
-    return Math.min(parsed, MAX_LIMIT);
-  }
-
-  /**
-   * Safely parse pagination offset
-   */
-  private parseOffset(offset?: string): number {
-    if (!offset) return 0;
-    const parsed = parseInt(offset, 10);
-    return isNaN(parsed) || parsed < 0 ? 0 : parsed;
-  }
-
   constructor(
     @Inject(STORAGE)
     private readonly storage: StorageInterface,
@@ -73,43 +60,58 @@ export class NestLensApiController {
     private readonly config: NestLensConfig,
     private readonly pruningService: PruningService,
     private readonly collectorService: CollectorService,
-  ) {
-    // Calculate next prune run
-    const intervalMinutes = this.config.pruning?.interval ?? 60;
-    this.nextPruneRun = new Date(Date.now() + intervalMinutes * 60 * 1000);
-  }
+  ) {}
 
   @Get('entries')
-  async getEntries(
-    @Query('type') type?: EntryType,
-    @Query('requestId') requestId?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Res() _res?: unknown,
-  ) {
-    const parsedLimit = this.parseLimit(limit);
-    const parsedOffset = this.parseOffset(offset);
+  async getEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage(query.type, query);
+  }
 
-    const entries = await this.storage.find({
-      type,
-      requestId,
-      limit: parsedLimit,
-      offset: parsedOffset,
-      from: from ? new Date(from) : undefined,
-      to: to ? new Date(to) : undefined,
+  /**
+   * A page of one type, narrowed by a filter the storage applies.
+   *
+   * `logs` and `queries` used to read a page and then filter what came back,
+   * which chooses the matches out of the newest fifty rather than the newest
+   * fifty matches. On 5,005 logs whose five errors were the oldest,
+   * `?level=error` returned nothing at all and reported a total of 5,005 —
+   * a hundred pages to click through to reach the first match.
+   *
+   * `findWithCursor` applies filters before it chooses a page, in every
+   * backend, and counts what matches. Offset paging on top of it asks for
+   * `offset + limit` matches and drops the ones already shown, which is what
+   * an offset costs anywhere.
+   *
+   * Every list endpoint goes through here now. `entries`, `requests` and
+   * `exceptions` used `find`, which takes no filters at all, so they accepted
+   * `minDuration` and ignored it — the same silence, one path over. Two ways
+   * to answer the same question is how the two came to disagree.
+   */
+  private async filteredPage(
+    type: EntryType | undefined,
+    query: EntriesQueryDto,
+    filters?: CursorPaginationParams['filters'],
+  ) {
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const offset = query.offset ?? 0;
+
+    const result = await this.storage.findWithCursor(type, {
+      limit: offset + limit,
+      filters: {
+        // The window and the duration bounds these endpoints accept. The
+        // window reached the storage on the `entries` path and not on this
+        // one, so `logs` and `queries` took a `from` and ignored it.
+        from: query.from?.toISOString(),
+        to: query.to?.toISOString(),
+        minDuration: query.minDuration,
+        maxDuration: query.maxDuration,
+        requestId: query.requestId,
+        ...filters,
+      },
     });
 
-    const total = await this.storage.count(type);
-
     return {
-      data: entries,
-      meta: {
-        total,
-        limit: parsedLimit,
-        offset: parsedOffset,
-      },
+      data: result.data.slice(offset),
+      meta: { total: result.meta.total, limit, offset },
     };
   }
 
@@ -132,19 +134,18 @@ export class NestLensApiController {
   }
 
   @Get('entries/latest-sequence')
-  async getLatestSequence(@Query('type') type?: EntryType, @Res() _res?: unknown) {
-    const sequence = await this.storage.getLatestSequence(type);
+  async getLatestSequence(@Query() query: LatestSequenceQueryDto, @Res() _res?: unknown) {
+    const sequence = await this.storage.getLatestSequence(query.type);
     return { data: sequence };
   }
 
   @Get('entries/check-new')
-  async checkNewEntries(
-    @Query('afterSequence') afterSequence: string,
-    @Query('type') type?: EntryType,
-    @Res() _res?: unknown,
-  ) {
-    const seq = parseInt(afterSequence, 10);
-    const count = await this.storage.hasEntriesAfter(seq, type);
+  async checkNewEntries(@Query() query: CheckNewQueryDto, @Res() _res?: unknown) {
+    // `parseInt` of a missing or unreadable parameter is NaN, and NaN reached
+    // the storage: Redis was asked for `zcount (NaN +inf` and answered with an
+    // error. The live tail calls this on a timer, so it would have been a 500
+    // every few seconds rather than once.
+    const count = await this.storage.hasEntriesAfter(query.afterSequence, query.type);
     return { data: { count, hasNew: count > 0 } };
   }
 
@@ -153,12 +154,11 @@ export class NestLensApiController {
    * NOTE: Must come BEFORE @Get('entries/:id') to avoid route conflict
    */
   @Get('entries/grouped')
-  async getGroupedEntries(
-    @Query('type') type?: EntryType,
-    @Query('limit') limit?: string,
-    @Res() _res?: unknown,
-  ) {
-    const groups = await this.storage.getGroupedByFamilyHash(type, this.parseLimit(limit));
+  async getGroupedEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    const groups = await this.storage.getGroupedByFamilyHash(
+      query.type,
+      query.limit ?? DEFAULT_LIMIT,
+    );
     return { data: groups };
   }
 
@@ -168,11 +168,13 @@ export class NestLensApiController {
    */
   @Get('entries/family/:hash')
   async getEntriesByFamilyHash(
+    // A family hash is a fixed-width digest; the parameter is a path segment a
+    // caller writes, and it becomes part of a Redis key.
     @Param('hash') hash: string,
-    @Query('limit') limit?: string,
+    @Query() query: EntriesQueryDto,
     @Res() _res?: unknown,
   ) {
-    const entries = await this.storage.findByFamilyHash(hash, this.parseLimit(limit));
+    const entries = await this.storage.findByFamilyHash(hash, query.limit ?? DEFAULT_LIMIT);
     return { data: entries };
   }
 
@@ -207,86 +209,23 @@ export class NestLensApiController {
   }
 
   @Get('requests')
-  async getRequests(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Res() _res?: unknown,
-  ) {
-    return this.getEntries('request', undefined, limit, offset);
+  async getRequests(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    return this.getEntries({ ...query, type: 'request' });
   }
 
   @Get('queries')
-  async getQueries(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('slow') slow?: string,
-    @Res() _res?: unknown,
-  ) {
-    const parsedLimit = this.parseLimit(limit);
-    const parsedOffset = this.parseOffset(offset);
-
-    const entries = await this.storage.find({
-      type: 'query',
-      limit: parsedLimit,
-      offset: parsedOffset,
-    });
-
-    // Filter slow queries if requested
-    const filtered =
-      slow === 'true' ? entries.filter((e) => e.type === 'query' && e.payload.slow) : entries;
-
-    const total = await this.storage.count('query');
-
-    return {
-      data: filtered,
-      meta: {
-        total,
-        limit: parsedLimit,
-        offset: parsedOffset,
-      },
-    };
+  async getQueries(@Query() query: QueriesQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage('query', query, query.slow === 'true' ? { slow: true } : undefined);
   }
 
   @Get('exceptions')
-  async getExceptions(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Res() _res?: unknown,
-  ) {
-    return this.getEntries('exception', undefined, limit, offset);
+  async getExceptions(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+    return this.getEntries({ ...query, type: 'exception' });
   }
 
   @Get('logs')
-  async getLogs(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('level') level?: string,
-    @Res() _res?: unknown,
-  ) {
-    const parsedLimit = this.parseLimit(limit);
-    const parsedOffset = this.parseOffset(offset);
-
-    const entries = await this.storage.find({
-      type: 'log',
-      limit: parsedLimit,
-      offset: parsedOffset,
-    });
-
-    // Filter by level if requested
-    const filtered = level
-      ? entries.filter((e) => e.type === 'log' && e.payload.level === level)
-      : entries;
-
-    const total = await this.storage.count('log');
-
-    return {
-      data: filtered,
-      meta: {
-        total,
-        limit: parsedLimit,
-        offset: parsedOffset,
-      },
-    };
+  async getLogs(@Query() query: LogsQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage('log', query, query.level ? { levels: [query.level] } : undefined);
   }
 
   /**
@@ -303,16 +242,19 @@ export class NestLensApiController {
    */
   @Get('pruning/status')
   async getPruningStatus(@Res() _res?: unknown) {
-    const config = this.config.pruning;
     const storageStats = await this.storage.getStorageStats();
+    // Read from the service rather than from the configuration: a setting it
+    // refused or clamped is not the one in effect, and reporting the written
+    // value would describe pruning that is not happening.
+    const { lastRun, nextRun } = this.pruningService.schedule;
 
     return {
       data: {
-        enabled: config?.enabled !== false,
-        maxAge: config?.maxAge ?? 24,
-        interval: config?.interval ?? 60,
-        lastRun: this.lastPruneRun?.toISOString() ?? null,
-        nextRun: this.nextPruneRun?.toISOString() ?? null,
+        enabled: this.config.pruning?.enabled !== false,
+        maxAge: this.pruningService.maxAgeHours,
+        interval: this.pruningService.intervalMinutes,
+        lastRun: lastRun?.toISOString() ?? null,
+        nextRun: nextRun?.toISOString() ?? null,
         totalEntries: storageStats.total,
         oldestEntry: storageStats.oldestEntry,
         newestEntry: storageStats.newestEntry,
@@ -321,23 +263,25 @@ export class NestLensApiController {
     };
   }
 
+  /**
+   * Prunes now, by the same rules as the timer.
+   *
+   * This used to compute its own window from `config.pruning.maxAge`, which
+   * the service refuses to take at face value: `maxAge: 0` is ignored there
+   * and was honoured here, so pressing *Run pruning* with it set deleted every
+   * entry the application had recorded.
+   */
   @Post('pruning/run')
   async runPruning(@Res() _res?: unknown) {
-    const maxAgeHours = this.config.pruning?.maxAge ?? 24;
-    const before = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
-
-    const deleted = await this.storage.prune(before);
-    this.lastPruneRun = new Date();
-
-    const intervalMinutes = this.config.pruning?.interval ?? 60;
-    this.nextPruneRun = new Date(Date.now() + intervalMinutes * 60 * 1000);
+    const deleted = await this.pruningService.pruneNow();
+    const { lastRun, nextRun } = this.pruningService.schedule;
 
     return {
       success: true,
       data: {
         deleted,
-        lastRun: this.lastPruneRun.toISOString(),
-        nextRun: this.nextPruneRun.toISOString(),
+        lastRun: lastRun?.toISOString() ?? null,
+        nextRun: nextRun?.toISOString() ?? null,
       },
     };
   }

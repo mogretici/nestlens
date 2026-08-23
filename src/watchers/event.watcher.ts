@@ -1,8 +1,16 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /**
  * The EventEmitter2 surface this watcher touches.
@@ -12,6 +20,8 @@ import { resolveWatcherConfig } from './watcher-config';
  */
 interface EventEmitterLike {
   onAny(listener: (event: string | string[], ...values: unknown[]) => void): unknown;
+  /** Present on EventEmitter2; absent on a bare emitter, hence the check. */
+  offAny?(listener: (event: string | string[], ...values: unknown[]) => void): unknown;
   listeners(event: string): unknown[];
 }
 
@@ -28,9 +38,11 @@ function isEventEmitter(value: unknown): value is EventEmitterLike {
 export const NESTLENS_EVENT_EMITTER = Symbol('NESTLENS_EVENT_EMITTER');
 
 @Injectable()
-export class EventWatcher implements OnModuleInit {
+export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventWatcher.name);
   private readonly config: EventWatcherConfig;
+  /** Kept so it can be taken off again. */
+  private anyListener?: (event: string | string[], ...values: unknown[]) => void;
 
   constructor(
     private readonly collector: CollectorService,
@@ -61,12 +73,31 @@ export class EventWatcher implements OnModuleInit {
     this.setupInterceptors();
   }
 
+  /**
+   * Stops listening when the module closes.
+   *
+   * The emitter belongs to the application and outlives this module, so a
+   * listener left on it goes on recording through a collector that is gone —
+   * and a process that builds the module more than once against the same
+   * emitter, as tests and `nest start --hmr` do, adds one listener per round
+   * and records one entry per listener.
+   */
+  onModuleDestroy(): void {
+    const emitter = this.eventEmitter;
+
+    if (this.anyListener && isEventEmitter(emitter) && typeof emitter.offAny === 'function') {
+      emitter.offAny(this.anyListener);
+    }
+
+    this.anyListener = undefined;
+  }
+
   private setupInterceptors(): void {
     const emitter = this.eventEmitter;
     if (!isEventEmitter(emitter)) return;
 
     // Use onAny to intercept all events
-    emitter.onAny((event: string | string[], ...values: unknown[]) => {
+    this.anyListener = (event: string | string[], ...values: unknown[]) => {
       const startTime = Date.now();
 
       // Normalize event name
@@ -85,7 +116,9 @@ export class EventWatcher implements OnModuleInit {
         const duration = Date.now() - startTime;
         this.collectEntry(eventName, values, listeners, duration);
       });
-    });
+    };
+
+    emitter.onAny(this.anyListener);
 
     this.logger.log('Event interceptors installed');
   }
@@ -128,19 +161,7 @@ export class EventWatcher implements OnModuleInit {
   private capturePayload(values: unknown[]): unknown {
     if (!values || values.length === 0) return undefined;
 
-    try {
-      // If single value, return it directly
-      const payload = values.length === 1 ? values[0] : values;
-
-      // Limit size to prevent huge payloads from bloating storage
-      const json = JSON.stringify(payload);
-      const maxSize = 64 * 1024; // 64KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return payload;
-    } catch {
-      return { _error: 'Unable to serialize payload' };
-    }
+    // A single value is recorded as itself rather than as a list of one.
+    return capturePayload(values.length === 1 ? values[0] : values, 64 * 1024);
   }
 }

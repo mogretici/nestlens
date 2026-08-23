@@ -222,13 +222,25 @@ export class EnhancedExceptionFilter implements ExceptionFilter {
         url: request.url,
         body: request.body,
       },
-      // Add custom context
-      customContext: {
-        userId: request.user?.id,
-        tenant: request.headers['x-tenant-id'],
-        version: request.headers['x-api-version'],
-      },
     });
+
+    // The exception payload is a fixed shape with no free-form field. Anything
+    // else worth keeping goes on a log entry's `metadata`, correlated to the
+    // same request:
+    this.collector.collect(
+      'log',
+      {
+        level: 'error',
+        message: `${exception.constructor.name}: ${exception.message}`,
+        context: 'AllExceptionsFilter',
+        metadata: {
+          userId: request.user?.id,
+          tenant: request.headers['x-tenant-id'],
+          version: request.headers['x-api-version'],
+        },
+      },
+      request.headers['x-nestlens-request-id'],
+    );
 
     response.status(status).json({
       statusCode: status,
@@ -590,8 +602,8 @@ Link events to requests:
 async trackOrder(orderId: string, requestId?: string) {
   await this.collector.collect(
     'event',
-    { name: 'order_created', payload: { orderId } },
-    requestId  // Link to request
+    { name: 'order_created', payload: { orderId }, listeners: [], duration: 0 },
+    requestId, // Link to request
   );
 }
 ```

@@ -10,6 +10,7 @@ import { CollectorService } from '../core/collector.service';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /**
  * The cache-manager surface this watcher touches. Every method is optional
@@ -206,18 +207,6 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   private captureValue(value: unknown): unknown {
-    if (value === undefined || value === null) return undefined;
-
-    try {
-      // Limit size to prevent huge cache values from bloating storage
-      const json = JSON.stringify(value);
-      const maxSize = 1024; // 1KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return value;
-    } catch {
-      return { _error: 'Unable to serialize value' };
-    }
+    return capturePayload(value, 1024);
   }
 }

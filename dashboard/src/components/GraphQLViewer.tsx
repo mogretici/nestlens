@@ -68,33 +68,70 @@ function tokenize(query: string): string[] {
   return tokens;
 }
 
+/**
+ * How deep this will follow a query before it stops reading.
+ *
+ * The parser is recursive, one call per `{`, and the query it is given came off
+ * a recorded entry: whoever can reach the GraphQL endpoint decides its shape.
+ * Nesting it deeply enough took the tab down —
+ * `RangeError: Maximum call stack size exceeded` after 3.0s of frozen page,
+ * from a query well inside the 8KB `maxQuerySize` the watcher records.
+ *
+ * Sixty-four is far past anything a schema is written to answer — the watcher's
+ * own depth alarm defaults to warning at fifteen — and past it the rest of the
+ * selection is skipped rather than followed, so the cost of reading a hostile
+ * query stays linear in its length.
+ */
+const MAX_PARSE_DEPTH = 64;
+
 // Parse tokens into tree structure
 function parseGraphQL(query: string): GraphQLNode[] {
   const tokens = tokenize(query);
   const nodes: GraphQLNode[] = [];
   let pos = 0;
 
-  function parseSelectionSet(): GraphQLNode[] {
+  /** Walks past a selection set without building anything from it. */
+  function skipSelectionSet(): void {
+    if (tokens[pos] !== '{') return;
+
+    let depth = 0;
+    while (pos < tokens.length) {
+      const token = tokens[pos++];
+      if (token === '{') depth += 1;
+      else if (token === '}') {
+        depth -= 1;
+        if (depth === 0) return;
+      }
+    }
+  }
+
+  function parseSelectionSet(depth: number): GraphQLNode[] {
     const selections: GraphQLNode[] = [];
     if (tokens[pos] !== '{') return selections;
+
+    if (depth > MAX_PARSE_DEPTH) {
+      skipSelectionSet();
+      return [{ type: 'field', name: '… deeper than this viewer follows' }];
+    }
+
     pos++; // skip {
 
     while (pos < tokens.length && tokens[pos] !== '}') {
-      const node = parseSelection();
+      const node = parseSelection(depth);
       if (node) selections.push(node);
     }
     pos++; // skip }
     return selections;
   }
 
-  function parseSelection(): GraphQLNode | null {
+  function parseSelection(depth: number): GraphQLNode | null {
     if (tokens[pos] === '...') {
       pos++;
       if (tokens[pos] === 'on') {
         // Inline fragment
         pos++; // skip 'on'
         const typeCondition = tokens[pos++];
-        const children = parseSelectionSet();
+        const children = parseSelectionSet(depth + 1);
         return { type: 'inline-fragment', typeCondition, children };
       } else {
         // Fragment spread
@@ -166,7 +203,7 @@ function parseGraphQL(query: string): GraphQLNode[] {
     // Selection set
     let children: GraphQLNode[] | undefined;
     if (tokens[pos] === '{') {
-      children = parseSelectionSet();
+      children = parseSelectionSet(depth + 1);
     }
 
     return { type: 'field', name, alias, arguments: args, directives, children };
@@ -177,7 +214,7 @@ function parseGraphQL(query: string): GraphQLNode[] {
     if (!['query', 'mutation', 'subscription', 'fragment'].includes(opType)) {
       // Anonymous query - just a selection set
       if (tokens[pos] === '{') {
-        const children = parseSelectionSet();
+        const children = parseSelectionSet(1);
         return { type: 'operation', operationType: 'query', children };
       }
       return null;
@@ -189,7 +226,7 @@ function parseGraphQL(query: string): GraphQLNode[] {
       const name = tokens[pos++];
       pos++; // skip 'on'
       const typeCondition = tokens[pos++];
-      const children = parseSelectionSet();
+      const children = parseSelectionSet(1);
       return { type: 'fragment', name, typeCondition, children };
     }
 
@@ -227,7 +264,7 @@ function parseGraphQL(query: string): GraphQLNode[] {
       if (tokens[pos] === ')') pos++;
     }
 
-    const children = parseSelectionSet();
+    const children = parseSelectionSet(1);
     return { type: 'operation', operationType: opType, name, variableDefinitions, children };
   }
 

@@ -7,9 +7,6 @@ import {
   PruningStatus,
   StorageStats,
   CheckNewResponse,
-  TagWithCount,
-  MonitoredTag,
-  GroupedEntry,
 } from './types';
 import { nestlensUrl } from './basePath';
 
@@ -25,21 +22,6 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   return response.json();
 }
 
-export async function getEntries(params: {
-  type?: EntryType;
-  limit?: number;
-  offset?: number;
-  requestId?: string;
-}): Promise<ApiResponse<Entry[]>> {
-  const searchParams = new URLSearchParams();
-  if (params.type) searchParams.set('type', params.type);
-  if (params.limit) searchParams.set('limit', params.limit.toString());
-  if (params.offset) searchParams.set('offset', params.offset.toString());
-  if (params.requestId) searchParams.set('requestId', params.requestId);
-
-  return fetchApi(`/entries?${searchParams.toString()}`);
-}
-
 export async function getEntry(id: number): Promise<ApiResponse<Entry>> {
   return fetchApi(`/entries/${id}`);
 }
@@ -48,25 +30,28 @@ export async function getStats(): Promise<ApiResponse<Stats>> {
   return fetchApi('/stats');
 }
 
-export async function getRequests(limit = 50, offset = 0): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/requests?limit=${limit}&offset=${offset}`);
-}
-
-export async function getQueries(limit = 50, offset = 0, slow = false): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/queries?limit=${limit}&offset=${offset}${slow ? '&slow=true' : ''}`);
-}
-
-export async function getExceptions(limit = 50, offset = 0): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/exceptions?limit=${limit}&offset=${offset}`);
-}
-
-export async function getLogs(limit = 50, offset = 0, level?: string): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/logs?limit=${limit}&offset=${offset}${level ? `&level=${level}` : ''}`);
-}
-
+/**
+ * Deletes every entry, or says why it could not.
+ *
+ * This read the body without looking at the status, so a refusal — a guard
+ * that did not recognise the caller, a storage that could not answer — came
+ * back as an ordinary value and the dashboard reported *All entries cleared*
+ * over a list that still had everything in it.
+ */
 export async function clearEntries(): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE}/entries`, { method: 'DELETE' });
-  return response.json();
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const body = (await response.json()) as ApiResponse<{ message?: string }> & {
+    success?: boolean;
+  };
+  if (body.success === false) {
+    throw new Error(body.error ?? 'The request was refused');
+  }
+
+  return { success: true, message: body.data?.message ?? 'All entries cleared' };
 }
 
 /**
@@ -137,6 +122,14 @@ export interface CursorFilters {
   // Common
   tags?: string[];
   search?: string;
+  /** ISO 8601 instant; only entries recorded at or after it. */
+  from?: string;
+  /** ISO 8601 instant; only entries recorded at or before it. */
+  to?: string;
+  /** Milliseconds; only entries that took at least this long. */
+  minDuration?: number;
+  /** Milliseconds; only entries that took at most this long. */
+  maxDuration?: number;
 }
 
 /**
@@ -217,6 +210,10 @@ export async function getEntriesWithCursor(params: {
     // Common filters
     if (f.tags && f.tags.length > 0) searchParams.set('tags', f.tags.join(','));
     if (f.search) searchParams.set('search', f.search);
+    if (f.from) searchParams.set('from', f.from);
+    if (f.to) searchParams.set('to', f.to);
+    if (f.minDuration !== undefined) searchParams.set('minDuration', f.minDuration.toString());
+    if (f.maxDuration !== undefined) searchParams.set('maxDuration', f.maxDuration.toString());
   }
 
   return fetchApi(`/entries/cursor?${searchParams.toString()}`);
@@ -261,32 +258,29 @@ export async function runPruning(): Promise<{
 // ==================== Tag API Functions ====================
 
 /**
- * Get all tags with their counts
+ * The tags being monitored, with how many entries carry each.
+ *
+ * Monitoring a tag is how a reader says *do not let these go*: its entries are
+ * kept when pruning runs. The store's `maxEntries` ceiling still applies.
  */
-export async function getAllTags(): Promise<ApiResponse<TagWithCount[]>> {
-  return fetchApi('/tags');
+export async function getMonitoredTags(): Promise<
+  ApiResponse<{ id: number; tag: string; createdAt: string; count: number }[]>
+> {
+  return fetchApi('/tags/monitored');
 }
 
-/**
- * Get entries by tags
- */
-export async function getEntriesByTags(
-  tags: string[],
-  logic: 'AND' | 'OR' = 'OR',
-  limit = 50,
-): Promise<ApiResponse<Entry[]>> {
-  const searchParams = new URLSearchParams();
-  searchParams.set('tags', tags.join(','));
-  searchParams.set('logic', logic);
-  searchParams.set('limit', limit.toString());
-  return fetchApi(`/tags/entries?${searchParams.toString()}`);
+export async function addMonitoredTag(
+  tag: string,
+): Promise<{ success: boolean; data: { tag: string } }> {
+  return fetchApi('/tags/monitored', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  });
 }
 
-/**
- * Get tags for a specific entry
- */
-export async function getEntryTags(entryId: number): Promise<ApiResponse<string[]>> {
-  return fetchApi(`/tags/entry/${entryId}`);
+export async function removeMonitoredTag(tag: string): Promise<{ success: boolean }> {
+  return fetchApi(`/tags/monitored/${encodeURIComponent(tag)}`, { method: 'DELETE' });
 }
 
 /**
@@ -320,37 +314,6 @@ export async function removeTagsFromEntry(
 // ==================== Monitored Tags ====================
 
 /**
- * Get monitored tags with counts
- */
-export async function getMonitoredTags(): Promise<ApiResponse<MonitoredTag[]>> {
-  return fetchApi('/tags/monitored');
-}
-
-/**
- * Add a monitored tag
- */
-export async function addMonitoredTag(
-  tag: string,
-): Promise<{ success: boolean; data: MonitoredTag }> {
-  return fetchApi('/tags/monitored', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tag }),
-  });
-}
-
-/**
- * Remove a monitored tag
- */
-export async function removeMonitoredTag(tag: string): Promise<{ success: boolean }> {
-  return fetchApi(`/tags/monitored/${encodeURIComponent(tag)}`, {
-    method: 'DELETE',
-  });
-}
-
-// ==================== Resolution ====================
-
-/**
  * Mark an entry as resolved
  */
 export async function resolveEntry(id: number): Promise<{ success: boolean; data: Entry }> {
@@ -365,31 +328,6 @@ export async function unresolveEntry(id: number): Promise<{ success: boolean; da
 }
 
 // ==================== Family Hash (Grouping) ====================
-
-/**
- * Get entries grouped by family hash
- */
-export async function getGroupedEntries(
-  type?: EntryType,
-  limit = 50,
-): Promise<ApiResponse<GroupedEntry[]>> {
-  const searchParams = new URLSearchParams();
-  if (type) searchParams.set('type', type);
-  searchParams.set('limit', limit.toString());
-  return fetchApi(`/entries/grouped?${searchParams.toString()}`);
-}
-
-/**
- * Get entries with the same family hash
- */
-export async function getEntriesByFamilyHash(
-  hash: string,
-  limit = 50,
-): Promise<ApiResponse<Entry[]>> {
-  return fetchApi(`/entries/family/${hash}?limit=${limit}`);
-}
-
-// ==================== Recording Control ====================
 
 export interface RecordingStatus {
   isPaused: boolean;

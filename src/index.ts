@@ -32,6 +32,15 @@ export {
   GateWatcherConfig,
   BatchWatcherConfig,
   DumpWatcherConfig,
+  GraphQLWatcherConfig,
+  GraphQLSubscriptionConfig,
+  GraphQLOperationContext,
+  // Security and masking
+  SecurityConfig,
+  // Alerting
+  AlertingConfig,
+  AlertingWebhook,
+  AlertingWebhookType,
   // Storage config
   StorageConfig,
   StorageDriver,
@@ -62,14 +71,35 @@ export { NestLensLogger } from './watchers/log.watcher';
 // Request ID header constant
 export { REQUEST_ID_HEADER } from './watchers/request.watcher';
 
-// Watcher classes (for manual setup)
+// Watcher classes.
+//
+// Every one of them, because every one is an `@Injectable()` an application
+// may hold: several carry a manual `track*` method as their documented way in,
+// and three of those — `BatchWatcher`, `DumpWatcher` and `GateWatcher` — were
+// written up with `import { … } from 'nestlens'` while not being exported at
+// all. Following the documentation produced `undefined`. `exports` in
+// package.json allows three entry points, so what is not here is not reachable
+// by any other route either.
+export { BatchWatcher } from './watchers/batch.watcher';
+export { CacheWatcher } from './watchers/cache.watcher';
+export { CommandWatcher } from './watchers/command.watcher';
+export { DumpWatcher } from './watchers/dump.watcher';
+export { EventWatcher } from './watchers/event.watcher';
+export { ExceptionWatcher } from './watchers/exception.watcher';
+export { GateWatcher } from './watchers/gate.watcher';
+export { HttpClientWatcher } from './watchers/http-client.watcher';
 export { JobWatcher } from './watchers/job.watcher';
+export { MailWatcher } from './watchers/mail.watcher';
 export { ModelWatcher } from './watchers/model.watcher';
+export { NotificationWatcher } from './watchers/notification.watcher';
+export { RedisWatcher } from './watchers/redis.watcher';
+export { RequestWatcher } from './watchers/request.watcher';
+export { ScheduleWatcher } from './watchers/schedule.watcher';
+export { ViewWatcher } from './watchers/view.watcher';
 export { GraphQLWatcher, GRAPHQL_WATCHER } from './watchers/graphql';
 
 // Watcher tokens (for dependency injection)
 export { NESTLENS_EVENT_EMITTER } from './watchers/event.watcher';
-export { NESTLENS_BULL_QUEUES } from './watchers/job.watcher';
 export { NESTLENS_REDIS_CLIENT } from './watchers/redis.watcher';
 export { NESTLENS_MODEL_SUBSCRIBER } from './watchers/model.watcher';
 export { NESTLENS_NOTIFICATION_SERVICE } from './watchers/notification.watcher';
@@ -79,3 +109,4 @@ export { NESTLENS_MAILER_SERVICE } from './watchers/mail.watcher';
 export { NESTLENS_GATE_SERVICE } from './watchers/gate.watcher';
 export { NESTLENS_COMMAND_BUS } from './watchers/command.watcher';
 export { NESTLENS_BATCH_PROCESSOR } from './watchers/batch.watcher';
+export { NESTLENS_DUMP_SERVICE } from './watchers/dump.watcher';

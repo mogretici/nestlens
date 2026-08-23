@@ -274,11 +274,24 @@ export default function Layout() {
   }, [darkMode, applyTheme]);
 
   const handleClear = useCallback(async () => {
-    if (window.confirm('Are you sure you want to clear all entries?')) {
-      await clearEntries();
-      toast.success('All entries cleared');
-      window.location.reload();
+    if (!window.confirm('Are you sure you want to clear all entries?')) {
+      return;
     }
+
+    // Told, rather than assumed: this reported success without looking, so a
+    // refusal or an unreachable API still said *All entries cleared* and
+    // reloaded the page onto a list that still had everything in it.
+    try {
+      await clearEntries();
+    } catch (error) {
+      toast.error(
+        `Could not clear entries: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+
+    toast.success('All entries cleared');
+    window.location.reload();
   }, []);
 
   // Apply theme on mount and when system preference changes

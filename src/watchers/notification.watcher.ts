@@ -7,9 +7,11 @@ import {
   Optional,
 } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
+import { wrapMethodPreservingShape } from './wrap-method';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 type NotificationMethod = (...args: unknown[]) => unknown;
 
@@ -84,12 +86,14 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      // Store original method
-      const original = (existing as NotificationMethod).bind(service);
+      // What was there, and a bound copy to call through. See the same note in
+      // `redis.watcher.ts`: storing the bound one meant `destroy` put back
+      // something the application never wrote.
+      const original = existing as NotificationMethod;
       this.originalMethods.set(name, original);
 
       // Wrap the method
-      service[name] = this.wrapNotificationMethod(name, type, original);
+      service[name] = this.wrapNotificationMethod(name, type, original.bind(service));
     }
 
     this.logger.log('Notification interceptors installed');
@@ -121,35 +125,23 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
     notificationType: 'email' | 'sms' | 'push' | 'socket' | 'webhook',
     originalMethod: NotificationMethod,
   ): NotificationMethod {
-    return async (...args: unknown[]): Promise<unknown> => {
-      const startTime = Date.now();
-      let status: 'sent' | 'failed' = 'sent';
-      let error: string | undefined;
-
-      // Extract notification details from arguments
+    // Wrapped without changing what a caller gets back: written `async`, this
+    // turned a service whose send is synchronous into one that returns a
+    // promise, and the notification services applications write are their own.
+    return wrapMethodPreservingShape(originalMethod, ({ args, error, durationMs }) => {
       const notificationData = this.extractNotificationData(args);
 
-      try {
-        const result = await originalMethod(...args);
-        return result;
-      } catch (err) {
-        status = 'failed';
-        error = err instanceof Error ? err.message : String(err);
-        throw err;
-      } finally {
-        const duration = Date.now() - startTime;
-        this.collectEntry(
-          notificationType,
-          notificationData.recipient,
-          notificationData.title,
-          notificationData.message,
-          notificationData.metadata,
-          status,
-          duration,
-          error,
-        );
-      }
-    };
+      this.collectEntry(
+        notificationType,
+        notificationData.recipient,
+        notificationData.title,
+        notificationData.message,
+        notificationData.metadata,
+        error ? 'failed' : 'sent',
+        durationMs,
+        error ? (error instanceof Error ? error.message : String(error)) : undefined,
+      );
+    });
   }
 
   /**
@@ -273,15 +265,6 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
   private captureMetadata(metadata?: Record<string, unknown>): Record<string, unknown> | undefined {
     if (!metadata) return undefined;
 
-    try {
-      const json = JSON.stringify(metadata);
-      const maxSize = 2048; // 2KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return metadata;
-    } catch {
-      return { _error: 'Unable to serialize metadata' };
-    }
+    return capturePayload(metadata, 2048) as Record<string, unknown>;
   }
 }

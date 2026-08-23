@@ -748,3 +748,82 @@ describe('DataTable Edge Cases', () => {
     expect(screen.getByText('-')).toBeInTheDocument();
   });
 });
+
+/**
+ * A table that could not ask must not answer for the application.
+ *
+ * The empty state stood in for both. A dashboard reached through a tunnel from
+ * an address the guard does not allow gets 403 from every call, and the table
+ * said "No requests recorded yet" — measured identically against 403, 500 and
+ * an unreachable server. That reads as "your application is idle", the one
+ * conclusion a reader must never draw from a tool that cannot see anything.
+ */
+describe('DataTable — when the request failed', () => {
+  const columns = [{ key: 'name', header: 'Name', render: (row: { name: string }) => row.name }];
+
+  const draw = (props: Record<string, unknown> = {}) =>
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        keyExtractor={(row) => row.name}
+        emptyMessage="No requests recorded yet"
+        {...props}
+      />,
+    );
+
+  it('says it could not load rather than that there is nothing', () => {
+    draw({ error: new Error('API error: 403') });
+
+    expect(screen.getByTestId('table-error')).toBeInTheDocument();
+    expect(screen.queryByText('No requests recorded yet')).not.toBeInTheDocument();
+  });
+
+  it('repeats what went wrong', () => {
+    draw({ error: new Error('API error: 403') });
+
+    expect(screen.getByText(/403/)).toBeInTheDocument();
+  });
+
+  it('is announced', () => {
+    draw({ error: new Error('API error: 500') });
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('offers another go when the caller can retry', () => {
+    const onRetry = vi.fn();
+    draw({ error: new Error('nope'), onRetry });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing about retrying when there is no way to', () => {
+    draw({ error: new Error('nope') });
+
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('still shows the rows it has when a later request fails', () => {
+    // A failed poll must not blank a table the reader is reading.
+    draw({ data: [{ name: 'one' }], error: new Error('nope') });
+
+    expect(screen.getByText('one')).toBeInTheDocument();
+    expect(screen.queryByTestId('table-error')).not.toBeInTheDocument();
+  });
+
+  it('keeps the empty state when nothing failed', () => {
+    draw();
+
+    expect(screen.getByText('No requests recorded yet')).toBeInTheDocument();
+    expect(screen.queryByTestId('table-error')).not.toBeInTheDocument();
+  });
+
+  it('shows the skeleton, not the failure, while loading', () => {
+    draw({ error: new Error('nope'), loading: true });
+
+    expect(screen.queryByTestId('table-error')).not.toBeInTheDocument();
+  });
+});

@@ -129,6 +129,22 @@ private readonly FLUSH_INTERVAL = 1000;       // 1 second
 private readonly MAX_BUFFERED_ENTRIES = 1000; // Ceiling while storage is down
 ```
 
+### When storage is slower than the traffic
+
+One batch is on its way to the storage at a time. A flush that starts while
+another is still going waits for it and then writes whatever accumulated in
+the meantime; the interval timer and the buffer's own threshold skip rather
+than queue, because the flush in flight will take what they would have.
+
+That keeps `MAX_BUFFERED_ENTRIES` meaningful. Every caller used to start its
+own write, so entries already in flight were outside the ceiling — measured at
+thirty concurrent writes and three thousand entries in flight against a store
+taking 300 ms a batch, three times the cap and growing with the lag.
+
+At a rate the storage can keep up with, nothing is dropped and nothing waits:
+a thousand entries a second against that same 300 ms store wrote all three
+thousand. Past that the ceiling below decides what survives.
+
 ### When storage stops answering
 
 Entries that could not be written are kept and retried, but only up to
@@ -381,6 +397,29 @@ cost about 2.5% of the process's CPU.
 
 Turn it on where the application handles one thing at a time — a local
 reproduction, a worker — and the number means something.
+
+## Shutting Down
+
+The last thing NestLens does on shutdown is flush whatever is still buffered.
+That flush has a **three-second deadline**, after which the application finishes
+shutting down without it.
+
+The deadline exists because a storage that has stopped answering does not fail
+the flush — it never returns. Awaiting it meant `app.close()` never resolved,
+SIGTERM did nothing, and the process waited for whatever eventually killed it.
+An unreachable Redis was enough to leave a rolling deploy hanging.
+
+Measured against a storage whose `save` never settles:
+
+| storage | `app.close()` |
+| --- | --- |
+| healthy | 1 ms |
+| throwing | 302 ms |
+| hanging | never (now: 3 s) |
+
+A normal flush is milliseconds, so the deadline only ever applies when storage
+is already failing — and entries it will not accept were not going to be kept
+either way.
 
 ## Sampling
 
@@ -732,7 +771,10 @@ export class MetricsController {
   @Get('nestlens/metrics')
   async getMetrics() {
     return {
-      bufferSize: collector.getBufferSize(),
+      // { pending, capacity, dropped } — `pending` near `capacity` means
+      // storage is slower than collection, and `dropped` is what that has
+      // already cost.
+      buffer: collector.getBufferSize(),
       storageSize: await storage.getStorageStats(),
       performance: performanceMonitor.getMetrics(),
     };

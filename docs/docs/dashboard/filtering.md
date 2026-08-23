@@ -4,7 +4,8 @@ sidebar_position: 3
 
 # Filtering
 
-NestLens provides comprehensive filtering capabilities with over 60 filter types to help you find exactly what you're looking for in your application's activity.
+The API accepts 50 filter parameters, and the dashboard reaches them from the
+header, the search box and the values in each table.
 
 ## Filter Types
 
@@ -27,6 +28,20 @@ Available across multiple entry types:
 - **Resolved** - Show only resolved entries
 - **Unresolved** - Show only unresolved entries
 - **All** - Show both (default)
+
+#### Time Window
+- **Any time** (default), **Last 5 minutes**, **Last 15 minutes**, **Last hour**, **Last 24 hours**
+- Available on every list
+- Relative, not fixed: the window is measured from the moment of each request, so
+  a page left open keeps showing the last five minutes rather than the five
+  minutes around when you chose it
+- URL parameter: `window=5m`
+
+#### Duration
+- **Any duration** (default), **Over 100ms**, **Over 500ms**, **Over 1s**, **Over 5s**
+- Available on every list whose entries record how long they took — everything
+  except exceptions and logs, which measure nothing
+- URL parameter: `slower=500`
 
 ### Request Filters
 
@@ -165,45 +180,52 @@ Data operation filters:
 
 ![Filtering in Action](/img/screenshots/filtering.png)
 
-### Filter Bar
+### Range Controls
 
-The filter bar appears below the header and shows:
-- Active filter badges
-- "Clear all" button (when filters active)
-- Filter dropdown menu
-- Quick filter toggles
+A row under the page title carries the time window and, where entries measure
+one, the duration. Both write to the URL, so the narrowed view is a link.
 
 ### Filter Badges
 
-Each active filter displays as a badge:
+Every filter you have applied appears as a badge below the header:
+
 ```
-Status: 500 ×    Method: POST ×    Slow: true ×
+Method: GET ×    Status: 500 ×
 ```
 
-Click the × to remove individual filters.
+Click the × to remove one, or **Clear all** to remove them all at once.
 
-### Filter Dropdown
+### Filtering From a Row
 
-Click "Filters" to open advanced filtering:
-1. Select filter type from dropdown
-2. Choose or enter filter value
-3. Click "Apply" or press Enter
-4. Filter badge appears in filter bar
+Most values in a table are buttons. Clicking a method, a status code, a path, a
+queue name or a tag adds it as a filter — this is how filters are added, rather
+than through a separate filter menu.
 
-### Quick Filters
+### Search
 
-Common filters have toggle buttons for quick access:
-- **Slow Queries** - Toggle slow query filter
-- **Errors Only** - Show only 4xx/5xx responses
-- **Unresolved** - Show unresolved exceptions
+The search box above each table matches the entry's payload and its tags. It is
+applied by the server alongside the other filters.
+
+### Per-Page Controls
+
+Some lists carry a control of their own:
+
+- **Queries** - a **Slow Only** switch in the header
+- **Exceptions** - **All / Unresolved / Resolved** tabs
+- **GraphQL** - the error and N+1 badges on a row filter the list to operations
+  that have them
 
 ## URL-Driven Filters
 
 Filters are reflected in the URL query string:
 
 ```
-/nestlens/requests?status=500&method=POST&path=/api/users
+/nestlens/requests?statuses=500&methods=POST&paths=/api/users&window=1h
 ```
+
+Parameter names are plural, and one accepts several comma-separated values:
+`statuses=500,503`. A name the API does not know is ignored rather than
+rejected, so a link that filters nothing is usually a misspelled parameter.
 
 Benefits:
 - **Bookmarkable** - Save filtered views
@@ -223,27 +245,34 @@ This means all conditions must match.
 
 ### Tag Filters
 
-Tag filters support both AND and OR logic:
+Filtering by several tags in the dashboard matches an entry carrying **any** of
+them.
 
-- **OR Logic** - Match any tag: `tag=error OR tag=critical`
-- **AND Logic** - Match all tags: `tag=error AND tag=production`
+The API offers both, on its own endpoint:
 
-Toggle between modes in the tag filter dropdown.
+```
+GET /nestlens/__nestlens__/api/tags/entries?tags=error,production&logic=AND
+```
+
+`logic` accepts `AND` or `OR` and defaults to `OR`.
 
 ## Clear Filters
 
 Remove all active filters:
 
-1. **Clear All Button** - Click "Clear All" in the filter bar
-2. **Navigation** - Click the entry type in the sidebar to reset its view
+1. **Clear all** - the button beside the filter badges, shown once more than one
+   filter is active
+2. **One at a time** - the × on a badge
+3. **Navigation** - clicking the entry type in the sidebar opens it unfiltered
 
 ## Filter Persistence
 
-Filters persist during your session:
+The URL is the only place a filter is kept:
 
-- **Session Storage** - Filters saved per entry type
-- **Cleared on Refresh** - Fresh start on page reload
-- **URL Takes Precedence** - URL params override saved filters
+- **Survives a refresh** - reloading the page keeps every filter
+- **Survives the back button** - browser history moves between filtered views
+- **Nothing is stored locally** - opening the same page in another tab starts
+  from whatever that tab's URL says
 
 ## Performance Considerations
 
@@ -287,12 +316,11 @@ Type: Exceptions
 Resolved: false
 ```
 
-### Redis Cache Misses
+### Cache Reads
 
 ```
 Type: Cache
 Operation: get
-Hit: false
 ```
 
 ## Next Steps

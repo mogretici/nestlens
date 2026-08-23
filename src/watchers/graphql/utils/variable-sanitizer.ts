@@ -5,6 +5,7 @@
  */
 
 import { markSanitized } from '../../../core/sanitized-payload';
+import { assignKey } from '../../../core/safe-assign';
 
 const MASKED_VALUE = '***';
 
@@ -263,21 +264,36 @@ function sanitizeObject(
 
   for (const [key, value] of Object.entries(obj)) {
     if (matcher.isSensitive(key)) {
-      result[key] = MASKED_VALUE;
+      assignKey(result, key, MASKED_VALUE);
       continue;
     }
 
-    if (value === null || value === undefined) {
-      result[key] = value;
+    if (typeof value === 'function') {
+      // A function is dropped by `JSON.stringify` and kept by the in-memory
+      // driver, so the same payload takes two shapes — and one carried across
+      // is one that runs later: an own `toJSON` that throws makes the
+      // sanitised copy unwritable, which costs the whole entry. The masker
+      // records functions the same way.
+      assignKey(result, key, '[Function]');
+    } else if (typeof value === 'bigint') {
+      // The one primitive `JSON.stringify` refuses rather than skips. Written
+      // the way it is printed, as the masker writes it.
+      assignKey(result, key, `${value}n`);
+    } else if (value === null || value === undefined) {
+      assignKey(result, key, value);
     } else if (Array.isArray(value)) {
-      result[key] = sanitizeArray(value, matcher, depth + 1, maxDepth);
+      assignKey(result, key, sanitizeArray(value, matcher, depth + 1, maxDepth));
     } else if (typeof value === 'object') {
-      result[key] = sanitizeObject(value as Record<string, unknown>, matcher, depth + 1, maxDepth);
+      assignKey(
+        result,
+        key,
+        sanitizeObject(value as Record<string, unknown>, matcher, depth + 1, maxDepth),
+      );
     } else if (typeof value === 'string' && looksLikeSensitiveValue(value)) {
       // Mask values that look like tokens, keys, etc.
-      result[key] = MASKED_VALUE;
+      assignKey(result, key, MASKED_VALUE);
     } else {
-      result[key] = value;
+      assignKey(result, key, value);
     }
   }
 
@@ -298,6 +314,14 @@ function sanitizeArray(
   }
 
   return arr.map((item) => {
+    if (typeof item === 'function') {
+      return '[Function]';
+    }
+
+    if (typeof item === 'bigint') {
+      return `${item}n`;
+    }
+
     if (item === null || item === undefined) {
       return item;
     }
@@ -574,17 +598,4 @@ export function sanitizeResponse(
   }
 
   return data;
-}
-
-/**
- * Create a sanitizer function with pre-configured patterns
- */
-export function createSanitizer(sensitivePatterns: string[]) {
-  return {
-    sanitizeVariables: (variables?: Record<string, unknown>) =>
-      sanitizeVariables(variables, sensitivePatterns),
-
-    sanitizeResponse: (data: unknown, maxSize: number) =>
-      sanitizeResponse(data, sensitivePatterns, maxSize),
-  };
 }

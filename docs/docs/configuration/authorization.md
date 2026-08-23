@@ -127,6 +127,19 @@ Provides complete control over access authorization with custom logic.
 The `req` parameter is typed as the Express `Request` for convenience, but only common fields are read (`req.headers`, `req.ip`, `req.url`). The callback works on both the Express and Fastify adapters — just stick to standard header/URL access rather than Express-only helpers.
 :::
 
+:::caution Only `true` and an `AuthUser` grant access
+Any other answer is a refusal — `false`, `null`, `undefined`, `0`, an empty string, or a thrown error. A function that falls off the end of a branch returns `undefined`, and that has to mean no:
+
+```typescript
+// Denies every request: the authorised branch never returns anything.
+canAccess: (req) => {
+  if (!req.headers.authorization) return false;
+}
+```
+
+An error thrown or rejected inside `canAccess` is logged and denies as well, so a lookup that cannot reach its database closes the dashboard rather than opening it.
+:::
+
 #### Simple Boolean Authorization
 
 ```typescript
@@ -212,10 +225,24 @@ NestLensModule.forRoot({
 
 ### requiredRoles
 
-Specifies which roles are required to access NestLens. Works in conjunction with `canAccess` when it returns an `AuthUser` object.
+Specifies which roles are required to access NestLens. The user is whoever `canAccess` returned.
 
 - **Type**: `string[]`
 - **Default**: `undefined` (no role requirements)
+
+:::caution A role requirement needs a user to check
+Roles are checked against the `AuthUser` that `canAccess` returns, so setting `requiredRoles` without a `canAccess` that returns one denies every request — and says so in the log. The two configurations below both refuse:
+
+```typescript
+// Nothing produces a user, so nothing can hold the role.
+{ requiredRoles: ['admin'] }
+
+// `true` grants access without saying who, so there are no roles to check.
+{ canAccess: () => true, requiredRoles: ['admin'] }
+```
+
+Return an `AuthUser` with `roles` instead. The user must hold **all** of the required roles.
+:::
 
 ```typescript
 NestLensModule.forRoot({

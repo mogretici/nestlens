@@ -1,15 +1,16 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { GateWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { GateEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
-
-type GateMethod = (
-  gate: string,
-  action?: string,
-  subject?: unknown,
-  user?: unknown,
-) => Promise<boolean>;
+import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * Token for injecting authorization/gate service
@@ -22,15 +23,10 @@ export const NESTLENS_GATE_SERVICE = Symbol('NESTLENS_GATE_SERVICE');
  * capturing gate name, action, subject, allowed/denied status, and user information.
  */
 @Injectable()
-export class GateWatcher implements OnModuleInit {
+export class GateWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GateWatcher.name);
   private readonly config: GateWatcherConfig;
-  private originalCheck?: (
-    gate: string,
-    action: string,
-    subject?: unknown,
-    user?: unknown,
-  ) => Promise<boolean>;
+  private wrapped?: WrappedMethods;
 
   constructor(
     private readonly collector: CollectorService,
@@ -64,65 +60,44 @@ export class GateWatcher implements OnModuleInit {
   private setupInterceptors(): void {
     if (!this.gateService) return;
 
+    this.wrapped = new WrappedMethods(this.gateService as Record<string, unknown>);
+
     // Try to wrap common authorization methods
-    this.wrapMethod('check');
-    this.wrapMethod('allows');
-    this.wrapMethod('denies');
-    this.wrapMethod('authorize');
-    this.wrapMethod('can');
+    for (const method of ['check', 'allows', 'denies', 'authorize', 'can']) {
+      this.wrapped.replace(method, (original) =>
+        wrapMethodPreservingShape(original, ({ args, result, error, durationMs }) => {
+          const [gate, action, subject, user] = args as [string, string?, unknown?, unknown?];
+
+          // `denies` answers the opposite question, so its `true` is a refusal.
+          const allowed = error ? false : method === 'denies' ? !result : Boolean(result);
+
+          this.collectEntry(
+            gate,
+            action || method,
+            subject,
+            allowed,
+            user,
+            error ? (error instanceof Error ? error.message : String(error)) : undefined,
+            durationMs,
+          );
+        }),
+      );
+    }
 
     this.logger.log('Gate interceptors installed');
   }
 
-  private wrapMethod(methodName: string): void {
-    // The service is user-supplied and its methods are looked up by name, so
-    // the shape is checked at runtime rather than declared.
-    const service: Record<string, unknown> | undefined = this.gateService as
-      Record<string, unknown> | undefined;
-
-    if (!service) return;
-
-    const existing = service[methodName];
-
-    if (typeof existing !== 'function') {
-      return;
-    }
-
-    const originalMethod = (existing as GateMethod).bind(service);
-
-    service[methodName] = async (
-      gate: string,
-      action?: string,
-      subject?: unknown,
-      user?: unknown,
-    ): Promise<boolean> => {
-      const startTime = Date.now();
-
-      try {
-        const allowed = await originalMethod(gate, action, subject, user);
-        const duration = Date.now() - startTime;
-
-        // Track authorization check
-        this.collectEntry(gate, action || 'check', subject, allowed, user, undefined, duration);
-
-        return allowed;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-
-        // Track failed authorization check
-        this.collectEntry(
-          gate,
-          action || 'check',
-          subject,
-          false,
-          user,
-          error instanceof Error ? error.message : String(error),
-          duration,
-        );
-
-        throw error; // Re-throw to maintain original behavior
-      }
-    };
+  /**
+   * Puts the authorization service back the way it was.
+   *
+   * Without this the host goes on calling through a watcher whose collector is
+   * gone, and a process that builds the module more than once against the same
+   * service — as tests and `nest start --hmr` do — wraps each round on top of
+   * the last.
+   */
+  onModuleDestroy(): void {
+    this.wrapped?.restore();
+    this.wrapped = undefined;
   }
 
   /**

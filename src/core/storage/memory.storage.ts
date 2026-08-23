@@ -57,7 +57,11 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     const savedEntry: StoredEntry = {
       ...entry,
       id,
-      createdAt: new Date().toISOString(),
+      // What the collector stamped when the thing happened, or now for a
+      // caller that supplied nothing. The buffer holds entries for up to a
+      // second, so stamping them here recorded the flush rather than the
+      // event.
+      createdAt: entry.createdAt ?? new Date().toISOString(),
     };
 
     this.entries.set(id, savedEntry);
@@ -308,12 +312,37 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
   // ==================== Pruning ====================
 
+  /**
+   * The entries a monitored tag is keeping.
+   *
+   * Monitoring a tag is how a reader says *do not let these go*, which is what
+   * it means in Telescope and what nothing here did with it: the tag was
+   * stored, listed and counted, and pruning deleted its entries with the rest.
+   *
+   * Age is what it protects against. The store's `maxEntries` ceiling still
+   * applies — that is what bounds how much memory NestLens holds, and a
+   * monitored tag on a busy route would otherwise have no bound at all.
+   */
+  private monitoredEntryIds(): Set<number> {
+    const protectedIds = new Set<number>();
+
+    for (const monitored of this.monitoredTags.values()) {
+      const ids = this.tagIndex.get(normalizeTag(monitored.tag));
+      if (!ids) continue;
+
+      for (const id of ids) protectedIds.add(id);
+    }
+
+    return protectedIds;
+  }
+
   async prune(before: Date): Promise<number> {
     const beforeTime = before.getTime();
+    const protectedIds = this.monitoredEntryIds();
     let deleted = 0;
 
     for (const [id, entry] of this.entries) {
-      if (new Date(entry.createdAt).getTime() < beforeTime) {
+      if (new Date(entry.createdAt).getTime() < beforeTime && !protectedIds.has(id)) {
         this.entries.delete(id);
         this.removeEntryTagsInternal(id);
         deleted++;
@@ -329,10 +358,15 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
     const beforeTime = before.getTime();
+    const protectedIds = this.monitoredEntryIds();
     let deleted = 0;
 
     for (const [id, entry] of this.entries) {
-      if (entry.type === type && new Date(entry.createdAt).getTime() < beforeTime) {
+      if (
+        entry.type === type &&
+        new Date(entry.createdAt).getTime() < beforeTime &&
+        !protectedIds.has(id)
+      ) {
         this.entries.delete(id);
         this.removeEntryTagsInternal(id);
         deleted++;
@@ -345,6 +379,15 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   // ==================== Tag Methods ====================
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
+    // Same rule as the SQLite backend: an entry that is not here cannot be
+    // tagged. Storing the tag anyway left it counted by `getAllTags` and
+    // returned by `getEntryTags` for an id nothing else knows about, and it
+    // would never be cleaned up — `removeEntryTagsInternal` only runs for
+    // entries that were evicted, and this one was never there.
+    if (!this.entries.has(entryId)) {
+      return;
+    }
+
     const entryTagSet = this.entryTags.get(entryId) ?? new Set<string>();
     this.entryTags.set(entryId, entryTagSet);
 

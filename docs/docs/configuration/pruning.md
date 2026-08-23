@@ -145,10 +145,37 @@ NestLensModule.forRoot({
 NestLens executes a pruning query similar to:
 
 ```sql
-DELETE FROM nestlens_entries WHERE created_at < ?
+DELETE FROM nestlens_entries
+WHERE created_at < ?
+  AND id NOT IN (SELECT entry_id FROM nestlens_tags
+                 WHERE tag IN (SELECT tag FROM nestlens_monitored_tags))
 ```
 
 Where `?` is the ISO timestamp calculated from the current time minus `maxAge` hours.
+
+## Keeping entries: monitored tags
+
+An entry that carries a **monitored tag** is not pruned. Monitoring a tag is how
+you say *do not let these go* — the incident you are still investigating, the
+route you are watching over a week, the customer whose requests you tagged.
+
+Monitor a tag from the dashboard, beside the retention figures on the overview,
+or through the API:
+
+```bash
+curl -X POST http://localhost:3000/nestlens/__nestlens__/api/tags/monitored \
+  -H 'Content-Type: application/json' -d '{"tag":"checkout"}'
+```
+
+Age is what it protects against. The store's `maxEntries` ceiling still applies:
+that is what bounds how much NestLens holds, and a monitored tag on a busy route
+would otherwise have no bound at all. Where you need a monitored tag's entries
+to survive volume as well, raise `storage.<driver>.maxEntries` to suit — and
+watch what it costs, which the [performance page](../advanced/performance.md)
+measures.
+
+All three drivers honour it, and stopping monitoring lets the entries go at the
+next prune.
 
 ## Configuration Examples
 

@@ -354,6 +354,16 @@ export type Entry =
  */
 export type StoredEntry = Entry & { id: number; createdAt: string };
 
+/**
+ * What `find` narrows by.
+ *
+ * It used to declare thirteen more fields under a heading that said "advanced
+ * filtering", and no storage read any of them: a caller could ask `find` for
+ * `{ method: 'POST', statusCodeMin: 500 }` and receive every entry there is,
+ * with nothing to say the request had been ignored. Narrowing beyond this is
+ * `findWithCursor`'s `filters`, which every backend applies before it chooses
+ * a page — and which is checked against all three in the parity suite.
+ */
 export interface EntryFilter {
   type?: EntryType;
   requestId?: string;
@@ -361,18 +371,6 @@ export interface EntryFilter {
   to?: Date;
   limit?: number;
   offset?: number;
-  // Advanced filtering
-  tags?: string[];
-  tagLogic?: 'AND' | 'OR';
-  familyHash?: string;
-  userId?: string;
-  statusCodeMin?: number;
-  statusCodeMax?: number;
-  path?: string;
-  method?: string;
-  search?: string;
-  hideDuplicates?: boolean;
-  resolved?: boolean;
 }
 
 /**
@@ -384,6 +382,28 @@ export interface CursorPaginationParams {
   afterSequence?: number;
   // Filter fields - all arrays use OR logic within, AND logic between categories
   filters?: {
+    /**
+     * The window an entry has to fall inside, as ISO 8601 instants.
+     *
+     * Strings rather than Dates: these arrive from a query string, they are
+     * compared against `createdAt` which is a string, and SQLite compares them
+     * as text. Turning them into Dates and back was a conversion in both
+     * directions for no gain.
+     */
+    from?: string;
+    to?: string;
+    /**
+     * How long the thing took, in milliseconds.
+     *
+     * Every entry that measures anything carries `duration`, and there was no
+     * way to ask about it: the only related filter was `slow`, a boolean the
+     * query watcher sets from its own threshold, so "requests over 500ms" —
+     * the first question anybody asks a debugging tool — had no answer.
+     */
+    minDuration?: number;
+    maxDuration?: number;
+    /** Everything one request produced. */
+    requestId?: string;
     // Logs
     levels?: string[];
     contexts?: string[];

@@ -7,9 +7,11 @@ import {
   Optional,
 } from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
+import { wrapMethodPreservingShape } from './wrap-method';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 type RedisCommand = (...args: unknown[]) => unknown;
 
@@ -117,12 +119,16 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
-      // Store original method
-      const original = (existing as RedisCommand).bind(client);
+      // What was there, and a bound copy to call through. Storing the bound
+      // one was storing something the application never wrote: `destroy` put
+      // that back instead, so three module lifecycles against one client left
+      // `[Function bound bound bound get]` where `get` had been. The other
+      // watchers that do this keep the two apart; these two did not.
+      const original = existing as RedisCommand;
       this.originalMethods.set(command, original);
 
       // Wrap the command
-      client[command] = this.wrapCommand(command, original);
+      client[command] = this.wrapCommand(command, original.bind(client));
     }
 
     this.logger.log('Redis interceptors installed');
@@ -149,25 +155,25 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
     this.originalMethods = undefined;
   }
 
+  /**
+   * Wrapped without changing what a caller gets back.
+   *
+   * Written `async`, this turned every command into one that returns a
+   * promise. ioredis returns promises anyway; a client that does not — node's
+   * older callback API, a wrapper an application wrote itself, a test double —
+   * had its return value replaced.
+   */
   private wrapCommand(command: string, originalMethod: RedisCommand): RedisCommand {
-    return async (...args: unknown[]): Promise<unknown> => {
-      const startTime = Date.now();
-      let status: 'success' | 'error' = 'success';
-      let result: unknown;
-      let error: string | undefined;
-
-      try {
-        result = await originalMethod(...args);
-        return result;
-      } catch (err) {
-        status = 'error';
-        error = err instanceof Error ? err.message : String(err);
-        throw err;
-      } finally {
-        const duration = Date.now() - startTime;
-        this.collectEntry(command, args, duration, status, result, error);
-      }
-    };
+    return wrapMethodPreservingShape(originalMethod, ({ args, result, error, durationMs }) => {
+      this.collectEntry(
+        command,
+        args,
+        durationMs,
+        error ? 'error' : 'success',
+        result,
+        error ? (error instanceof Error ? error.message : String(error)) : undefined,
+      );
+    });
   }
 
   private collectEntry(
@@ -235,17 +241,11 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    try {
-      // Limit size to prevent huge arguments from bloating storage
-      const json = JSON.stringify(args);
-      const maxSize = this.config.maxResultSize ?? 1024; // 1KB default; 0 captures nothing
-      if (json.length > maxSize) {
-        return [{ _truncated: true, _size: json.length }];
-      }
-      return args;
-    } catch {
-      return [{ _error: 'Unable to serialize arguments' }];
-    }
+    // 1KB default; 0 captures nothing.
+    const captured = capturePayload(args, this.config.maxResultSize ?? 1024);
+
+    // The arguments are a list either way, so a truncated one is a list of one.
+    return Array.isArray(captured) ? captured : [captured];
   }
 
   /**
@@ -258,16 +258,7 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
       return '***MASKED***';
     }
 
-    try {
-      // Limit size to prevent huge results from bloating storage
-      const json = JSON.stringify(result);
-      const maxSize = this.config.maxResultSize ?? 1024; // 1KB default; 0 captures nothing
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return result;
-    } catch {
-      return { _error: 'Unable to serialize result' };
-    }
+    // 1KB default; 0 captures nothing.
+    return capturePayload(result, this.config.maxResultSize ?? 1024);
   }
 }

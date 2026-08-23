@@ -10,7 +10,7 @@ import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
 import { SimulationsModule } from './simulations/simulations.module';
 import { StatusModule } from './status/status.module';
-import { NestLensModule, GraphQLWatcher } from 'nestlens';
+import { NestLensModule } from 'nestlens';
 
 // NestLens module configuration
 const nestLensModule = NestLensModule.forRoot({
@@ -40,18 +40,16 @@ const nestLensModule = NestLensModule.forRoot({
 @Module({
   imports: [
     nestLensModule,
-    GraphQLModule.forRootAsync<ApolloDriverConfig>({
+    // No plugin wiring: `watchers.graphql` registers NestLens's Apollo plugin as
+    // a provider and Apollo discovers it, which is what the documentation
+    // tells a reader to expect. The example is where that promise is exercised.
+    GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [nestLensModule],
-      inject: [GraphQLWatcher],
-      useFactory: (graphqlWatcher: GraphQLWatcher) => ({
-        autoSchemaFile: true,
-        playground: true,
-        plugins: [graphqlWatcher.getPlugin() as any],
-        subscriptions: {
-          'graphql-ws': true,
-        },
-      }),
+      autoSchemaFile: true,
+      playground: true,
+      subscriptions: {
+        'graphql-ws': true,
+      },
     }),
     DatabaseModule,
     UsersModule,

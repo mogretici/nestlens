@@ -327,12 +327,14 @@ describe('CollectorService', () => {
       expect(mockTagService.autoTag).toHaveBeenCalledWith(savedEntry);
     });
 
-    it('should throw error on storage failure', async () => {
+    it('returns null on storage failure rather than rejecting', async () => {
       // Arrange
       mockStorage.save.mockRejectedValue(new Error('Storage error'));
 
-      // Act & Assert
-      await expect(service.collectImmediate('request', {} as any)).rejects.toThrow('Storage error');
+      // Act & Assert: `null` says "not recorded", which is all a watcher can
+      // act on. Rejecting produced unhandled rejections in the callers that
+      // fire and forget, and Node ends the process on those.
+      await expect(service.collectImmediate('request', {} as any)).resolves.toBeNull();
     });
   });
 

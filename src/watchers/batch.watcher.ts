@@ -1,10 +1,16 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
-
-type BatchMethod = (name: string, items: unknown[], options?: unknown) => Promise<unknown>;
+import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * Token for injecting batch processor service
@@ -17,17 +23,10 @@ export const NESTLENS_BATCH_PROCESSOR = Symbol('NESTLENS_BATCH_PROCESSOR');
  * duration, memory usage, and status.
  */
 @Injectable()
-export class BatchWatcher implements OnModuleInit {
+export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BatchWatcher.name);
   private readonly config: BatchWatcherConfig;
-  private originalProcess?: (name: string, items: unknown[], options?: unknown) => Promise<unknown>;
-  private readonly batchTracking = new Map<
-    string,
-    {
-      startTime: number;
-      startMemory: number;
-    }
-  >();
+  private wrapped?: WrappedMethods;
 
   constructor(
     private readonly collector: CollectorService,
@@ -61,95 +60,61 @@ export class BatchWatcher implements OnModuleInit {
   private setupInterceptors(): void {
     if (!this.batchProcessor) return;
 
+    this.wrapped = new WrappedMethods(this.batchProcessor as Record<string, unknown>);
+
     // Try to wrap common batch processing methods
-    this.wrapMethod('process');
-    this.wrapMethod('processBatch');
-    this.wrapMethod('bulk');
-    this.wrapMethod('bulkProcess');
+    for (const method of ['process', 'processBatch', 'bulk', 'bulkProcess']) {
+      this.wrapped.replace(method, (original) =>
+        wrapMethodPreservingShape(
+          original,
+          ({ args, result, error, durationMs, context }) => {
+            const [name, items, options] = args as [string, unknown[], unknown?];
+            const total = Array.isArray(items) ? items.length : 0;
+            const memoryDelta =
+              context === undefined ? undefined : process.memoryUsage().heapUsed - context;
+
+            if (error) {
+              this.collectEntry(
+                name,
+                method,
+                total,
+                0,
+                total,
+                durationMs,
+                this.getBatchSize(options),
+                'failed',
+                [error instanceof Error ? error.message : String(error)],
+                memoryDelta,
+              );
+              return;
+            }
+
+            const { processed, failed, errors } = this.parseResult(result, total);
+
+            this.collectEntry(
+              name,
+              method,
+              total,
+              processed,
+              failed,
+              durationMs,
+              this.getBatchSize(options),
+              'completed',
+              errors,
+              memoryDelta,
+            );
+          },
+          this.config.trackMemory === false ? undefined : () => process.memoryUsage().heapUsed,
+        ),
+      );
+    }
 
     this.logger.log('Batch interceptors installed');
   }
 
-  private wrapMethod(methodName: string): void {
-    // The processor is user-supplied and its methods are looked up by name, so
-    // the shape is checked at runtime rather than declared.
-    const processor: Record<string, unknown> | undefined = this.batchProcessor as
-      Record<string, unknown> | undefined;
-    if (!processor) return;
-
-    const existing = processor[methodName];
-
-    if (typeof existing !== 'function') {
-      return;
-    }
-
-    const originalMethod = (existing as BatchMethod).bind(processor);
-
-    processor[methodName] = async (
-      name: string,
-      items: unknown[],
-      options?: unknown,
-    ): Promise<unknown> => {
-      const batchId = `${name}-${Date.now()}`;
-      const startTime = Date.now();
-      const startMemory = this.config.trackMemory !== false ? process.memoryUsage().heapUsed : 0;
-
-      this.batchTracking.set(batchId, { startTime, startMemory });
-
-      try {
-        const result = await originalMethod(name, items, options);
-        const duration = Date.now() - startTime;
-        const memoryDelta =
-          this.config.trackMemory !== false
-            ? process.memoryUsage().heapUsed - startMemory
-            : undefined;
-
-        this.batchTracking.delete(batchId);
-
-        // Extract results from the result object
-        const { processed, failed, errors } = this.parseResult(result, items.length);
-
-        // Track batch completed
-        this.collectEntry(
-          name,
-          methodName,
-          items.length,
-          processed,
-          failed,
-          duration,
-          this.getBatchSize(options),
-          'completed',
-          errors,
-          memoryDelta,
-        );
-
-        return result;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        const memoryDelta =
-          this.config.trackMemory !== false
-            ? process.memoryUsage().heapUsed - startMemory
-            : undefined;
-
-        this.batchTracking.delete(batchId);
-
-        // Track batch failed
-        this.collectEntry(
-          name,
-          methodName,
-          items.length,
-          0,
-          items.length,
-          duration,
-          this.getBatchSize(options),
-          'failed',
-          [error instanceof Error ? error.message : String(error)],
-          memoryDelta,
-        );
-
-        throw error; // Re-throw to maintain original behavior
-      }
-    };
+  onModuleDestroy(): void {
+    this.wrapped?.restore();
+    this.wrapped = undefined;
   }
 
   /**

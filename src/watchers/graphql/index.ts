@@ -6,11 +6,11 @@
  * - Query/Mutation/Subscription tracking
  * - N+1 query detection
  * - Field-level resolver tracing (opt-in)
- * - WebSocket subscription tracking
+ * - WebSocket subscription tracking, instrumented at the schema
  */
 
 // Main watcher
-export { GraphQLWatcher, GRAPHQL_WATCHER, createGraphQLWatcher } from './graphql.watcher';
+export { GraphQLWatcher, GRAPHQL_WATCHER } from './graphql.watcher';
 
 // Types
 export * from './types';
@@ -26,13 +26,7 @@ export {
   SubscriptionTracker,
   createSubscriptionTracker,
 } from './subscription/subscription.tracker';
-export {
-  GraphQLWsMessageType,
-  LegacyWsMessageType,
-  createGraphQLWsHandlers,
-  createWsMessageInterceptor,
-  extractConnectionInfo,
-} from './subscription/ws-gateway';
+export { instrumentSubscriptions } from './subscription/schema-instrumentation';
 
 // Utils
 export {
@@ -41,28 +35,13 @@ export {
   truncateQuery,
   extractOperationName,
   extractOperationType,
-  isIntrospectionQuery,
-  countFields,
-  parseQuery,
   formatQuery,
 } from './utils/query-parser';
 
-export { sanitizeVariables, sanitizeResponse, createSanitizer } from './utils/variable-sanitizer';
+export { sanitizeVariables, sanitizeResponse } from './utils/variable-sanitizer';
 
-export { N1Detector, createN1Detector, detectN1FromMap } from './utils/n1-detector';
+export { N1Detector } from './utils/n1-detector';
 
-export {
-  calculateDepth,
-  calculateDepthFromAST,
-  exceedsMaxDepth,
-  getDepthDescription,
-} from './utils/depth-calculator';
+export { calculateDepth } from './utils/depth-calculator';
 
-export {
-  FieldTracer,
-  createFieldTracer,
-  noopTracer,
-  formatTraceDuration,
-  nsToMs,
-  buildWaterfall,
-} from './utils/field-tracer';
+export { FieldTracer, createFieldTracer } from './utils/field-tracer';

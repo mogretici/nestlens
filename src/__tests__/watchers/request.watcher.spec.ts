@@ -94,6 +94,27 @@ describe('RequestWatcher', () => {
     watcher = module.get<RequestWatcher>(RequestWatcher);
   });
 
+  /** A watcher configured to believe a forwarding header. */
+  const behindAProxy = async (): Promise<RequestWatcher> => {
+    const module = await Test.createTestingModule({
+      providers: [
+        RequestWatcher,
+        { provide: CollectorService, useValue: mockCollector },
+        httpAdapterHostProvider,
+        {
+          provide: NESTLENS_CONFIG,
+          useValue: {
+            path: '/nestlens',
+            trustProxy: true,
+            watchers: { request: { enabled: true } },
+          },
+        },
+      ],
+    }).compile();
+
+    return module.get<RequestWatcher>(RequestWatcher);
+  };
+
   // ============================================================================
   // Enabled/Disabled
   // ============================================================================
@@ -375,8 +396,31 @@ describe('RequestWatcher', () => {
       );
     });
 
-    it('should get IP from x-forwarded-for header', async () => {
+    it('ignores a forwarding header when no proxy is trusted', async () => {
+      // The default. The header is written by whoever sends the request, so
+      // believing it made the recorded address, the `ips` filter and the IP
+      // column whatever the caller typed — while the guard's whitelist went on
+      // checking the socket. Two answers to one question, in one product.
+      const context = createMockContext({
+        request: {
+          ip: undefined,
+          socket: { remoteAddress: '203.0.113.7' },
+          headers: { 'x-forwarded-for': '10.0.0.1' },
+        },
+      });
+
+      await watcher.intercept(context, createMockHandler()).toPromise();
+
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'request',
+        expect.objectContaining({ ip: '203.0.113.7' }),
+        expect.any(String),
+      );
+    });
+
+    it('should get IP from x-forwarded-for header behind a trusted proxy', async () => {
       // Arrange
+      const proxied = await behindAProxy();
       const context = createMockContext({
         request: {
           ip: '127.0.0.1',
@@ -385,7 +429,7 @@ describe('RequestWatcher', () => {
       });
 
       // Act
-      await watcher.intercept(context, createMockHandler()).toPromise();
+      await proxied.intercept(context, createMockHandler()).toPromise();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -848,7 +892,7 @@ describe('RequestWatcher', () => {
       expect(JSON.stringify(mockCollector.collect.mock.calls)).not.toContain('user@example.com');
     });
 
-    it('should handle non-serializable body', async () => {
+    it('keeps a body that points back at itself', async () => {
       // Arrange - circular reference
       const circularBody: Record<string, unknown> = { name: 'test' };
       circularBody.self = circularBody;
@@ -861,15 +905,9 @@ describe('RequestWatcher', () => {
       await watcher.intercept(context, createMockHandler()).toPromise();
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'request',
-        expect.objectContaining({
-          body: expect.objectContaining({
-            _error: 'Unable to serialize body',
-          }),
-        }),
-        expect.any(String),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as Record<string, any>;
+      expect(collected.body.name).toBe('test');
+      expect(collected.body.self).toBe(collected.body);
     });
   });
 
@@ -1385,8 +1423,9 @@ describe('RequestWatcher', () => {
   // ============================================================================
 
   describe('x-forwarded-for edge cases', () => {
-    it('should handle array x-forwarded-for header', async () => {
+    it('should handle array x-forwarded-for header behind a trusted proxy', async () => {
       // Arrange
+      const proxied = await behindAProxy();
       const context = createMockContext({
         request: {
           ip: '127.0.0.1',
@@ -1395,7 +1434,7 @@ describe('RequestWatcher', () => {
       });
 
       // Act
-      await watcher.intercept(context, createMockHandler()).toPromise();
+      await proxied.intercept(context, createMockHandler()).toPromise();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(

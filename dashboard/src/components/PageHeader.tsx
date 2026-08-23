@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { LucideIcon, RefreshCw, X } from 'lucide-react';
 
 interface FilterItem {
@@ -58,6 +58,34 @@ export default function PageHeader({
   actions,
   filterControls,
 }: PageHeaderProps) {
+  /**
+   * The header floats above the page, so the content underneath has to start
+   * below it. Every page used to carry its own pair of padding constants for
+   * that — nineteen copies of a number that had to be kept in step with a
+   * header that grows a row when filters are active and another when a page
+   * adds controls. A row added here silently slid the top of nineteen tables
+   * under the header.
+   *
+   * The height is measured instead, and the spacer below reserves exactly it.
+   */
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barHeight, setBarHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+
+    const measure = () => setBarHeight(bar.getBoundingClientRect().height);
+    measure();
+
+    // Absent in jsdom, and a fixed layout still measures correctly once.
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
   const hasActiveFilters = filters.length > 0;
   const displayCount = count ?? totalCount;
 
@@ -71,7 +99,11 @@ export default function PageHeader({
   }, {} as Record<string, FilterItem[]>);
 
   return (
-    <div className="fixed top-0 left-0 right-0 lg:left-64 z-30 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+    <>
+    <div
+      ref={barRef}
+      className="fixed top-0 left-0 right-0 lg:left-64 z-30 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700"
+    >
       {/* Main Header Row */}
       <div className="h-16 px-4 lg:px-6 flex items-center justify-between">
         {/* Left: Icon, Title, Count */}
@@ -211,6 +243,8 @@ export default function PageHeader({
         </div>
       )}
     </div>
+    <div aria-hidden="true" data-testid="page-header-spacer" style={{ height: barHeight }} />
+    </>
   );
 }
 

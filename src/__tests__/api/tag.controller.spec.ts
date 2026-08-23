@@ -91,7 +91,7 @@ describe('TagController', () => {
       mockTagService.findByTags.mockResolvedValue(mockEntries as any);
 
       // Act
-      const result = await controller.getEntriesByTags('ERROR', undefined, undefined);
+      const result = await controller.getEntriesByTags({ tags: ['ERROR'] });
 
       // Assert
       expect(result).toEqual({ data: mockEntries });
@@ -104,7 +104,7 @@ describe('TagController', () => {
       mockTagService.findByTags.mockResolvedValue(mockEntries as any);
 
       // Act
-      const result = await controller.getEntriesByTags('ERROR,SLOW', 'AND', undefined);
+      const result = await controller.getEntriesByTags({ tags: ['ERROR', 'SLOW'], logic: 'AND' });
 
       // Assert
       expect(result).toEqual({ data: mockEntries });
@@ -120,7 +120,7 @@ describe('TagController', () => {
       mockTagService.findByTags.mockResolvedValue(mockEntries as any);
 
       // Act
-      const result = await controller.getEntriesByTags('ERROR,SLOW', 'OR', undefined);
+      const result = await controller.getEntriesByTags({ tags: ['ERROR', 'SLOW'], logic: 'OR' });
 
       // Assert
       expect(result).toEqual({ data: mockEntries });
@@ -132,32 +132,28 @@ describe('TagController', () => {
       mockTagService.findByTags.mockResolvedValue([]);
 
       // Act
-      await controller.getEntriesByTags('ERROR', undefined, '100');
+      await controller.getEntriesByTags({ tags: ['ERROR'], limit: 100 });
 
       // Assert
       expect(mockTagService.findByTags).toHaveBeenCalledWith(['ERROR'], 'OR', 100);
     });
 
-    it('should trim whitespace from tags', async () => {
-      // Arrange
+    it('passes the tags the DTO produced', async () => {
+      // Splitting and trimming belong to the transformer now; what is left to
+      // check here is that the handler passes them on unchanged.
       mockTagService.findByTags.mockResolvedValue([]);
 
-      // Act
-      await controller.getEntriesByTags(' ERROR , SLOW ', undefined, undefined);
+      await controller.getEntriesByTags({ tags: ['ERROR', 'SLOW'] });
 
-      // Assert
       expect(mockTagService.findByTags).toHaveBeenCalledWith(['ERROR', 'SLOW'], 'OR', 50);
     });
 
-    it('should filter empty tags', async () => {
-      // Arrange
+    it('uses the default limit when the DTO left it out', async () => {
       mockTagService.findByTags.mockResolvedValue([]);
 
-      // Act
-      await controller.getEntriesByTags('ERROR,,SLOW,', undefined, undefined);
+      await controller.getEntriesByTags({ tags: ['ERROR'] });
 
-      // Assert
-      expect(mockTagService.findByTags).toHaveBeenCalledWith(['ERROR', 'SLOW'], 'OR', 50);
+      expect(mockTagService.findByTags).toHaveBeenCalledWith(['ERROR'], 'OR', 50);
     });
   });
 

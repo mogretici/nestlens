@@ -5,7 +5,6 @@ import { NestLensConfig, NESTLENS_CONFIG, QueryWatcherConfig } from '../../nestl
 import { QueryEntry } from '../../types';
 import {
   isLikelyTypeORMDataSource,
-  isModuleAvailable,
   isPrismaClient,
   PrismaClient,
   PrismaMiddlewareParams,
@@ -28,6 +27,7 @@ export interface QueryData {
 }
 
 const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
+const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
 
 @Injectable()
 export class QueryWatcher implements OnApplicationBootstrap {
@@ -49,13 +49,16 @@ export class QueryWatcher implements OnApplicationBootstrap {
       return;
     }
 
-    if (isModuleAvailable('typeorm')) {
-      this.attachTypeORM();
-    }
-
-    if (isModuleAvailable('@prisma/client')) {
-      this.attachPrisma();
-    }
+    /*
+     * Both halves find what they attach to by its shape, in Nest's own
+     * container, so neither needs the package to be resolvable from here —
+     * and asking was a way to answer *no* while the client sat in the
+     * container: `require.resolve` runs from NestLens's own directory, which
+     * under pnpm's layout or in a monorepo is not where the application's
+     * dependencies are.
+     */
+    this.attachTypeORM();
+    this.attachPrisma();
   }
 
   private attachTypeORM(): void {
@@ -124,20 +127,72 @@ export class QueryWatcher implements OnApplicationBootstrap {
     return true;
   }
 
+  /**
+   * Finds the Prisma client the way the TypeORM half finds a DataSource.
+   *
+   * This looked at `global.prisma` and nowhere else — the singleton pattern a
+   * Next.js application uses, and not how a Nest application holds a client. A
+   * `PrismaService extends PrismaClient` registered as a provider, which is
+   * what the documentation for this library and Prisma's own Nest guide both
+   * show, was never found: *Database queries (TypeORM/Prisma auto-detected)*
+   * recorded TypeORM's and none of Prisma's.
+   *
+   * The container knows every provider, and a client is recognisable by the
+   * methods this watcher is about to call.
+   */
   private attachPrisma(): void {
     try {
+      let attached = 0;
+
+      for (const client of this.discoverPrismaClients()) {
+        if (this.attachPrismaMiddleware(client)) {
+          attached += 1;
+        }
+      }
+
       const globalPrisma = (global as Record<string, unknown>)['prisma'];
-      if (isPrismaClient(globalPrisma)) {
-        this.attachPrismaMiddleware(globalPrisma);
-        this.logger.log('Prisma query watcher attached (global instance)');
+      if (isPrismaClient(globalPrisma) && this.attachPrismaMiddleware(globalPrisma)) {
+        attached += 1;
+      }
+
+      if (attached > 0) {
+        this.logger.log(`Prisma query watcher attached to ${attached} client(s)`);
       }
     } catch (error) {
       this.logger.debug(`Prisma attach skipped: ${String(error)}`);
     }
   }
 
-  private attachPrismaMiddleware(client: PrismaClient): void {
-    if (!client.$use) return;
+  private discoverPrismaClients(): PrismaClient[] {
+    const seen = new WeakSet<object>();
+    const clients: PrismaClient[] = [];
+
+    for (const wrapper of this.discoveryService.getProviders()) {
+      const instance = wrapper.instance as unknown;
+
+      if (
+        instance &&
+        typeof instance === 'object' &&
+        !seen.has(instance as object) &&
+        isPrismaClient(instance)
+      ) {
+        seen.add(instance as object);
+        clients.push(instance);
+      }
+    }
+
+    return clients;
+  }
+
+  private attachPrismaMiddleware(client: PrismaClient): boolean {
+    if (!client.$use) return false;
+
+    // One client can be injected into many providers, and the global may be
+    // the same object again.
+    const marked = client as unknown as Record<symbol, boolean | undefined>;
+    if (marked[PRISMA_ATTACHED]) return false;
+    marked[PRISMA_ATTACHED] = true;
+
     client.$use(
       async (
         params: PrismaMiddlewareParams,
@@ -167,10 +222,34 @@ export class QueryWatcher implements OnApplicationBootstrap {
         }
       },
     );
+
+    return true;
+  }
+
+  /**
+   * Whether a configured pattern covers this query.
+   *
+   * `lastIndex` is reset first. A `RegExp` carrying `g` or `y` remembers where
+   * its last match ended, and `test` resumes from there — so
+   * `ignorePatterns: [/health/g]` ignored every *other* health check and
+   * recorded the ones in between. The flag is one character and the failure is
+   * invisible: the list is a user's, written however they write regular
+   * expressions elsewhere.
+   */
+  private isIgnored(query: string): boolean {
+    const patterns = this.config.ignorePatterns;
+    if (!patterns?.length) {
+      return false;
+    }
+
+    return patterns.some((pattern) => {
+      pattern.lastIndex = 0;
+      return pattern.test(query);
+    });
   }
 
   private handleQuery(data: QueryData): void {
-    if (this.config.ignorePatterns?.some((p) => p.test(data.query))) {
+    if (this.isIgnored(data.query)) {
       return;
     }
     const slowThreshold = this.config.slowThreshold ?? 100;

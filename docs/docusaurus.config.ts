@@ -68,10 +68,20 @@ const config: Config = {
       {
         entryPoints: ['../src/index.ts'],
         tsconfig: '../tsconfig.json',
-        out: 'api',
+        // Inside the docs plugin's directory, so the pages are published.
+        // They were written to `docs/api` before — outside it — which meant
+        // seventy-two files were generated from the source on every build and
+        // none of them ever reached the site, while the reference readers
+        // actually saw was typed out by hand and had fallen sixteen interfaces
+        // behind.
+        out: 'docs/api-reference',
         excludePrivate: true,
         excludeProtected: true,
         excludeInternal: true,
+        // Without this the reference inlines Express's `Request` and everything
+        // Node's typings drag in with it — four thousand lines of somebody
+        // else's API, and MDX cannot render all of it.
+        excludeExternals: true,
         readme: 'none',
       },
     ],

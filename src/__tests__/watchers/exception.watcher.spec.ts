@@ -34,6 +34,8 @@ describe('ExceptionWatcher', () => {
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn().mockReturnThis(),
+      end: jest.fn().mockReturnThis(),
+      headersSent: false,
     };
     return res as unknown as jest.Mocked<Response>;
   };
@@ -48,6 +50,12 @@ describe('ExceptionWatcher', () => {
         getRequest: () => request,
         getResponse: () => response,
       }),
+      // Nest's own filter reads the response positionally, and the watcher
+      // hands the exception to it rather than writing a reply of its own. A
+      // fake that answers `switchToHttp` and nothing else is not the interface
+      // it claims to be.
+      getArgByIndex: (index: number) => (index === 0 ? request : response),
+      getArgs: () => [request, response],
       getType: () => type,
     }) as unknown as ArgumentsHost;
 
@@ -61,9 +69,13 @@ describe('ExceptionWatcher', () => {
           provide: HttpAdapterHost,
           useValue: {
             httpAdapter: {
-              // Mirror ExpressAdapter.reply: forward to the response mock.
+              // Mirror ExpressAdapter: the watcher hands the exception to
+              // Nest's own filter, which asks whether the response has already
+              // been written before writing to it.
               reply: (res: Response, body: unknown, status: number) =>
                 res.status(status).json(body),
+              isHeadersSent: (res: { headersSent?: boolean }) => res.headersSent === true,
+              end: (res: { end?: () => void }) => res.end?.(),
             },
           },
         },
@@ -267,7 +279,7 @@ describe('ExceptionWatcher', () => {
 
     it('should skip NestLens API paths', async () => {
       // Arrange
-      const request = createMockRequest({ path: '/__nestlens-api/entries' });
+      const request = createMockRequest({ path: '/__nestlens__/api/entries' });
       const host = createMockHost(request, mockResponse);
       const error = new Error('API error');
 
@@ -276,6 +288,23 @@ describe('ExceptionWatcher', () => {
 
       // Assert
       expect(mockCollector.collectImmediate).not.toHaveBeenCalled();
+    });
+
+    // This asserted `/__nestlens-api/entries` — a path NestLens has never
+    // served — and passed because the mount point was compared with
+    // `startsWith`. It is the application's route, and its failures are the
+    // ones a reader came here to see.
+    it('records a failure on a route that starts with the mount point', async () => {
+      // Arrange
+      const request = createMockRequest({ path: '/__nestlens-api/entries' });
+      const host = createMockHost(request, mockResponse);
+      const error = new Error('API error');
+
+      // Act
+      watcher.catch(error, host);
+
+      // Assert
+      expect(mockCollector.collectImmediate).toHaveBeenCalled();
     });
 
     it('should collect exceptions on regular paths', async () => {
@@ -414,13 +443,39 @@ describe('ExceptionWatcher', () => {
       // Act
       watcher.catch(error, host);
 
-      // Assert
+      // Assert — Nest's own wording, because the response is Nest's own. The
+      // thrown message used to go out in the body, which is a message the
+      // application chose not to publish.
       expect(mockResponse.status).toHaveBeenCalledWith(500);
       expect(mockResponse.json).toHaveBeenCalledWith({
         statusCode: 500,
-        message: 'Internal error',
-        error: 'Internal Server Error',
+        message: 'Internal server error',
       });
+    });
+
+    it('keeps the status an http-errors failure carries', async () => {
+      // What body-parser, serve-static and much else throw: not an
+      // `HttpException`, but carrying its own status. This used to answer 500.
+      const host = createMockHost(createMockRequest(), mockResponse);
+      const error = Object.assign(new Error('request entity too large'), { statusCode: 413 });
+
+      watcher.catch(error, host);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(413);
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        statusCode: 413,
+        message: 'request entity too large',
+      });
+    });
+
+    it('writes nothing to a response that has already been sent', async () => {
+      const sent = { ...createMockResponse(), headersSent: true } as unknown as Response;
+      const host = createMockHost(createMockRequest(), sent);
+
+      watcher.catch(new Error('too late'), host);
+
+      expect((sent as unknown as { json: jest.Mock }).json).not.toHaveBeenCalled();
+      expect((sent as unknown as { end: jest.Mock }).end).toHaveBeenCalled();
     });
   });
 

@@ -1,9 +1,26 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import { ScheduleWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ScheduleEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { WrappedMethods } from './wrap-method';
+import { isThenable } from '../core/thenable';
+
+/** One scheduled callback, as `@nestjs/schedule`'s orchestrator stores it. */
+interface ScheduledTarget {
+  target: (...args: unknown[]) => unknown;
+  timeout?: number;
+}
+
+type ScheduledStore = Record<string, ScheduledTarget> | undefined;
 
 /**
  * The part of a `cron` job this watcher touches.
@@ -53,12 +70,19 @@ function toIsoString(value: unknown): string | undefined {
 }
 
 @Injectable()
-export class ScheduleWatcher implements OnApplicationBootstrap {
+export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(ScheduleWatcher.name);
   private readonly config: ScheduleWatcherConfig;
-  private readonly jobTracking = new Map<string, number>(); // jobName -> startTime
   private readonly wrappedJobs = new Set<string>(); // Track which jobs we've already wrapped
   private schedulerRegistry?: SchedulerRegistryLike;
+  private wrappedRegistry?: WrappedMethods;
+  private wrappedOrchestrator?: WrappedMethods;
+  /** Every scheduled callback replaced, so it can be put back. */
+  private readonly wrappedTargets = new Map<ScheduledTarget, ScheduledTarget['target']>();
+  /** Every job whose error handler was chained, and what was there before. */
+  private readonly wrappedErrorHandlers = new Map<CronJobLike, unknown>();
+  /** Every cron job whose tick was replaced, so it can be put back. */
+  private readonly wrappedTicks = new Map<CronJobLike, () => unknown>();
 
   constructor(
     private readonly collector: CollectorService,
@@ -91,6 +115,132 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     this.setupInterceptors();
   }
 
+  /**
+   * Tracks `@Interval` and `@Timeout`, which nothing was doing.
+   *
+   * Only `@Cron` was ever recorded. The two others were reached for through
+   * the registry, which holds the *timer handles* — there is no callback on a
+   * `Timeout` object to wrap — so the watcher logged
+   * "registered but cannot be wrapped" and moved on. The payload has declared
+   * `interval` and `timeout` fields the whole time, documented as "reserved,
+   * not currently populated", and the watcher's own page shows both decorators
+   * in its examples.
+   *
+   * The callback does exist one layer up. `@nestjs/schedule` keeps every
+   * scheduled method on its `SchedulerOrchestrator` and turns them into timers
+   * in `mountIntervals` and `mountTimeouts`, which run in its
+   * `onApplicationBootstrap`. Replacing those two methods puts a wrapper around
+   * each target before `setInterval` ever sees it.
+   *
+   * This runs in `onModuleInit` on purpose: Nest completes every module's
+   * `onModuleInit` before it starts any `onApplicationBootstrap`, so being
+   * early enough is a guarantee rather than a question of module order — which
+   * is what made the cron half of this watcher record nothing on NestJS 9 and
+   * 10 until it was moved.
+   */
+  onModuleInit(): void {
+    if (!this.config.enabled) {
+      return;
+    }
+
+    const orchestrator = this.findSchedulerOrchestrator();
+    if (!orchestrator) {
+      return;
+    }
+
+    this.wrappedOrchestrator = new WrappedMethods(
+      orchestrator as unknown as Record<string, unknown>,
+    );
+
+    const mounts: [string, 'intervals' | 'timeouts'][] = [
+      ['mountIntervals', 'intervals'],
+      ['mountTimeouts', 'timeouts'],
+    ];
+
+    for (const [method, store] of mounts) {
+      this.wrappedOrchestrator.replace(method, (original) => {
+        return (...args: unknown[]): unknown => {
+          this.trackScheduled(orchestrator[store], store);
+          return (original as (...a: unknown[]) => unknown)(...args);
+        };
+      });
+    }
+  }
+
+  /**
+   * Puts a wrapper around each stored callback, before it becomes a timer.
+   */
+  private trackScheduled(
+    store: Record<string, ScheduledTarget> | undefined,
+    kind: 'intervals' | 'timeouts',
+  ): void {
+    if (!store) return;
+
+    for (const [name, options] of Object.entries(store)) {
+      if (typeof options?.target !== 'function' || this.wrappedTargets.has(options)) {
+        continue;
+      }
+
+      const original = options.target;
+      this.wrappedTargets.set(options, original);
+
+      const every =
+        kind === 'intervals' ? { interval: options.timeout } : { timeout: options.timeout };
+
+      options.target = (...args: unknown[]): unknown => {
+        const started = Date.now();
+        this.collectEntry(name, 'started', 0, undefined, undefined, undefined, every);
+
+        const finish = (error?: unknown): void => {
+          this.collectEntry(
+            name,
+            error ? 'failed' : 'completed',
+            Date.now() - started,
+            error ? (error instanceof Error ? error.message : String(error)) : undefined,
+            undefined,
+            undefined,
+            every,
+          );
+        };
+
+        try {
+          const result = original(...args);
+
+          if (isThenable(result)) {
+            return result.then(
+              (value) => {
+                finish();
+                return value;
+              },
+              (error: unknown) => {
+                finish(error);
+                throw error;
+              },
+            );
+          }
+
+          finish();
+          return result;
+        } catch (error) {
+          finish(error);
+          throw error;
+        }
+      };
+    }
+  }
+
+  private findSchedulerOrchestrator(): Record<string, ScheduledStore> | undefined {
+    for (const wrapper of this.discoveryService.getProviders()) {
+      const instance = wrapper.instance as Record<string, unknown> | undefined;
+
+      if (instance?.constructor?.name === 'SchedulerOrchestrator') {
+        return instance as unknown as Record<string, ScheduledStore>;
+      }
+    }
+
+    return undefined;
+  }
+
   private findSchedulerRegistry(): SchedulerRegistryLike | undefined {
     for (const wrapper of this.discoveryService.getProviders()) {
       const instance: unknown = wrapper.instance;
@@ -115,18 +265,9 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
         this.wrapCronJob(name, job);
       });
 
-      const intervals = registry.getIntervals();
-      intervals.forEach((name) => {
-        this.wrapInterval(name);
-      });
-
-      const timeouts = registry.getTimeouts();
-      timeouts.forEach((name) => {
-        this.wrapTimeout(name);
-      });
-
       this.logger.log(
-        `Schedule interceptors installed (${cronJobs.size} cron jobs, ${intervals.length} intervals, ${timeouts.length} timeouts)`,
+        `Schedule interceptors installed (${cronJobs.size} cron jobs, ` +
+          `${registry.getIntervals().length} intervals, ${registry.getTimeouts().length} timeouts)`,
       );
     } catch (error) {
       this.logger.warn(`Failed to setup schedule interceptors: ${error}`);
@@ -146,18 +287,68 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
    * bootstrap-time sweep alone would never see.
    */
   private interceptRegistrations(registry: SchedulerRegistryLike): void {
-    const addCronJob = registry.addCronJob;
-    if (typeof addCronJob !== 'function') return;
+    this.wrappedRegistry = new WrappedMethods(registry as unknown as Record<string, unknown>);
 
-    const original = addCronJob.bind(registry);
-
-    registry.addCronJob = (name: string, job: CronJobLike, ...rest: unknown[]): unknown => {
-      const result = original(name, job, ...rest);
-      this.wrapCronJob(name, job);
-      return result;
-    };
+    this.wrappedRegistry.replace('addCronJob', (original) => {
+      return (name: string, job: CronJobLike, ...rest: unknown[]): unknown => {
+        const result = (original as (...args: unknown[]) => unknown)(name, job, ...rest);
+        this.wrapCronJob(name, job);
+        return result;
+      };
+    });
   }
 
+  /**
+   * Puts the registry and every job back the way they were.
+   *
+   * The registry is a singleton the application owns, and the cron jobs on it
+   * outlive the module: without this a closed application goes on ticking
+   * through a watcher whose collector is gone, and a process that builds the
+   * module more than once against the same registry — tests, `nest start
+   * --hmr` — wraps each round on top of the last. Measured at three lifecycles:
+   * one tick, six entries.
+   */
+  onModuleDestroy(): void {
+    this.wrappedRegistry?.restore();
+    this.wrappedRegistry = undefined;
+
+    this.wrappedOrchestrator?.restore();
+    this.wrappedOrchestrator = undefined;
+
+    for (const [options, target] of this.wrappedTargets) {
+      options.target = target;
+    }
+    this.wrappedTargets.clear();
+
+    for (const [job, fireOnTick] of this.wrappedTicks) {
+      job.fireOnTick = fireOnTick as CronJobLike['fireOnTick'];
+    }
+
+    for (const [job, handler] of this.wrappedErrorHandlers) {
+      const holder = job as unknown as Record<string, unknown>;
+      if (handler === undefined) delete holder.errorHandler;
+      else holder.errorHandler = handler;
+    }
+    this.wrappedErrorHandlers.clear();
+
+    this.wrappedTicks.clear();
+    this.wrappedJobs.clear();
+  }
+
+  /**
+   * Follows one cron job's ticks.
+   *
+   * The tick's own error never escapes it. `cron` catches everything inside
+   * `fireOnTick` and hands it to the job's `errorHandler`, or prints it, so a
+   * watcher waiting for a rejection sees a clean return and records a failed
+   * run as a completed one — which is worse than not recording it. The handler
+   * is where the failure actually is, so that is chained too.
+   *
+   * A job registered through `@Cron` is caught a second time, by
+   * `@nestjs/schedule`'s own try/catch around the decorated method, and never
+   * reaches even the handler. Those failures are Nest logger output, which the
+   * log watcher records.
+   */
   private wrapCronJob(name: string, job: CronJobLike | undefined): void {
     if (this.wrappedJobs.has(name)) return;
     this.wrappedJobs.add(name);
@@ -165,63 +356,94 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     if (!job || typeof job.fireOnTick !== 'function') return;
 
     const originalFireOnTick = job.fireOnTick.bind(job);
+    this.wrappedTicks.set(job, job.fireOnTick as () => unknown);
+
+    /** Set by the error handler below, read by the tick that caused it. */
+    let failure: unknown;
+    /**
+     * How many runs of this job are going at once.
+     *
+     * `cron` fires on schedule whether or not the previous tick has finished,
+     * so a job that takes longer than its interval overlaps itself — and the
+     * error handler is per job, not per run. With one failure shared between
+     * them, the run that finished first took the other's error and the run
+     * that actually failed was recorded as completed. Where nothing can say
+     * which run an error belongs to, it is recorded on its own instead.
+     */
+    let inFlight = 0;
+
+    this.chainErrorHandler(job, (error) => {
+      if (inFlight <= 1) {
+        failure = error;
+        return;
+      }
+
+      this.collectEntry(
+        name,
+        'failed',
+        0,
+        error instanceof Error ? error.message : String(error),
+        this.getCronPattern(job),
+      );
+    });
 
     job.fireOnTick = async (): Promise<void> => {
       const startTime = Date.now();
-      const jobKey = `cron:${name}`;
-      this.jobTracking.set(jobKey, startTime);
+      inFlight += 1;
+      if (inFlight === 1) {
+        failure = undefined;
+      }
 
-      // Track job started
       this.collectEntry(name, 'started', 0, undefined, this.getCronPattern(job));
+
+      const finish = (error: unknown): void => {
+        const duration = Date.now() - startTime;
+
+        this.collectEntry(
+          name,
+          error ? 'failed' : 'completed',
+          duration,
+          error ? (error instanceof Error ? error.message : String(error)) : undefined,
+          this.getCronPattern(job),
+          error ? undefined : this.getNextRun(job),
+        );
+      };
 
       try {
         await originalFireOnTick();
-        const duration = Date.now() - startTime;
-        this.jobTracking.delete(jobKey);
-
-        // Track job completed
-        this.collectEntry(
-          name,
-          'completed',
-          duration,
-          undefined,
-          this.getCronPattern(job),
-          this.getNextRun(job),
-        );
+        // Only this run's failure: with another in flight, the error handler
+        // has already recorded whatever it saw.
+        finish(inFlight === 1 ? failure : undefined);
       } catch (error) {
-        const duration = Date.now() - startTime;
-        this.jobTracking.delete(jobKey);
-
-        // Track job failed
-        this.collectEntry(
-          name,
-          'failed',
-          duration,
-          error instanceof Error ? error.message : String(error),
-          this.getCronPattern(job),
-        );
-
-        throw error; // Re-throw to maintain original behavior
+        // Only reachable where something else calls the tick directly, since
+        // `cron` does not let one out of its own.
+        finish(error);
+        throw error;
+      } finally {
+        inFlight -= 1;
+        if (inFlight === 0) {
+          failure = undefined;
+        }
       }
     };
   }
 
-  private wrapInterval(name: string): void {
-    if (this.wrappedJobs.has(name)) return;
-    this.wrappedJobs.add(name);
+  /**
+   * Adds a listener to a job's error handler without replacing the caller's.
+   */
+  private chainErrorHandler(job: CronJobLike, observe: (error: unknown) => void): void {
+    const holder = job as unknown as Record<string, unknown>;
+    const existing = holder.errorHandler;
 
-    // For intervals, we can't easily wrap the callback without access to the original function
-    // This is a limitation of the current approach
-    // We'd need to intercept at the decorator level for full tracking
-    this.logger.debug(`Interval ${name} registered but cannot be wrapped`);
-  }
+    if (this.wrappedErrorHandlers.has(job)) return;
+    this.wrappedErrorHandlers.set(job, existing);
 
-  private wrapTimeout(name: string): void {
-    if (this.wrappedJobs.has(name)) return;
-    this.wrappedJobs.add(name);
-
-    // Similar limitation as intervals
-    this.logger.debug(`Timeout ${name} registered but cannot be wrapped`);
+    holder.errorHandler = (error: unknown): unknown => {
+      observe(error);
+      return typeof existing === 'function'
+        ? (existing as (e: unknown) => unknown)(error)
+        : undefined;
+    };
   }
 
   private getCronPattern(job: CronJobLike): string | undefined {
@@ -247,6 +469,7 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
     error?: string,
     cron?: string,
     nextRun?: string,
+    every?: { interval?: number; timeout?: number },
   ): void {
     const payload: ScheduleEntry['payload'] = {
       name,
@@ -255,6 +478,8 @@ export class ScheduleWatcher implements OnApplicationBootstrap {
       duration,
       error,
       nextRun,
+      interval: every?.interval,
+      timeout: every?.timeout,
     };
 
     this.collector.collect('schedule', payload);

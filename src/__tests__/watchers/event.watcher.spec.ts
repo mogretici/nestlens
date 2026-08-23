@@ -381,9 +381,15 @@ describe('EventWatcher', () => {
       );
     });
 
-    it('should handle non-serializable payloads', async () => {
+    /**
+     * An event carrying an entity that points back at its parent — which is
+     * what an ORM emits — was recorded as `{_error: 'Unable to serialize
+     * payload'}` and lost. The watcher passes it on now; masking resolves the
+     * reference on the way to storage.
+     */
+    it('keeps a payload that points back at itself', async () => {
       // Arrange
-      const circularPayload: any = {};
+      const circularPayload: any = { id: 1 };
       circularPayload.self = circularPayload;
 
       // Act
@@ -391,12 +397,9 @@ describe('EventWatcher', () => {
       jest.runAllTimers();
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'event',
-        expect.objectContaining({
-          payload: { _error: 'Unable to serialize payload' },
-        }),
-      );
+      const collected = mockCollector.collect.mock.calls[0][1] as unknown as { payload: any };
+      expect(collected.payload.id).toBe(1);
+      expect(collected.payload.self).toBe(collected.payload);
     });
   });
 

@@ -1,5 +1,5 @@
 import { ReactNode, useState, useCallback, useRef, useEffect } from 'react';
-import { ChevronRight, Inbox } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Inbox } from 'lucide-react';
 import { getBadgeColor } from './badgeColors';
 
 // Column definition
@@ -23,6 +23,10 @@ interface DataTableProps<T> {
   loading?: boolean;
   emptyMessage?: string;
   emptyIcon?: ReactNode;
+  /** Set when the last request failed; shown instead of the empty state. */
+  error?: Error | null;
+  /** Offered beside the failure, when the caller can ask again. */
+  onRetry?: () => void;
   showChevron?: boolean;
   compact?: boolean;
   stickyHeader?: boolean;
@@ -49,6 +53,44 @@ function TableSkeleton({ columns, rows = 5 }: { columns: number; rows?: number }
 }
 
 // Empty state component
+/**
+ * What the table says when it could not ask.
+ *
+ * The empty state used to stand in for both. A dashboard reached through a
+ * tunnel with the wrong IP gets 403 from every call, and the table answered
+ * "No requests recorded yet" — which reads as "your application is idle", the
+ * one conclusion a reader must not draw from a debugging tool that cannot see
+ * anything. Measured against 403, 500 and an unreachable server: the same
+ * sentence all three times.
+ */
+function FailedState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center py-12 px-4"
+      role="alert"
+      data-testid="table-error"
+    >
+      <div className="p-3 rounded-full bg-red-50 dark:bg-red-900/20 mb-4">
+        <AlertTriangle className="h-8 w-8 text-red-500 dark:text-red-400" />
+      </div>
+      <p className="text-sm font-medium text-gray-900 dark:text-white text-center">
+        Could not load these entries
+      </p>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 text-center max-w-sm">
+        {error.message}
+      </p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="mt-4 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
 function EmptyState({ message, icon }: { message: string; icon?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4">
@@ -70,6 +112,8 @@ export default function DataTable<T>({
   loading = false,
   emptyMessage = 'No data available',
   emptyIcon,
+  error,
+  onRetry,
   showChevron = true,
   compact = false,
   stickyHeader = true,
@@ -208,6 +252,12 @@ export default function DataTable<T>({
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {loading ? (
               <TableSkeleton columns={totalColumns} rows={5} />
+            ) : error && data.length === 0 ? (
+              <tr>
+                <td colSpan={totalColumns}>
+                  <FailedState error={error} onRetry={onRetry} />
+                </td>
+              </tr>
             ) : data.length === 0 ? (
               <tr>
                 <td colSpan={totalColumns}>

@@ -16,6 +16,7 @@ import {
 } from '../../types';
 import { StorageInterface } from './storage.interface';
 import { normalizeTag } from './tag-normalization';
+import { serializePayload } from './serialize-payload';
 
 /**
  * Database row type for nestlens_entries table
@@ -56,19 +57,103 @@ interface TypeCountRow {
  *
  *   1  the original table: id, type, request_id, payload, created_at
  *   2  adds family_hash and resolved_at
+ *   3  adds UNIQUE (entry_id, tag) — see `migrateTagUniqueness`
+ *   4  timestamps in one format — see `migrateTimestampFormat`, and an index
+ *      over the GraphQL flag
  *
  * Bump it whenever the schema changes, alongside the migration that performs
  * the change. Files written before versioning read as 0 and are migrated the
  * same way — the column probing below has always been idempotent.
+ *
+ * Exported so the tests read it from here rather than keeping their own copy:
+ * a hand-maintained second copy is a test that fails on every bump for the one
+ * reason that is never interesting.
  */
-const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
+
+/**
+ * What a timestamp column defaults to when an INSERT does not name it.
+ *
+ * `CURRENT_TIMESTAMP` writes `2026-08-21 14:29:25`. Read back and parsed by a
+ * browser, a space where the `T` belongs means local time rather than UTC, so
+ * every entry displayed at the reader's offset from the truth — three hours
+ * out in Istanbul — and the seconds-only resolution lost the rest. The other
+ * two backends have always written `toISOString()`, and this now writes what
+ * they write, to the millisecond.
+ */
+const ISO_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+
+/**
+ * Escapes the characters `LIKE` treats as wildcards.
+ *
+ * A reader searching for `50%` means the three characters, not "anything
+ * starting with 50" — and a search for `%` alone matched every row rather than
+ * the rows containing a percent sign. The other two backends compare with
+ * `includes`, where these are ordinary characters, so SQLite was reading the
+ * same query differently: `%` returned 4 of 4 entries against their 1.
+ *
+ * Paired with `ESCAPE '\\'` on every `LIKE` below. The backslash has to go
+ * first, or it would escape the escapes.
+ */
+/**
+ * The entries a monitored tag is keeping.
+ *
+ * Monitoring a tag is how a reader says *do not let these go*, which is what
+ * it means in Telescope and what nothing here did with it: the tag was stored,
+ * listed and counted, and pruning deleted its entries with the rest.
+ *
+ * Age is what it protects against. The store's `maxEntries` ceiling still
+ * applies — that is what bounds how large the file grows, and a monitored tag
+ * on a busy route would otherwise have no bound at all.
+ */
+const MONITORED_ENTRIES = `
+  SELECT t.entry_id FROM nestlens_tags t
+  WHERE t.tag IN (SELECT m.tag FROM nestlens_monitored_tags m)
+`;
+
+const escapeLike = (value: string): string =>
+  value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 
 @Injectable()
 export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SqliteStorage.name);
   private db: DatabaseType;
 
-  constructor(private readonly filename: string = '.cache/nestlens.db') {
+  /**
+   * The most entries to keep, or `0` to keep everything.
+   *
+   * Age was the only bound this driver had, so a busy application filled a
+   * disk long before anything reached `pruning.maxAge`: at a thousand requests
+   * a second the default twenty-four hours is eighty-six million rows.
+   */
+  private readonly maxEntries: number;
+
+  /**
+   * Saves since the ceiling was last checked.
+   *
+   * Checking on every write would mean a `COUNT(*)` per entry. Checking every
+   * hundred costs the same query once per hundred and lets the store overshoot
+   * by at most that, which for a ceiling measured in thousands is noise.
+   */
+  private sinceLimitCheck = 0;
+  private static readonly LIMIT_CHECK_EVERY = 100;
+  /**
+   * How many saves pass between limit checks, for this store's cap.
+   *
+   * The amortisation below overshoots by up to a hundred entries, which is
+   * nothing against the ten thousand of the default and everything against a
+   * small cap set on purpose: `maxEntries: 3` held 103 rows. Checking at
+   * whichever is smaller keeps the store within twice what was asked for.
+   */
+  private readonly limitCheckEvery: number;
+
+  constructor(
+    private readonly filename: string = '.cache/nestlens.db',
+    maxEntries = 10_000,
+  ) {
+    this.maxEntries = Math.max(0, maxEntries);
+    this.limitCheckEvery = Math.max(1, Math.min(SqliteStorage.LIMIT_CHECK_EVERY, this.maxEntries));
+
     // Ensure directory exists
     const dir = path.dirname(filename);
     if (dir && dir !== '.' && !fs.existsSync(dir)) {
@@ -78,6 +163,28 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     this.db = new Database(filename);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000'); // 5 second timeout for locked database
+
+    /*
+     * Case folding the way JavaScript does it.
+     *
+     * SQLite's `LIKE` and `lower()` fold ASCII and nothing else, so a search
+     * for text that is not English found only what matched exactly. Measured
+     * against the same entries on all three drivers:
+     *
+     * ```text
+     * "ünlü"   memory 2   redis 2   sqlite 1
+     * "ÜNLÜ"   memory 2   redis 2   sqlite 0
+     * ```
+     *
+     * The other two compare with `includes` after `toLowerCase`, which is
+     * Unicode-aware; this gives SQLite the same comparison. A search costs
+     * 12ms against ten thousand entries where the native `LIKE` cost 2ms and
+     * answered the wrong question.
+     */
+    this.db.function('nestlens_lower', (value: unknown) =>
+      typeof value === 'string' ? value.toLowerCase() : value,
+    );
+
     this.initializeDatabase();
   }
 
@@ -119,12 +226,22 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         type TEXT NOT NULL,
         request_id TEXT,
         payload TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT (${ISO_NOW})
       );
 
       CREATE INDEX IF NOT EXISTS idx_nestlens_type ON nestlens_entries(type);
       CREATE INDEX IF NOT EXISTS idx_nestlens_request_id ON nestlens_entries(request_id);
       CREATE INDEX IF NOT EXISTS idx_nestlens_created_at ON nestlens_entries(created_at);
+
+      -- A GraphQL operation is recorded as a request too, flagged, and belongs
+      -- to the GraphQL page rather than the Requests page. The badge above the
+      -- Requests list has to subtract them, and without this it read the
+      -- payload of every request row and parsed each one: 56 ms across 200,000
+      -- entries, on a driver that is synchronous and so on the application's
+      -- event loop, for a number the dashboard polls. Indexing the expression
+      -- the count already asks for makes the plan a covering search — 7 ms.
+      CREATE INDEX IF NOT EXISTS idx_nestlens_graphql
+        ON nestlens_entries(type, json_extract(payload, '$.isGraphQL'));
     `);
 
     // Migrate existing database - add new columns if they don't exist
@@ -136,8 +253,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         entry_id INTEGER NOT NULL,
         tag TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (entry_id) REFERENCES nestlens_entries(id) ON DELETE CASCADE
+        created_at TEXT DEFAULT (${ISO_NOW}),
+        FOREIGN KEY (entry_id) REFERENCES nestlens_entries(id) ON DELETE CASCADE,
+        -- What the INSERT OR IGNORE in addTags needs in order to ignore
+        -- anything. Without it the clause is inert: tagging an entry twice
+        -- stored the tag twice, getAllTags counted it twice, and removeTags
+        -- left a copy behind.
+        UNIQUE (entry_id, tag)
       );
 
       CREATE INDEX IF NOT EXISTS idx_nestlens_tags_entry_id ON nestlens_tags(entry_id);
@@ -149,9 +271,11 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       CREATE TABLE IF NOT EXISTS nestlens_monitored_tags (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tag TEXT NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT (${ISO_NOW})
       );
     `);
+
+    this.migrateTimestampFormat();
 
     // Stamped last, so a run that dies midway through leaves the file marked
     // with the version it still is rather than the one it was becoming.
@@ -181,47 +305,149 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     this.db.exec(
       'CREATE INDEX IF NOT EXISTS idx_nestlens_family_hash ON nestlens_entries(family_hash)',
     );
+
+    this.migrateTagUniqueness();
+  }
+
+  /**
+   * Rewrites timestamps an earlier version left in SQLite's own format.
+   *
+   * `CURRENT_TIMESTAMP` writes `2026-08-21 14:29:25`. A browser parsing that
+   * sees no timezone and a space where the `T` belongs, so it reads it as local
+   * time: every entry in a file written before this version displayed at the
+   * reader's offset from the truth, three hours out in Istanbul, and to the
+   * second rather than the millisecond. The other two backends have always
+   * written `toISOString()`.
+   *
+   * One format in the column is also what lets `created_at < ?` use the index
+   * — see `prune` — so this has to convert every row, not only the ones being
+   * displayed. The stored value is UTC either way, so the conversion is
+   * textual: a `T` for the space and a `.000Z` on the end.
+   */
+  private migrateTimestampFormat(): void {
+    const legacy = "created_at IS NOT NULL AND created_at NOT LIKE '%T%'";
+    const converted = "replace(created_at, ' ', 'T') || '.000Z'";
+
+    for (const table of ['nestlens_entries', 'nestlens_tags', 'nestlens_monitored_tags']) {
+      this.db.exec(`UPDATE ${table} SET created_at = ${converted} WHERE ${legacy}`);
+    }
+
+    this.db.exec(
+      `UPDATE nestlens_entries SET resolved_at = replace(resolved_at, ' ', 'T') || '.000Z'
+       WHERE resolved_at IS NOT NULL AND resolved_at NOT LIKE '%T%'`,
+    );
+  }
+
+  /**
+   * Gives an existing tag table the uniqueness it was always assumed to have.
+   *
+   * `addTags` has always written `INSERT OR IGNORE`, which does nothing unless
+   * a constraint exists to be violated — and none did. A file written by an
+   * earlier version therefore holds one row per tagging rather than one row per
+   * tag, so the duplicates have to go before the index can be built.
+   *
+   * `CREATE TABLE` above carries the constraint for new files; this is for the
+   * ones already on disk. Both paths end at the same schema.
+   */
+  private migrateTagUniqueness(): void {
+    const tagTable = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'nestlens_tags'")
+      .get();
+
+    if (!tagTable) {
+      return;
+    }
+
+    const alreadyUnique = (
+      this.db.prepare('PRAGMA index_list(nestlens_tags)').all() as {
+        unique: number;
+        name: string;
+      }[]
+    ).some((index) => index.unique === 1);
+
+    if (alreadyUnique) {
+      return;
+    }
+
+    // Keep the earliest row for each pair; the later ones were never meant to
+    // exist and carry nothing the first does not.
+    this.db.exec(`
+      DELETE FROM nestlens_tags
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM nestlens_tags GROUP BY entry_id, tag
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_nestlens_tags_entry_tag
+        ON nestlens_tags(entry_id, tag);
+    `);
   }
 
   async initialize(): Promise<void> {
     this.initializeDatabase();
   }
 
+  /**
+   * Writes the timestamp rather than leaving it to the column default.
+   *
+   * `save` reported `new Date().toISOString()` while the row kept whatever
+   * `CURRENT_TIMESTAMP` had written, so the two disagreed about the same
+   * entry: the dashboard showed one time as the entry arrived and a different
+   * one after a refresh. Naming the column makes the value returned and the
+   * value stored the same string.
+   */
   async save(entry: Entry): Promise<Entry> {
     const stmt = this.db.prepare(`
-      INSERT INTO nestlens_entries (type, request_id, payload)
-      VALUES (?, ?, ?)
+      INSERT INTO nestlens_entries (type, request_id, payload, created_at)
+      VALUES (?, ?, ?, ?)
     `);
 
-    const result = stmt.run(entry.type, entry.requestId || null, JSON.stringify(entry.payload));
+    // The collector stamps an entry when the thing happened; the buffer holds
+    // it for up to a second, so stamping it here recorded the flush instead.
+    const createdAt = entry.createdAt ?? new Date().toISOString();
+    const result = stmt.run(
+      entry.type,
+      entry.requestId || null,
+      serializePayload(entry.payload),
+      createdAt,
+    );
+
+    this.enforceEntryLimit(1);
 
     return {
       ...entry,
       id: result.lastInsertRowid as number,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
   }
 
   async saveBatch(entries: Entry[]): Promise<Entry[]> {
     const stmt = this.db.prepare(`
-      INSERT INTO nestlens_entries (type, request_id, payload)
-      VALUES (?, ?, ?)
+      INSERT INTO nestlens_entries (type, request_id, payload, created_at)
+      VALUES (?, ?, ?, ?)
     `);
 
     const savedEntries: Entry[] = [];
 
     const insertMany = this.db.transaction((items: Entry[]) => {
       for (const entry of items) {
-        const result = stmt.run(entry.type, entry.requestId || null, JSON.stringify(entry.payload));
+        const createdAt = entry.createdAt ?? new Date().toISOString();
+        const result = stmt.run(
+          entry.type,
+          entry.requestId || null,
+          serializePayload(entry.payload),
+          createdAt,
+        );
         savedEntries.push({
           ...entry,
           id: Number(result.lastInsertRowid),
-          createdAt: new Date().toISOString(),
+          createdAt,
         });
       }
     });
 
     insertMany(entries);
+    this.enforceEntryLimit(entries.length);
+
     return savedEntries;
   }
 
@@ -247,26 +473,31 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       params.push(filter.requestId);
     }
 
-    // `datetime()` on both sides: SQLite writes CURRENT_TIMESTAMP as
-    // "2026-08-12 21:55:45" and a Date arrives as "2026-08-12T21:25:45.292Z",
-    // so comparing them as text compares a space against a "T" — every row
-    // from today or earlier reads as older than any cutoff today. See prune().
+    // Compared as text, which is what the column holds and what the parameter
+    // is: both sides are `toISOString()` now, a fixed-width UTC format whose
+    // lexical order is its chronological order. That also lets the comparison
+    // use `idx_nestlens_created_at`, which wrapping the column in `datetime()`
+    // ruled out.
     if (filter.from) {
-      sql += ' AND datetime(created_at) >= datetime(?)';
+      sql += ' AND created_at >= ?';
       params.push(filter.from.toISOString());
     }
 
     if (filter.to) {
-      sql += ' AND datetime(created_at) <= datetime(?)';
+      sql += ' AND created_at <= ?';
       params.push(filter.to.toISOString());
     }
 
     // id breaks ties so rows written in the same millisecond page consistently.
     sql += ' ORDER BY created_at DESC, id DESC';
 
-    if (filter.limit) {
+    // SQLite will not take an OFFSET without a LIMIT — `near "OFFSET": syntax
+    // error` — while the other two backends skip and return the rest. `-1` is
+    // SQLite's "no limit", so an offset on its own means the same thing here as
+    // it does there.
+    if (filter.limit || filter.offset) {
       sql += ' LIMIT ?';
-      params.push(filter.limit);
+      params.push(filter.limit ?? -1);
     }
 
     if (filter.offset) {
@@ -422,18 +653,68 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   }
 
   /**
-   * Both sides go through `datetime()` before they are compared.
+   * Keeps the newest `maxEntries` and deletes the rest.
    *
-   * SQLite stores `CURRENT_TIMESTAMP` as `2026-08-12 21:55:45` and a JavaScript
-   * Date arrives as `2026-08-12T21:25:45.292Z`. Compared as text — which is
-   * what `created_at < ?` does — the eleventh character decides: a space sorts
-   * before a "T", so every row whose date is the cutoff's date or earlier reads
-   * as older than the cutoff whatever its time. Pruning anything therefore
-   * pruned everything recorded that day, including entries seconds old.
+   * By id rather than by count: ids are handed out in order, so the id of the
+   * last row over the line is the boundary and everything up to it goes in one
+   * indexed delete.
+   *
+   * Counted from the *oldest* end. Asking for the n-th newest row means
+   * `OFFSET maxEntries`, and SQLite walks every one of those index entries to
+   * get there — ten thousand steps per check, which cost a third of the write
+   * throughput. Walking the overflow instead is at most `LIMIT_CHECK_EVERY`
+   * steps, because that is how far the store can have drifted since the last
+   * check.
+   *
+   * Amortised: a count per entry is more than the ceiling is worth, and
+   * overshooting by up to a hundred entries out of thousands is not.
+   */
+  private enforceEntryLimit(saved: number): void {
+    if (this.maxEntries <= 0) return;
+
+    this.sinceLimitCheck += saved;
+    if (this.sinceLimitCheck < this.limitCheckEvery) return;
+    this.sinceLimitCheck = 0;
+
+    const { count } = this.db.prepare('SELECT COUNT(*) as count FROM nestlens_entries').get() as {
+      count: number;
+    };
+
+    const overflow = count - this.maxEntries;
+    if (overflow <= 0) return;
+
+    const boundary = this.db
+      .prepare('SELECT id FROM nestlens_entries ORDER BY id ASC LIMIT 1 OFFSET ?')
+      .get(overflow - 1) as { id: number } | undefined;
+
+    if (!boundary) return;
+
+    this.db.prepare('DELETE FROM nestlens_entries WHERE id <= ?').run(boundary.id);
+  }
+
+  /**
+   * Deletes by comparing the column directly, which the index can answer.
+   *
+   * Both sides used to go through `datetime()`, because the column held
+   * `2026-08-12 21:55:45` and the parameter arrived as
+   * `2026-08-12T21:25:45.292Z`: compared as text the eleventh character
+   * decided, a space sorting before a "T", so every row from the cutoff's date
+   * or earlier read as older whatever its time — pruning anything pruned
+   * everything recorded that day.
+   *
+   * Wrapping the column fixed that and cost the index: `EXPLAIN QUERY PLAN`
+   * read `SCAN nestlens_entries`, so every prune walked the whole table, on a
+   * driver that is synchronous and therefore on the application's event loop.
+   * A prune that matched nothing at all still took 21 ms across 200,000
+   * entries, and that figure grows with the table.
+   *
+   * The column holds `toISOString()` now — see `migrateTimestampFormat` — so
+   * the two sides are the same fixed-width UTC format, text order is time
+   * order, and the plan reads `SEARCH ... USING COVERING INDEX`.
    */
   async prune(before: Date): Promise<number> {
     const stmt = this.db.prepare(
-      'DELETE FROM nestlens_entries WHERE datetime(created_at) < datetime(?)',
+      `DELETE FROM nestlens_entries WHERE created_at < ? AND id NOT IN (${MONITORED_ENTRIES})`,
     );
     const result = stmt.run(before.toISOString());
     return result.changes;
@@ -441,7 +722,8 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
     const stmt = this.db.prepare(
-      'DELETE FROM nestlens_entries WHERE type = ? AND datetime(created_at) < datetime(?)',
+      `DELETE FROM nestlens_entries
+       WHERE type = ? AND created_at < ? AND id NOT IN (${MONITORED_ENTRIES})`,
     );
     const result = stmt.run(type, before.toISOString());
     return result.changes;
@@ -462,6 +744,36 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       return { conditions, params };
     }
 
+    // The window, compared against the column directly so the index on
+    // `created_at` can answer it. Both sides are `toISOString()`.
+    if (filters.from) {
+      conditions.push('e.created_at >= ?');
+      params.push(filters.from);
+    }
+
+    if (filters.to) {
+      conditions.push('e.created_at <= ?');
+      params.push(filters.to);
+    }
+
+    if (filters.requestId) {
+      conditions.push('e.request_id = ?');
+      params.push(filters.requestId);
+    }
+
+    // How long it took. `json_extract` gives NULL for an entry that measures
+    // nothing, and a NULL comparison is not true, so those are excluded — the
+    // same answer the other two backends give.
+    if (filters.minDuration !== undefined) {
+      conditions.push("json_extract(e.payload, '$.duration') >= ?");
+      params.push(filters.minDuration);
+    }
+
+    if (filters.maxDuration !== undefined) {
+      conditions.push("json_extract(e.payload, '$.duration') <= ?");
+      params.push(filters.maxDuration);
+    }
+
     // Logs: levels filter
     if (filters.levels && filters.levels.length > 0) {
       const placeholders = filters.levels.map(() => '?').join(', ');
@@ -479,10 +791,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Queries: queryTypes filter (SELECT, INSERT, UPDATE, DELETE)
     if (filters.queryTypes && filters.queryTypes.length > 0) {
       const queryConditions = filters.queryTypes
-        .map(() => `json_extract(e.payload, '$.query') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.query') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${queryConditions})`);
-      params.push(...filters.queryTypes.map((qt) => `${qt}%`));
+      params.push(...filters.queryTypes.map((qt) => `${escapeLike(qt)}%`));
     }
 
     // Queries: sources filter (typeorm, prisma, etc)
@@ -500,11 +812,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Exceptions: names filter
     if (filters.names && filters.names.length > 0) {
+      // Folded on both sides, as the JavaScript backends compare; see
+      // `nestlens_lower`.
       const nameConditions = filters.names
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `nestlens_lower(json_extract(e.payload, '$.name')) LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.names.map((n) => `%${n}%`));
+      params.push(...filters.names.map((n) => `%${escapeLike(n.toLowerCase())}%`));
     }
 
     // Requests & Exceptions: methods filter
@@ -519,15 +833,22 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Requests & Exceptions: paths filter (supports LIKE)
     if (filters.paths && filters.paths.length > 0) {
       const requestConditions = filters.paths
-        .map(() => `json_extract(e.payload, '$.path') LIKE ?`)
+        .map(() => `nestlens_lower(json_extract(e.payload, '$.path')) LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       const exceptionConditions = filters.paths
-        .map(() => `json_extract(e.payload, '$.request.url') LIKE ?`)
+        .map(() => `nestlens_lower(json_extract(e.payload, '$.request.url')) LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`((${requestConditions}) OR (${exceptionConditions}))`);
-      const pathParams = filters.paths.map((p) =>
-        p.includes('*') ? p.replace(/\*/g, '%') : `%${p}%`,
-      );
+      // `*` stays a wildcard — it is the documented way to ask for one — but
+      // everything around it is escaped, so a path containing `%` or `_`
+      // matches itself.
+      // A pattern with a wildcard is anchored — `/item*` means "starts with
+      // /item" — and one without matches anywhere. The JavaScript backends
+      // follow the same rule; see `matchesPathPattern`.
+      const pathParams = filters.paths.map((raw) => {
+        const p = raw.toLowerCase();
+        return p.includes('*') ? escapeLike(p).replace(/\*/g, '%') : `%${escapeLike(p)}%`;
+      });
       params.push(...pathParams, ...pathParams);
     }
 
@@ -565,12 +886,13 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
       const hostnameConditions = filters.hostnames
         .map(
           () =>
-            `(json_extract(e.payload, '$.headers.host') LIKE ? OR json_extract(e.payload, '$.headers.Host') LIKE ? OR json_extract(e.payload, '$.hostname') LIKE ?)`,
+            `(json_extract(e.payload, '$.headers.host') LIKE ? ESCAPE '\\' OR json_extract(e.payload, '$.headers.Host') LIKE ? ESCAPE '\\' OR json_extract(e.payload, '$.hostname') LIKE ? ESCAPE '\\')`,
         )
         .join(' OR ');
       conditions.push(`(${hostnameConditions})`);
       filters.hostnames.forEach((h) => {
-        params.push(`%${h}%`, `%${h}%`, `%${h}%`);
+        const pattern = `%${escapeLike(h)}%`;
+        params.push(pattern, pattern, pattern);
       });
     }
 
@@ -591,10 +913,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Events: eventNames filter
     if (filters.eventNames && filters.eventNames.length > 0) {
       const nameConditions = filters.eventNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.eventNames.map((n) => `%${n}%`));
+      params.push(...filters.eventNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Schedule: scheduleStatuses filter (started, completed, failed)
@@ -607,10 +929,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Schedule: scheduleNames filter
     if (filters.scheduleNames && filters.scheduleNames.length > 0) {
       const nameConditions = filters.scheduleNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.scheduleNames.map((n) => `%${n}%`));
+      params.push(...filters.scheduleNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Jobs: jobStatuses filter (waiting, active, completed, failed, delayed)
@@ -623,10 +945,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Jobs: jobNames filter
     if (filters.jobNames && filters.jobNames.length > 0) {
       const nameConditions = filters.jobNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.jobNames.map((n) => `%${n}%`));
+      params.push(...filters.jobNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Jobs: queues filter
@@ -723,19 +1045,19 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // Command: commandNames filter
     if (filters.commandNames && filters.commandNames.length > 0) {
       const nameConditions = filters.commandNames
-        .map(() => `json_extract(e.payload, '$.name') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.name') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.commandNames.map((n) => `%${n}%`));
+      params.push(...filters.commandNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Gate: gateNames filter
     if (filters.gateNames && filters.gateNames.length > 0) {
       const nameConditions = filters.gateNames
-        .map(() => `json_extract(e.payload, '$.gate') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.gate') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.gateNames.map((n) => `%${n}%`));
+      params.push(...filters.gateNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // Gate: gateResults filter (allowed, denied mapped from boolean)
@@ -797,10 +1119,10 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     // GraphQL: operationNames filter
     if (filters.operationNames && filters.operationNames.length > 0) {
       const nameConditions = filters.operationNames
-        .map(() => `json_extract(e.payload, '$.operationName') LIKE ?`)
+        .map(() => `json_extract(e.payload, '$.operationName') LIKE ? ESCAPE '\\'`)
         .join(' OR ');
       conditions.push(`(${nameConditions})`);
-      params.push(...filters.operationNames.map((n) => `%${n}%`));
+      params.push(...filters.operationNames.map((n) => `%${escapeLike(n)}%`));
     }
 
     // GraphQL: hasErrors filter
@@ -831,10 +1153,14 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
 
     // Search filter (searches in payload and entry tags)
     if (filters.search) {
+      // `instr` over the folded text: the term is a substring, not a pattern,
+      // which is what the other two drivers compare and what removes the need
+      // to escape `%` here. See `nestlens_lower`.
       conditions.push(
-        `(e.payload LIKE ? OR EXISTS (SELECT 1 FROM nestlens_tags st WHERE st.entry_id = e.id AND st.tag LIKE ?))`,
+        `(instr(nestlens_lower(e.payload), ?) > 0 OR EXISTS (SELECT 1 FROM nestlens_tags st WHERE st.entry_id = e.id AND instr(nestlens_lower(st.tag), ?) > 0))`,
       );
-      params.push(`%${filters.search}%`, `%${filters.search}%`);
+      const folded = filters.search.toLowerCase();
+      params.push(folded, folded);
     }
 
     return { conditions, params };
@@ -1052,6 +1378,19 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   // ==================== Tag Methods ====================
 
   async addTags(entryId: number, tags: string[]): Promise<void> {
+    // An entry that is not there cannot be tagged, and asking to is not an
+    // error worth throwing over: the collector tags an entry just after saving
+    // it, and pruning or the entry cap can remove it in between. The foreign
+    // key made that race throw out of the collector; there is nothing for the
+    // caller to do about it, and nothing to record either.
+    const exists = this.db
+      .prepare('SELECT 1 FROM nestlens_entries WHERE id = ?')
+      .get(entryId) as unknown;
+
+    if (!exists) {
+      return;
+    }
+
     const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO nestlens_tags (entry_id, tag)
       VALUES (?, ?)
@@ -1200,7 +1539,7 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
   async resolveEntry(id: number): Promise<void> {
     const stmt = this.db.prepare(`
       UPDATE nestlens_entries
-      SET resolved_at = CURRENT_TIMESTAMP
+      SET resolved_at = ${ISO_NOW}
       WHERE id = ?
     `);
     stmt.run(id);

@@ -61,7 +61,20 @@ NestLensModule.forRoot({
 | `captureSession` | boolean | `true` | Capture session data |
 | `captureResponseHeaders` | boolean | `true` | Capture response headers |
 | `captureControllerInfo` | boolean | `true` | Capture controller/handler names |
+| `captureMemory` | boolean | `false` | Record heap growth across the handler |
 | `tags` | function | `undefined` | Function to generate custom tags |
+
+:::note `captureMemory` is off by default
+`process.memoryUsage()` walks V8's heap statistics, and two of those per request
+came to about 2.5% of the process's CPU under load — for a figure that is one
+global counter read either side of a handler sharing the heap with every other
+request in flight. Measured on an endpoint returning `{ok:true}` it ranged from
+-570 KB to +671 KB and came out negative once in thirty.
+
+It is still worth having where a single request is being investigated in
+isolation, which is why the option exists. See
+[Performance](/docs/advanced/performance#request-watcher-memory).
+:::
 
 ## Payload Structure
 
@@ -82,7 +95,7 @@ interface RequestEntry {
     responseBody?: unknown;       // Response body
     responseHeaders?: Record<string, string>;
     duration: number;             // Milliseconds (always present)
-    memory: number;               // Bytes (always present)
+    memory?: number;              // Heap growth in bytes, only with captureMemory
     controllerAction?: string;    // e.g., "UserController.create"
     handler?: string;             // Handler method name
     user?: {                      // Authenticated user

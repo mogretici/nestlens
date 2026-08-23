@@ -1,38 +1,18 @@
-import { IsOptional, IsIn, IsString, MaxLength } from 'class-validator';
+import { IsInt, IsISO8601, IsOptional, IsIn, IsString, MaxLength, Min } from 'class-validator';
 import {
   TransformLimit,
   TransformSequence,
   TransformCommaSeparatedArray,
   TransformCommaSeparatedNumbersOrErr,
   TransformStringToBoolean,
+  TransformToInt,
   IsCommaSeparatedStrings,
   IsCommaSeparatedList,
   IsBooleanLike,
   MAX_SEARCH_LENGTH,
 } from './transformers';
+import { ENTRY_TYPES } from './entry-types';
 import { EntryType } from '@/types';
-
-const ENTRY_TYPES: EntryType[] = [
-  'request',
-  'query',
-  'exception',
-  'log',
-  'cache',
-  'event',
-  'job',
-  'schedule',
-  'mail',
-  'http-client',
-  'redis',
-  'model',
-  'notification',
-  'view',
-  'command',
-  'gate',
-  'batch',
-  'dump',
-  'graphql',
-];
 
 /**
  * Complete cursor query DTO that combines pagination with all filter types.
@@ -56,6 +36,53 @@ export class CursorQueryDto {
   @IsOptional()
   @TransformSequence()
   afterSequence?: number;
+
+  // ==================== The window ====================
+
+  /**
+   * The instants an entry has to fall between.
+   *
+   * The dashboard could not narrow by time at all: this endpoint is what every
+   * list is paged through, and it took no window, so "what happened at 14:03"
+   * had no answer. `entries`, `requests` and `exceptions` accepted `from` and
+   * `to` through a different path; `logs` and `queries` accepted them and
+   * ignored them, which is worse than refusing.
+   */
+  @IsOptional()
+  @IsISO8601({}, { message: 'from must be an ISO 8601 instant, such as 2026-08-22T14:03:00Z' })
+  from?: string;
+
+  @IsOptional()
+  @IsISO8601({}, { message: 'to must be an ISO 8601 instant, such as 2026-08-22T14:03:00Z' })
+  to?: string;
+
+  // ==================== How long it took ====================
+
+  /**
+   * Bounds on `duration`, in milliseconds.
+   *
+   * Every entry that measures anything carries one, and there was no way to
+   * ask about it: the only related filter was `slow`, a boolean the query
+   * watcher sets from its own threshold. "Requests over 500ms" is the first
+   * question anybody asks a debugging tool.
+   */
+  @IsOptional()
+  @IsInt({ message: 'minDuration must be a whole number of milliseconds' })
+  @Min(0)
+  @TransformToInt({ min: 0 })
+  minDuration?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'maxDuration must be a whole number of milliseconds' })
+  @Min(0)
+  @TransformToInt({ min: 0 })
+  maxDuration?: number;
+
+  /** Everything one request produced, which is what a detail page shows. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  requestId?: string;
 
   // ==================== Log Filters ====================
 
@@ -342,6 +369,11 @@ export class CursorQueryDto {
    * properties this DTO declares, so a filter added later cannot go missing.
    */
   private static readonly FILTER_KEYS = [
+    'from',
+    'to',
+    'minDuration',
+    'maxDuration',
+    'requestId',
     'levels',
     'contexts',
     'queryTypes',

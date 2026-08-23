@@ -28,9 +28,13 @@ import {
   isGraphQLEntry,
 } from '../types';
 import Tabs from '../components/Tabs';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { EntryTags } from '../components/EntryTags';
+import JsonViewer from '../components/JsonViewer';
 import { ControlledInlineJson } from '../components/JsonViewerWithToolbar';
 import { useJsonToolbar } from '../components/useJsonToolbar';
 import ClickableBadge from '../components/ClickableBadge';
+import { getEntryTypeConfig } from '../config/entryTypes';
 
 /**
  * One chunk per detail view, fetched when an entry of that type is opened.
@@ -44,203 +48,27 @@ import ClickableBadge from '../components/ClickableBadge';
  * Holds the page's height while a detail view arrives, so the layout does not
  * jump. The chunks are small and same-origin, so this is usually a single frame.
  */
-function DetailViewSkeleton() {
+/**
+ * What is shown when a detail view cannot read its entry.
+ *
+ * The views read their payload's fields directly — `payload.method`,
+ * `payload.level`, `payload.listeners` — and a payload does not always have
+ * them: an entry written by an older version, or one whose payload could not
+ * be serialised and was replaced by the reason. Without this the whole page
+ * became *Something went wrong*, which is a worse answer than the entry
+ * itself: the data is there, only the view for it did not fit.
+ */
+/**
+ * The heading, as its own component so the boundary above it can do its job.
+ *
+ * A boundary catches what its descendants throw, not what the component
+ * rendering it throws — and this JSX used to be inline in the page, so a
+ * payload without the fields its type declares took the whole page down
+ * before the fallback could be reached.
+ */
+function EntryHeading({ entry }: { entry: Entry }) {
   return (
-    <div className="animate-pulse space-y-3" aria-hidden="true">
-      <div className="h-8 rounded bg-gray-100 dark:bg-gray-800" />
-      <div className="h-40 rounded bg-gray-100 dark:bg-gray-800" />
-    </div>
-  );
-}
-
-const RequestDetailView = lazy(() => import('../components/RequestDetailView'));
-const QueryDetailView = lazy(() => import('../components/QueryDetailView'));
-const ExceptionDetailView = lazy(() => import('../components/ExceptionDetailView'));
-const LogDetailView = lazy(() => import('../components/LogDetailView'));
-const EventDetailView = lazy(() => import('../components/EventDetailView'));
-const JobDetailView = lazy(() => import('../components/JobDetailView'));
-const CacheDetailView = lazy(() => import('../components/CacheDetailView'));
-const MailDetailView = lazy(() => import('../components/MailDetailView'));
-const ScheduleDetailView = lazy(() => import('../components/ScheduleDetailView'));
-const HttpClientDetailView = lazy(() => import('../components/HttpClientDetailView'));
-const RedisDetailView = lazy(() => import('../components/RedisDetailView'));
-const ModelDetailView = lazy(() => import('../components/ModelDetailView'));
-const NotificationDetailView = lazy(() => import('../components/NotificationDetailView'));
-const ViewDetailView = lazy(() => import('../components/ViewDetailView'));
-const CommandDetailView = lazy(() => import('../components/CommandDetailView'));
-const GateDetailView = lazy(() => import('../components/GateDetailView'));
-const BatchDetailView = lazy(() => import('../components/BatchDetailView'));
-const DumpDetailView = lazy(() => import('../components/DumpDetailView'));
-const GraphQLDetailView = lazy(() => import('../components/GraphQLDetailView'));
-
-// Get display method - GRAPHQL for GraphQL endpoints, otherwise HTTP method
-function getDisplayMethod(path: string, method: string): string {
-  if (path?.toLowerCase().includes('/graphql')) {
-    return 'GRAPHQL';
-  }
-  return method.toUpperCase();
-}
-
-// Get query type from SQL query
-function getQueryType(query: string): string {
-  const trimmed = query.trim().toUpperCase();
-  if (trimmed.startsWith('SELECT')) return 'SELECT';
-  if (trimmed.startsWith('INSERT')) return 'INSERT';
-  if (trimmed.startsWith('UPDATE')) return 'UPDATE';
-  if (trimmed.startsWith('DELETE')) return 'DELETE';
-  if (trimmed.startsWith('CREATE')) return 'CREATE';
-  if (trimmed.startsWith('ALTER')) return 'ALTER';
-  if (trimmed.startsWith('DROP')) return 'DROP';
-  if (trimmed.startsWith('TRUNCATE')) return 'TRUNCATE';
-  if (trimmed.startsWith('BEGIN') || trimmed.startsWith('START')) return 'TRANSACTION';
-  if (trimmed.startsWith('COMMIT')) return 'COMMIT';
-  if (trimmed.startsWith('ROLLBACK')) return 'ROLLBACK';
-  return 'QUERY';
-}
-
-export default function EntryDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const [entry, setEntry] = useState<Entry | null>(null);
-  const [related, setRelated] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const fallbackToolbar = useJsonToolbar();
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!id) return;
-      try {
-        const response = await getEntry(parseInt(id));
-        setEntry(response.data);
-        setRelated(response.related ?? []);
-      } catch (error) {
-        console.error('Failed to fetch entry:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [id]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64" role="status" aria-label="Loading...">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  if (!entry) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          Entry not found
-        </h2>
-        <Link to="/" className="text-primary-600 hover:text-primary-700 mt-4 inline-block">
-          Go back to dashboard
-        </Link>
-      </div>
-    );
-  }
-
-  // Render type-specific detail view
-  const renderDetailView = () => {
-    if (isRequestEntry(entry)) {
-      return <RequestDetailView entry={entry} related={related} />;
-    }
-    if (isQueryEntry(entry)) {
-      return <QueryDetailView entry={entry} />;
-    }
-    if (isExceptionEntry(entry)) {
-      return <ExceptionDetailView entry={entry} />;
-    }
-    if (isLogEntry(entry)) {
-      return <LogDetailView entry={entry} />;
-    }
-    if (isEventEntry(entry)) {
-      return <EventDetailView entry={entry} />;
-    }
-    if (isJobEntry(entry)) {
-      return <JobDetailView entry={entry} />;
-    }
-    if (isCacheEntry(entry)) {
-      return <CacheDetailView entry={entry} />;
-    }
-    if (isMailEntry(entry)) {
-      return <MailDetailView entry={entry} />;
-    }
-    if (isScheduleEntry(entry)) {
-      return <ScheduleDetailView entry={entry} />;
-    }
-    if (isHttpClientEntry(entry)) {
-      return <HttpClientDetailView entry={entry} />;
-    }
-    if (isRedisEntry(entry)) {
-      return <RedisDetailView entry={entry} />;
-    }
-    if (isModelEntry(entry)) {
-      return <ModelDetailView entry={entry} />;
-    }
-    if (isNotificationEntry(entry)) {
-      return <NotificationDetailView entry={entry} />;
-    }
-    if (isViewEntry(entry)) {
-      return <ViewDetailView entry={entry} />;
-    }
-    if (isCommandEntry(entry)) {
-      return <CommandDetailView entry={entry} />;
-    }
-    if (isGateEntry(entry)) {
-      return <GateDetailView entry={entry} />;
-    }
-    if (isBatchEntry(entry)) {
-      return <BatchDetailView entry={entry} />;
-    }
-    if (isDumpEntry(entry)) {
-      return <DumpDetailView entry={entry} />;
-    }
-    if (isGraphQLEntry(entry)) {
-      return <GraphQLDetailView entry={entry} />;
-    }
-    // Generic fallback for future entry types
-    const unknownEntry = entry as Entry;
-    const payloadData = unknownEntry.payload as unknown as JsonValue;
-    const fallbackTabs = [
-      {
-        id: 'payload',
-        label: 'Payload',
-        content: (
-          <ControlledInlineJson
-            data={payloadData}
-            toolbarState={fallbackToolbar.state}
-            searchBar={fallbackToolbar.SearchBar}
-            maxHeight={400}
-          />
-        ),
-      },
-    ];
-    return (
-      <Tabs
-        tabs={fallbackTabs}
-        defaultTab="payload"
-        headerRight={<fallbackToolbar.Toolbar data={payloadData} />}
-      />
-    );
-  };
-
-  return (
-    <div>
-      {/* Fixed Header */}
-      <div className="fixed top-0 left-0 right-0 lg:left-64 z-30 h-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center space-x-4 px-4 lg:px-6 h-full">
-          <Link
-            to={-1 as unknown as string}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 text-gray-500" />
-          </Link>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-3">
+    <div className="flex items-center space-x-3">
               {/* Request entries: show method badge + path */}
               {isRequestEntry(entry) ? (
                 <>
@@ -459,7 +287,326 @@ export default function EntryDetailPage() {
                   );
                 })()
               )}
-            </div>
+    </div>
+  );
+}
+
+/**
+ * An entry's tags, and the one way to change them.
+ *
+ * `EntryTags` was rendered nowhere: the endpoints, the service and all three
+ * storage drivers implement tagging, with tests, and a reader had no way to
+ * reach any of it. The read-only side was inconsistent as well — five of the
+ * nineteen detail views listed an entry's tags and the other fourteen showed
+ * them nowhere.
+ *
+ * Here they are once, above the view, for every type. The five views that
+ * list them as well are left as they are: what they show is read-only and
+ * correct, and rewriting five components to remove a duplicate row is a
+ * tidy-up, not a fix.
+ */
+function EntryTagsCard({ entry }: { entry: Entry }) {
+  const [tags, setTags] = useState<string[]>(entry.tags ?? []);
+
+  return (
+    <div className="card" data-testid="entry-tags">
+      <div className="p-4 flex items-center gap-3 flex-wrap">
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Tags</span>
+        <EntryTags entryId={entry.id} tags={tags} editable onTagsChange={setTags} />
+      </div>
+    </div>
+  );
+}
+
+/** The heading for an entry whose payload does not carry what its type declares. */
+function PlainHeading({ entry }: { entry: Entry }) {
+  return (
+    <div className="flex items-center space-x-3" data-testid="plain-heading">
+      <ClickableBadge clickable={false}>{entry.type.toUpperCase()}</ClickableBadge>
+      <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+        {entry.requestId || `#${entry.id}`}
+      </h1>
+    </div>
+  );
+}
+
+function RawPayload({ entry }: { entry: Entry }) {
+  return (
+    <div className="card" data-testid="raw-payload">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Entry payload</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          This entry does not have the shape the {entry.type} view expects, so it is shown as it
+          was recorded.
+        </p>
+      </div>
+      <div className="p-4">
+        <JsonViewer data={(entry.payload ?? {}) as unknown as JsonValue} inline />
+      </div>
+    </div>
+  );
+}
+
+function DetailViewSkeleton() {
+  return (
+    <div className="animate-pulse space-y-3" aria-hidden="true">
+      <div className="h-8 rounded bg-gray-100 dark:bg-gray-800" />
+      <div className="h-40 rounded bg-gray-100 dark:bg-gray-800" />
+    </div>
+  );
+}
+
+const RequestDetailView = lazy(() => import('../components/RequestDetailView'));
+const QueryDetailView = lazy(() => import('../components/QueryDetailView'));
+const ExceptionDetailView = lazy(() => import('../components/ExceptionDetailView'));
+const LogDetailView = lazy(() => import('../components/LogDetailView'));
+const EventDetailView = lazy(() => import('../components/EventDetailView'));
+const JobDetailView = lazy(() => import('../components/JobDetailView'));
+const CacheDetailView = lazy(() => import('../components/CacheDetailView'));
+const MailDetailView = lazy(() => import('../components/MailDetailView'));
+const ScheduleDetailView = lazy(() => import('../components/ScheduleDetailView'));
+const HttpClientDetailView = lazy(() => import('../components/HttpClientDetailView'));
+const RedisDetailView = lazy(() => import('../components/RedisDetailView'));
+const ModelDetailView = lazy(() => import('../components/ModelDetailView'));
+const NotificationDetailView = lazy(() => import('../components/NotificationDetailView'));
+const ViewDetailView = lazy(() => import('../components/ViewDetailView'));
+const CommandDetailView = lazy(() => import('../components/CommandDetailView'));
+const GateDetailView = lazy(() => import('../components/GateDetailView'));
+const BatchDetailView = lazy(() => import('../components/BatchDetailView'));
+const DumpDetailView = lazy(() => import('../components/DumpDetailView'));
+const GraphQLDetailView = lazy(() => import('../components/GraphQLDetailView'));
+
+// Get display method - GRAPHQL for GraphQL endpoints, otherwise HTTP method
+function getDisplayMethod(path: string, method: string): string {
+  if (path?.toLowerCase().includes('/graphql')) {
+    return 'GRAPHQL';
+  }
+  return method.toUpperCase();
+}
+
+// Get query type from SQL query
+function getQueryType(query: string): string {
+  const trimmed = query.trim().toUpperCase();
+  if (trimmed.startsWith('SELECT')) return 'SELECT';
+  if (trimmed.startsWith('INSERT')) return 'INSERT';
+  if (trimmed.startsWith('UPDATE')) return 'UPDATE';
+  if (trimmed.startsWith('DELETE')) return 'DELETE';
+  if (trimmed.startsWith('CREATE')) return 'CREATE';
+  if (trimmed.startsWith('ALTER')) return 'ALTER';
+  if (trimmed.startsWith('DROP')) return 'DROP';
+  if (trimmed.startsWith('TRUNCATE')) return 'TRUNCATE';
+  if (trimmed.startsWith('BEGIN') || trimmed.startsWith('START')) return 'TRANSACTION';
+  if (trimmed.startsWith('COMMIT')) return 'COMMIT';
+  if (trimmed.startsWith('ROLLBACK')) return 'ROLLBACK';
+  return 'QUERY';
+}
+
+export default function EntryDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  /**
+   * What is on screen, and which id it belongs to.
+   *
+   * Held together on purpose. Moving between entries starts a second request
+   * before the first has landed — from the list, from a related entry, from
+   * the back button — and whichever finished last used to win, putting one
+   * entry's detail under another entry's id. Recording the id alongside the
+   * data makes that impossible to render: the spinner shows exactly while what
+   * is loaded is not what the URL asks for, so the two can never disagree.
+   */
+  const [loaded, setLoaded] = useState<{
+    id?: string;
+    entry: Entry | null;
+    related: Entry[];
+    /** Set when the request failed for a reason other than the entry not existing. */
+    failure?: Error;
+  }>({ entry: null, related: [] });
+  const fallbackToolbar = useJsonToolbar();
+
+  const loading = loaded.id !== id;
+  const entry = loaded.entry;
+  const related = loaded.related;
+
+  useEffect(() => {
+    // A response that arrives after the effect has been torn down is answering
+    // a question nobody is asking any more.
+    let current = true;
+
+    const fetchData = async () => {
+      if (!id) return;
+
+      try {
+        const response = await getEntry(parseInt(id, 10));
+        if (current) setLoaded({ id, entry: response.data, related: response.related ?? [] });
+      } catch (error) {
+        console.error('Failed to fetch entry:', error);
+        // Settled even so — the spinner has to stop — but not as "not found".
+        // A 403 and a 500 both landed here, and the page told the reader the
+        // entry did not exist: measured identically for 403, 404 and 500 while
+        // the entry was there all along.
+        const failure = error instanceof Error ? error : new Error('Failed to load this entry');
+        const missing = /\b404\b/.test(failure.message);
+        if (current) {
+          setLoaded({ id, entry: null, related: [], failure: missing ? undefined : failure });
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      current = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64" role="status" aria-label="Loading...">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (!entry) {
+    const failure = loaded.failure;
+
+    return (
+      <div className="text-center py-12" role={failure ? 'alert' : undefined}>
+        <h2
+          className="text-xl font-semibold text-gray-900 dark:text-white"
+          data-testid={failure ? 'entry-error' : 'entry-missing'}
+        >
+          {failure ? 'Could not load this entry' : 'Entry not found'}
+        </h2>
+        {failure && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{failure.message}</p>
+        )}
+        <Link to="/" className="text-primary-600 hover:text-primary-700 mt-4 inline-block">
+          Go back to dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  // Render type-specific detail view
+  const renderDetailView = () => {
+    if (isRequestEntry(entry)) {
+      return <RequestDetailView entry={entry} related={related} />;
+    }
+    if (isQueryEntry(entry)) {
+      return <QueryDetailView entry={entry} />;
+    }
+    if (isExceptionEntry(entry)) {
+      return <ExceptionDetailView entry={entry} />;
+    }
+    if (isLogEntry(entry)) {
+      return <LogDetailView entry={entry} />;
+    }
+    if (isEventEntry(entry)) {
+      return <EventDetailView entry={entry} />;
+    }
+    if (isJobEntry(entry)) {
+      return <JobDetailView entry={entry} />;
+    }
+    if (isCacheEntry(entry)) {
+      return <CacheDetailView entry={entry} />;
+    }
+    if (isMailEntry(entry)) {
+      return <MailDetailView entry={entry} />;
+    }
+    if (isScheduleEntry(entry)) {
+      return <ScheduleDetailView entry={entry} />;
+    }
+    if (isHttpClientEntry(entry)) {
+      return <HttpClientDetailView entry={entry} />;
+    }
+    if (isRedisEntry(entry)) {
+      return <RedisDetailView entry={entry} />;
+    }
+    if (isModelEntry(entry)) {
+      return <ModelDetailView entry={entry} />;
+    }
+    if (isNotificationEntry(entry)) {
+      return <NotificationDetailView entry={entry} />;
+    }
+    if (isViewEntry(entry)) {
+      return <ViewDetailView entry={entry} />;
+    }
+    if (isCommandEntry(entry)) {
+      return <CommandDetailView entry={entry} />;
+    }
+    if (isGateEntry(entry)) {
+      return <GateDetailView entry={entry} />;
+    }
+    if (isBatchEntry(entry)) {
+      return <BatchDetailView entry={entry} />;
+    }
+    if (isDumpEntry(entry)) {
+      return <DumpDetailView entry={entry} />;
+    }
+    if (isGraphQLEntry(entry)) {
+      return <GraphQLDetailView entry={entry} />;
+    }
+    // Generic fallback for future entry types
+    const unknownEntry = entry as Entry;
+    const payloadData = unknownEntry.payload as unknown as JsonValue;
+    const fallbackTabs = [
+      {
+        id: 'payload',
+        label: 'Payload',
+        content: (
+          <ControlledInlineJson
+            data={payloadData}
+            toolbarState={fallbackToolbar.state}
+            searchBar={fallbackToolbar.SearchBar}
+            maxHeight={400}
+          />
+        ),
+      },
+    ];
+    return (
+      <Tabs
+        tabs={fallbackTabs}
+        defaultTab="payload"
+        headerRight={<fallbackToolbar.Toolbar data={payloadData} />}
+      />
+    );
+  };
+
+  /**
+   * Where the arrow goes: the list this entry belongs to.
+   *
+   * It was `<Link to={-1 as unknown as string}>` — a cast around the fact that
+   * `Link` takes a path and history deltas belong to `useNavigate`. Clicking it
+   * did go back, but the href it rendered was the page the reader was already
+   * on, so opening it in a new tab or copying the address gave them that. And
+   * a detail page reached from a shared link has nothing behind it to go back
+   * to: the entry type does, always.
+   */
+  const listRoute = `/${getEntryTypeConfig(entry.type)?.route ?? 'requests'}`;
+
+  return (
+    <div>
+      {/* Fixed Header */}
+      <div className="fixed top-0 left-0 right-0 lg:left-64 z-30 h-16 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center space-x-4 px-4 lg:px-6 h-full">
+          <Link
+            to={listRoute}
+            aria-label={`Back to ${listRoute.slice(1)}`}
+            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-500" />
+          </Link>
+          <div className="flex-1 min-w-0">
+            {/*
+              The heading reads the fields its entry type declares, and a
+              payload does not always have them — one written by an older
+              version, or one replaced by the reason it could not be
+              serialised. Falling back to the type and the id keeps the header
+              on a page whose view below has already degraded gracefully.
+            */}
+            <ErrorBoundary key={`heading-${entry.id}`} fallback={<PlainHeading entry={entry} />}>
+              <EntryHeading entry={entry} />
+            </ErrorBoundary>
           </div>
         </div>
       </div>
@@ -467,8 +614,13 @@ export default function EntryDetailPage() {
       {/* Content with top padding to account for fixed header */}
       <div className="pt-16 space-y-6">
 
+      {/* Tags — one place, for every type */}
+      <EntryTagsCard entry={entry} />
+
       {/* Type-specific Detail View */}
-      <Suspense fallback={<DetailViewSkeleton />}>{renderDetailView()}</Suspense>
+      <ErrorBoundary key={entry.id} fallback={<RawPayload entry={entry} />}>
+        <Suspense fallback={<DetailViewSkeleton />}>{renderDetailView()}</Suspense>
+      </ErrorBoundary>
 
       {/* Related Entries */}
       {related.length > 0 && (

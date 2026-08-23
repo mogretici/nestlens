@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Database } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import {
   NewEntriesButton,
   LoadMoreButton,
@@ -27,13 +29,16 @@ export default function RedisPage() {
     clearAll,
     serverFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('redis');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -43,7 +48,12 @@ export default function RedisPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<RedisEntry>({ type: 'redis', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<RedisEntry>({
+    type: 'redis',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is RedisEntry => isRedisEntry(entry));
@@ -119,7 +129,6 @@ export default function RedisPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -135,11 +144,12 @@ export default function RedisPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="redis" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         {/* New entries button */}
         <NewEntriesButton
           count={newEntriesCount}
@@ -154,6 +164,8 @@ export default function RedisPage() {
           onRowClick={(entry) => navigate(`/redis/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No Redis commands recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Database className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

@@ -1,8 +1,17 @@
-import { Inject, Injectable, OnModuleInit, Optional, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  OnModuleInit,
+  Optional,
+  Logger,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
+import { createTermMatcher } from '../core/data-masker.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
 
 /**
  * The axios surface this watcher touches.
@@ -35,6 +44,8 @@ interface RequestErrorLike {
 
 interface InterceptorManager<T> {
   use(onFulfilled: (value: T) => T, onRejected: (error: unknown) => unknown): unknown;
+  /** axios returns an id from `use` and removes it here. */
+  eject?(id: unknown): void;
 }
 
 interface AxiosLike {
@@ -42,6 +53,13 @@ interface AxiosLike {
     request: InterceptorManager<RequestConfigLike>;
     response: InterceptorManager<ResponseLike>;
   };
+}
+
+/** An interceptor this watcher installed, and where to take it off. */
+interface InstalledInterceptor {
+  instance: AxiosLike;
+  kind: 'request' | 'response';
+  id: unknown;
 }
 
 function hasInterceptors(value: unknown): value is AxiosLike {
@@ -61,10 +79,14 @@ function hasInterceptors(value: unknown): value is AxiosLike {
 export const NESTLENS_HTTP_CLIENT = Symbol('NESTLENS_HTTP_CLIENT');
 
 @Injectable()
-export class HttpClientWatcher implements OnModuleInit {
+export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HttpClientWatcher.name);
   private readonly config: HttpClientWatcherConfig;
   private readonly maxBodySize: number;
+  /** Every interceptor installed, so `onModuleDestroy` can eject them. */
+  private readonly installed: InstalledInterceptor[] = [];
+  private matchesRequestParam?: (fieldName: string) => boolean;
+  private matchesResponseParam?: (fieldName: string) => boolean;
 
   constructor(
     private readonly collector: CollectorService,
@@ -111,33 +133,60 @@ export class HttpClientWatcher implements OnModuleInit {
     }
 
     // Request interceptor - capture start time
-    candidate.interceptors.request.use(
-      (config) => {
-        config.metadata = {
-          ...config.metadata,
-          nestlensStartTime: Date.now(),
-        };
-        return config;
-      },
-      (error: unknown) => Promise.reject(error),
-    );
+    this.installed.push({
+      instance: candidate,
+      kind: 'request',
+      id: candidate.interceptors.request.use(
+        (config) => {
+          config.metadata = {
+            ...config.metadata,
+            nestlensStartTime: Date.now(),
+          };
+          return config;
+        },
+        (error: unknown) => Promise.reject(error),
+      ),
+    });
 
     // Response interceptor - capture response and log
-    candidate.interceptors.response.use(
-      (response) => {
-        this.collectEntry(response.config, response.status, response.headers, response.data);
-        return response;
-      },
-      (error: unknown) => {
-        const { config, response, message } = (error ?? {}) as RequestErrorLike;
+    this.installed.push({
+      instance: candidate,
+      kind: 'response',
+      id: candidate.interceptors.response.use(
+        (response) => {
+          this.collectEntry(response.config, response.status, response.headers, response.data);
+          return response;
+        },
+        (error: unknown) => {
+          const { config, response, message } = (error ?? {}) as RequestErrorLike;
 
-        this.collectEntry(config, response?.status, response?.headers, response?.data, message);
+          this.collectEntry(config, response?.status, response?.headers, response?.data, message);
 
-        return Promise.reject(error);
-      },
-    );
+          return Promise.reject(error);
+        },
+      ),
+    });
 
     this.logger.log('HTTP Client interceptors installed');
+  }
+
+  /**
+   * Takes the interceptors back off.
+   *
+   * They live on an axios instance the application owns and keeps, so closing
+   * the module has to remove them. Otherwise the host goes on recording
+   * through a watcher whose collector is gone — and a process that builds the
+   * module more than once against the same instance, as tests and
+   * `nest start --hmr` do, installs another pair each round: measured at three
+   * lifecycles, three request interceptors and three response interceptors on
+   * one instance.
+   */
+  onModuleDestroy(): void {
+    for (const { instance, kind, id } of this.installed) {
+      instance.interceptors[kind].eject?.(id);
+    }
+
+    this.installed.length = 0;
   }
 
   private collectEntry(
@@ -179,15 +228,16 @@ export class HttpClientWatcher implements OnModuleInit {
       return;
     }
 
-    // Merge default and custom sensitive params
-    const sensitiveRequestParams = [
+    // Built once per watcher rather than per request: the lists do not change
+    // after construction and the matcher remembers the answers it has given.
+    const matchesRequestParam = (this.matchesRequestParam ??= createTermMatcher([
       ...HttpClientWatcher.DEFAULT_SENSITIVE_REQUEST_PARAMS,
       ...(this.config.sensitiveRequestParams ?? []),
-    ];
-    const sensitiveResponseParams = [
+    ]));
+    const matchesResponseParam = (this.matchesResponseParam ??= createTermMatcher([
       ...HttpClientWatcher.DEFAULT_SENSITIVE_RESPONSE_PARAMS,
       ...(this.config.sensitiveResponseParams ?? []),
-    ];
+    ]));
 
     const payload: HttpClientEntry['payload'] = {
       method: (config.method || 'GET').toUpperCase(),
@@ -197,13 +247,13 @@ export class HttpClientWatcher implements OnModuleInit {
       requestHeaders: this.captureHeaders(config.headers),
       requestBody:
         this.config.captureRequestBody !== false
-          ? this.captureBody(config.data, sensitiveRequestParams)
+          ? this.captureBody(config.data, matchesRequestParam)
           : undefined,
       statusCode,
       responseHeaders: this.captureHeaders(responseHeaders),
       responseBody:
         this.config.captureResponseBody !== false
-          ? this.captureBody(responseData, sensitiveResponseParams)
+          ? this.captureBody(responseData, matchesResponseParam)
           : undefined,
       duration,
       error: errorMessage,
@@ -281,9 +331,20 @@ export class HttpClientWatcher implements OnModuleInit {
    * Recursively mask sensitive data in objects
    * Includes depth limiting to prevent stack overflow on deeply nested objects
    */
+  /**
+   * Replaces the values of fields a term covers.
+   *
+   * Through the collector's matcher, so a term means here what it means there.
+   * This used to compare `key.toLowerCase()` against the raw terms, which only
+   * matches the spelling the term happens to be written in: a reader who set
+   * `sensitiveRequestParams: ['internal_ref']` for a payload holding
+   * `internalRef` got the value recorded in full, and the collector's own
+   * masking could not save them because the term was theirs, not one of its
+   * defaults.
+   */
   private maskSensitiveData(
     data: unknown,
-    sensitiveKeys: string[],
+    matches: (fieldName: string) => boolean,
     replacement = '********',
     depth = 0,
   ): unknown {
@@ -296,23 +357,16 @@ export class HttpClientWatcher implements OnModuleInit {
     }
 
     if (Array.isArray(data)) {
-      return data.map((item) =>
-        this.maskSensitiveData(item, sensitiveKeys, replacement, depth + 1),
-      );
+      return data.map((item) => this.maskSensitiveData(item, matches, replacement, depth + 1));
     }
 
     const masked: Record<string, unknown> = {};
-    const lowerSensitiveKeys = sensitiveKeys.map((k) => k.toLowerCase());
 
     for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-      const lowerKey = key.toLowerCase();
-      // Check if key contains any sensitive pattern
-      const isSensitive = lowerSensitiveKeys.some((s) => lowerKey.includes(s));
-
-      if (isSensitive) {
+      if (matches(key)) {
         masked[key] = replacement;
       } else if (typeof value === 'object' && value !== null) {
-        masked[key] = this.maskSensitiveData(value, sensitiveKeys, replacement, depth + 1);
+        masked[key] = this.maskSensitiveData(value, matches, replacement, depth + 1);
       } else {
         masked[key] = value;
       }
@@ -321,21 +375,10 @@ export class HttpClientWatcher implements OnModuleInit {
     return masked;
   }
 
-  private captureBody(body: unknown, sensitiveParams: string[]): unknown {
+  private captureBody(body: unknown, matches: (fieldName: string) => boolean): unknown {
     if (body === undefined || body === null) return undefined;
 
-    try {
-      // First mask sensitive data
-      const maskedBody = this.maskSensitiveData(body, sensitiveParams);
-
-      // Then check size
-      const json = JSON.stringify(maskedBody);
-      if (json.length > this.maxBodySize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return maskedBody;
-    } catch {
-      return { _error: 'Unable to serialize body' };
-    }
+    // Masked first, so what is measured is what would be recorded.
+    return capturePayload(this.maskSensitiveData(body, matches), this.maxBodySize);
   }
 }

@@ -69,7 +69,8 @@ async collect<T extends EntryType>(
 **Example:**
 ```typescript
 await this.collector.collect('log', {
-  level: 'info',
+  // 'debug' | 'log' | 'warn' | 'error' | 'verbose'. There is no 'info'.
+  level: 'log',
   message: 'User logged in',
   context: 'AuthService',
 });
@@ -133,8 +134,9 @@ Create custom watchers using provider tokens.
 
 ### Registering Bull/BullMQ Queues
 
-:::warning Use `setupQueue()`, not a provider token
-A `NESTLENS_BULL_QUEUES` symbol is exported, but `JobWatcher` does not inject or consume it, so providing queues via that token has **no effect**. Register queues by calling the `JobWatcher` setup methods from an `OnModuleInit` hook instead.
+:::note Queues are registered by calling
+There is no provider token for queues; call the `JobWatcher` setup methods from
+an `OnModuleInit` hook.
 :::
 
 ```typescript
@@ -610,7 +612,9 @@ Leverage TypeScript for compile-time safety:
 import { LogEntry } from 'nestlens';
 
 const logPayload: LogEntry['payload'] = {
-  level: 'info',
+  // 'debug' | 'log' | 'warn' | 'error' | 'verbose' — this is what the type
+  // buys you: 'info' does not compile.
+  level: 'log',
   message: 'Custom log',
   context: 'MyService',
 };

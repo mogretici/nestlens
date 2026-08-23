@@ -8,6 +8,15 @@ import { STORAGE, StorageInterface } from './storage/storage.interface';
 import { TagService } from './tag.service';
 import { FamilyHashService } from './family-hash.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
+import { settled } from './thenable';
+
+/**
+ * How long the final flush may take before shutdown proceeds without it.
+ *
+ * A normal flush is milliseconds; anything approaching this means storage has
+ * stopped answering, and waiting longer only delays the process exiting.
+ */
+const SHUTDOWN_FLUSH_TIMEOUT = 3000;
 
 @Injectable()
 export class CollectorService implements OnModuleDestroy {
@@ -88,7 +97,7 @@ export class CollectorService implements OnModuleDestroy {
     if (!this.config.filter) return true;
     try {
       const result = this.config.filter(entry);
-      return result instanceof Promise ? await result : result;
+      return await settled(result);
     } catch (error) {
       this.logger.warn(`Filter callback error: ${error}`);
       return true; // Fail-open - don't block collection on filter errors
@@ -131,6 +140,26 @@ export class CollectorService implements OnModuleDestroy {
   }
 
   /**
+   * Whether NestLens is keeping up.
+   *
+   * `pending` sitting near `capacity` means storage is slower than collection,
+   * and `dropped` says how many entries that has already cost — the buffer
+   * discards its oldest rather than growing without limit, so a rising number
+   * here is the only place that loss is visible.
+   *
+   * The performance page has documented a metrics endpoint calling
+   * `collector.getBufferSize()` for some time and there was no such method: a
+   * reader copying that example got a compile error.
+   */
+  getBufferSize(): { pending: number; capacity: number; dropped: number } {
+    return {
+      pending: this.buffer.length,
+      capacity: this.MAX_BUFFERED_ENTRIES,
+      dropped: this.droppedEntries,
+    };
+  }
+
+  /**
    * Collect an entry
    * Uses discriminated union pattern - the type parameter determines the expected payload type
    */
@@ -148,6 +177,12 @@ export class CollectorService implements OnModuleDestroy {
     const entry = {
       type,
       payload,
+      // Stamped here, where the thing happened, rather than wherever it is
+      // eventually written. The buffer holds entries for up to a second, so a
+      // storage that stamped them on the way in recorded the flush rather than
+      // the event: measured at a full second of drift, which puts every entry
+      // of a busy second at the same instant and every timeline out of order.
+      createdAt: new Date().toISOString(),
       // A watcher that knows the request says so; the rest are attributed from
       // the ambient context, which is how a query recorded by TypeORM's logger
       // ends up on the detail page of the request that ran it.
@@ -166,12 +201,21 @@ export class CollectorService implements OnModuleDestroy {
       return;
     }
 
-    this.buffer.push(this.mask(entry));
+    try {
+      this.buffer.push(this.mask(entry));
+    } catch (error) {
+      // Masking walks a payload the application handed us; a getter that
+      // throws or a hostile `toJSON` is its failure, not a reason to reject a
+      // promise most watchers do not await.
+      this.logger.warn(`Failed to record entry: ${error}`);
+      return;
+    }
+
     this.enforceBufferLimit();
 
     // Flush if buffer is full — unless storage is already failing, in which
     // case the periodic timer retries and the caller is not made to wait.
-    if (this.buffer.length >= this.BUFFER_SIZE && !this.storageIsFailing) {
+    if (this.buffer.length >= this.BUFFER_SIZE && !this.storageIsFailing && !this.flushing) {
       await this.flush();
     }
   }
@@ -194,6 +238,7 @@ export class CollectorService implements OnModuleDestroy {
     const entry = {
       type,
       payload,
+      createdAt: new Date().toISOString(),
       requestId: requestId ?? currentRequestId(),
     } as Extract<Entry, { type: T }>;
 
@@ -217,8 +262,21 @@ export class CollectorService implements OnModuleDestroy {
 
       return savedEntry;
     } catch (error) {
+      // Reported, not rethrown.
+      //
+      // Every caller of this is a watcher recording something the application
+      // already handled, and two of the three do not await it. A rejected
+      // promise nobody is holding is an unhandled rejection, which Node treats
+      // as fatal — so a database outage during an application error took the
+      // process down: five failing saves, five unhandled rejections, and the
+      // only thing wrong was that NestLens could not write them down.
+      //
+      // The ones that do await it are inside a GraphQL plugin and a
+      // subscription handler, where throwing would break the operation being
+      // watched. `null` says "not recorded", which is all any of them can act
+      // on anyway.
       this.logger.error(`Failed to save entry: ${error}`);
-      throw error;
+      return null;
     }
   }
 
@@ -295,7 +353,44 @@ export class CollectorService implements OnModuleDestroy {
   /**
    * Flush buffer to storage
    */
+  /**
+   * Writes what has been buffered, one batch at a time.
+   *
+   * Serialised on purpose. Every caller used to start its own write, so a
+   * storage slower than the traffic was handed more and more at once —
+   * measured at thirty concurrent batches against a store taking 300ms each,
+   * with three thousand entries in flight at the peak. `MAX_BUFFERED_ENTRIES`
+   * is what bounds how much NestLens holds, and entries already on their way
+   * to the storage were outside it.
+   *
+   * A second call waits for the one in flight and then writes whatever has
+   * accumulated since, so an awaited flush — a shutdown, a test — still writes
+   * everything. The timer and the full-buffer path skip instead of queueing:
+   * the flush in flight will take what they would have.
+   */
   async flush(): Promise<void> {
+    const inFlight = this.flushing;
+
+    const mine = (inFlight ?? Promise.resolve()).then(() => this.flushOnce());
+
+    // Cleared only by the last flush to be queued, so a caller that arrives
+    // while this one is still going still waits for it.
+    const settled = mine.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.flushing = settled;
+    void settled.then(() => {
+      if (this.flushing === settled) this.flushing = undefined;
+    });
+
+    return mine;
+  }
+
+  /** Whether a batch is on its way to the storage. */
+  private flushing?: Promise<void>;
+
+  private async flushOnce(): Promise<void> {
     if (this.buffer.length === 0) return;
 
     let entries = [...this.buffer];
@@ -305,7 +400,7 @@ export class CollectorService implements OnModuleDestroy {
     if (this.config.filterBatch) {
       try {
         const result = this.config.filterBatch(entries);
-        entries = result instanceof Promise ? await result : result;
+        entries = await settled(result);
       } catch (error) {
         this.logger.warn(`Batch filter callback error: ${error}`);
         // Fail-open - continue with original entries on filter error
@@ -365,6 +460,9 @@ export class CollectorService implements OnModuleDestroy {
    */
   private startFlushTimer(): void {
     this.flushTimer = setInterval(() => {
+      // The one in flight will take whatever has accumulated.
+      if (this.flushing) return;
+
       this.flush().catch((err) => {
         this.logger.error(`Flush timer error: ${err}`);
       });
@@ -380,14 +478,56 @@ export class CollectorService implements OnModuleDestroy {
 
   /**
    * Stop flush timer and flush remaining entries
+   *
+   * The last flush is given a deadline. A storage that has stopped answering
+   * does not fail here — it simply never returns, and `await` on it means the
+   * application never finishes shutting down: `app.close()` hangs, SIGTERM
+   * does nothing, and the process waits for whatever eventually kills it.
+   * Measured against a storage whose `save` never settles: healthy 1ms, a
+   * throwing storage 302ms, a hanging one still going after six seconds.
+   *
+   * A monitoring tool must not be the reason a deployment cannot roll. So the
+   * remaining entries get {@link SHUTDOWN_FLUSH_TIMEOUT} to reach storage,
+   * and after that they are given up — which is the right trade in the one
+   * situation where it applies, since a storage that is not answering was not
+   * going to keep them anyway.
    */
   async shutdown(): Promise<void> {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
       this.flushTimer = null;
     }
-    await this.flush();
+
+    await this.flushBeforeShutdown();
     this.entrySubject.complete();
+  }
+
+  /** The final flush, bounded. See {@link shutdown}. */
+  private async flushBeforeShutdown(): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const deadline = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), SHUTDOWN_FLUSH_TIMEOUT);
+      // Nothing should stay alive for this timer, least of all during shutdown.
+      timer.unref?.();
+    });
+
+    try {
+      const outcome = await Promise.race([this.flush().then(() => 'flushed' as const), deadline]);
+
+      if (outcome === 'timeout') {
+        this.logger.warn(
+          `Storage did not accept the final ${this.buffer.length} entries within ` +
+            `${SHUTDOWN_FLUSH_TIMEOUT}ms; shutting down without them.`,
+        );
+      }
+    } catch (error) {
+      // `flush` already reports storage failures; this is here so a rejection
+      // cannot escape into the shutdown sequence.
+      this.logger.warn(`Final flush failed: ${error}`);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /**

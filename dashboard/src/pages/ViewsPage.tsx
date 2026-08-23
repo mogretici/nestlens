@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Eye } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader from '../components/PageHeader';
 import DataTable, { Column, TextCell, DurationCell } from '../components/DataTable';
@@ -15,13 +17,17 @@ export default function ViewsPage() {
   const navigate = useNavigate();
 
   // Use centralized filter hook - all config comes from entryTypes.ts
-  const { addFilter, clearAll, serverFilters, headerFilters, hasFilters } =
+  const { addFilter, clearAll, serverFilters, headerFilters } =
     useEntryFilters('views');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -31,7 +37,12 @@ export default function ViewsPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<ViewEntry>({ type: 'view', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<ViewEntry>({
+    type: 'view',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is ViewEntry => isViewEntry(entry));
@@ -129,7 +140,6 @@ export default function ViewsPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -145,11 +155,12 @@ export default function ViewsPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="views" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         {/* New entries button */}
         <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
 
@@ -160,6 +171,8 @@ export default function ViewsPage() {
           onRowClick={(entry) => navigate(`/views/${entry.id}`)}
           rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No view renders recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Eye className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

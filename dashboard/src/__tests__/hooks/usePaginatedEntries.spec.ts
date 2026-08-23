@@ -375,29 +375,32 @@ describe('Auto-refresh interval behavior', () => {
     expect(api.checkNewEntries).toHaveBeenCalled();
   });
 
-  it('gets latest sequence when no entries exist', async () => {
-    // Arrange
+  it('fills an empty list in rather than offering a button that cannot work', async () => {
+    // There is no cursor to count from when nothing is on screen. It used to
+    // ask whether any entry of this type existed anywhere and, if one did, show
+    // "Load 1 new entry" — under a filter that matched none of them, and with
+    // `loadNew` returning immediately for want of that same cursor, so the
+    // badge could not be dismissed.
     localStorage.setItem('nestlens-auto-refresh', 'false');
     (api.getEntriesWithCursor as any).mockResolvedValue({
       data: [],
       meta: { total: 0, hasMore: false, newestSequence: null, oldestSequence: null },
     });
-    (api.getLatestSequence as any).mockResolvedValue({ data: { sequence: 1 } });
 
-    renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
+    const { result } = renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
 
-    // Wait for initial load
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
+    const afterFirstLoad = (api.getEntriesWithCursor as any).mock.calls.length;
 
-    // Act - trigger interval
     await act(async () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Assert - should try to get latest sequence since no entries
-    expect(api.getLatestSequence).toHaveBeenCalled();
+    expect((api.getEntriesWithCursor as any).mock.calls.length).toBeGreaterThan(afterFirstLoad);
+    expect(api.getLatestSequence).not.toHaveBeenCalled();
+    expect(result.current.newEntriesCount).toBe(0);
   });
 
   it('auto-loads new entries when auto-refresh enabled and new entries exist', async () => {
@@ -405,7 +408,7 @@ describe('Auto-refresh interval behavior', () => {
     localStorage.setItem('nestlens-auto-refresh', 'true');
 
     const newEntries = [{ id: 2, sequence: 101 }];
-    (api.checkNewEntries as any).mockResolvedValue({ data: { count: 1 } });
+    (api.getLatestSequence as any).mockResolvedValue({ data: 101 });
     (api.getEntriesWithCursor as any)
       .mockResolvedValueOnce({
         data: [{ id: 1, sequence: 100 }],
@@ -416,7 +419,7 @@ describe('Auto-refresh interval behavior', () => {
         meta: { total: 2, hasMore: false, newestSequence: 101, oldestSequence: 100 },
       });
 
-    renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
+    const { result } = renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
 
     // Wait for initial load
     await act(async () => {
@@ -428,8 +431,11 @@ describe('Auto-refresh interval behavior', () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Assert
-    expect(api.checkNewEntries).toHaveBeenCalled();
+    // Assert — the new entry is on the list, asked for a page at a time.
+    expect(result.current.entries.map((entry) => entry.id)).toContain(2);
+    const [params] = (api.getEntriesWithCursor as any).mock.calls[1];
+    expect(params.afterSequence).toBe(100);
+    expect(params.limit).toBe(50);
   });
 
   it('handles errors in checkForNew gracefully', async () => {
@@ -455,9 +461,9 @@ describe('Auto-refresh interval behavior', () => {
   it('handles errors in autoLoadNew gracefully', async () => {
     // Arrange
     localStorage.setItem('nestlens-auto-refresh', 'true');
-    (api.checkNewEntries as any).mockRejectedValue(new Error('Network error'));
+    (api.getLatestSequence as any).mockRejectedValue(new Error('Network error'));
 
-    renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
+    const { result } = renderHook(() => usePaginatedEntries({ autoRefreshInterval: 500 }));
 
     await act(async () => {
       vi.advanceTimersByTime(100);
@@ -468,8 +474,9 @@ describe('Auto-refresh interval behavior', () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Assert - no error thrown
-    expect(api.checkNewEntries).toHaveBeenCalled();
+    // Assert - no error thrown, and what was on screen stays there
+    expect(api.getLatestSequence).toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
   });
 
   it('clears interval on unmount', async () => {

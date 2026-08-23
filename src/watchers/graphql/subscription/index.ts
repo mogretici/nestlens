@@ -4,4 +4,4 @@
 
 export * from './connection.store';
 export * from './subscription.tracker';
-export * from './ws-gateway';
+export * from './schema-instrumentation';

@@ -6,6 +6,20 @@
   body {
     @apply antialiased;
   }
+
+  /*
+   * What the browser draws for itself: the select popup, the scrollbars, the
+   * focus ring. Without this the dark theme stopped at the edge of anything
+   * Tailwind does not paint, and the range filter's dropdown opened white on a
+   * dark page.
+   */
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
 }
 
 @layer components {

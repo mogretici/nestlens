@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Briefcase } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import {
   NewEntriesButton,
   LoadMoreButton,
@@ -26,13 +28,16 @@ export default function JobsPage() {
     clearAll,
     serverFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('jobs');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -42,7 +47,12 @@ export default function JobsPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<JobEntry>({ type: 'job', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<JobEntry>({
+    type: 'job',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is JobEntry => isJobEntry(entry));
@@ -123,7 +133,6 @@ export default function JobsPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -139,11 +148,12 @@ export default function JobsPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="jobs" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         {/* New entries button */}
         <NewEntriesButton
           count={newEntriesCount}
@@ -158,6 +168,8 @@ export default function JobsPage() {
           onRowClick={(entry) => navigate(`/jobs/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No jobs recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Briefcase className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

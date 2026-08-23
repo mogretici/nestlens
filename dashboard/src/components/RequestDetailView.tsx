@@ -7,6 +7,7 @@ import ClickableBadge, { BadgeList } from './ClickableBadge';
 import Tabs from './Tabs';
 import UserCard from './UserCard';
 import RelatedEntries from './RelatedEntries';
+import RequestTimeline from './RequestTimeline';
 import { ControlledInlineJson } from './JsonViewerWithToolbar';
 import { useJsonToolbar } from './useJsonToolbar';
 
@@ -298,6 +299,10 @@ export default function RequestDetailView({ entry, related = [] }: RequestDetail
       />
 
       {/* Related Entries (Exceptions, Logs, Queries, Events, Jobs, Cache, Mails) */}
+      {/* Above the grouped list: what happened, in the order it happened, is
+          the first thing a reader of a slow request wants. */}
+      <RequestTimeline request={entry} related={related} />
+
       <RelatedEntries entries={related} />
     </div>
   );

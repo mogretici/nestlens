@@ -6,7 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { GraphQLPayload } from '../../../types';
+import { MAX_RECORDED_ERRORS, GraphQLPayload } from '../../../types';
 import {
   hashQuery,
   truncateQuery,
@@ -18,6 +18,8 @@ import { N1Detector } from '../utils/n1-detector';
 import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
+import { capturePayload } from '../../capture-payload';
+import { recording, recordingSync, recordingValue } from '../never-breaks-the-response';
 
 /**
  * Apollo Server Plugin interface (minimal type for our usage)
@@ -62,12 +64,52 @@ interface ApolloFieldResolverParams {
 }
 
 /**
+ * Whether a field could be fetching something.
+ *
+ * Every counted call used to be a candidate, so a query over sixteen order
+ * items reported three findings of equal weight:
+ *
+ *     OrderItem.id       16 times   "consider using DataLoader"
+ *     OrderItem.product  16 times   "consider using DataLoader"
+ *     Product.name       16 times   "consider using DataLoader"
+ *
+ * One of those is the query's actual problem and two are property reads. A
+ * DataLoader for `id` is advice a reader has to know to ignore, and the finding
+ * that matters is buried among them.
+ *
+ * Having a resolver does not separate them: `@nestjs/graphql` attaches one to
+ * every field in a code-first schema, which was measured before this was
+ * written. What does separate them is what the field returns. A scalar or an
+ * enum is a leaf — whatever produced it, there is nothing further to fetch —
+ * while an object or a list of them is the shape an N+1 takes.
+ *
+ * Read structurally rather than by importing `graphql`, which is not a
+ * dependency of this package: unwrap the wrappers, and a named type that can
+ * be asked for its fields is not a leaf.
+ */
+const returnsSomethingFetchable = (info: GraphQLResolveInfo): boolean => {
+  try {
+    let type = info.returnType as { ofType?: unknown; getFields?: unknown } | undefined;
+
+    // `[Order!]!` is a non-null of a list of a non-null of Order.
+    while (type && typeof (type as { ofType?: unknown }).ofType === 'object') {
+      type = (type as { ofType?: { ofType?: unknown; getFields?: unknown } }).ofType;
+    }
+
+    return typeof type?.getFields === 'function';
+  } catch {
+    // An unreadable type is not a reason to stop recording the operation.
+    return false;
+  }
+};
+
+/**
  * GraphQL resolve info from graphql-js
  */
 interface GraphQLResolveInfo {
   fieldName: string;
   parentType: { name: string };
-  returnType: { toString: () => string };
+  returnType: { toString: () => string; ofType?: unknown; getFields?: unknown };
   path: {
     key: string | number;
     prev?: { key: string | number; prev?: unknown };
@@ -101,6 +143,15 @@ interface GraphQLError {
  * Apollo Server Adapter
  */
 export class ApolloAdapter extends BaseGraphQLAdapter {
+  /**
+   * Operations already picked up, so a second plugin cannot record them again.
+   *
+   * A `WeakSet` because the key is Apollo's request context: it lives exactly
+   * as long as the operation, and nothing here keeps it alive a moment longer.
+   * See `getPlugin()`.
+   */
+  private readonly startedRequests = new WeakSet<object>();
+
   readonly type = 'apollo' as const;
 
   /**
@@ -120,241 +171,308 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
       async requestDidStart(
         requestContext: ApolloRequestContext,
       ): Promise<ApolloRequestListener | void> {
-        const { request } = requestContext;
-        const query = request.query;
+        // Contained, because this runs inside Apollo's own pipeline: a throw
+        // here is not a lost entry, it is the application's answer replaced by
+        // `Internal server error`. See `never-breaks-the-response`.
+        return recordingValue<ApolloRequestListener | void>(
+          'starting an operation',
+          () => adapter.startOperation(requestContext),
+          undefined,
+        );
+      },
+    };
+  }
 
-        // Skip if no query
-        if (!query) {
-          return;
-        }
+  /**
+   * Everything the plugin does for one operation.
+   *
+   * A method rather than the hook body itself so the whole of it sits behind
+   * one guard: Apollo calls the hook, and what the hook returns is the
+   * listener for the rest of the operation.
+   */
+  private startOperation(requestContext: ApolloRequestContext): ApolloRequestListener | void {
+    const adapter = this;
 
-        // Check sampling
-        if (!adapter.shouldSample()) {
-          return;
-        }
+    // One entry per operation, however many plugins reach it.
+    //
+    // NestLens registers itself with Apollo automatically, and
+    // `getPlugin()` still exists for the manual wiring that used to be
+    // required. An application carrying both — every installation written
+    // before auto-registration, including this repository's own example —
+    // hands Apollo two plugins that delegate to this adapter, and Apollo
+    // calls each of them: two entries per request, storage filling twice as
+    // fast, and every operation listed twice on the dashboard. Measured at
+    // 10 requests in, 20 entries out.
+    //
+    // Keyed on the request context, which Apollo creates per operation, so
+    // it does not matter which plugin arrives first or how many there are.
+    if (adapter.startedRequests.has(requestContext)) {
+      return;
+    }
+    adapter.startedRequests.add(requestContext);
 
-        // Extract operation info
-        const operationName = request.operationName || extractOperationName(query);
-        const operationType = extractOperationType(query);
+    const { request } = requestContext;
+    const query = request.query;
 
-        // Check if should ignore
-        if (adapter.shouldIgnoreOperation(operationName, query)) {
-          return;
-        }
+    // Skip if no query
+    if (!query) {
+      return;
+    }
 
-        // Initialize operation context
-        const requestId = uuidv4();
-        const startTime = process.hrtime.bigint();
-        const queryHash = hashQuery(query);
-        const truncatedQuery = truncateQuery(query, adapter.config.maxQuerySize);
+    // Check sampling
+    if (!adapter.shouldSample()) {
+      return;
+    }
 
-        // Initialize trackers
-        const n1Detector = adapter.config.detectN1Queries
-          ? new N1Detector(adapter.config.n1Threshold)
-          : null;
+    // Extract operation info
+    const operationName = extractOperationName(query, request.operationName);
+    // Which operation ran, for a document that declares more than one.
+    const operationType = extractOperationType(query, request.operationName);
 
-        const fieldTracer = adapter.config.traceFieldResolvers
-          ? createFieldTracer(startTime, {
-              enabled: true,
-              slowThreshold: adapter.config.traceSlowResolvers,
-              sampleRate: adapter.config.resolverTracingSampleRate,
-              maxTraces: 100,
-            })
-          : null;
+    // Check if should ignore
+    if (adapter.shouldIgnoreOperation(operationName, query)) {
+      return;
+    }
 
-        // Timing trackers
-        let parsingStartTime: bigint | undefined;
-        let parsingEndTime: bigint | undefined;
-        let validationStartTime: bigint | undefined;
-        let validationEndTime: bigint | undefined;
-        let executionStartTime: bigint | undefined;
+    // Initialize operation context
+    const requestId = uuidv4();
+    const startTime = process.hrtime.bigint();
+    const queryHash = hashQuery(query);
+    const truncatedQuery = truncateQuery(query, adapter.config.maxQuerySize);
 
-        // Error tracking
-        let errors: GraphQLError[] = [];
-        let resolverCount = 0;
+    // Initialize trackers
+    const n1Detector = adapter.config.detectN1Queries
+      ? new N1Detector(adapter.config.n1Threshold)
+      : null;
 
-        // Extract request info
-        const httpRequest = adapter.extractHttpRequest(requestContext);
-        const ip = adapter.getClientIp(httpRequest);
-        const userAgent = adapter.getUserAgent(httpRequest);
-        const user = adapter.extractUser(httpRequest);
-        const headers = adapter.extractHeaders(requestContext, httpRequest);
+    const fieldTracer = adapter.config.traceFieldResolvers
+      ? createFieldTracer(startTime, {
+          enabled: true,
+          slowThreshold: adapter.config.traceSlowResolvers,
+          sampleRate: adapter.config.resolverTracingSampleRate,
+          maxTraces: 100,
+        })
+      : null;
 
-        return {
-          async parsingDidStart() {
-            parsingStartTime = process.hrtime.bigint();
-            return () => {
-              parsingEndTime = process.hrtime.bigint();
-            };
-          },
+    // Timing trackers
+    let parsingStartTime: bigint | undefined;
+    let parsingEndTime: bigint | undefined;
+    let validationStartTime: bigint | undefined;
+    let validationEndTime: bigint | undefined;
+    let executionStartTime: bigint | undefined;
 
-          async validationDidStart() {
-            validationStartTime = process.hrtime.bigint();
-            return () => {
-              validationEndTime = process.hrtime.bigint();
-            };
-          },
+    // Error tracking
+    let errors: GraphQLError[] = [];
+    let resolverCount = 0;
 
-          async didResolveOperation() {
-            // Operation has been resolved - we could do additional checks here
-          },
+    // Extract request info
+    const httpRequest = adapter.extractHttpRequest(requestContext);
+    const ip = adapter.getClientIp(httpRequest);
+    const userAgent = adapter.getUserAgent(httpRequest);
+    const user = adapter.extractUser(httpRequest);
+    const headers = adapter.extractHeaders(requestContext, httpRequest);
 
-          async executionDidStart() {
-            executionStartTime = process.hrtime.bigint();
+    const record = async (ctx: ApolloResponseContext): Promise<void> => {
+      const endTime = process.hrtime.bigint();
+      const duration = adapter.nsToMs(endTime - startTime);
 
-            return {
-              willResolveField({ info }: ApolloFieldResolverParams) {
-                resolverCount++;
+      // Calculate timing
+      const parsingDuration =
+        parsingStartTime && parsingEndTime
+          ? adapter.nsToMs(parsingEndTime - parsingStartTime)
+          : undefined;
 
-                // Extract field info from GraphQLResolveInfo
-                const parentTypeName = info.parentType.name;
-                const fieldName = info.fieldName;
-                const returnTypeName = info.returnType.toString();
+      const validationDuration =
+        validationStartTime && validationEndTime
+          ? adapter.nsToMs(validationEndTime - validationStartTime)
+          : undefined;
 
-                // Track for N+1 detection
-                if (n1Detector) {
-                  n1Detector.recordCall({
-                    parentType: parentTypeName,
-                    fieldName: fieldName,
-                  });
-                }
+      const executionDuration = executionStartTime
+        ? adapter.nsToMs(endTime - executionStartTime)
+        : undefined;
 
-                // Field tracing
-                if (fieldTracer?.isActive()) {
-                  const path = adapter.buildFieldPath(info.path);
-                  const traceId = fieldTracer.startField(
-                    path,
-                    parentTypeName,
-                    fieldName,
-                    returnTypeName,
-                  );
+      // Get response errors
+      const responseErrors = ctx.response.body?.singleResult?.errors ?? errors;
 
-                  return () => {
-                    fieldTracer.endField(traceId);
-                  };
-                }
+      // Calculate depth
+      const depthResult = calculateDepth(query);
 
-                return undefined;
-              },
+      // N+1 detection
+      const n1Warnings = n1Detector ? n1Detector.detect().warnings : [];
 
-              async executionDidEnd() {
-                // Execution completed
-              },
-            };
-          },
+      // Sanitized, then bounded: the query is truncated at
+      // `maxQuerySize` and the response at `maxResponseSize`, and the
+      // variables were bounded only in depth — a 100KB argument was
+      // stored whole, on every request that carried one.
+      const sanitizedVariables = adapter.config.captureVariables
+        ? (capturePayload(
+            sanitizeVariables(request.variables, adapter.config.sensitiveVariables),
+            adapter.config.maxVariablesSize,
+          ) as Record<string, unknown> | undefined)
+        : undefined;
 
-          async didEncounterErrors(ctx) {
-            errors = [...ctx.errors];
-          },
+      // Sanitize response
+      const responseData =
+        adapter.config.captureResponse && ctx.response.body?.singleResult?.data
+          ? sanitizeResponse(
+              ctx.response.body.singleResult.data,
+              adapter.config.sensitiveVariables,
+              adapter.config.maxResponseSize,
+            )
+          : undefined;
 
-          async willSendResponse(ctx: ApolloResponseContext) {
-            const endTime = process.hrtime.bigint();
-            const duration = adapter.nsToMs(endTime - startTime);
+      // Get field traces
+      const fieldTraces = fieldTracer?.isActive() ? fieldTracer.getTraces() : undefined;
 
-            // Calculate timing
-            const parsingDuration =
-              parsingStartTime && parsingEndTime
-                ? adapter.nsToMs(parsingEndTime - parsingStartTime)
-                : undefined;
+      // Determine status code
+      const statusCode =
+        ctx.response.http?.status ?? (responseErrors && responseErrors.length > 0 ? 400 : 200);
 
-            const validationDuration =
-              validationStartTime && validationEndTime
-                ? adapter.nsToMs(validationEndTime - validationStartTime)
-                : undefined;
+      // Build payload
+      const payload: GraphQLPayload = {
+        operationName,
+        operationType,
+        query: truncatedQuery,
+        queryHash,
+        variables: sanitizedVariables,
+        duration,
+        parsingDuration,
+        validationDuration,
+        executionDuration,
+        statusCode,
+        hasErrors: responseErrors && responseErrors.length > 0,
+        // The first few, and how many there were. graphql-js stops
+        // validating at a hundred and each error carries a message, a
+        // path and a position: one rejected query recorded a
+        // 152,749-byte entry, repeatable by anyone who can reach the
+        // endpoint. See `MAX_RECORDED_ERRORS`.
+        errors: responseErrors?.slice(0, MAX_RECORDED_ERRORS).map((e) => ({
+          message: e.message,
+          path: e.path as (string | number)[] | undefined,
+          locations: e.locations as { line: number; column: number }[] | undefined,
+          extensions: e.extensions,
+        })),
+        errorCount:
+          responseErrors && responseErrors.length > MAX_RECORDED_ERRORS
+            ? responseErrors.length
+            : undefined,
+        responseData,
+        resolverCount,
+        fieldCount: depthResult.maxDepth > 0 ? resolverCount : undefined,
+        depthReached: depthResult.maxDepth,
+        potentialN1: n1Warnings.length > 0 ? n1Warnings : undefined,
+        ip,
+        userAgent,
+        headers,
+        user,
+        fieldTraces,
+      };
 
-            const executionDuration = executionStartTime
-              ? adapter.nsToMs(endTime - executionStartTime)
-              : undefined;
-
-            // Get response errors
-            const responseErrors = ctx.response.body?.singleResult?.errors ?? errors;
-
-            // Calculate depth
-            const depthResult = calculateDepth(query);
-
-            // N+1 detection
-            const n1Warnings = n1Detector ? n1Detector.detect().warnings : [];
-
-            // Sanitize variables
-            const sanitizedVariables = adapter.config.captureVariables
-              ? sanitizeVariables(request.variables, adapter.config.sensitiveVariables)
-              : undefined;
-
-            // Sanitize response
-            const responseData =
-              adapter.config.captureResponse && ctx.response.body?.singleResult?.data
-                ? sanitizeResponse(
-                    ctx.response.body.singleResult.data,
-                    adapter.config.sensitiveVariables,
-                    adapter.config.maxResponseSize,
-                  )
-                : undefined;
-
-            // Get field traces
-            const fieldTraces = fieldTracer?.isActive() ? fieldTracer.getTraces() : undefined;
-
-            // Determine status code
-            const statusCode =
-              ctx.response.http?.status ??
-              (responseErrors && responseErrors.length > 0 ? 400 : 200);
-
-            // Build payload
-            const payload: GraphQLPayload = {
-              operationName,
-              operationType,
-              query: truncatedQuery,
-              queryHash,
-              variables: sanitizedVariables,
-              duration,
-              parsingDuration,
-              validationDuration,
-              executionDuration,
-              statusCode,
-              hasErrors: responseErrors && responseErrors.length > 0,
-              errors: responseErrors?.map((e) => ({
-                message: e.message,
-                path: e.path as (string | number)[] | undefined,
-                locations: e.locations as { line: number; column: number }[] | undefined,
-                extensions: e.extensions,
-              })),
-              responseData,
-              resolverCount,
-              fieldCount: depthResult.maxDepth > 0 ? resolverCount : undefined,
-              depthReached: depthResult.maxDepth,
-              potentialN1: n1Warnings.length > 0 ? n1Warnings : undefined,
+      // Get custom tags if configured
+      if (adapter.config.tags) {
+        try {
+          const tags = await adapter.config.tags({
+            operationName,
+            operationType,
+            query,
+            variables: request.variables,
+            request: {
               ip,
               userAgent,
               headers,
-              user,
-              fieldTraces,
-            };
+            },
+          });
+          if (tags && tags.length > 0) {
+            payload.tags = tags;
+          }
+        } catch {
+          // Ignore tag errors
+        }
+      }
 
-            // Get custom tags if configured
-            if (adapter.config.tags) {
-              try {
-                const tags = await adapter.config.tags({
-                  operationName,
-                  operationType,
-                  query,
-                  variables: request.variables,
-                  request: {
-                    ip,
-                    userAgent,
-                    headers,
-                  },
-                });
-                if (tags && tags.length > 0) {
-                  payload.tags = tags;
-                }
-              } catch {
-                // Ignore tag errors
-              }
-            }
+      // Collect the entry
+      await adapter.collectEntry(payload, requestId);
+    };
 
-            // Collect the entry
-            await adapter.collectEntry(payload, requestId);
+    return {
+      async parsingDidStart() {
+        parsingStartTime = process.hrtime.bigint();
+        return () => {
+          parsingEndTime = process.hrtime.bigint();
+        };
+      },
+
+      async validationDidStart() {
+        validationStartTime = process.hrtime.bigint();
+        return () => {
+          validationEndTime = process.hrtime.bigint();
+        };
+      },
+
+      async didResolveOperation() {
+        // Operation has been resolved - we could do additional checks here
+      },
+
+      async executionDidStart() {
+        executionStartTime = process.hrtime.bigint();
+
+        return {
+          willResolveField({ info }: ApolloFieldResolverParams) {
+            // This one runs per field. A throw here fails the field it was
+            // only watching, so what it returns on failure is what a schema
+            // without NestLens returns: nothing.
+            return recordingSync<(() => void) | void>(
+              'watching a field',
+              () => watchField(info),
+              undefined,
+            );
+          },
+
+          async executionDidEnd() {
+            // Execution completed
           },
         };
+
+        function watchField(info: ApolloFieldResolverParams['info']): (() => void) | void {
+          resolverCount++;
+
+          // Extract field info from GraphQLResolveInfo
+          const parentTypeName = info.parentType.name;
+          const fieldName = info.fieldName;
+          const returnTypeName = info.returnType.toString();
+
+          // Track for N+1 detection, for fields that return something
+          // there is more to fetch from. See `N1Detector.recordCall`.
+          if (n1Detector && returnsSomethingFetchable(info)) {
+            n1Detector.recordCall({
+              parentType: parentTypeName,
+              fieldName: fieldName,
+            });
+          }
+
+          // Field tracing
+          if (fieldTracer?.isActive()) {
+            const path = adapter.buildFieldPath(info.path);
+            const traceId = fieldTracer.startField(path, parentTypeName, fieldName, returnTypeName);
+
+            return () => {
+              fieldTracer.endField(traceId);
+            };
+          }
+
+          return undefined;
+        }
+      },
+
+      async didEncounterErrors(ctx) {
+        errors = [...ctx.errors];
+      },
+
+      async willSendResponse(ctx: ApolloResponseContext) {
+        // Contained for the same reason as the hook above it, and measured:
+        // a throw from here replaces the operation's result with
+        // `Internal server error`.
+        return recording('recording an operation', () => record(ctx));
       },
     };
   }

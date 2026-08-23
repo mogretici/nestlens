@@ -8,6 +8,10 @@ export enum ErrorCode {
   VALIDATION_ERROR = 'ERR_VALIDATION',
   BAD_REQUEST = 'ERR_BAD_REQUEST',
 
+  // Authorization
+  UNAUTHORIZED = 'ERR_UNAUTHORIZED',
+  FORBIDDEN = 'ERR_FORBIDDEN',
+
   // Resource errors
   NOT_FOUND = 'ERR_NOT_FOUND',
   ENTRY_NOT_FOUND = 'ERR_ENTRY_NOT_FOUND',
@@ -32,6 +36,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.INTERNAL_ERROR]: 'An internal error occurred',
   [ErrorCode.VALIDATION_ERROR]: 'Validation failed',
   [ErrorCode.BAD_REQUEST]: 'Bad request',
+  [ErrorCode.UNAUTHORIZED]: 'Authentication required',
+  [ErrorCode.FORBIDDEN]: 'Access denied',
   [ErrorCode.NOT_FOUND]: 'Resource not found',
   [ErrorCode.ENTRY_NOT_FOUND]: 'Entry not found',
   [ErrorCode.TAG_NOT_FOUND]: 'Tag not found',
@@ -49,6 +55,8 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   [ErrorCode.INTERNAL_ERROR]: 500,
   [ErrorCode.VALIDATION_ERROR]: 400,
   [ErrorCode.BAD_REQUEST]: 400,
+  [ErrorCode.UNAUTHORIZED]: 401,
+  [ErrorCode.FORBIDDEN]: 403,
   [ErrorCode.NOT_FOUND]: 404,
   [ErrorCode.ENTRY_NOT_FOUND]: 404,
   [ErrorCode.TAG_NOT_FOUND]: 404,

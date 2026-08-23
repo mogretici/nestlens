@@ -15,6 +15,16 @@ interface UsePaginatedEntriesOptions {
   autoRefresh?: boolean;
   autoRefreshInterval?: number;
   filters?: CursorFilters;
+  /**
+   * How far back to look, in minutes, counted from each request.
+   *
+   * A `from` cannot be computed once and kept: "the last five minutes" would
+   * quietly become "the five minutes before you chose it", and after ten
+   * minutes of watching a live page it would be showing fifteen. So the window
+   * travels as a duration and becomes an instant where the request is made,
+   * which also keeps `filters` stable enough to compare.
+   */
+  windowMinutes?: number;
 }
 
 // Stable JSON stringify for filter comparison
@@ -26,6 +36,43 @@ function stableStringify(obj: unknown): string {
   }
   const keys = Object.keys(obj as Record<string, unknown>).sort();
   return '{' + keys.map(k => `"${k}":${stableStringify((obj as Record<string, unknown>)[k])}`).join(',') + '}';
+}
+
+/**
+ * How many rows the live feed may leave on screen.
+ *
+ * New entries arrive for as long as the page is open, and nothing was dropping
+ * the old ones: a tab left on a busy service accumulated a row per request
+ * forever — a few thousand within the hour, each one about nineteen DOM nodes,
+ * all of them re-rendered on every update. The reader can see fifty.
+ *
+ * Ten pages' worth is far more than anyone scrolls back through in a live feed
+ * and still bounds what the tab holds. Paging deliberately with "load more" is
+ * a different thing and is not capped here — see `loadMore`.
+ */
+const MAX_LIVE_ROWS = 500;
+
+/**
+ * Prepends only the entries that are not on the list already.
+ *
+ * The guard above stops the overlap that produced duplicates; this makes a
+ * duplicate impossible to render even if some other path ever produces one.
+ * A list keyed by id has to hold each id once, and that is cheap to guarantee
+ * here rather than to rediscover from a broken table.
+ */
+function prependNew<T extends Entry>(previous: T[], incoming: T[]): T[] {
+  if (incoming.length === 0) return previous;
+
+  const known = new Set(previous.map((entry) => entry.id));
+  const fresh = incoming.filter((entry) => !known.has(entry.id));
+
+  if (fresh.length === 0) return previous;
+
+  const combined = [...fresh, ...previous];
+
+  // Oldest first out of the window, which is the end of the list: the feed is
+  // newest-first, and what fell off the bottom is a "load more" away.
+  return combined.length > MAX_LIVE_ROWS ? combined.slice(0, MAX_LIVE_ROWS) : combined;
 }
 
 interface UsePaginatedEntriesResult<T extends Entry> {
@@ -75,12 +122,13 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     autoRefresh: initialAutoRefresh,
     autoRefreshInterval = 5000,
     filters: filtersOption,
+    windowMinutes,
   } = options;
 
   // Serialize filters for dependency comparison using stable stringify
   const filtersKey = stableStringify(filtersOption);
   /** Everything that decides what a fetch returns, in one comparable value. */
-  const requestKey = `${type}|${limit}|${filtersKey}`;
+  const requestKey = `${type}|${limit}|${filtersKey}|${windowMinutes ?? 0}`;
 
   /**
    * The filters, re-identified from their content.
@@ -109,6 +157,23 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   }
   const filters = identifiedFilters.value;
 
+  /**
+   * The filters as they go out, with the window turned into an instant.
+   *
+   * Computed when a request is made rather than when the component renders:
+   * "the last five minutes" has to keep meaning that, and a `from` fixed once
+   * would quietly become "the five minutes before you chose it" — after ten
+   * minutes of watching a live page it would be showing fifteen.
+   */
+  const askedFilters = useCallback((): CursorFilters | undefined => {
+    if (!windowMinutes || windowMinutes <= 0) return filters;
+
+    return {
+      ...filters,
+      from: new Date(Date.now() - windowMinutes * 60_000).toISOString(),
+    };
+  }, [filters, windowMinutes]);
+
   const [entries, setEntries] = useState<T[]>([]);
   /**
    * Which request the entries on screen came from, or `null` before the first
@@ -133,6 +198,35 @@ export function usePaginatedEntries<T extends Entry = Entry>(
 
   const newestSequenceRef = useRef<number | null>(null);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  /**
+   * Set while a "load newer" round trip is in the air.
+   *
+   * Two things ask for newer entries — the interval below and the SSE handler
+   * at the bottom — and both read `newestSequenceRef` *before* awaiting and
+   * write it after. Overlap them and each fetches from the same cursor, each
+   * gets the same rows, and each prepends them: the table fills with copies of
+   * the same request while the entries the reader came for scroll away. Under
+   * real traffic this compounds fast — measured on the GraphQL page with two
+   * requests per second, 3,224 rows of which 121 were distinct.
+   *
+   * Duplicate ids are also duplicate React keys, which is why rows went missing
+   * rather than merely repeating: React cannot tell two rows with one key
+   * apart, so it reuses and drops them unpredictably as the list changes.
+   */
+  const loadingNewerRef = useRef(false);
+  /**
+   * The newest sequence that has been considered, matching the filters or not.
+   *
+   * Distinct from `newestSequenceRef`, which is the newest entry on screen.
+   * They are the same thing only while every arriving entry matches. When one
+   * does not it is never loaded, so the on-screen cursor stays put — and asking
+   * again from that cursor re-examines a range that grows for as long as the
+   * tab is open. Measured on `/requests?statuses=500` with traffic that did not
+   * match it: the automatic path asked for 32 entries, then 88, then 136,
+   * reaching the API's ceiling of 1,000 within twenty-five seconds and scanning
+   * that far every five seconds afterwards.
+   */
+  const seenSequenceRef = useRef<number | null>(null);
   // Track if this is the initial load (no data yet)
   const isInitialLoadRef = useRef(true);
 
@@ -162,6 +256,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       setEntries(response.data as T[]);
       setMeta(response.meta);
       newestSequenceRef.current = response.meta.newestSequence;
+      seenSequenceRef.current = response.meta.newestSequence;
       setNewEntriesCount(0);
       setError(null);
       isInitialLoadRef.current = false;
@@ -196,10 +291,15 @@ export function usePaginatedEntries<T extends Entry = Entry>(
         type,
         limit,
         beforeSequence: meta.oldestSequence,
-        filters,
+        filters: askedFilters(),
       });
 
-      setEntries((prev) => [...prev, ...(response.data as T[])]);
+      setEntries((prev) => {
+        // The page below can overlap the one on screen when entries arrived
+        // between the two requests, and an id must appear once.
+        const known = new Set(prev.map((entry) => entry.id));
+        return [...prev, ...(response.data as T[]).filter((entry) => !known.has(entry.id))];
+      });
       setMeta(response.meta);
     } catch (err) {
       console.error('Failed to load more entries:', err);
@@ -207,19 +307,23 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, meta, filters]);
+  }, [type, limit, meta, askedFilters]);
 
   // Load new entries (manual button click)
   const loadNew = useCallback(async () => {
     if (!newestSequenceRef.current) return;
+    // Shares the guard with the automatic path: the button and the poll ask
+    // the same question and must not both answer it.
+    if (loadingNewerRef.current) return;
 
+    loadingNewerRef.current = true;
     setRefreshing(true);
     try {
       const response = await getEntriesWithCursor({
         type,
         limit: newEntriesCount || limit,
         afterSequence: newestSequenceRef.current,
-        filters,
+        filters: askedFilters(),
       });
 
       if (response.data.length > 0) {
@@ -229,7 +333,7 @@ export function usePaginatedEntries<T extends Entry = Entry>(
           highlightedEntriesRef.current.set(entry.id, now);
         });
 
-        setEntries((prev) => [...(response.data as T[]), ...prev]);
+        setEntries((prev) => prependNew(prev, response.data as T[]));
         newestSequenceRef.current = response.meta.newestSequence;
         setNewEntriesCount(0);
       }
@@ -237,19 +341,21 @@ export function usePaginatedEntries<T extends Entry = Entry>(
       console.error('Failed to load new entries:', err);
       toast.error('Failed to load new entries');
     } finally {
+      loadingNewerRef.current = false;
       setRefreshing(false);
     }
-  }, [type, limit, newEntriesCount, filters]);
+  }, [type, limit, newEntriesCount, askedFilters]);
 
   // Refresh all data
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
       setError(null);
-      const response = await getEntriesWithCursor({ type, limit, filters });
+      const response = await getEntriesWithCursor({ type, limit, filters: askedFilters() });
       setEntries(response.data as T[]);
       setMeta(response.meta);
       newestSequenceRef.current = response.meta.newestSequence;
+      seenSequenceRef.current = response.meta.newestSequence;
       setNewEntriesCount(0);
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error('Failed to refresh entries');
@@ -259,30 +365,60 @@ export function usePaginatedEntries<T extends Entry = Entry>(
     } finally {
       setRefreshing(false);
     }
-  }, [type, limit, filters]);
+  }, [type, limit, askedFilters]);
 
-  // Check for new entries
+  /** Whether anything is being narrowed, which decides how new entries are counted. */
+  const narrowed = (asked: CursorFilters | undefined): boolean =>
+    Boolean(
+      asked &&
+        Object.values(asked).some((value) =>
+          Array.isArray(value) ? value.length > 0 : value !== undefined && value !== '',
+        ),
+    );
+
+  /**
+   * How many new entries the reader would actually see.
+   *
+   * `entries/check-new` counts by sequence and type and knows nothing about
+   * filters, so under one it counted rows the list would never show. Measured
+   * on `/requests?statuses=500` with no 500s arriving: "Load 147 new entries",
+   * and clicking it loaded none of them.
+   *
+   * With a filter active the count comes from asking for the entries
+   * themselves, which is the same request the automatic path already makes —
+   * so it is capped at a page, which is also all one click brings in.
+   */
   const checkForNew = useCallback(async () => {
     if (!newestSequenceRef.current) {
-      // If no entries yet, get latest sequence
-      try {
-        const response = await getLatestSequence(type);
-        if (response.data) {
-          setNewEntriesCount(1);
-        }
-      } catch {
-        // Ignore errors
-      }
+      // Nothing on screen, so there is no cursor to count from — and the badge
+      // used to say "Load 1 new entry" here whenever an entry of this type
+      // existed anywhere, filter or no filter, while `loadNew` returned
+      // immediately for want of that same cursor. The button could not be
+      // dismissed. An empty list has nothing to lose by filling itself in.
+      await refresh();
       return;
     }
 
+    const asked = askedFilters();
+
     try {
-      const response = await checkNewEntries(newestSequenceRef.current, type);
-      setNewEntriesCount(response.data.count);
+      if (!narrowed(asked)) {
+        const response = await checkNewEntries(newestSequenceRef.current, type);
+        setNewEntriesCount(response.data.count);
+        return;
+      }
+
+      const response = await getEntriesWithCursor({
+        type,
+        limit,
+        afterSequence: newestSequenceRef.current,
+        filters: asked,
+      });
+      setNewEntriesCount(response.data.length);
     } catch {
       // Ignore errors
     }
-  }, [type]);
+  }, [type, limit, askedFilters, refresh]);
 
   // Toggle auto-refresh
   const setAutoRefresh = useCallback((enabled: boolean) => {
@@ -302,8 +438,25 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   // The first page, and every page after a filter or page-size change. The
   // request leaves here; what it produces is written by the continuations above.
   useEffect(() => {
-    getEntriesWithCursor({ type, limit, filters }).then(applyPage, applyFailure);
-  }, [type, limit, filters, applyPage, applyFailure]);
+    // A second request can leave before the first one lands — a filter typed
+    // quickly, a page switched and switched back — and the slower answer must
+    // not overwrite the faster one. Without this the table shows whatever
+    // finished last, which is not what was asked for.
+    let current = true;
+
+    getEntriesWithCursor({ type, limit, filters: askedFilters() }).then(
+      (response) => {
+        if (current) applyPage(response);
+      },
+      (err) => {
+        if (current) applyFailure(err);
+      },
+    );
+
+    return () => {
+      current = false;
+    };
+  }, [type, limit, askedFilters, applyPage, applyFailure]);
 
   // Check if an entry is highlighted (new)
   const isHighlighted = useCallback((id: number): boolean => {
@@ -330,16 +483,32 @@ export function usePaginatedEntries<T extends Entry = Entry>(
   // Auto-load new entries when auto-refresh is enabled
   const autoLoadNew = useCallback(async () => {
     if (!newestSequenceRef.current) return;
+    // One round trip at a time. See `loadingNewerRef`.
+    if (loadingNewerRef.current) return;
 
+    loadingNewerRef.current = true;
     try {
-      const checkResponse = await checkNewEntries(newestSequenceRef.current, type);
-      if (checkResponse.data.count > 0) {
+      const since = seenSequenceRef.current ?? newestSequenceRef.current;
+      const latest = await getLatestSequence(type);
+      const newest = latest.data;
+
+      if (typeof newest === 'number' && newest > since) {
+        // A page at a time. The unfiltered count used to be the limit, so a
+        // filtered page asked for entries the filter would drop, and asked for
+        // more of them every time.
         const response = await getEntriesWithCursor({
           type,
-          limit: checkResponse.data.count,
-          afterSequence: newestSequenceRef.current,
-          filters,
+          limit,
+          afterSequence: since,
+          filters: askedFilters(),
         });
+
+        // Everything up to `newest` has been considered now, matching or not —
+        // unless the page filled, in which case there is more to come and only
+        // what came back can be counted as seen.
+        seenSequenceRef.current = response.meta.hasMore
+          ? (response.meta.newestSequence ?? since)
+          : newest;
 
         if (response.data.length > 0) {
           // Mark new entries as highlighted
@@ -348,20 +517,28 @@ export function usePaginatedEntries<T extends Entry = Entry>(
             highlightedEntriesRef.current.set(entry.id, now);
           });
 
-          setEntries((prev) => [...(response.data as T[]), ...prev]);
+          let added = 0;
+          setEntries((prev) => {
+            const next = prependNew(prev, response.data as T[]);
+            added = next.length - prev.length;
+            return next;
+          });
           newestSequenceRef.current = response.meta.newestSequence;
-          // Update meta total
+          // Update meta total by what was actually added, not by what came
+          // back: a row already on the list must not be counted twice.
           setMeta((prevMeta) => prevMeta ? {
             ...prevMeta,
-            total: prevMeta.total + response.data.length,
+            total: prevMeta.total + added,
             newestSequence: response.meta.newestSequence,
           } : response.meta);
         }
       }
     } catch {
       // Ignore errors
+    } finally {
+      loadingNewerRef.current = false;
     }
-  }, [type, filters]);
+  }, [type, limit, askedFilters]);
 
   // Set up auto-refresh interval
   useEffect(() => {

@@ -7,9 +7,13 @@ import { tap } from 'rxjs/operators';
 import { v4 as uuidv4 } from 'uuid';
 import { CollectorService } from '../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, RequestWatcherConfig } from '../nestlens.config';
+import { AddressableRequest, resolveClientIp } from '../core/client-ip';
 import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { describeThrown } from './thrown-value';
+import { assignKey } from '../core/safe-assign';
+import { capturePayload } from './capture-payload';
 
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
@@ -160,7 +164,12 @@ export class RequestWatcher implements NestInterceptor {
 
           this.collector.collect('request', payload, requestId);
         },
-        error: async (error) => {
+        error: async (thrown) => {
+          // Anything can be thrown, including `null`. Reading `.status` off it
+          // here used to take the process down from inside an RxJS error
+          // handler, where nothing was left to catch it. See `describeThrown`.
+          const error = describeThrown(thrown);
+
           const duration = Date.now() - startTime;
           const memory =
             startMemory === undefined ? undefined : process.memoryUsage().heapUsed - startMemory;
@@ -181,7 +190,7 @@ export class RequestWatcher implements NestInterceptor {
             body,
             ip: this.getClientIp(request),
             userAgent: request.headers['user-agent'],
-            statusCode: error.status || 500,
+            statusCode: error.status ?? 500,
             responseBody: {
               error: error.message,
               name: error.name,
@@ -224,28 +233,23 @@ export class RequestWatcher implements NestInterceptor {
   }
 
   private captureBody(body: unknown): unknown {
-    if (!body) return undefined;
-
-    const maxSize = this.config.maxBodySize ?? 64 * 1024; // 64KB default; 0 captures nothing
-
-    try {
-      const json = JSON.stringify(body);
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return body;
-    } catch {
-      return { _error: 'Unable to serialize body' };
-    }
+    // 64KB default; 0 captures nothing.
+    return body ? capturePayload(body, this.config.maxBodySize ?? 64 * 1024) : undefined;
   }
 
+  /**
+   * The client's address, by the same rule the guard authorizes with.
+   *
+   * This used to read `X-Forwarded-For` whatever the configuration said, while
+   * the guard read it only under `trustProxy` — so with the defaults the
+   * dashboard displayed an address the caller had chosen and the whitelist
+   * checked a different one.
+   */
   private getClientIp(request: Request): string | undefined {
-    const forwardedFor = request.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-      return ips.trim();
-    }
-    return request.ip || request.socket?.remoteAddress;
+    return resolveClientIp(
+      request as unknown as AddressableRequest,
+      this.nestlensConfig.trustProxy,
+    );
   }
 
   private captureControllerInfo(context: ExecutionContext): {
@@ -301,11 +305,16 @@ export class RequestWatcher implements NestInterceptor {
       const session = (request as Request & { session?: Record<string, unknown> }).session;
       if (!session) return undefined;
 
-      // Filter out internal session properties
+      // Filter out internal session properties.
+      //
+      // Written through `assignKey` because a session is deserialised from a
+      // store, and what it holds came from the application's users — so
+      // `__proto__` is a name it can carry, unlike a header, which Node drops
+      // before a handler ever sees it.
       const filtered: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(session)) {
         if (!key.startsWith('_') && key !== 'cookie') {
-          filtered[key] = value;
+          assignKey(filtered, key, value);
         }
       }
 

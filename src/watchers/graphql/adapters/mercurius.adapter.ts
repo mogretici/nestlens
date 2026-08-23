@@ -6,7 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { GraphQLPayload } from '../../../types';
+import { MAX_RECORDED_ERRORS, GraphQLPayload } from '../../../types';
 import {
   hashQuery,
   truncateQuery,
@@ -15,15 +15,51 @@ import {
 } from '../utils/query-parser';
 import { sanitizeVariables } from '../utils/variable-sanitizer';
 import { N1Detector } from '../utils/n1-detector';
+
+/** What Mercurius hands a resolver hook, of which three parts matter here. */
+interface ResolverFieldInfo {
+  fieldName: string;
+  parentType: { name: string };
+  returnType: { toString: () => string; ofType?: unknown; getFields?: unknown };
+  path: {
+    key: string | number;
+    prev?: { key: string | number };
+  };
+}
+
+/**
+ * Whether a field could be fetching something.
+ *
+ * A scalar or an enum is a leaf and cannot be an N+1 however often it is
+ * resolved; an object, or a list of them, is the shape one takes. See the same
+ * function in the Apollo adapter for what this replaced and why.
+ */
+const returnsSomethingFetchable = (info: ResolverFieldInfo): boolean => {
+  try {
+    let type = info.returnType as { ofType?: unknown; getFields?: unknown } | undefined;
+
+    while (type && typeof (type as { ofType?: unknown }).ofType === 'object') {
+      type = (type as { ofType?: { ofType?: unknown; getFields?: unknown } }).ofType;
+    }
+
+    return typeof type?.getFields === 'function';
+  } catch {
+    return false;
+  }
+};
 import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer, FieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
+import { capturePayload } from '../../capture-payload';
+import { recording } from '../never-breaks-the-response';
 
 /**
  * Mercurius context type
  */
 interface MercuriusContext {
+  /** Fastify's reply, which is what Mercurius puts on the context. */
   reply?: {
+    statusCode?: number;
     request?: {
       ip?: string;
       headers?: Record<string, string>;
@@ -39,36 +75,32 @@ interface MercuriusContext {
 }
 
 /**
- * Mercurius execution context for hooks
+ * What `onResolution` is handed first.
+ *
+ * A GraphQL `ExecutionResult` — the answer, not the request. This was modelled
+ * as the request: `operationName`, `query`, `variables` and `reply` were read
+ * off it and every one of them was undefined, so the variables were never
+ * captured, the status code always came from a fallback, and the errors were
+ * read from a tracking array nothing ever wrote to. Every failing operation
+ * was recorded as a success. See `mercurius/index.d.ts`:
+ *
+ *     onResolutionHookHandler(execution: ExecutionResult<TData>, context)
  */
-interface MercuriusExecutionContext {
-  operationName?: string;
-  query?: string;
-  variables?: Record<string, unknown>;
-  context?: MercuriusContext;
-  reply?: {
-    statusCode?: number;
-    request?: {
-      ip?: string;
-      headers?: Record<string, string>;
-      user?: Record<string, unknown>;
-    };
-  };
+interface MercuriusExecutionResult {
+  data?: Record<string, unknown> | null;
+  errors?: {
+    message: string;
+    path?: (string | number)[];
+    locations?: { line: number; column: number }[];
+    extensions?: Record<string, unknown>;
+  }[];
 }
 
 /**
  * Mercurius resolution event
  */
 interface MercuriusResolutionEvent {
-  info: {
-    fieldName: string;
-    parentType: { name: string };
-    returnType: { toString: () => string };
-    path: {
-      key: string | number;
-      prev?: { key: string | number };
-    };
-  };
+  info: ResolverFieldInfo;
 }
 
 /**
@@ -81,6 +113,7 @@ interface MercuriusHooks {
     schema: unknown,
     document: unknown,
     context: MercuriusContext,
+    variables?: Record<string, unknown>,
   ) => Promise<{
     document?: unknown;
     errors?: unknown[];
@@ -91,7 +124,7 @@ interface MercuriusHooks {
     context: MercuriusContext,
     service: unknown,
   ) => Promise<void>;
-  onResolution?: (execution: MercuriusExecutionContext, context: MercuriusContext) => Promise<void>;
+  onResolution?: (execution: MercuriusExecutionResult, context: MercuriusContext) => Promise<void>;
   preSubscriptionParsing?: (
     schema: unknown,
     source: string,
@@ -103,7 +136,7 @@ interface MercuriusHooks {
     context: MercuriusContext,
   ) => Promise<void>;
   onSubscriptionResolution?: (
-    execution: MercuriusExecutionContext,
+    execution: MercuriusExecutionResult,
     context: MercuriusContext,
   ) => Promise<void>;
   onSubscriptionEnd?: (context: MercuriusContext, id: string) => Promise<void>;
@@ -124,6 +157,8 @@ interface RequestTrackingData {
   validationStartTime?: bigint;
   validationEndTime?: bigint;
   executionStartTime?: bigint;
+  /** Handed to `preExecution`, and to no other hook. */
+  variables?: Record<string, unknown>;
   n1Detector?: N1Detector;
   fieldTracer?: FieldTracer;
   resolverCount: number;
@@ -149,18 +184,40 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
    * Get the Mercurius hooks object
    */
   getPlugin(): MercuriusHooks {
+    return contained(this.buildHooks());
+  }
+
+  private buildHooks(): MercuriusHooks {
     const adapter = this;
 
     return {
       async preParsing(_schema: unknown, source: string, context: MercuriusContext) {
+        // One entry per operation, however many hook sets are registered.
+        //
+        // NestLens registers its hooks automatically, and `getPlugin()` still
+        // exists for the manual wiring that used to be required. An application
+        // carrying both runs this twice for one operation: the second call
+        // overwrites the tracking data the first stored on the context, and
+        // `onResolution` then fires twice — two entries, two of everything on
+        // the dashboard. The Apollo adapter guards the same case on the request
+        // context; here the context already carries the mark.
+        if ((context as Record<symbol, unknown>)[TRACKING_KEY]) {
+          return;
+        }
+
         // Check sampling
         if (!adapter.shouldSample()) {
           return;
         }
 
         const query = source;
-        const operationName = extractOperationName(query);
-        const operationType = extractOperationType(query);
+        // What the client named, which is the only answer for a document that
+        // declares more than one operation. Mercurius does not pass it to a
+        // hook; it is on the request body Fastify parsed.
+        const requested = (context.reply?.request as { body?: { operationName?: string } })?.body
+          ?.operationName;
+        const operationName = extractOperationName(query, requested);
+        const operationType = extractOperationType(query, requested);
 
         // Check if should ignore
         if (adapter.shouldIgnoreOperation(operationName, query)) {
@@ -201,8 +258,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
       async preValidation(_schema: unknown, _document: unknown, context: MercuriusContext) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.parsingEndTime = process.hrtime.bigint();
@@ -210,23 +266,30 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         }
       },
 
-      async preExecution(_schema: unknown, _document: unknown, context: MercuriusContext) {
+      async preExecution(
+        _schema: unknown,
+        _document: unknown,
+        context: MercuriusContext,
+        variables?: Record<string, unknown>,
+      ) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
           tracking.executionStartTime = process.hrtime.bigint();
+          // This is the only hook Mercurius hands the variables to. They were
+          // read off the `onResolution` argument instead, which is the result,
+          // so `captureVariables` recorded nothing on this server.
+          tracking.variables = variables;
         }
 
         return undefined;
       },
 
-      async onResolution(execution: MercuriusExecutionContext, context: MercuriusContext) {
+      async onResolution(execution: MercuriusExecutionResult, context: MercuriusContext) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (!tracking) {
           return;
@@ -263,9 +326,12 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         // N+1 detection
         const n1Warnings = tracking.n1Detector ? tracking.n1Detector.detect().warnings : [];
 
-        // Sanitize variables
+        // Sanitized, then bounded; see the Apollo adapter for why.
         const sanitizedVariables = adapter.config.captureVariables
-          ? sanitizeVariables(execution.variables, adapter.config.sensitiveVariables)
+          ? (capturePayload(
+              sanitizeVariables(tracking.variables, adapter.config.sensitiveVariables),
+              adapter.config.maxVariablesSize,
+            ) as Record<string, unknown> | undefined)
           : undefined;
 
         // Truncate query
@@ -276,15 +342,15 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           ? tracking.fieldTracer.getTraces()
           : undefined;
 
-        // Determine status code and errors
-        const errors = tracking.errors as Array<{
-          message: string;
-          path?: (string | number)[];
-          locations?: { line: number; column: number }[];
-          extensions?: Record<string, unknown>;
-        }>;
+        // The result carries the errors. They used to be read from a tracking
+        // array nothing ever pushed to, so every failing operation was recorded
+        // as a success and the dashboard's error filter never matched one.
+        const errors = execution.errors ?? [];
         const hasErrors = errors.length > 0;
-        const statusCode = execution.reply?.statusCode ?? (hasErrors ? 400 : 200);
+        // What the client was actually given. Mercurius answers a failed
+        // operation with 200 and the errors in the body, so the old fallback of
+        // 400 was reporting a status nobody received.
+        const statusCode = context.reply?.statusCode ?? (hasErrors ? 400 : 200);
 
         // Build payload
         const payload: GraphQLPayload = {
@@ -299,8 +365,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           executionDuration,
           statusCode,
           hasErrors,
+          errorCount: errors.length > MAX_RECORDED_ERRORS ? errors.length : undefined,
+          // The first few, and how many there were; see the Apollo adapter.
           errors: hasErrors
-            ? errors.map((e) => ({
+            ? errors.slice(0, MAX_RECORDED_ERRORS).map((e) => ({
                 message: e.message,
                 path: e.path,
                 locations: e.locations,
@@ -324,7 +392,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
               operationName: tracking.operationName,
               operationType: tracking.operationType,
               query: tracking.query,
-              variables: execution.variables,
+              variables: tracking.variables,
               request: {
                 ip,
                 userAgent,
@@ -374,8 +442,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         context: MercuriusContext,
       ) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (tracking) {
           tracking.validationEndTime = process.hrtime.bigint();
@@ -384,7 +451,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
       },
 
       async onSubscriptionResolution(
-        execution: MercuriusExecutionContext,
+        execution: MercuriusExecutionResult,
         context: MercuriusContext,
       ) {
         // Handle subscription messages if tracking is enabled
@@ -393,8 +460,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         }
 
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (!tracking) {
           return;
@@ -406,8 +472,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
       async onSubscriptionEnd(context: MercuriusContext, id: string) {
         const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-          | RequestTrackingData
-          | undefined;
+          RequestTrackingData | undefined;
 
         if (!tracking) {
           return;
@@ -440,21 +505,32 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
   }
 
   /**
-   * Register resolver tracking hook (called externally if needed)
+   * Records one field resolution, and returns what to call when it ends.
+   *
+   * Mercurius has no per-field hook of its own, so this is driven from the
+   * schema by `instrumentFieldResolvers`. It used to be driven by nothing at
+   * all — the comment below said it "would need to be integrated via custom
+   * wrapper" — which left `resolverCount`, `detectN1Queries` and
+   * `traceFieldResolvers` recording nothing on this server. The trace's end
+   * used to be stored on the context under a key nobody read, so every trace
+   * stayed open even if the method had been called.
    */
-  trackResolver(event: MercuriusResolutionEvent, context: MercuriusContext): void {
+  trackResolver(
+    event: MercuriusResolutionEvent,
+    context: MercuriusContext,
+  ): (() => void) | undefined {
     const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
-      | RequestTrackingData
-      | undefined;
+      RequestTrackingData | undefined;
 
     if (!tracking) {
-      return;
+      return undefined;
     }
 
     tracking.resolverCount++;
 
-    // N+1 tracking
-    if (tracking.n1Detector) {
+    // N+1 tracking, for fields that return something there is more to fetch
+    // from. See `N1Detector.recordCall`.
+    if (tracking.n1Detector && returnsSomethingFetchable(event.info)) {
       tracking.n1Detector.recordCall({
         parentType: event.info.parentType.name,
         fieldName: event.info.fieldName,
@@ -463,25 +539,18 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
     // Field tracing
     const fieldTracer = tracking.fieldTracer;
-    if (fieldTracer?.isActive()) {
-      const path = this.buildFieldPath(event.info.path);
-      const traceId = fieldTracer.startField(
-        path,
-        event.info.parentType.name,
-        event.info.fieldName,
-        event.info.returnType.toString(),
-      );
-
-      // Return cleanup function (caller should invoke when resolver completes)
-      // Note: Mercurius doesn't have built-in resolver tracing hooks,
-      // so this would need to be integrated via custom wrapper
-      if (traceId) {
-        // Store for later cleanup
-        (context as Record<string, unknown>)[`_trace_${traceId}`] = () => {
-          fieldTracer.endField(traceId);
-        };
-      }
+    if (!fieldTracer?.isActive()) {
+      return undefined;
     }
+
+    const traceId = fieldTracer.startField(
+      this.buildFieldPath(event.info.path),
+      event.info.parentType.name,
+      event.info.fieldName,
+      event.info.returnType.toString(),
+    );
+
+    return traceId ? () => fieldTracer.endField(traceId) : undefined;
   }
 
   /**
@@ -498,6 +567,33 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
     return parts.join('.');
   }
+}
+
+/**
+ * The same hooks, with each one unable to reach the response.
+ *
+ * Measured against Mercurius 16: a hook that throws in `onResolution` empties
+ * the result and puts its own message in front of the caller —
+ * `{"data":null,"errors":[{"message":"watcher blew up"}]}` — so a failure while
+ * recording is an answer the application never gave, and its internals in a
+ * client's response.
+ *
+ * Applied to the object rather than to each hook so a hook added later is
+ * covered by having been added.
+ */
+function contained(hooks: MercuriusHooks): MercuriusHooks {
+  const guarded: Record<string, unknown> = {};
+
+  for (const [name, hook] of Object.entries(hooks)) {
+    if (typeof hook !== 'function') continue;
+
+    guarded[name] = (...args: unknown[]): Promise<void> =>
+      recording(`the ${name} hook`, () =>
+        (hook as (...hookArgs: unknown[]) => Promise<void>)(...args),
+      );
+  }
+
+  return guarded as MercuriusHooks;
 }
 
 /**

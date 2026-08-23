@@ -5,6 +5,8 @@ import { parseDate } from '../utils/date';
 import { Mail } from 'lucide-react';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import {
   NewEntriesButton,
   LoadMoreButton,
@@ -31,13 +33,16 @@ export default function MailPage() {
     clearAll,
     serverFilters,
     headerFilters,
-    hasFilters,
   } = useEntryFilters('mail');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   const {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -47,7 +52,12 @@ export default function MailPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<MailEntry>({ type: 'mail', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<MailEntry>({
+    type: 'mail',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter only (server handles the actual filtering)
   const entries = allEntries.filter((entry): entry is MailEntry => isMailEntry(entry));
@@ -141,7 +151,6 @@ export default function MailPage() {
   }
 
   // Calculate dynamic padding based on header height
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -157,11 +166,12 @@ export default function MailPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="mail" />}
         onClearAllFilters={clearAll}
       />
 
       {/* Content */}
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         {/* New entries button */}
         <NewEntriesButton
           count={newEntriesCount}
@@ -176,6 +186,8 @@ export default function MailPage() {
           onRowClick={(entry) => navigate(`/mail/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No emails recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Mail className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

@@ -6,6 +6,7 @@
  */
 import { ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { HttpAdapterHost } from '@nestjs/core';
 import { NestLensGuard, NestLensRequest } from '../../api/api.guard';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 
@@ -571,16 +572,17 @@ describe('NestLensGuard', () => {
       expect(result).toBe(true);
     });
 
-    it('should skip role check when canAccess returns boolean true', async () => {
-      // Arrange
+    it('refuses when canAccess granted without saying who', async () => {
+      // This used to read "should skip role check when canAccess returns
+      // boolean true", and it passed: `true` grants access with no user, so
+      // the role check — which lived inside the branch that runs when a user
+      // comes back — never ran. An operator asking for `requiredRoles:
+      // ['admin']` got no role requirement at all. See
+      // `authorization-fails-closed.spec.ts` for the rest of that shape.
       mockConfig.authorization!.canAccess = () => true;
       mockConfig.authorization!.requiredRoles = ['admin'];
 
-      // Act
-      const result = await guard.canActivate(createMockContext());
-
-      // Assert - should pass because canAccess returned boolean, not user object
-      expect(result).toBe(true);
+      await expect(guard.canActivate(createMockContext())).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -821,5 +823,100 @@ describe('NestLensGuard IP whitelist and forwarding headers', () => {
     await expect(guard.canActivate(requestFrom('172.16.0.1', '203.0.113.9'))).rejects.toThrow(
       ForbiddenException,
     );
+  });
+});
+
+/**
+ * A 429 has to say when to come back.
+ *
+ * Without `Retry-After` a refused client knows only that it was refused, so the
+ * one strategy left is to guess — which is how a rate limit turns into a retry
+ * storm against the service it is protecting. RFC 6585 asks for the header, and
+ * the value was already being computed for the response body.
+ */
+describe('NestLensGuard rate limit headers', () => {
+  const makeContext = (ip: string, response: Record<string, unknown>) =>
+    ({
+      switchToHttp: () => ({
+        getRequest: () => ({ ip, headers: {}, socket: { remoteAddress: ip } }),
+        getResponse: () => response,
+      }),
+    }) as unknown as ExecutionContext;
+
+  it('sets Retry-After when it refuses a request', async () => {
+    const headers: Record<string, string> = {};
+    const adapterHost = {
+      httpAdapter: {
+        setHeader: (_res: unknown, name: string, value: string) => {
+          headers[name] = value;
+        },
+      },
+    } as unknown as HttpAdapterHost;
+
+    const guard = new NestLensGuard(
+      {
+        enabled: true,
+        authorization: { allowedEnvironments: null },
+        rateLimit: { windowMs: 60_000, maxRequests: 1 },
+      } as NestLensConfig,
+      adapterHost,
+    );
+
+    const context = makeContext('10.0.0.1', {});
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(context)).rejects.toBeDefined();
+
+    expect(headers['Retry-After']).toBeDefined();
+    expect(Number(headers['Retry-After'])).toBeGreaterThan(0);
+    expect(Number(headers['Retry-After'])).toBeLessThanOrEqual(60);
+
+    guard.onModuleDestroy();
+  });
+
+  it('still refuses when there is no adapter to write the header with', async () => {
+    // Built without the adapter — as most of the tests above do — the guard
+    // must still enforce the limit rather than fail trying to describe it.
+    const guard = new NestLensGuard({
+      enabled: true,
+      authorization: { allowedEnvironments: null },
+      rateLimit: { windowMs: 60_000, maxRequests: 1 },
+    } as NestLensConfig);
+
+    const context = makeContext('10.0.0.2', {});
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    await expect(guard.canActivate(context)).rejects.toBeDefined();
+
+    guard.onModuleDestroy();
+  });
+
+  it('does not turn a 429 into a 500 when the header cannot be written', async () => {
+    const adapterHost = {
+      httpAdapter: {
+        setHeader: () => {
+          throw new Error('headers already sent');
+        },
+      },
+    } as unknown as HttpAdapterHost;
+
+    const guard = new NestLensGuard(
+      {
+        enabled: true,
+        authorization: { allowedEnvironments: null },
+        rateLimit: { windowMs: 60_000, maxRequests: 1 },
+      } as NestLensConfig,
+      adapterHost,
+    );
+
+    const context = makeContext('10.0.0.3', {});
+
+    await guard.canActivate(context);
+    await expect(guard.canActivate(context)).rejects.toMatchObject({
+      // The rate-limit rejection, not the header failure.
+      status: 429,
+    });
+
+    guard.onModuleDestroy();
   });
 });

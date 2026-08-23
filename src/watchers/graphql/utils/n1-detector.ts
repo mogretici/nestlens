@@ -12,9 +12,6 @@ import { PotentialN1Warning } from '../../../types';
 export interface ResolverCall {
   parentType: string;
   fieldName: string;
-  returnType?: string;
-  /** Parent object ID if available */
-  parentId?: string | number;
 }
 
 /**
@@ -36,9 +33,6 @@ export class N1Detector {
   /** Map of "ParentType.fieldName" -> call count */
   private resolverCalls: Map<string, number> = new Map();
 
-  /** Map of "ParentType.fieldName" -> set of parent IDs */
-  private parentIds: Map<string, Set<string | number>> = new Map();
-
   /** Threshold for N+1 warnings */
   private threshold: number;
 
@@ -47,36 +41,26 @@ export class N1Detector {
   }
 
   /**
-   * Record a resolver call
+   * Record a resolver call.
+   *
+   * Only calls that could be fetching something. Every call used to count, so a
+   * query over sixteen order items reported three findings of equal weight:
+   *
+   *     OrderItem.id       16 times   "consider using DataLoader"
+   *     OrderItem.product  16 times   "consider using DataLoader"
+   *     Product.name       16 times   "consider using DataLoader"
+   *
+   * One of those three is the query's actual problem and two are property
+   * reads; advising a DataLoader for `id` is advice a reader has to know to
+   * ignore. What separates them is what the field returns — a scalar is a leaf
+   * and an object is not — and the adapters decide, because only they hold the
+   * schema's types.
    */
   recordCall(call: ResolverCall): void {
     const key = `${call.parentType}.${call.fieldName}`;
 
-    // Increment call count
     const currentCount = this.resolverCalls.get(key) ?? 0;
     this.resolverCalls.set(key, currentCount + 1);
-
-    // Track parent IDs if available
-    if (call.parentId !== undefined) {
-      const parents = this.parentIds.get(key) ?? new Set<string>();
-      parents.add(call.parentId);
-      this.parentIds.set(key, parents);
-    }
-  }
-
-  /**
-   * Get the count for a specific resolver
-   */
-  getCount(parentType: string, fieldName: string): number {
-    const key = `${parentType}.${fieldName}`;
-    return this.resolverCalls.get(key) ?? 0;
-  }
-
-  /**
-   * Get all resolver counts
-   */
-  getAllCounts(): Map<string, number> {
-    return new Map(this.resolverCalls);
   }
 
   /**
@@ -173,68 +157,4 @@ export class N1Detector {
 
     return computedPatterns.some((pattern) => pattern.test(fieldName));
   }
-
-  /**
-   * Reset the detector for a new request
-   */
-  reset(): void {
-    this.resolverCalls.clear();
-    this.parentIds.clear();
-  }
-
-  /**
-   * Get statistics about resolver calls
-   */
-  getStats(): {
-    totalResolvers: number;
-    totalCalls: number;
-    maxCalls: number;
-    avgCalls: number;
-  } {
-    const counts = Array.from(this.resolverCalls.values());
-
-    if (counts.length === 0) {
-      return {
-        totalResolvers: 0,
-        totalCalls: 0,
-        maxCalls: 0,
-        avgCalls: 0,
-      };
-    }
-
-    const totalCalls = counts.reduce((sum, c) => sum + c, 0);
-
-    return {
-      totalResolvers: counts.length,
-      totalCalls,
-      maxCalls: Math.max(...counts),
-      avgCalls: totalCalls / counts.length,
-    };
-  }
-}
-
-/**
- * Create a new N+1 detector with the given threshold
- */
-export function createN1Detector(threshold: number = 10): N1Detector {
-  return new N1Detector(threshold);
-}
-
-/**
- * Quick detection from a resolver calls map
- */
-export function detectN1FromMap(
-  resolverCalls: Map<string, number>,
-  threshold: number = 10,
-): PotentialN1Warning[] {
-  const detector = new N1Detector(threshold);
-
-  for (const [key, count] of resolverCalls.entries()) {
-    const [parentType, fieldName] = key.split('.');
-    for (let i = 0; i < count; i++) {
-      detector.recordCall({ parentType, fieldName });
-    }
-  }
-
-  return detector.detect().warnings;
 }

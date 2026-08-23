@@ -11,9 +11,33 @@ NestLens automatically masks sensitive data to protect credentials, tokens, and 
 Data masking protects:
 - Authentication tokens and passwords
 - API keys and secrets
-- Credit card numbers and personal data
+- Card numbers, card verification codes and national identifiers
 - Session cookies and credentials
 - Database connection strings
+
+### What it does not protect
+
+Masking works by field name, and the names it knows are credentials and
+payment details. Everything else your application handles reaches storage as
+it was — including personal data that is not a credential:
+
+```json
+{ "email": "ada@example.com", "phone": "+44 7700 900000", "dateOfBirth": "1990-01-01" }
+```
+
+That is deliberate: a mail watcher that hid every recipient would have nothing
+to show, and the body you are debugging is usually the point. Where a field is
+sensitive in your domain, name it — `sensitiveParams` is read on every payload,
+and [Masking Only What You Name](#masking-only-what-you-name) narrows the list
+instead of extending it:
+
+```typescript
+security: {
+  dataMasking: {
+    sensitiveParams: ['email', 'phone', 'dateOfBirth', 'iban'],
+  },
+}
+```
 
 ## Automatic Masking
 
@@ -164,6 +188,37 @@ NestLensModule.forRoot({
   },
 })
 ```
+
+## What Masking Cannot Reach
+
+Masking works from field names. Where a value carries no name of its own,
+nothing here can decide about it, and these watchers record what they are shown:
+
+| Watcher | Field | Why it cannot be masked |
+| --- | --- | --- |
+| Query | `query` | A literal embedded in SQL text — `WHERE token = 'abc'` — is inside a string, not a named field. Parameterised queries keep values in `parameters`, which is also unnamed: masking it would blank every value a slow query is read for. |
+| Command | positional arguments | `seed hunter2` marks nothing. Values passed to a **named flag** *are* masked: `--password hunter2` and `--token=abc` both lose their value and keep the flag. |
+| Redis | command arguments | `SET session:1 <value>` is positional in the same way. |
+| Cache | `value` | Seeing what was cached is the reason the watcher exists. |
+| Mail | `text`, `html` | Free text. A token pasted into an email body reads like any other sentence. |
+| Exception | `message` | Free text as well: an application that interpolates a token into an error message puts the value inside a sentence. Stack traces are handled separately by `stackTraceSanitization`. |
+
+Two things do get masked wherever they appear, because their shape is
+unambiguous:
+
+- **Query strings inside URLs.** `GET /reset?token=abc` is masked in `url` as
+  well as in `query`.
+- **Credentials inside URLs.** `postgres://app:hunter2@db/orders` keeps the
+  user and host and loses the password — in `url`, `connectionString`,
+  `connectionUri` and `dsn`.
+
+Where a watcher in the table above would record something you cannot store,
+turn it off, narrow it with `filter`, or add the field name to
+`sensitiveParams` if it has one.
+
+The same applies to [alerting webhooks](../configuration/alerting): they are
+sent the entry **after** masking, so a redacted field is redacted there too —
+but an unmaskable value stays unmaskable on its way out.
 
 ## Global Security Configuration
 

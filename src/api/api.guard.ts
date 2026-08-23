@@ -7,9 +7,14 @@ import {
   Inject,
   Injectable,
   Logger,
+  OnModuleDestroy,
+  Optional,
 } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 import type { Request } from 'express';
+import { AddressableRequest, resolveClientIp } from '../core/client-ip';
 import { AuthUser, AuthorizationConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
+import { settled } from '../core/thenable';
 
 /**
  * Extended Request type with NestLens auth user
@@ -26,6 +31,26 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
+/** What `evaluateCanAccess` returns when the answer is no. */
+const DENIED = Symbol('nestlens.access.denied');
+
+/**
+ * How many callers the rate limiter will remember at once.
+ *
+ * One entry per address seen inside the window, removed only when the sweep
+ * five minutes later finds it expired. Nothing bounded it: a dashboard reachable
+ * by many clients — or one behind a proxy that lets a caller choose the address
+ * it is counted under — grows the map with every new one. Measured with 200,000
+ * distinct callers: 200,000 entries and about 10 MB of keys, none of them
+ * eligible for the sweep yet.
+ *
+ * Past the ceiling the expired ones go first, then the oldest. Evicting relaxes
+ * the limit for whoever is dropped, which is the right way round: at that many
+ * distinct addresses a per-address limit is not what is protecting anything, and
+ * unbounded memory is.
+ */
+const MAX_RATE_LIMIT_KEYS = 5_000;
+
 /**
  * Default rate limit configuration
  */
@@ -35,7 +60,7 @@ const DEFAULT_RATE_LIMIT = {
 };
 
 @Injectable()
-export class NestLensGuard implements CanActivate {
+export class NestLensGuard implements CanActivate, OnModuleDestroy {
   private readonly logger = new Logger(NestLensGuard.name);
 
   /**
@@ -52,6 +77,10 @@ export class NestLensGuard implements CanActivate {
   constructor(
     @Inject(NESTLENS_CONFIG)
     private readonly config: NestLensConfig,
+    // Optional so the guard can still be constructed in isolation, which is
+    // how most of its tests build it.
+    @Optional()
+    private readonly httpAdapterHost?: HttpAdapterHost,
   ) {
     // Periodic cleanup of expired rate limit entries
     this.cleanupInterval = setInterval(
@@ -67,6 +96,19 @@ export class NestLensGuard implements CanActivate {
     }
   }
 
+  /**
+   * Stops the cleanup timer with the application.
+   *
+   * `unref()` above keeps the timer from holding the process open, which is a
+   * different thing from stopping it: without this, a closed application leaves
+   * a timer still firing against a store nobody reads, and a test suite that
+   * creates guards leaves one behind per application it builds.
+   */
+  onModuleDestroy(): void {
+    clearInterval(this.cleanupInterval);
+    this.rateLimitStore.clear();
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<NestLensRequest>();
 
@@ -78,11 +120,23 @@ export class NestLensGuard implements CanActivate {
     // Check rate limit first (before any other checks)
     const clientIp = this.getClientIp(request);
     if (!this.checkRateLimit(clientIp)) {
+      const retryAfter = Math.ceil(this.getRateLimitResetTime(clientIp) / 1000);
+
+      // A 429 without `Retry-After` tells a client it has been refused and
+      // nothing about when to come back, so the only strategy left is to guess
+      // — which is how a rate limit turns into a retry storm. RFC 6585 asks for
+      // this header, and the value was already being computed for the body.
+      this.setRetryAfter(context, retryAfter);
+
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,
           message: 'Too many requests. Please try again later.',
-          retryAfter: Math.ceil(this.getRateLimitResetTime(clientIp) / 1000),
+          // In `details` as well, which is the envelope's place for it: the
+          // API's filter keeps the message and drops the rest, so a client
+          // reading the documented `retryAfter` found nothing in the body.
+          details: { retryAfter },
+          retryAfter,
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -119,32 +173,67 @@ export class NestLensGuard implements CanActivate {
     }
 
     // 3. Check custom access function
-    const canAccess = authConfig.canAccess;
-    if (canAccess) {
-      const result = await this.evaluateCanAccess(canAccess, request);
+    if (authConfig.canAccess) {
+      const user = await this.evaluateCanAccess(authConfig.canAccess, request);
 
-      if (result === false) {
-        this.logger.warn('Access denied: canAccess function returned false');
+      if (user === DENIED) {
+        this.logger.warn('Access denied: canAccess did not grant access');
         throw new ForbiddenException('Access denied');
       }
 
-      // If result is an AuthUser object, attach to request and check roles
-      if (typeof result === 'object' && result !== null) {
-        request.nestlensUser = result as AuthUser;
+      if (user) {
+        request.nestlensUser = user;
+      }
+    }
 
-        // 4. Check required roles
-        if (authConfig.requiredRoles && authConfig.requiredRoles.length > 0) {
-          if (!this.hasRequiredRoles(request.nestlensUser, authConfig.requiredRoles)) {
-            this.logger.warn(
-              `Access denied: User missing required roles. Required: ${authConfig.requiredRoles.join(', ')}`,
-            );
-            throw new ForbiddenException('Insufficient permissions');
-          }
-        }
+    // 4. Check required roles
+    const requiredRoles = authConfig.requiredRoles;
+    if (requiredRoles && requiredRoles.length > 0) {
+      // Roles are checked against a user, and the only thing that produces one
+      // is `canAccess` returning an `AuthUser`. Without one there is nothing to
+      // check, and this used to mean the requirement was skipped: configuring
+      // `requiredRoles: ['admin']` on its own protected nothing at all, and
+      // configuring it beside a `canAccess` that returned plain `true` was the
+      // same. An authorization setting the operator wrote down cannot quietly
+      // do nothing, so absent a user this denies and says what is missing.
+      if (!request.nestlensUser) {
+        this.logger.warn(
+          `Access denied: requiredRoles is set to [${requiredRoles.join(', ')}] but no user was ` +
+            'resolved. canAccess has to return an AuthUser for roles to be checked.',
+        );
+        throw new ForbiddenException('Insufficient permissions');
+      }
+
+      if (!this.hasRequiredRoles(request.nestlensUser, requiredRoles)) {
+        this.logger.warn(
+          `Access denied: User missing required roles. Required: ${requiredRoles.join(', ')}`,
+        );
+        throw new ForbiddenException('Insufficient permissions');
       }
     }
 
     return true;
+  }
+
+  /**
+   * Writes `Retry-After`, on whichever HTTP platform is underneath.
+   *
+   * Express and Fastify disagree about the method name; the adapter does not.
+   * Absent — in a unit test that builds the guard on its own — the header is
+   * simply not written, which is what happens anyway when there is no response
+   * to write it to.
+   */
+  private setRetryAfter(context: ExecutionContext, seconds: number): void {
+    const adapter = this.httpAdapterHost?.httpAdapter;
+    if (!adapter || typeof adapter.setHeader !== 'function') {
+      return;
+    }
+
+    try {
+      adapter.setHeader(context.switchToHttp().getResponse(), 'Retry-After', String(seconds));
+    } catch {
+      // Writing a header must never turn a 429 into a 500.
+    }
   }
 
   /**
@@ -207,19 +296,40 @@ export class NestLensGuard implements CanActivate {
   }
 
   /**
-   * Evaluate canAccess function
+   * Runs the caller's access function and reads its answer as a decision.
+   *
+   * Only `true` and an object grant. Everything else denies, including the
+   * values a function returns when it did not decide anything: `undefined` from
+   * a branch with no `return`, `null` from a lookup that found nobody, `0` from
+   * a count. Each of those used to grant access, because the check was
+   * `result === false` and nothing else was refused — so a hook written as
+   *
+   * ```text
+   * canAccess: (req) => { if (!req.user) return false; }
+   * ```
+   *
+   * let everyone in through the branch its author forgot to write. An
+   * authorization hook is the one place where an unrecognised answer has to
+   * mean no.
    */
   private async evaluateCanAccess(
     canAccess: NonNullable<AuthorizationConfig['canAccess']>,
     request: Request,
-  ): Promise<boolean | AuthUser> {
+  ): Promise<AuthUser | undefined | typeof DENIED> {
+    let result: boolean | AuthUser;
+
     try {
-      const result = canAccess(request);
-      return result instanceof Promise ? await result : result;
+      const returned = canAccess(request);
+      result = await settled(returned);
     } catch (error) {
       this.logger.error(`Error in canAccess function: ${error}`);
-      return false;
+      return DENIED;
     }
+
+    if (result === true) return undefined;
+    if (typeof result === 'object' && result !== null) return result as AuthUser;
+
+    return DENIED;
   }
 
   /**
@@ -236,28 +346,9 @@ export class NestLensGuard implements CanActivate {
   /**
    * Get client IP from request
    */
+  /** The client's address, by the same rule the request watcher records. */
   private getClientIp(request: Request): string {
-    // `X-Forwarded-For` is written by whoever sends the request, and nothing
-    // strips it unless something in front does. Read unconditionally it turned
-    // the IP whitelist into a formality: a header claiming an allowed address
-    // was enough to reach the dashboard, and the dashboard is where every
-    // recorded Authorization header, cookie and request body ends up.
-    //
-    // Behind a proxy the socket address is the proxy's and the header is the
-    // only way to see the client — so it is read once the application says it
-    // is behind one, the same line `X-Forwarded-Prefix` is held to.
-    if (this.config.trustProxy) {
-      const forwardedFor = request.headers['x-forwarded-for'];
-      if (forwardedFor) {
-        const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-        return ips.trim();
-      }
-    }
-
-    // Express fills `request.ip` from the forwarding header itself when the
-    // host application enables its own `trust proxy`, which is the host's
-    // decision to make and is honoured here.
-    return request.ip || request.socket?.remoteAddress || '';
+    return resolveClientIp(request as unknown as AddressableRequest, this.config.trustProxy) ?? '';
   }
 
   /**
@@ -352,6 +443,7 @@ export class NestLensGuard implements CanActivate {
 
     if (!entry || now >= entry.resetAt) {
       // First request or window expired - create new entry
+      this.makeRoom(now);
       this.rateLimitStore.set(ip, {
         count: 1,
         resetAt: now + config.windowMs,
@@ -384,6 +476,32 @@ export class NestLensGuard implements CanActivate {
   /**
    * Cleanup expired rate limit entries to prevent memory leaks
    */
+  /**
+   * Keeps the store under its ceiling before adding to it.
+   *
+   * Only walked once the map is large: sweeping on every request would cost
+   * more than the entries do. See `MAX_RATE_LIMIT_KEYS`.
+   */
+  private makeRoom(now: number): void {
+    if (this.rateLimitStore.size < MAX_RATE_LIMIT_KEYS) {
+      return;
+    }
+
+    for (const [ip, entry] of this.rateLimitStore) {
+      if (now >= entry.resetAt) {
+        this.rateLimitStore.delete(ip);
+      }
+    }
+
+    // Still full: every window is live. Insertion order is age order here, so
+    // the first key is the one that has been counted longest.
+    while (this.rateLimitStore.size >= MAX_RATE_LIMIT_KEYS) {
+      const oldest = this.rateLimitStore.keys().next();
+      if (oldest.done) break;
+      this.rateLimitStore.delete(oldest.value);
+    }
+  }
+
   private cleanupExpiredEntries(): void {
     const now = Date.now();
     let cleaned = 0;

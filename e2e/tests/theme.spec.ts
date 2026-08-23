@@ -78,3 +78,30 @@ test.describe('Theme', () => {
     await expect(dashboard.themeToggle).toBeEnabled();
   });
 });
+
+test.describe('Native controls', () => {
+  /**
+   * What the browser paints for itself — the select popup, the scrollbars —
+   * follows `color-scheme`, not Tailwind. Without it the dark theme stopped at
+   * the edge of anything the stylesheet does not paint, and the range filter's
+   * dropdown opened white on a dark page.
+   */
+  const declaredScheme = (page: import('@playwright/test').Page) =>
+    page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+
+  test('tells the browser the page is dark', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/requests');
+    await page.waitForSelector('html.dark');
+
+    expect(await declaredScheme(page)).toBe('dark');
+  });
+
+  test('tells the browser the page is light', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/requests');
+    await page.waitForSelector('html:not(.dark)');
+
+    expect(await declaredScheme(page)).toBe('light');
+  });
+});

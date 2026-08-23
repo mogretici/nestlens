@@ -147,12 +147,15 @@ describe('CollectorService', () => {
       expect(mockTagService.autoTag).toHaveBeenCalledWith(savedEntry);
     });
 
-    it('should throw error if save fails', async () => {
+    it('reports a failed save without rejecting', async () => {
+      // Two of the three callers do not await this, and a rejected promise
+      // nobody holds is an unhandled rejection — which Node treats as fatal.
+      // A storage outage must not be able to take the application down.
       mockStorage.save.mockRejectedValue(new Error('Save failed'));
 
-      await expect(service.collectImmediate('request', createMockRequestPayload())).rejects.toThrow(
-        'Save failed',
-      );
+      await expect(
+        service.collectImmediate('request', createMockRequestPayload()),
+      ).resolves.toBeNull();
     });
   });
 

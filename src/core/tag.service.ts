@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Entry, MonitoredTag, TagWithCount } from '../types';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
-import { normalizeTag } from './storage/tag-normalization';
+import { MAX_TAGS_PER_ENTRY, boundTag, normalizeTag } from './storage/tag-normalization';
 
 /**
  * Service for managing tags and auto-tagging entries
@@ -81,12 +81,17 @@ export class TagService {
         break;
     }
 
+    // Bounded here rather than at each of the thirty pushes above: every one
+    // of them can carry application data, and one place is one place to be
+    // right. See `MAX_TAG_LENGTH`.
+    const bounded = tags.slice(0, MAX_TAGS_PER_ENTRY).map(boundTag);
+
     // Add tags to storage if entry has an ID
-    if (entry.id && tags.length > 0) {
-      await this.storage.addTags(entry.id, tags);
+    if (entry.id && bounded.length > 0) {
+      await this.storage.addTags(entry.id, bounded);
     }
 
-    return tags;
+    return bounded;
   }
 
   private addRequestTags(entry: Entry, tags: string[]): void {
@@ -115,8 +120,14 @@ export class TagService {
     }
 
     // Method tag - skip for GraphQL (shown in Method column as GRAPHQL)
-    // Only add HTTP method tag for non-GraphQL requests
-    if (payload.method && !payload.path?.toLowerCase().includes('/graphql')) {
+    //
+    // Read from the flag the request watcher set, which decides by looking at
+    // the request — POST, a JSON content type, a `query` field holding GraphQL
+    // syntax — rather than from the path. The path is not the answer: an
+    // application serving GraphQL at `/api/gql` was tagged POST, and a REST
+    // route named `/graphql-docs` was not tagged at all. The storage layer has
+    // always used this flag; this is the last place that guessed.
+    if (payload.method && !payload.isGraphQL) {
       tags.push(payload.method.toUpperCase());
     }
 
@@ -127,7 +138,15 @@ export class TagService {
 
     // Custom tags from payload
     if (payload.tags && Array.isArray(payload.tags)) {
-      tags.push(...payload.tags.map((t) => t.toUpperCase()));
+      for (const tag of payload.tags) {
+        const upper = String(tag).toUpperCase();
+        // Deduplicated the way the GraphQL branch already does: a caller's
+        // `tags` may repeat what was derived above, and a list of tags should
+        // hold each one once.
+        if (!tags.includes(upper)) {
+          tags.push(upper);
+        }
+      }
     }
   }
 

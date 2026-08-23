@@ -140,4 +140,51 @@ describe('isNestLensRequest', () => {
   it('combines a global prefix with a custom path', () => {
     expect(isNestLensRequest('/api/dev/nestlens/requests', '/dev/nestlens', 'api')).toBe(true);
   });
+
+  /**
+   * The mount point was compared with `startsWith`, which does not know where a
+   * path segment ends. `/nestlens` prefixes `/nestlens-admin` too, so an
+   * application with a route of its own by that name had it silently left out of
+   * its own recording.
+   */
+  it('does not match a route that merely starts with the mount point', () => {
+    expect(isNestLensRequest('/nestlens-admin', undefined)).toBe(false);
+    expect(isNestLensRequest('/nestlensified/x', undefined)).toBe(false);
+    expect(isNestLensRequest('/__nestlens__-old', undefined)).toBe(false);
+  });
+
+  it('still matches the mount point itself and everything under it', () => {
+    expect(isNestLensRequest('/nestlens', undefined)).toBe(true);
+    expect(isNestLensRequest('/nestlens/', undefined)).toBe(true);
+    expect(isNestLensRequest('/nestlens/assets/index-Bu05f2IL.js', undefined)).toBe(true);
+  });
+
+  /**
+   * Mounted at the server root, NestLens has no path that identifies it — and
+   * `''` prefixes every string there is. Every request in the application
+   * therefore counted as NestLens's own traffic and the request and exception
+   * watchers recorded nothing at all: measured on a real application, one
+   * request to `/orders` produced zero entries.
+   *
+   * A root mount is the natural setting for `server`, where the dashboard has a
+   * listener to itself and no reason to sit under a path.
+   */
+  describe('mounted at the server root', () => {
+    it.each([['/'], ['']])('records the application under path %j', (path) => {
+      expect(isNestLensRequest('/orders', path)).toBe(false);
+      expect(isNestLensRequest('/', path)).toBe(false);
+    });
+
+    it('still knows its own API', () => {
+      expect(isNestLensRequest('/__nestlens__/api/entries', '/')).toBe(true);
+    });
+
+    it('does not claim the global prefix as its own path', () => {
+      // `path: '/'` with `setGlobalPrefix('api')` put the dashboard at `/api`,
+      // and reading that as a mount point hid every route the application
+      // serves under its prefix.
+      expect(isNestLensRequest('/api/orders', '/', 'api')).toBe(false);
+      expect(isNestLensRequest('/api/__nestlens__/api/entries', '/', 'api')).toBe(true);
+    });
+  });
 });

@@ -7,7 +7,7 @@
  * system: that the dashboard is *on* one address and *not on* another. Only a
  * connection can say that.
  */
-import { Controller, Get, INestApplication, Module } from '@nestjs/common';
+import { Controller, Get, INestApplication, Logger, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
@@ -134,6 +134,17 @@ describe('Dashboard on a listener of its own', () => {
       expect(routeExists(apiRoute.status, apiRoute.body)).toBe(false);
     });
 
+    it('does not serve the stream or the tag API on the application either', async () => {
+      // Four controllers make up NestLens's surface and the isolation is only
+      // as good as its least-remembered one. The three above are the ones a
+      // reader thinks of.
+      const stream = await request(app.getHttpServer()).get('/nestlens/__nestlens__/stream');
+      const tags = await request(app.getHttpServer()).get('/nestlens/__nestlens__/api/tags');
+
+      expect(routeExists(stream.status, stream.body)).toBe(false);
+      expect(routeExists(tags.status, tags.body)).toBe(false);
+    });
+
     it('leaves the application itself untouched', async () => {
       const response = await request(app.getHttpServer()).get('/demo');
 
@@ -221,20 +232,60 @@ describe('Dashboard on a listener of its own', () => {
     });
   });
 
+  /**
+   * A port already taken, or an address the host does not hold, is a
+   * deployment's condition rather than a mistake in its code. This used to end
+   * the application's startup over it — a debugging tool stopping a production
+   * deployment from booting, where `SqliteStorage` already refuses to cause
+   * that when its file will not open. Nothing is exposed by carrying on: with
+   * `server` configured the dashboard is not registered on the application at
+   * all.
+   */
   describe('when the address cannot be bound', () => {
-    it('fails the application startup instead of falling back', async () => {
-      // TEST-NET-3 (RFC 5737). Reserved for documentation, so no host holds it.
-      const app = await NestFactory.create(
-        appModuleFor({ server: { host: '203.0.113.9', port: 0 } }),
-        new ExpressAdapter(),
-        { logger: false, abortOnError: false },
-      );
+    // TEST-NET-3 (RFC 5737). Reserved for documentation, so no host holds it.
+    const unbindable = { host: '203.0.113.9', port: 0 };
 
-      await expect(app.listen(0, '127.0.0.1')).rejects.toThrow(
-        /could not bind its dashboard listener to 203\.0\.113\.9:0/,
-      );
+    let errors: string[];
+    let errorSpy: jest.SpyInstance;
+    let app: INestApplication;
 
-      await app.close();
+    beforeAll(async () => {
+      errors = [];
+      errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation((message: unknown) => void errors.push(String(message)));
+
+      app = await NestFactory.create(appModuleFor({ server: unbindable }), new ExpressAdapter(), {
+        logger: false,
+        abortOnError: false,
+      });
+
+      await app.listen(0, '127.0.0.1');
+    });
+
+    afterAll(async () => {
+      await app?.close();
+      errorSpy.mockRestore();
+    });
+
+    it('lets the application start', async () => {
+      const response = await fetch(`${await app.getUrl()}/demo`);
+
+      expect(response.status).toBe(200);
+    });
+
+    it('says which address it could not bind', () => {
+      expect(errors.join('\n')).toContain('203.0.113.9:0');
+    });
+
+    it('says the dashboard is not reachable at all', () => {
+      expect(errors.join('\n')).toContain('not reachable');
+    });
+
+    it('holds no listener', () => {
+      const server = app.get(NestLensDashboardServer);
+
+      expect(server.address()).toBeUndefined();
     });
   });
 

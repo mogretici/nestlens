@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
+import toast from 'react-hot-toast';
+import MonitoredTags from '../components/MonitoredTags';
 import { parseDate } from '../utils/date';
 import {
   Activity,
@@ -268,7 +270,7 @@ function StatCard({
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { stats, refreshStats } = useStats();
+  const { stats, error: statsError, refreshStats } = useStats();
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [pruningStatus, setPruningStatus] = useState<PruningStatus | null>(null);
   const [pruningRunning, setPruningRunning] = useState(false);
@@ -283,6 +285,7 @@ export default function DashboardPage() {
   const [activityEntries, setActivityEntries] = useState<Entry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
+  const [activityError, setActivityError] = useState<Error | null>(null);
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityHasMore, setActivityHasMore] = useState(false);
   const [activityOldestSeq, setActivityOldestSeq] = useState<number | null>(null);
@@ -313,18 +316,25 @@ export default function DashboardPage() {
     setPruningRunning(true);
     try {
       const result = await runPruning();
-      if (result.success) {
-        // Refresh data after pruning
-        const [storageRes, pruningRes] = await Promise.all([
-          getStorageStats(),
-          getPruningStatus(),
-        ]);
-        setStorageStats(storageRes.data);
-        setPruningStatus(pruningRes.data);
-        refreshStats();
-      }
+
+      const [storageRes, pruningRes] = await Promise.all([getStorageStats(), getPruningStatus()]);
+      setStorageStats(storageRes.data);
+      setPruningStatus(pruningRes.data);
+      refreshStats();
+
+      // Said out loud, because the usual outcome is that nothing was old
+      // enough to delete — and a button that changes nothing and says nothing
+      // reads as a button that did not work.
+      const deleted = result.data?.deleted ?? 0;
+      toast.success(
+        deleted === 0
+          ? 'Nothing was old enough to prune'
+          : `Pruned ${deleted.toLocaleString()} ${deleted === 1 ? 'entry' : 'entries'}`,
+      );
     } catch (error) {
-      console.error('Failed to run pruning:', error);
+      toast.error(
+        `Could not prune: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setPruningRunning(false);
     }
@@ -332,24 +342,39 @@ export default function DashboardPage() {
 
   // Fetch initial activities
   useEffect(() => {
+    // Same rule as everywhere else that fetches: a response that arrives after
+    // the effect has been torn down is answering a question nobody is asking
+    // any more.
+    let current = true;
+
     const fetchInitialActivities = async () => {
       setLoading(true);
       try {
         const response = await getEntriesWithCursor({ limit: ACTIVITY_PAGE_SIZE });
+        if (!current) return;
         setActivityEntries(response.data);
         setActivityTotal(response.meta.total);
         setActivityHasMore(response.meta.hasMore);
         setActivityOldestSeq(response.meta.oldestSequence);
         setActivityPage(1);
         setPageHistory([]);
+        setActivityError(null);
       } catch (error) {
-        console.error('Failed to fetch activities:', error);
+        if (!current) return;
+        // Kept, because the panel's empty state is a claim about the
+        // application — "No entries recorded yet" — and a list that could not
+        // be fetched is not an empty one.
+        setActivityError(error instanceof Error ? error : new Error('Failed to load activity'));
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
     fetchInitialActivities();
+
+    return () => {
+      current = false;
+    };
   }, []);
 
   // Pagination handlers
@@ -391,6 +416,44 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center h-64" role="status" aria-label="Loading...">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  /**
+   * Nothing is known, and saying so beats saying zero.
+   *
+   * Every number here falls back to `0` when `stats` is absent, and `stats` is
+   * absent whenever the API refuses or cannot be reached. A dashboard opened
+   * from an address the guard does not allow therefore reported: 0 entries
+   * recorded, 0 unresolved exceptions, 0 slow queries — an all-clear from a
+   * monitor that could not see anything, which is the worst thing this page
+   * can do. A refresh that fails later keeps the last numbers instead; those
+   * were true when they were fetched.
+   */
+  if (!stats && statsError) {
+    return (
+      <div
+        className="card flex flex-col items-center justify-center py-16 px-4"
+        role="alert"
+        data-testid="stats-error"
+      >
+        <div className="p-3 rounded-full bg-red-50 dark:bg-red-900/20 mb-4">
+          <AlertTriangle className="h-8 w-8 text-red-500 dark:text-red-400" />
+        </div>
+        <p className="text-base font-medium text-gray-900 dark:text-white">
+          Could not reach NestLens
+        </p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 text-center max-w-md">
+          {statsError.message}. Nothing on this page is known — it is not a
+          report of an idle application.
+        </p>
+        <button
+          onClick={() => void refreshStats()}
+          className="mt-5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -529,7 +592,19 @@ export default function DashboardPage() {
             {activityLoading && activityEntries.length > 0 && (
               <div className="absolute inset-0 bg-white/50 dark:bg-gray-800/50 z-10 pointer-events-none" />
             )}
-            {activityEntries.length === 0 && !activityLoading ? (
+            {activityEntries.length === 0 && activityError ? (
+              <div
+                className="p-8 text-center text-gray-500 dark:text-gray-400"
+                role="alert"
+                data-testid="activity-error"
+              >
+                <AlertTriangle className="h-7 w-7 mx-auto mb-2 text-red-500 dark:text-red-400" />
+                <p className="text-sm">Could not load recent activity</p>
+                <p className="mt-1 text-xs">
+                  {activityError.message}. This is not a report of an idle application.
+                </p>
+              </div>
+            ) : activityEntries.length === 0 && !activityLoading ? (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                 <Activity className="h-7 w-7 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No entries recorded yet</p>
@@ -652,7 +727,10 @@ export default function DashboardPage() {
                   <span className="text-sm">Retention</span>
                 </div>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {pruningStatus?.maxAge ?? 24}h
+                  {/* The window in force, or nothing: the default was printed
+                      as `24h` whenever the status could not be fetched, which
+                      is a guess about the deployment presented as its setting. */}
+                  {pruningStatus?.maxAge !== undefined ? `${pruningStatus.maxAge}h` : 'N/A'}
                 </span>
               </div>
 
@@ -680,6 +758,9 @@ export default function DashboardPage() {
                 </span>
               </div>
             </div>
+
+            {/* What pruning leaves alone */}
+            <MonitoredTags />
 
             {/* Prune Now Button */}
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">

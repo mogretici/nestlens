@@ -5,10 +5,18 @@
 
 BASE_URL="${1:-http://localhost:3000}"
 
+# Where NestLens is mounted. 0.6.0 moved the API under it — `/__nestlens__/api`
+# became `/nestlens/__nestlens__/api` — and the summary at the end of this
+# script kept asking for the old path. A 404 there is a JSON body like any
+# other, so `data.get(...)` found nothing and the run finished by printing a
+# table of zeros. It had been doing that for every release since.
+NESTLENS_PATH="${2:-/nestlens}"
+
 echo "========================================"
 echo "NestLens Test Data Generator"
 echo "========================================"
 echo "Base URL: $BASE_URL"
+echo "NestLens: $BASE_URL$NESTLENS_PATH"
 echo ""
 
 # Colors
@@ -393,10 +401,14 @@ echo "Done! Fetching stats..."
 echo "========================================"
 sleep 1
 
-curl -s "$BASE_URL/__nestlens__/api/stats" | python3 -c "
+curl -s "$BASE_URL$NESTLENS_PATH/__nestlens__/api/stats" | python3 -c "
 import json, sys
 try:
-    data = json.load(sys.stdin).get('data', {})
+    body = json.load(sys.stdin)
+    if 'data' not in body:
+        # An error body parses as JSON too. Saying so beats a table of zeros.
+        raise SystemExit(f'NestLens did not answer with stats: {body}')
+    data = body['data']
     by_type = data.get('byType', {})
     print(f'''
 Summary:
@@ -415,4 +427,4 @@ except Exception as e:
     print(f'Could not parse stats: {e}')
 "
 
-echo "Dashboard: $BASE_URL/nestlens"
+echo "Dashboard: $BASE_URL$NESTLENS_PATH"

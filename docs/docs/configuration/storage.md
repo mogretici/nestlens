@@ -38,20 +38,39 @@ NestLensModule.forRoot({
 NestLensModule.forRoot({
   storage: {
     driver: 'memory',
-    memory: {
-      maxEntries: 10000, // Default: 10000
-    },
+    maxEntries: 10000, // Default: 10000
   },
 })
 ```
 
-### MemoryStorageConfig
+### How many entries a store keeps
+
+`storage.maxEntries` applies to every driver, and the oldest go first when it
+is reached.
 
 ```typescript
-interface MemoryStorageConfig {
-  maxEntries?: number;  // Maximum entries to store (default: 10000)
-}
+NestLensModule.forRoot({
+  storage: {
+    driver: 'sqlite',
+    maxEntries: 50_000, // the ceiling, whichever driver is in use
+  },
+})
 ```
+
+:::caution Age alone is not a bound
+`pruning.maxAge` deletes what is old; it does not stop a store growing inside
+that window. At a thousand requests a second the default twenty-four hours is
+eighty-six million entries — enough to fill a disk, or a Redis instance, long
+before anything is old enough to be pruned. Leave `maxEntries` set unless
+something else bounds the store.
+
+`maxEntries: 0` turns the ceiling off and relies on age alone. It is a
+reasonable choice where the volume is known; it is a choice worth making
+deliberately.
+:::
+
+`storage.memory.maxEntries` still works and still means the same thing. Where
+both are given, the driver-specific one wins.
 
 ### When to Use
 

@@ -1,8 +1,17 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { WrappedMethods } from './wrap-method';
+import { capturePayload } from './capture-payload';
 
 /**
  * The TypeORM subscriber surface this watcher touches.
@@ -57,18 +66,13 @@ export const NESTLENS_MODEL_SUBSCRIBER = Symbol('NESTLENS_MODEL_SUBSCRIBER');
 /**
  * Sensitive field names that should be masked in data capture
  */
-const SENSITIVE_FIELDS = [
-  'password',
-  'passwordHash',
-  'secret',
-  'token',
-  'apiKey',
-  'accessToken',
-  'refreshToken',
-  'creditCard',
-  'ssn',
-  'privateKey',
-];
+/**
+ * How much of an entity is recorded when `captureData` is on.
+ *
+ * The same 64KB the request watcher gives a body: an ORM result can be a page
+ * of rows, and one that is too large is recorded as its size.
+ */
+const MAX_ENTITY_SIZE = 64 * 1024;
 
 /**
  * ModelWatcher tracks ORM operations (TypeORM and Prisma) including
@@ -76,13 +80,33 @@ const SENSITIVE_FIELDS = [
  * masking sensitive fields.
  */
 @Injectable()
-export class ModelWatcher implements OnModuleInit {
+export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
-  private operationTracking = new Map<
-    string,
-    { startTime: number; entity: string; action: string }
-  >();
+  private wrapped?: WrappedMethods;
+  /**
+   * When each operation in flight began, oldest first, per entity and action.
+   *
+   * It used to be a map keyed `insert-${entityName}-${Date.now()}`, and the
+   * completion looked its partner up with
+   * `Array.from(keys).find(k => k.startsWith(...))`. Two things followed, and
+   * the first is not a race — it is what an ordinary batch does:
+   *
+   * ```text
+   * ten inserts of one entity in the same millisecond
+   *   tracked   1     the key collided nine times
+   *   recorded  1     nine operations vanished
+   * ```
+   *
+   * The second: an operation whose completion never fires — a transaction that
+   * rolls back — left its entry behind for good, and every completion allocated
+   * an array of every key to search it.
+   *
+   * A queue per entity and action pairs them first-in-first-out, which is the
+   * right answer for operations that are interchangeable except for how long
+   * they took, and cannot collide however many are in flight.
+   */
+  private readonly pending = new Map<string, number[]>();
 
   constructor(
     private readonly collector: CollectorService,
@@ -94,6 +118,41 @@ export class ModelWatcher implements OnModuleInit {
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
     this.config = resolveWatcherConfig(watcherConfig);
+  }
+
+  /**
+   * How many un-finished operations of one kind are remembered.
+   *
+   * An operation that never completes — a rolled-back transaction — leaves its
+   * start behind, so the queue is bounded and drops the oldest rather than
+   * growing. Losing the oldest start costs one duration; not bounding it costs
+   * the process.
+   */
+  private static readonly MAX_PENDING = 1_000;
+
+  private beganAt(action: string, entityName: string): void {
+    const key = `${action}:${entityName}`;
+    const queue = this.pending.get(key) ?? [];
+
+    if (queue.length >= ModelWatcher.MAX_PENDING) {
+      queue.shift();
+    }
+
+    queue.push(Date.now());
+    this.pending.set(key, queue);
+  }
+
+  /** How long the oldest operation of this kind has been running, if any. */
+  private endedAfter(action: string, entityName: string): number | undefined {
+    const key = `${action}:${entityName}`;
+    const queue = this.pending.get(key);
+    const startedAt = queue?.shift();
+
+    if (queue?.length === 0) {
+      this.pending.delete(key);
+    }
+
+    return startedAt === undefined ? undefined : Date.now() - startedAt;
   }
 
   onModuleInit() {
@@ -121,81 +180,52 @@ export class ModelWatcher implements OnModuleInit {
     const subscriber = this.entitySubscriber as EntitySubscriberLike | undefined;
     if (!subscriber) return;
 
-    // Track entity loading (find operations)
-    if (typeof subscriber.afterLoad === 'function') {
-      const originalAfterLoad = subscriber.afterLoad.bind(subscriber);
-      subscriber.afterLoad = (entity: unknown, event: EntityEventLike) => {
-        this.handleAfterLoad(entity, event);
-        if (originalAfterLoad) {
-          originalAfterLoad(entity, event);
-        }
-      };
-    }
+    this.wrapped = new WrappedMethods(subscriber as unknown as Record<string, unknown>);
 
-    // Track entity insertion (create operations)
-    if (typeof subscriber.beforeInsert === 'function') {
-      const originalBeforeInsert = subscriber.beforeInsert.bind(subscriber);
-      subscriber.beforeInsert = (event: EntityEventLike) => {
-        this.handleBeforeInsert(event);
-        if (originalBeforeInsert) {
-          originalBeforeInsert(event);
-        }
-      };
-    }
+    // `afterLoad` is handed the entity as well; the rest take only the event.
+    const record: Record<string, (event: EntityEventLike, entity?: unknown) => void> = {
+      afterLoad: (event, entity) => this.handleAfterLoad(entity, event),
+      beforeInsert: (event) => this.handleBeforeInsert(event),
+      afterInsert: (event) => this.handleAfterInsert(event),
+      beforeUpdate: (event) => this.handleBeforeUpdate(event),
+      afterUpdate: (event) => this.handleAfterUpdate(event),
+      beforeRemove: (event) => this.handleBeforeRemove(event),
+      afterRemove: (event) => this.handleAfterRemove(event),
+    };
 
-    if (typeof subscriber.afterInsert === 'function') {
-      const originalAfterInsert = subscriber.afterInsert.bind(subscriber);
-      subscriber.afterInsert = (event: EntityEventLike) => {
-        this.handleAfterInsert(event);
-        if (originalAfterInsert) {
-          originalAfterInsert(event);
-        }
-      };
-    }
+    for (const [hook, note] of Object.entries(record)) {
+      this.wrapped.replace(hook, (original) => {
+        return (...args: unknown[]): unknown => {
+          // Recording first used to mean recording *instead*: an entry that
+          // could not be built threw out of the subscriber, and the
+          // application's own hook never ran. It is the application's hook.
+          try {
+            const event = (hook === 'afterLoad' ? args[1] : args[0]) as EntityEventLike;
+            note(event, args[0]);
+          } catch (error) {
+            this.logger.debug(`Failed to record a model event: ${error}`);
+          }
 
-    // Track entity updates
-    if (typeof subscriber.beforeUpdate === 'function') {
-      const originalBeforeUpdate = subscriber.beforeUpdate.bind(subscriber);
-      subscriber.beforeUpdate = (event: EntityEventLike) => {
-        this.handleBeforeUpdate(event);
-        if (originalBeforeUpdate) {
-          originalBeforeUpdate(event);
-        }
-      };
-    }
-
-    if (typeof subscriber.afterUpdate === 'function') {
-      const originalAfterUpdate = subscriber.afterUpdate.bind(subscriber);
-      subscriber.afterUpdate = (event: EntityEventLike) => {
-        this.handleAfterUpdate(event);
-        if (originalAfterUpdate) {
-          originalAfterUpdate(event);
-        }
-      };
-    }
-
-    // Track entity deletion
-    if (typeof subscriber.beforeRemove === 'function') {
-      const originalBeforeRemove = subscriber.beforeRemove.bind(subscriber);
-      subscriber.beforeRemove = (event: EntityEventLike) => {
-        this.handleBeforeRemove(event);
-        if (originalBeforeRemove) {
-          originalBeforeRemove(event);
-        }
-      };
-    }
-
-    if (typeof subscriber.afterRemove === 'function') {
-      const originalAfterRemove = subscriber.afterRemove.bind(subscriber);
-      subscriber.afterRemove = (event: EntityEventLike) => {
-        this.handleAfterRemove(event);
-        if (originalAfterRemove) {
-          originalAfterRemove(event);
-        }
-      };
+          return (original as (...a: unknown[]) => unknown)(...args);
+        };
+      });
     }
 
     this.logger.log('Model interceptors installed for TypeORM');
+  }
+
+  /**
+   * Puts the subscriber's hooks back.
+   *
+   * The subscriber belongs to the application and outlives this module, so
+   * without this the host goes on recording through a watcher whose collector
+   * is gone — and a process that builds the module more than once against the
+   * same subscriber, as tests and `nest start --hmr` do, wraps each round on
+   * top of the last.
+   */
+  onModuleDestroy(): void {
+    this.wrapped?.restore();
+    this.wrapped = undefined;
   }
 
   /**
@@ -229,7 +259,7 @@ export class ModelWatcher implements OnModuleInit {
           'prisma',
           duration,
           Array.isArray(result) ? result.length : result ? 1 : 0,
-          this.config.captureData ? this.maskSensitiveData(result) : undefined,
+          this.config.captureData ? this.captureEntity(result) : undefined,
           params.args?.where,
         );
 
@@ -273,29 +303,15 @@ export class ModelWatcher implements OnModuleInit {
   }
 
   private handleBeforeInsert(event: EntityEventLike): void {
-    const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = `insert-${entityName}-${Date.now()}`;
-
-    this.operationTracking.set(trackingKey, {
-      startTime: Date.now(),
-      entity: entityName,
-      action: 'create',
-    });
+    this.beganAt('insert', event?.metadata?.name || 'unknown');
   }
 
   private handleAfterInsert(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
-      key.startsWith(`insert-${entityName}`),
-    );
+    const duration = this.endedAfter('insert', entityName);
 
-    if (!trackingKey) return;
-
-    const tracking = this.operationTracking.get(trackingKey);
-    if (!tracking) return;
-
-    const duration = Date.now() - tracking.startTime;
-    this.operationTracking.delete(trackingKey);
+    // Nothing began: the watcher attached between the two halves.
+    if (duration === undefined) return;
 
     // Skip if entity should be ignored
     if (this.config.ignoreEntities?.includes(entityName)) {
@@ -308,34 +324,20 @@ export class ModelWatcher implements OnModuleInit {
       'typeorm',
       duration,
       1,
-      this.config.captureData ? this.maskSensitiveData(event.entity) : undefined,
+      this.config.captureData ? this.captureEntity(event.entity) : undefined,
     );
   }
 
   private handleBeforeUpdate(event: EntityEventLike): void {
-    const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = `update-${entityName}-${Date.now()}`;
-
-    this.operationTracking.set(trackingKey, {
-      startTime: Date.now(),
-      entity: entityName,
-      action: 'update',
-    });
+    this.beganAt('update', event?.metadata?.name || 'unknown');
   }
 
   private handleAfterUpdate(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
-      key.startsWith(`update-${entityName}`),
-    );
+    const duration = this.endedAfter('update', entityName);
 
-    if (!trackingKey) return;
-
-    const tracking = this.operationTracking.get(trackingKey);
-    if (!tracking) return;
-
-    const duration = Date.now() - tracking.startTime;
-    this.operationTracking.delete(trackingKey);
+    // Nothing began: the watcher attached between the two halves.
+    if (duration === undefined) return;
 
     // Skip if entity should be ignored
     if (this.config.ignoreEntities?.includes(entityName)) {
@@ -348,34 +350,20 @@ export class ModelWatcher implements OnModuleInit {
       'typeorm',
       duration,
       1,
-      this.config.captureData ? this.maskSensitiveData(event.entity) : undefined,
+      this.config.captureData ? this.captureEntity(event.entity) : undefined,
     );
   }
 
   private handleBeforeRemove(event: EntityEventLike): void {
-    const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = `remove-${entityName}-${Date.now()}`;
-
-    this.operationTracking.set(trackingKey, {
-      startTime: Date.now(),
-      entity: entityName,
-      action: 'delete',
-    });
+    this.beganAt('remove', event?.metadata?.name || 'unknown');
   }
 
   private handleAfterRemove(event: EntityEventLike): void {
     const entityName = event?.metadata?.name || 'unknown';
-    const trackingKey = Array.from(this.operationTracking.keys()).find((key) =>
-      key.startsWith(`remove-${entityName}`),
-    );
+    const duration = this.endedAfter('remove', entityName);
 
-    if (!trackingKey) return;
-
-    const tracking = this.operationTracking.get(trackingKey);
-    if (!tracking) return;
-
-    const duration = Date.now() - tracking.startTime;
-    this.operationTracking.delete(trackingKey);
+    // Nothing began: the watcher attached between the two halves.
+    if (duration === undefined) return;
 
     // Skip if entity should be ignored
     if (this.config.ignoreEntities?.includes(entityName)) {
@@ -432,44 +420,28 @@ export class ModelWatcher implements OnModuleInit {
   /**
    * Mask sensitive fields in entity data
    */
-  private maskSensitiveData(data: unknown): unknown {
-    if (!data || typeof data !== 'object') {
-      return data;
-    }
-
-    if (Array.isArray(data)) {
-      return data.map((item) => this.maskSensitiveData(item));
-    }
-
-    const masked: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (SENSITIVE_FIELDS.some((field) => key.toLowerCase().includes(field.toLowerCase()))) {
-        masked[key] = '***MASKED***';
-      } else if (typeof value === 'object' && value !== null) {
-        masked[key] = this.maskSensitiveData(value);
-      } else {
-        masked[key] = value;
-      }
-    }
-
-    return masked;
+  /**
+   * An entity as it is recorded.
+   *
+   * This used to walk the entity itself, masking by field name, with no bound
+   * on depth and no memory of where it had been — so an entity with a relation
+   * pointing back at its parent, which is what a bidirectional mapping is,
+   * ended in `RangeError: Maximum call stack size exceeded`. Thrown from
+   * inside TypeORM's subscriber, that reached the application's own `save()`:
+   * enabling `captureData` broke the query it was meant to describe.
+   *
+   * The collector masks every payload it is given — by the same field names,
+   * and with a cycle, a depth and a walk bound behind them — so this only has
+   * to decide how much of the entity is worth keeping.
+   */
+  private captureEntity(data: unknown): unknown {
+    return capturePayload(data, MAX_ENTITY_SIZE);
   }
 
   /**
    * Capture where conditions with size limits
    */
   private captureWhere(where: unknown): unknown {
-    if (!where) return undefined;
-
-    try {
-      const json = JSON.stringify(where);
-      const maxSize = 1024; // 1KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return where;
-    } catch {
-      return { _error: 'Unable to serialize where condition' };
-    }
+    return where ? capturePayload(where, 1024) : undefined;
   }
 }

@@ -6,6 +6,8 @@ import { Hexagon } from 'lucide-react';
 import EntrySearchInput from '../components/EntrySearchInput';
 import { usePaginatedEntries } from '../hooks/usePaginatedEntries';
 import { useEntryFilters, HeaderFilter } from '../hooks/useEntryFilters';
+import { useRangeFilters } from '../hooks/useRangeFilters';
+import RangeFilters from '../components/RangeFilters';
 import { NewEntriesButton, LoadMoreButton } from '../components/PaginationControls';
 import PageHeader from '../components/PageHeader';
 import DataTable, {
@@ -31,9 +33,10 @@ export default function GraphQLPage() {
   const {
     serverFilters: baseServerFilters,
     headerFilters: baseHeaderFilters,
-    hasFilters: baseHasFilters,
     addFilter,
   } = useEntryFilters('graphql');
+
+  const { rangeFilters, windowMinutes } = useRangeFilters();
 
   // Add boolean filters to server filters
   const serverFilters = {
@@ -68,7 +71,6 @@ export default function GraphQLPage() {
   }
 
   const headerFilters = [...baseHeaderFilters, ...booleanHeaderFilters];
-  const hasFilters = baseHasFilters || hasErrorsFilter || hasN1Filter;
 
   // Clear all including boolean filters
   const clearAll = () => {
@@ -100,6 +102,8 @@ export default function GraphQLPage() {
     entries: allEntries,
     loading,
     refreshing,
+    error,
+    refresh,
     newEntriesCount,
     hasMore,
     loadMore,
@@ -109,7 +113,12 @@ export default function GraphQLPage() {
     setAutoRefresh,
     meta,
     isHighlighted,
-  } = usePaginatedEntries<GraphQLEntry>({ type: 'graphql', limit: 50, filters: serverFilters });
+  } = usePaginatedEntries<GraphQLEntry>({
+    type: 'graphql',
+    limit: 50,
+    filters: { ...serverFilters, ...rangeFilters },
+    windowMinutes,
+  });
 
   // Type guard filter
   const entries = allEntries.filter((entry): entry is GraphQLEntry => isGraphQLEntry(entry));
@@ -213,7 +222,6 @@ export default function GraphQLPage() {
     );
   }
 
-  const headerPadding = hasFilters ? 'pt-28' : 'pt-16';
 
   return (
     <div>
@@ -228,10 +236,11 @@ export default function GraphQLPage() {
         live={live}
         onAutoRefreshToggle={setAutoRefresh}
         filters={headerFilters}
+        filterControls={<RangeFilters route="graphql" />}
         onClearAllFilters={clearAll}
       />
 
-      <div className={`${headerPadding} space-y-4 transition-all duration-200`}>
+      <div className="space-y-4">
         <EntrySearchInput placeholder="Search by operation, type, tag, or query content..." />
 
         <NewEntriesButton count={newEntriesCount} onClick={loadNew} loading={refreshing} />
@@ -243,6 +252,8 @@ export default function GraphQLPage() {
           onRowClick={(entry) => navigate(`/graphql/${entry.id}`)}
           rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No GraphQL operations recorded yet"
+          error={error}
+          onRetry={refresh}
           emptyIcon={<Hexagon className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
         />
 

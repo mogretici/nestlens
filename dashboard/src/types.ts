@@ -303,6 +303,8 @@ export interface GraphQLPayload {
   statusCode: number;
   hasErrors: boolean;
   errors?: GraphQLErrorInfo[];
+  /** How many errors the operation had, when more than were recorded */
+  errorCount?: number;
   responseData?: JsonValue;
   resolverCount?: number;
   fieldCount?: number;

@@ -5,7 +5,22 @@ title: API Reference
 
 # API Reference
 
-Complete API documentation for NestLens.
+Everything NestLens exports, with the examples that show how each piece is
+meant to be used.
+
+The exhaustive listing — every interface, every field, every default, straight
+from the source — is generated on each build and lives in the pages below this
+one. This page does not repeat it.
+
+:::info Where the types are
+[**NestLensConfig**](../api-reference/interfaces/NestLensConfig.md) is the whole
+configuration surface, and everything it names has a page of its own. Start
+there when you want a field list; start here when you want an example.
+
+This page used to carry hand-typed copies of those interfaces. They fell four
+config options, sixteen interfaces and the entire GraphQL watcher behind the
+code before anyone noticed, which is why they are gone.
+:::
 
 ## Core Exports
 
@@ -27,221 +42,25 @@ import { NestLensModule } from 'nestlens';
 export class AppModule {}
 ```
 
-### Configuration Interface
+Every option: [`NestLensConfig`](../api-reference/interfaces/NestLensConfig.md).
 
-```typescript
-interface NestLensConfig {
-  /** Enable or disable NestLens (default: true) */
-  enabled?: boolean;
+### Configuration at a glance
 
-  /** Dashboard path (default: '/nestlens') */
-  path?: string;
-
-  /** Watcher configurations */
-  watchers?: WatchersConfig;
-
-  /** Storage configuration */
-  storage?: StorageConfig;
-
-  /** Pruning configuration */
-  pruning?: PruningConfig;
-
-  /** Rate limiting configuration (set to false to disable) */
-  rateLimit?: RateLimitConfig | false;
-
-  /** Authorization configuration */
-  authorization?: AuthorizationConfig;
-
-  /** Webhook alerting configuration */
-  alerting?: AlertingConfig;
-
-  /** Single entry filter function */
-  filter?: (entry: Entry) => boolean | Promise<boolean>;
-
-  /** Batch entry filter function */
-  filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
-}
-```
-
-## Authorization Configuration
-
-```typescript
-interface AuthorizationConfig {
-  /** Allowed environments (default: ['development', 'local', 'test'])
-   *  Set to null to allow all environments */
-  allowedEnvironments?: string[] | null;
-
-  /** Environment variable to check (default: 'NODE_ENV') */
-  environmentVariable?: string;
-
-  /** Allowed IP addresses (supports wildcards like '192.168.1.*') */
-  allowedIps?: string[];
-
-  /** Custom access control function - can return boolean or AuthUser */
-  canAccess?: (req: Request) => boolean | AuthUser | Promise<boolean | AuthUser>;
-
-  /** Required roles for access (user must have ALL specified roles) */
-  requiredRoles?: string[];
-}
-
-interface AuthUser {
-  id: string | number;
-  email?: string;
-  name?: string;
-  roles?: string[];
-  [key: string]: unknown;  // Additional custom properties
-}
-```
-
-## Rate Limit Configuration
-
-```typescript
-interface RateLimitConfig {
-  /** Time window in milliseconds (default: 60000 = 1 minute) */
-  windowMs?: number;
-
-  /** Max requests per window per IP (default: 100) */
-  maxRequests?: number;
-}
-```
-
-## Storage Configuration
-
-```typescript
-interface StorageConfig {
-  /** Storage driver (default: 'memory') */
-  driver?: 'memory' | 'sqlite' | 'redis';
-
-  /** In-memory storage config */
-  memory?: {
-    maxEntries?: number;  // default: 10000
-  };
-
-  /** SQLite storage config (requires better-sqlite3) */
-  sqlite?: {
-    filename?: string;  // default: '.cache/nestlens.db'
-  };
-
-  /** Redis storage config (requires ioredis) */
-  redis?: {
-    host?: string;      // default: 'localhost'
-    port?: number;      // default: 6379
-    password?: string;
-    db?: number;        // default: 0
-    keyPrefix?: string; // default: 'nestlens:'
-    url?: string;       // overrides other options
-  };
-}
-```
-
-## Pruning Configuration
-
-```typescript
-interface PruningConfig {
-  /** Enable automatic pruning (default: true) */
-  enabled?: boolean;
-
-  /** Maximum age in hours (default: 24) */
-  maxAge?: number;
-
-  /** Pruning interval in minutes (default: 60) */
-  interval?: number;
-}
-```
-
-## Alerting Configuration
-
-```typescript
-interface AlertingConfig {
-  /** Enable webhook alerting (default: false) */
-  enabled?: boolean;
-
-  /** One or more webhook destinations */
-  webhooks?: AlertingWebhook[];
-
-  /** Per-delivery timeout in milliseconds (default: 5000) */
-  timeoutMs?: number;
-}
-
-interface AlertingWebhook {
-  /** Webhook URL to POST alerts to */
-  url: string;
-
-  /** Payload format (default: 'generic') */
-  type?: 'slack' | 'discord' | 'generic';
-
-  /** Entry types that trigger this webhook (default: ['exception']) */
-  events?: EntryType[];
-
-  /** Minimum milliseconds between alerts sharing a dedup key (default: 60000) */
-  throttleMs?: number;
-}
-```
-
-See [Alerting](/docs/configuration/alerting) for payload shapes and throttling
-behaviour.
-
-## Watchers Configuration
-
-```typescript
-interface WatchersConfig {
-  request?: boolean | RequestWatcherConfig;   // default: true
-  query?: boolean | QueryWatcherConfig;       // default: true
-  exception?: boolean | ExceptionWatcherConfig; // default: true
-  log?: boolean | LogWatcherConfig;           // default: true
-  cache?: boolean | CacheWatcherConfig;       // default: false
-  event?: boolean | EventWatcherConfig;       // default: false
-  job?: boolean | JobWatcherConfig;           // default: false
-  schedule?: boolean | ScheduleWatcherConfig; // default: false
-  mail?: boolean | MailWatcherConfig;         // default: false
-  httpClient?: boolean | HttpClientWatcherConfig; // default: false
-  redis?: boolean | RedisWatcherConfig;       // default: false
-  model?: boolean | ModelWatcherConfig;       // default: false
-  notification?: boolean | NotificationWatcherConfig; // default: false
-  view?: boolean | ViewWatcherConfig;         // default: false
-  command?: boolean | CommandWatcherConfig;   // default: false
-  gate?: boolean | GateWatcherConfig;         // default: false
-  batch?: boolean | BatchWatcherConfig;       // default: false
-  dump?: boolean | DumpWatcherConfig;         // default: false
-}
-```
-
-## Entry Types
-
-NestLens uses discriminated union types for entries:
-
-```typescript
-type EntryType =
-  | 'request'
-  | 'query'
-  | 'exception'
-  | 'log'
-  | 'cache'
-  | 'event'
-  | 'job'
-  | 'schedule'
-  | 'mail'
-  | 'http-client'
-  | 'redis'
-  | 'model'
-  | 'notification'
-  | 'view'
-  | 'command'
-  | 'gate'
-  | 'batch'
-  | 'dump';
-
-interface Entry {
-  id?: number;
-  type: EntryType;
-  payload: EntryPayload;  // Type-specific payload
-  requestId?: string;
-  createdAt?: string;
-  familyHash?: string;
-  tags?: string[];
-  resolvedAt?: string;
-}
-```
+| Option | What it does | Reference |
+| --- | --- | --- |
+| `enabled` | Turn NestLens off without removing it | [NestLensConfig](../api-reference/interfaces/NestLensConfig.md) |
+| `path` | Where the dashboard is mounted | [Basic configuration](/docs/configuration/basic-config) |
+| `trustProxy` | Honour `X-Forwarded-Prefix` behind a rewriting proxy | [NestLensConfig](../api-reference/interfaces/NestLensConfig.md) |
+| `sampling` | Record a fraction of traffic instead of all of it | [SamplingConfig](../api-reference/interfaces/SamplingConfig.md) |
+| `server` | Serve the dashboard on a listener of its own | [Network isolation](/docs/security/network-isolation) |
+| `watchers` | Which watchers run, and how each behaves | [Watchers overview](/docs/watchers/overview) |
+| `storage` | Where entries are kept | [Storage](/docs/configuration/storage) |
+| `pruning` | How long they are kept | [Pruning](/docs/configuration/pruning) |
+| `rateLimit` | Limit requests to the API | [Rate limiting](/docs/configuration/rate-limiting) |
+| `authorization` | Who may reach the dashboard | [Access control](/docs/security/access-control) |
+| `security` | Data masking and input validation | [Data masking](/docs/security/data-masking) |
+| `alerting` | POST entries to a webhook | [Alerting](/docs/configuration/alerting) |
+| `filter` / `filterBatch` | Decide what is worth recording | [Filtering entries](/docs/advanced/filtering-entries) |
 
 ## Services
 
@@ -286,6 +105,12 @@ export class MyService {
 }
 ```
 
+The payload is typed by the entry type you name, so the compiler tells you what
+each one needs: [`Entry`](../api-reference/type-aliases/Entry.md) is the union,
+and [`EntryType`](../api-reference/type-aliases/EntryType.md) lists the names.
+
+Full signature: [`CollectorService`](../api-reference/classes/CollectorService.md).
+
 ### NestLensLogger
 
 Custom logger that integrates with NestLens:
@@ -307,54 +132,27 @@ export class MyService {
 }
 ```
 
+Those five are the whole set — the levels Nest's own logger uses. There is no
+`info`; `log` is its equivalent.
+
 ### StorageInterface
 
-Implement custom storage backends:
+Implement a storage backend of your own and register it under the `STORAGE`
+token:
 
 ```typescript
 import { StorageInterface, Entry, STORAGE } from 'nestlens';
 
 @Injectable()
 export class CustomStorage implements StorageInterface {
-  // Basic CRUD
+  async initialize(): Promise<void> { /* ... */ }
   async save(entry: Entry): Promise<Entry> { /* ... */ }
   async saveBatch(entries: Entry[]): Promise<Entry[]> { /* ... */ }
-  async find(filter: EntryFilter): Promise<Entry[]> { /* ... */ }
-  async findById(id: number): Promise<Entry | null> { /* ... */ }
-  async findWithCursor(type: EntryType | undefined, params: CursorPaginationParams): Promise<CursorPaginatedResponse<Entry>> { /* ... */ }
 
-  // Counting & Sequence
-  async count(type?: EntryType): Promise<number> { /* ... */ }
-  async getLatestSequence(type?: EntryType): Promise<number | null> { /* ... */ }
-  async hasEntriesAfter(sequence: number, type?: EntryType): Promise<number> { /* ... */ }
-
-  // Statistics
-  async getStats(): Promise<EntryStats> { /* ... */ }
-  async getStorageStats(): Promise<StorageStats> { /* ... */ }
-
-  // Data Management
-  async prune(before: Date): Promise<number> { /* ... */ }
-  async pruneByType(type: EntryType, before: Date): Promise<number> { /* ... */ }
-  async clear(): Promise<void> { /* ... */ }
-  async close(): Promise<void> { /* ... */ }
-
-  // Tag Operations
-  async addTags(entryId: number, tags: string[]): Promise<void> { /* ... */ }
-  async removeTags(entryId: number, tags: string[]): Promise<void> { /* ... */ }
-  async getEntryTags(entryId: number): Promise<string[]> { /* ... */ }
-  async getAllTags(): Promise<TagWithCount[]> { /* ... */ }
-  async findByTags(tags: string[], logic?: 'AND' | 'OR', limit?: number): Promise<Entry[]> { /* ... */ }
-
-  // Resolution
-  async resolveEntry(id: number): Promise<void> { /* ... */ }
-  async unresolveEntry(id: number): Promise<void> { /* ... */ }
-
-  // Family Hash (Grouping)
-  async updateFamilyHash(id: number, familyHash: string): Promise<void> { /* ... */ }
-  async findByFamilyHash(familyHash: string, limit?: number): Promise<Entry[]> { /* ... */ }
+  // …and the rest of the interface. There are 28 methods in all; the compiler
+  // will name every one you have not written yet.
 }
 
-// Register custom storage
 @Module({
   providers: [
     {
@@ -363,13 +161,16 @@ export class CustomStorage implements StorageInterface {
     },
   ],
 })
+export class AppModule {}
 ```
+
+The complete list, with signatures:
+[`StorageInterface`](../api-reference/interfaces/StorageInterface.md). For a
+worked example, see [Extending storage](/docs/advanced/extending-storage).
 
 ## Injection Tokens
 
-### Exported Tokens
-
-These tokens are available for import:
+Every token a watcher asks you to provide is exported from the package root:
 
 ```typescript
 import {
@@ -377,150 +178,27 @@ import {
   NESTLENS_CONFIG,
   NESTLENS_EVENT_EMITTER,
   NESTLENS_REDIS_CLIENT,
-  NESTLENS_BULL_QUEUES,
   NESTLENS_MODEL_SUBSCRIBER,
   NESTLENS_NOTIFICATION_SERVICE,
   NESTLENS_VIEW_ENGINE,
-  REQUEST_ID_HEADER,  // 'x-nestlens-request-id'
+  NESTLENS_MAILER_SERVICE,
+  NESTLENS_HTTP_CLIENT,
+  NESTLENS_COMMAND_BUS,
+  NESTLENS_GATE_SERVICE,
+  NESTLENS_BATCH_PROCESSOR,
+  NESTLENS_DUMP_SERVICE,
+  REQUEST_ID_HEADER, // 'x-nestlens-request-id'
 } from 'nestlens';
 ```
 
-### Internal Tokens
-
-These tokens exist internally but are not exported. They are used by NestLens watchers:
-
-- `NESTLENS_COMMAND_BUS` - Command watcher
-- `NESTLENS_GATE_SERVICE` - Gate watcher
-- `NESTLENS_BATCH_PROCESSOR` - Batch watcher
-- `NESTLENS_DUMP_SERVICE` - Dump watcher
-- `NESTLENS_MAILER_SERVICE` - Mail watcher
-- `NESTLENS_HTTP_CLIENT` - HTTP Client watcher
-- `NESTLENS_SCHEDULER_REGISTRY` - Schedule watcher
-
-## Watcher-Specific Configurations
-
-### RequestWatcherConfig
-
-```typescript
-interface RequestWatcherConfig {
-  enabled?: boolean;
-  ignorePaths?: string[];
-  maxBodySize?: number;           // bytes, default: 64 * 1024 (64KB); 0 captures none
-  captureHeaders?: boolean;       // default: true
-  captureBody?: boolean;          // default: true
-  captureResponse?: boolean;      // default: true
-  captureUser?: boolean;          // default: true
-  captureSession?: boolean;       // default: true
-  captureResponseHeaders?: boolean; // default: true
-  captureControllerInfo?: boolean;  // default: true
-  tags?: (req: Request) => string[] | Promise<string[]>;
-}
-```
-
-### QueryWatcherConfig
-
-```typescript
-interface QueryWatcherConfig {
-  enabled?: boolean;
-  slowThreshold?: number;  // milliseconds, default: 100
-  ignorePatterns?: RegExp[];
-}
-```
-
-### ExceptionWatcherConfig
-
-```typescript
-interface ExceptionWatcherConfig {
-  enabled?: boolean;
-  ignoreExceptions?: string[];  // Exception class names to ignore
-}
-```
-
-### LogWatcherConfig
-
-```typescript
-interface LogWatcherConfig {
-  enabled?: boolean;
-  minLevel?: 'debug' | 'log' | 'warn' | 'error';
-}
-```
-
-### HttpClientWatcherConfig
-
-```typescript
-interface HttpClientWatcherConfig {
-  enabled?: boolean;
-  maxBodySize?: number;              // bytes, default: 64 * 1024; 0 captures none
-  captureRequestBody?: boolean;      // default: true
-  captureResponseBody?: boolean;     // default: true
-  ignoreHosts?: string[];
-  sensitiveHeaders?: string[];       // Added to defaults
-  sensitiveRequestParams?: string[]; // Fields to mask in request body
-  sensitiveResponseParams?: string[]; // Fields to mask in response body
-}
-```
-
-### RedisWatcherConfig
-
-```typescript
-interface RedisWatcherConfig {
-  enabled?: boolean;
-  ignoreCommands?: string[];
-  maxResultSize?: number;  // bytes, default: 1024; 0 captures none
-}
-```
-
-### ModelWatcherConfig
-
-```typescript
-interface ModelWatcherConfig {
-  enabled?: boolean;
-  ignoreEntities?: string[];
-  captureData?: boolean;  // default: false
-}
-```
-
-### JobWatcherConfig
-
-```typescript
-interface JobWatcherConfig {
-  enabled?: boolean;
-}
-```
-
-### CommandWatcherConfig
-
-```typescript
-interface CommandWatcherConfig {
-  enabled?: boolean;
-  capturePayload?: boolean;  // default: true
-  captureResult?: boolean;   // default: true
-  maxPayloadSize?: number;   // bytes, default: 64 * 1024; 0 captures none
-}
-```
-
-### GateWatcherConfig
-
-```typescript
-interface GateWatcherConfig {
-  enabled?: boolean;
-  captureContext?: boolean;  // default: true
-  ignoreAbilities?: string[];
-}
-```
-
-### BatchWatcherConfig
-
-```typescript
-interface BatchWatcherConfig {
-  enabled?: boolean;
-  trackMemory?: boolean;  // default: true
-}
-```
+Each watcher's page explains what to provide under its token. `NESTLENS_CONFIG`
+holds the resolved configuration and `NESTLENS_API_PREFIX` is the path segment
+the API sits behind; both are exported too. The generated reference lists every
+one under [Variables](../api-reference/variables/STORAGE.md).
 
 ## Internal Constants
 
-These values are used internally by NestLens and are not exported:
+Used internally, not exported:
 
 | Constant | Value | Description |
 |----------|-------|-------------|
@@ -529,19 +207,22 @@ These values are used internally by NestLens and are not exported:
 
 ### Default Sensitive Headers
 
-The following headers are automatically masked in captured data:
+Masked in captured data without any configuration:
 
 - `authorization`
 - `cookie`
 - `set-cookie`
 - `x-api-key`
 - `x-auth-token`
+- `x-access-token`
+- `x-refresh-token`
+- `x-csrf-token`
+- `proxy-authorization`
 
-You can add additional headers via `HttpClientWatcherConfig.sensitiveHeaders`.
+`sensitiveHeaders` adds to this list. To replace it instead, pass
+`{ replace: [...] }` — see [Data masking](/docs/security/data-masking).
 
 ## Full Documentation
-
-For detailed documentation on each watcher and feature, see:
 
 - [Getting Started](/docs/getting-started/installation)
 - [Configuration](/docs/configuration/basic-config)

@@ -1,10 +1,16 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { CollectorService } from '../core/collector.service';
 import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
-
-type DumpMethod = (options?: unknown) => Promise<unknown>;
+import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * Token for injecting dump/export/import service
@@ -17,10 +23,10 @@ export const NESTLENS_DUMP_SERVICE = Symbol('NESTLENS_DUMP_SERVICE');
  * record counts, file sizes, compression, and encryption status.
  */
 @Injectable()
-export class DumpWatcher implements OnModuleInit {
+export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DumpWatcher.name);
   private readonly config: DumpWatcherConfig;
-  private readonly dumpTracking = new Map<string, number>(); // dumpId -> startTime
+  private wrapped?: WrappedMethods;
 
   constructor(
     private readonly collector: CollectorService,
@@ -65,37 +71,38 @@ export class DumpWatcher implements OnModuleInit {
     this.logger.log('Dump interceptors installed');
   }
 
+  onModuleDestroy(): void {
+    this.wrapped?.restore();
+    this.wrapped = undefined;
+  }
+
   private wrapMethod(methodName: string): void {
-    // The service is user-supplied and its methods are looked up by name, so
-    // the shape is checked at runtime rather than declared.
-    const service: Record<string, unknown> | undefined = this.dumpService as
-      Record<string, unknown> | undefined;
-    if (!service) return;
-
-    const existing = service[methodName];
-
-    if (typeof existing !== 'function') {
-      return;
-    }
-
-    const originalMethod = (existing as DumpMethod).bind(service);
+    this.wrapped ??= new WrappedMethods(this.dumpService as Record<string, unknown>);
     const operation = this.getOperationType(methodName);
 
-    service[methodName] = async (options?: unknown): Promise<unknown> => {
-      const dumpId = `${methodName}-${Date.now()}`;
-      const startTime = Date.now();
+    this.wrapped.replace(methodName, (original) =>
+      wrapMethodPreservingShape(original, ({ args, result, error, durationMs }) => {
+        const [options] = args;
 
-      this.dumpTracking.set(dumpId, startTime);
+        if (error) {
+          const details = this.parseOptions(options);
+          this.collectEntry(
+            operation,
+            details.format,
+            details.source,
+            details.destination,
+            undefined,
+            undefined,
+            durationMs,
+            'failed',
+            details.compressed,
+            details.encrypted,
+            error instanceof Error ? error.message : String(error),
+          );
+          return;
+        }
 
-      try {
-        const result = await originalMethod(options);
-        const duration = Date.now() - startTime;
-        this.dumpTracking.delete(dumpId);
-
-        // Extract dump details from result
         const details = this.parseResult(result, options);
-
-        // Track dump completed
         this.collectEntry(
           operation,
           details.format,
@@ -103,39 +110,14 @@ export class DumpWatcher implements OnModuleInit {
           details.destination,
           details.recordCount,
           details.fileSize,
-          duration,
+          durationMs,
           'completed',
           details.compressed,
           details.encrypted,
           undefined,
         );
-
-        return result;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        this.dumpTracking.delete(dumpId);
-
-        // Extract dump details from options
-        const details = this.parseOptions(options);
-
-        // Track dump failed
-        this.collectEntry(
-          operation,
-          details.format,
-          details.source,
-          details.destination,
-          undefined,
-          undefined,
-          duration,
-          'failed',
-          details.compressed,
-          details.encrypted,
-          error instanceof Error ? error.message : String(error),
-        );
-
-        throw error; // Re-throw to maintain original behavior
-      }
-    };
+      }),
+    );
   }
 
   /**
