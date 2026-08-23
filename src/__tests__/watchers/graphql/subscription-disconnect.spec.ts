@@ -9,7 +9,7 @@
  * ```text
  * connect, subscribe, one message, disconnect
  *   recorded:  start, data          (no end, ever)
- *   buffered:  1 subscription's messages, kept for the life of the process
+ *   held:      1 subscription, kept for the life of the process
  * ```
  *
  * A client closing its socket — a page refresh, a tab closing, a network
@@ -39,11 +39,7 @@ const build = () => {
     } as never),
   );
 
-  return {
-    tracker,
-    recorded,
-    buffer: (tracker as unknown as { messageBuffer: Map<string, unknown[]> }).messageBuffer,
-  };
+  return { tracker, recorded };
 };
 
 const runOne = async (): Promise<ReturnType<typeof build>> => {
@@ -93,13 +89,13 @@ describe('a subscription whose connection drops', () => {
     expect(completed?.ip).toBe('127.0.0.1');
   });
 
-  it('leaves nothing buffered behind it', async () => {
-    const { tracker, buffer } = await runOne();
+  it('leaves nothing behind it', async () => {
+    const { tracker } = await runOne();
 
-    expect(buffer.size).toBe(1);
+    expect(tracker.getStats().totalSubscriptions).toBe(1);
     await tracker.handleDisconnection('c1');
 
-    expect(buffer.size).toBe(0);
+    expect(tracker.getStats().totalSubscriptions).toBe(0);
   });
 
   it('completes every subscription the connection held', async () => {
@@ -139,8 +135,8 @@ describe('a subscription whose connection drops', () => {
     expect(recorded.filter((entry) => entry.subscriptionEvent === 'error')).toHaveLength(1);
   });
 
-  it('leaves nothing buffered after a failure either', async () => {
-    const { tracker, buffer } = await runOne();
+  it('leaves nothing behind after a failure either', async () => {
+    const { tracker } = await runOne();
 
     await tracker.handleError({
       connectionId: 'c1',
@@ -149,7 +145,9 @@ describe('a subscription whose connection drops', () => {
       error: new Error('the stream broke'),
     } as never);
 
-    expect(buffer.size).toBe(0);
+    // The connection is still open; the subscription that failed is not.
+    expect(tracker.getStats().totalSubscriptions).toBe(0);
+    expect(tracker.getStats().totalConnections).toBe(1);
   });
 
   it('says nothing about a connection it never saw', async () => {

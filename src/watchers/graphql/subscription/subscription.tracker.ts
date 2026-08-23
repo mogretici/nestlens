@@ -69,7 +69,6 @@ export class SubscriptionTracker {
   private config: ResolvedSubscriptionConfig;
   private graphqlConfig: ResolvedGraphQLConfig;
   private collector: CollectorService;
-  private messageBuffer: Map<string, unknown[]> = new Map();
 
   /** Metrics for verification and debugging */
   private metrics: SubscriptionMetrics = {
@@ -294,22 +293,6 @@ export class SubscriptionTracker {
       return;
     }
 
-    // Buffer message data if capturing
-    if (this.config.captureMessageData && event.data) {
-      const bufferKey = `${event.connectionId}:${event.subscriptionId}`;
-      const buffer = this.messageBuffer.get(bufferKey) ?? [];
-      this.messageBuffer.set(bufferKey, buffer);
-      if (buffer.length < this.config.maxTrackedMessages) {
-        buffer.push(
-          sanitizeResponse(
-            event.data,
-            this.graphqlConfig.sensitiveVariables,
-            this.graphqlConfig.maxResponseSize,
-          ),
-        );
-      }
-    }
-
     // Collect data event
     const connection = this.connectionStore.getConnection(event.connectionId);
 
@@ -365,8 +348,6 @@ export class SubscriptionTracker {
     if (!subscription) {
       return;
     }
-
-    this.messageBuffer.delete(`${event.connectionId}:${event.subscriptionId}`);
 
     this.debugLog('Subscription error', {
       connectionId: event.connectionId,
@@ -450,10 +431,6 @@ export class SubscriptionTracker {
     };
 
     await this.collector.collect('graphql', payload, subscription.requestId);
-
-    // Clear message buffer
-    const bufferKey = `${event.connectionId}:${event.subscriptionId}`;
-    this.messageBuffer.delete(bufferKey);
   }
 
   /**
@@ -473,7 +450,6 @@ export class SubscriptionTracker {
    */
   clear(): void {
     this.connectionStore.clear();
-    this.messageBuffer.clear();
   }
 
   /**
