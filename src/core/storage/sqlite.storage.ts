@@ -95,6 +95,22 @@ const ISO_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
  * Paired with `ESCAPE '\\'` on every `LIKE` below. The backslash has to go
  * first, or it would escape the escapes.
  */
+/**
+ * The entries a monitored tag is keeping.
+ *
+ * Monitoring a tag is how a reader says *do not let these go*, which is what
+ * it means in Telescope and what nothing here did with it: the tag was stored,
+ * listed and counted, and pruning deleted its entries with the rest.
+ *
+ * Age is what it protects against. The store's `maxEntries` ceiling still
+ * applies — that is what bounds how large the file grows, and a monitored tag
+ * on a busy route would otherwise have no bound at all.
+ */
+const MONITORED_ENTRIES = `
+  SELECT t.entry_id FROM nestlens_tags t
+  WHERE t.tag IN (SELECT m.tag FROM nestlens_monitored_tags m)
+`;
+
 const escapeLike = (value: string): string =>
   value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 
@@ -697,13 +713,18 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
    * order, and the plan reads `SEARCH ... USING COVERING INDEX`.
    */
   async prune(before: Date): Promise<number> {
-    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE created_at < ?');
+    const stmt = this.db.prepare(
+      `DELETE FROM nestlens_entries WHERE created_at < ? AND id NOT IN (${MONITORED_ENTRIES})`,
+    );
     const result = stmt.run(before.toISOString());
     return result.changes;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
-    const stmt = this.db.prepare('DELETE FROM nestlens_entries WHERE type = ? AND created_at < ?');
+    const stmt = this.db.prepare(
+      `DELETE FROM nestlens_entries
+       WHERE type = ? AND created_at < ? AND id NOT IN (${MONITORED_ENTRIES})`,
+    );
     const result = stmt.run(type, before.toISOString());
     return result.changes;
   }

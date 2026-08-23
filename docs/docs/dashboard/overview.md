@@ -106,7 +106,7 @@ Click any entry to view comprehensive details including:
 - **ID** - Unique sequence number
 - **Created At** - Timestamp with millisecond precision
 - **Request ID** - Correlation ID for related entries
-- **Tags** - Custom and auto-generated tags
+- **Tags** - Custom and auto-generated tags, added and removed on the entry itself
 - **Family Hash** - Groups similar entries (exceptions, errors)
 
 ### Type-Specific Fields
@@ -116,6 +116,17 @@ Each entry type displays relevant payload data:
 - Exception stack traces
 - Job data and results
 - And much more
+
+## Keeping entries past their age
+
+The overview's retention card lists the **monitored tags**. An entry carrying
+one is not pruned, however old it is — monitoring a tag is how you say *do not
+let these go*. Add one there, or through
+`POST /__nestlens__/api/tags/monitored`, and remove it when the incident is
+closed.
+
+The store's `maxEntries` ceiling still applies; see
+[Pruning](../configuration/pruning.md#keeping-entries-monitored-tags).
 
 ## Browser Support
 

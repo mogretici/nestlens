@@ -1016,13 +1016,49 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     const client = this.getClient();
     const maxScore = before.getTime();
 
-    const ids = await client.zrangebyscore(this.key('entries', 'createdAt'), '-inf', maxScore);
+    const older = await client.zrangebyscore(this.key('entries', 'createdAt'), '-inf', maxScore);
+    if (older.length === 0) return 0;
+
+    const kept = await this.monitoredEntryIds();
+    const ids = older.filter((id) => !kept.has(id));
     if (ids.length === 0) return 0;
 
     await this.deleteEntries(ids);
 
     this.logger.log(`Pruned ${ids.length} entries older than ${before.toISOString()}`);
     return ids.length;
+  }
+
+  /**
+   * The entries a monitored tag is keeping.
+   *
+   * Monitoring a tag is how a reader says *do not let these go*, which is what
+   * it means in Telescope and what nothing here did with it: the tag was
+   * stored, listed and counted, and pruning deleted its entries with the rest.
+   *
+   * Age is what it protects against. The store's `maxEntries` ceiling still
+   * applies — that is what bounds how much of the instance NestLens takes, and
+   * a monitored tag on a busy route would otherwise have no bound at all.
+   */
+  private async monitoredEntryIds(): Promise<Set<string>> {
+    const client = this.getClient();
+    const monitored = await client.hkeys(this.key('monitored'));
+    const kept = new Set<string>();
+
+    if (monitored.length === 0) return kept;
+
+    const reader = client.pipeline();
+    for (const tag of monitored) {
+      reader.smembers(this.key('tags', 'index', normalizeTag(tag)));
+    }
+
+    for (const [error, ids] of (await reader.exec()) ?? []) {
+      if (error || !Array.isArray(ids)) continue;
+
+      for (const id of ids as string[]) kept.add(id);
+    }
+
+    return kept;
   }
 
   async pruneByType(type: EntryType, before: Date): Promise<number> {
@@ -1050,7 +1086,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       }
     }
 
-    const ids = olderThanCutoff.filter((_, index) => membership[index] !== null);
+    const kept = await this.monitoredEntryIds();
+    const ids = olderThanCutoff.filter((id, index) => membership[index] !== null && !kept.has(id));
 
     if (ids.length === 0) return 0;
 

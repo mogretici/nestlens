@@ -258,6 +258,32 @@ export async function runPruning(): Promise<{
 // ==================== Tag API Functions ====================
 
 /**
+ * The tags being monitored, with how many entries carry each.
+ *
+ * Monitoring a tag is how a reader says *do not let these go*: its entries are
+ * kept when pruning runs. The store's `maxEntries` ceiling still applies.
+ */
+export async function getMonitoredTags(): Promise<
+  ApiResponse<{ id: number; tag: string; createdAt: string; count: number }[]>
+> {
+  return fetchApi('/tags/monitored');
+}
+
+export async function addMonitoredTag(
+  tag: string,
+): Promise<{ success: boolean; data: { tag: string } }> {
+  return fetchApi('/tags/monitored', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  });
+}
+
+export async function removeMonitoredTag(tag: string): Promise<{ success: boolean }> {
+  return fetchApi(`/tags/monitored/${encodeURIComponent(tag)}`, { method: 'DELETE' });
+}
+
+/**
  * Add tags to an entry
  */
 export async function addTagsToEntry(

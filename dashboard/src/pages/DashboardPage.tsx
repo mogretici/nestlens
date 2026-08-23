@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
+import MonitoredTags from '../components/MonitoredTags';
 import { parseDate } from '../utils/date';
 import {
   Activity,
@@ -757,6 +758,9 @@ export default function DashboardPage() {
                 </span>
               </div>
             </div>
+
+            {/* What pruning leaves alone */}
+            <MonitoredTags />
 
             {/* Prune Now Button */}
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
