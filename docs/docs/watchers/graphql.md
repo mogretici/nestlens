@@ -64,6 +64,7 @@ NestLensModule.forRoot({
 | `server` | string | `'auto'` | GraphQL server type: 'apollo', 'mercurius', or 'auto' |
 | `maxQuerySize` | number | `8192` | Maximum query size to capture (bytes) |
 | `captureVariables` | boolean | `true` | Capture operation variables |
+| `maxVariablesSize` | number | `65536` | Maximum size of the recorded variables (bytes) |
 | `sensitiveVariables` | string[] \| `{ replace: string[] }` | `['password', 'token', ...]` | Variable names to mask, added to the defaults and to `security.dataMasking.sensitiveParams` |
 | `ignoreIntrospection` | boolean | `true` | Ignore introspection queries |
 | `ignoreOperations` | string[] | `[]` | Operation names to ignore |

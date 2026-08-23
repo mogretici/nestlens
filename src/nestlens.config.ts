@@ -279,6 +279,15 @@ export interface GraphQLWatcherConfig {
   /** Capture variables passed to operations. Default: true */
   captureVariables?: boolean;
   /**
+   * Maximum size of the recorded variables in bytes. Default: 65536 (64KB).
+   *
+   * The query is truncated at `maxQuerySize` and the response at
+   * `maxResponseSize`; the variables were bounded only in depth, so a single
+   * operation carrying a 100KB argument was stored whole — 101,228 bytes for
+   * one entry, repeatable on every request.
+   */
+  maxVariablesSize?: number;
+  /**
    * Variable and response field names to mask, added to the built-in list and
    * to whatever `security.dataMasking.sensitiveParams` names.
    *

@@ -141,6 +141,63 @@ describe('Mercurius, running', () => {
     return started.recorded.payloads[0];
   };
 
+  /**
+   * The query is truncated at `maxQuerySize` and the response at
+   * `maxResponseSize`. The variables were bounded only in depth, so one
+   * operation carrying a 100KB argument was stored whole — measured at
+   * 101,228 bytes for a single entry, on every request that carried one.
+   */
+  describe('the size of the variables it records', () => {
+    const huge = (): Record<string, unknown> => ({ name: 'v'.repeat(100_000) });
+
+    it('records the size instead of the value when it is too large', async () => {
+      const payload = await run('query Hello($name: String) { hello(name: $name) }', {}, huge());
+
+      expect(payload.variables).toEqual({ _truncated: true, _size: expect.any(Number) });
+    });
+
+    it('keeps the entry small', async () => {
+      const payload = await run('query Hello($name: String) { hello(name: $name) }', {}, huge());
+
+      expect(JSON.stringify(payload).length).toBeLessThan(10_000);
+    });
+
+    it('records ordinary variables as they were', async () => {
+      const payload = await run(
+        'query Hello($name: String) { hello(name: $name) }',
+        {},
+        {
+          name: 'ada',
+        },
+      );
+
+      expect(payload.variables).toEqual({ name: 'ada' });
+    });
+
+    it('still masks a sensitive variable', async () => {
+      const payload = await run(
+        'query Hello($name: String) { hello(name: $name) }',
+        {},
+        {
+          name: 'ada',
+          password: 'hunter2',
+        },
+      );
+
+      expect(JSON.stringify(payload.variables)).not.toContain('hunter2');
+    });
+
+    it('takes the limit from the configuration', async () => {
+      const payload = await run(
+        'query Hello($name: String) { hello(name: $name) }',
+        { maxVariablesSize: 10 },
+        { name: 'a-value-longer-than-ten-bytes' },
+      );
+
+      expect(payload.variables).toEqual({ _truncated: true, _size: expect.any(Number) });
+    });
+  });
+
   it('records a query', async () => {
     const payload = await run('query Hello { hello }');
 

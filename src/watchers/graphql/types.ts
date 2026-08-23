@@ -10,6 +10,7 @@ export interface ResolvedGraphQLConfig {
   server: 'apollo' | 'mercurius' | 'auto';
   maxQuerySize: number;
   captureVariables: boolean;
+  maxVariablesSize: number;
   sensitiveVariables: string[];
   captureHeaders: boolean;
   sensitiveHeaders: string[];
@@ -64,6 +65,7 @@ export const GRAPHQL_DEFAULTS = {
   server: 'auto' as const,
   maxQuerySize: 8192, // 8KB
   captureVariables: true,
+  maxVariablesSize: 64 * 1024, // 64KB, as for a response
   sensitiveVariables: [
     'password',
     'token',
@@ -181,6 +183,7 @@ export function resolveGraphQLConfig(
     trustProxy,
     server: config.server ?? GRAPHQL_DEFAULTS.server,
     maxQuerySize: config.maxQuerySize ?? GRAPHQL_DEFAULTS.maxQuerySize,
+    maxVariablesSize: config.maxVariablesSize ?? GRAPHQL_DEFAULTS.maxVariablesSize,
     captureVariables: config.captureVariables ?? GRAPHQL_DEFAULTS.captureVariables,
     sensitiveVariables: mergeSensitiveVariables(collectorTerms, config.sensitiveVariables),
     captureHeaders: config.captureHeaders ?? GRAPHQL_DEFAULTS.captureHeaders,

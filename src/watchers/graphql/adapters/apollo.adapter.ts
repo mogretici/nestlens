@@ -18,6 +18,7 @@ import { N1Detector } from '../utils/n1-detector';
 import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
+import { capturePayload } from '../../capture-payload';
 
 /**
  * Apollo Server Plugin interface (minimal type for our usage)
@@ -344,9 +345,15 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
             // N+1 detection
             const n1Warnings = n1Detector ? n1Detector.detect().warnings : [];
 
-            // Sanitize variables
+            // Sanitized, then bounded: the query is truncated at
+            // `maxQuerySize` and the response at `maxResponseSize`, and the
+            // variables were bounded only in depth — a 100KB argument was
+            // stored whole, on every request that carried one.
             const sanitizedVariables = adapter.config.captureVariables
-              ? sanitizeVariables(request.variables, adapter.config.sensitiveVariables)
+              ? (capturePayload(
+                  sanitizeVariables(request.variables, adapter.config.sensitiveVariables),
+                  adapter.config.maxVariablesSize,
+                ) as Record<string, unknown> | undefined)
               : undefined;
 
             // Sanitize response

@@ -50,6 +50,7 @@ const returnsSomethingFetchable = (info: ResolverFieldInfo): boolean => {
 import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer, FieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
+import { capturePayload } from '../../capture-payload';
 
 /**
  * Mercurius context type
@@ -320,9 +321,12 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         // N+1 detection
         const n1Warnings = tracking.n1Detector ? tracking.n1Detector.detect().warnings : [];
 
-        // Sanitize variables
+        // Sanitized, then bounded; see the Apollo adapter for why.
         const sanitizedVariables = adapter.config.captureVariables
-          ? sanitizeVariables(tracking.variables, adapter.config.sensitiveVariables)
+          ? (capturePayload(
+              sanitizeVariables(tracking.variables, adapter.config.sensitiveVariables),
+              adapter.config.maxVariablesSize,
+            ) as Record<string, unknown> | undefined)
           : undefined;
 
         // Truncate query
