@@ -6,10 +6,17 @@
 
 import { AddressableRequest, resolveClientIp } from '@/core/client-ip';
 import { CollectorService } from '@/core';
-import { GraphQLPayload } from '@/types';
+import { GraphQLPayload, MAX_RECORDED_ERRORS } from '@/types';
 import { ResolvedGraphQLConfig } from '../types';
 import { selectsIntrospection } from '../utils/query-parser';
 import { assignKey } from '../../../core/safe-assign';
+
+/** What an error from either server carries, of which four parts are read. */
+export interface GraphQLErrorLike {
+  message?: string;
+  path?: readonly (string | number)[];
+  originalError?: unknown;
+}
 
 /**
  * Callback for when an operation is collected
@@ -88,6 +95,73 @@ export abstract class BaseGraphQLAdapter {
     // Call the optional callback
     if (this.onCollect) {
       this.onCollect(payload, requestId);
+    }
+  }
+
+  /**
+   * Also records what a failed operation threw, as an exception.
+   *
+   * A failed HTTP request produces two entries — the `request` and the
+   * `exception` the handler threw — and a failed GraphQL operation produced
+   * only the operation. Everything downstream of "an exception happened" was
+   * therefore empty on a GraphQL API by construction, whatever the application
+   * did: the Exceptions page, `stats.unresolvedExceptions`, the resolve
+   * workflow, `sampling.always: ['exception']` (the default) and an alerting
+   * webhook on `events: ['exception']` (also the default).
+   *
+   * Reported by an application running this in production: 2,240 entries
+   * recorded, every one a health check, `exceptions: 0` — and eight
+   * deliberately broken queries produced four `graphql` entries with
+   * `hasErrors: true` while the exception count stayed at zero. Nothing warned;
+   * the configuration was the documented one.
+   *
+   * One entry per error, sharing the operation's request id so the two sit
+   * together on the detail page. `originalError` is what the resolver threw,
+   * so its name and stack are the useful ones; a validation error has no
+   * original and is recorded as what GraphQL reported.
+   */
+  protected async recordErrors(
+    errors: readonly GraphQLErrorLike[] | undefined,
+    operation: {
+      name?: string;
+      type?: string;
+      requestId: string;
+      /**
+       * What each field threw, by path, where the server does not carry it on
+       * the error. Mercurius formats its errors before any hook sees them.
+       */
+      thrown?: Map<string, unknown>;
+    },
+  ): Promise<void> {
+    if (!this.config.recordExceptions || !errors?.length) return;
+
+    for (const error of errors.slice(0, MAX_RECORDED_ERRORS)) {
+      const path = error.path?.length ? error.path.join('.') : undefined;
+      const original = error.originalError ?? (path ? operation.thrown?.get(path) : undefined);
+      const thrown = original instanceof Error ? original : undefined;
+
+      // Only what the application threw.
+      //
+      // A document that does not parse, or names a field the schema does not
+      // have, never reaches a resolver: nobody threw, and the caller made the
+      // mistake. Recording those as exceptions would put a stranger's typo on
+      // the Exceptions page — and, since an alerting webhook's default is
+      // `events: ['exception']`, would let anyone with curl page whoever is on
+      // call. They are on the operation entry either way, with its 400.
+      if (!thrown) continue;
+
+      await this.collector.collectImmediate(
+        'exception',
+        {
+          name: thrown.name,
+          message: error.message ?? thrown.message,
+          stack: thrown.stack,
+          // Where it happened, in the terms a GraphQL reader thinks in: the
+          // operation, and the field path the error carries.
+          context: ['GraphQL', operation.type, operation.name, path].filter(Boolean).join(' '),
+        },
+        operation.requestId,
+      );
     }
   }
 

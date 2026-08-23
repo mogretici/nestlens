@@ -16,6 +16,25 @@ The Exception Watcher captures unhandled exceptions and errors in your NestJS ap
 - Request information (method, URL, body)
 - Request correlation ID
 
+:::info Where GraphQL exceptions come from
+This watcher is an HTTP exception filter: it records what a controller threw.
+A resolver that throws is handled by the GraphQL server, never reaches it, and
+is recorded by the **GraphQL watcher** instead — which writes both the
+operation and an `exception` entry for what the resolver threw, sharing one
+request id. So `stats`, the Exceptions page, `sampling.always: ['exception']`
+and an alerting webhook on `events: ['exception']` all work on a GraphQL API,
+provided `watchers.graphql` is enabled.
+
+Two things are deliberately *not* recorded as exceptions: a document that does
+not parse and a field the schema does not have. Nobody threw — the caller made
+the mistake — and since an alerting webhook defaults to `events: ['exception']`,
+recording them would let anyone with curl page whoever is on call. They are on
+the operation entry with its 400.
+
+`watchers.graphql.recordExceptions: false` turns this off; the errors stay on
+the operation entry.
+:::
+
 ## Configuration
 
 ```typescript

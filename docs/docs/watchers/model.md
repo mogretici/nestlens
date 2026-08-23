@@ -83,24 +83,43 @@ export class AppModule {}
 
 ### Prisma Setup
 
+`setupPrismaClient()` returns the client to use, and on Prisma 6 and later that
+is a **different object** from the one passed in — see the note below. Keep the
+one it hands back:
+
 ```typescript
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { ModelWatcher } from 'nestlens';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
+export class PrismaService implements OnModuleInit {
+  client: PrismaClient;
+
   constructor(private modelWatcher: ModelWatcher) {
-    super();
+    this.client = new PrismaClient();
   }
 
   async onModuleInit() {
-    await this.$connect();
-    // Setup Prisma tracking
-    this.modelWatcher.setupPrismaClient(this);
+    await this.client.$connect();
+    // Recorded from here on; queries through the old client are not.
+    this.client = this.modelWatcher.setupPrismaClient(this.client);
   }
 }
 ```
+
+:::info Which Prisma API is used
+Prisma 5 and earlier have `$use`, the middleware API, which is installed into
+the client itself — there the returned client is the same object, and a service
+that extends `PrismaClient` works as before.
+
+Prisma removed `$use` in 6.0, and NestLens uses a
+[client extension](https://www.prisma.io/docs/orm/prisma-client/client-extensions)
+instead. Extensions do not modify the client: `$extends` returns a new one, and
+only queries made through *that* are recorded. This is why the example above
+holds the client in a field rather than extending `PrismaClient` — `this` cannot
+be replaced from inside its own method.
+:::
 
 ### Model Operations
 

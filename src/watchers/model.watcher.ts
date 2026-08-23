@@ -27,7 +27,7 @@ interface EntityEventLike {
 type LoadHook = (entity: unknown, event: EntityEventLike) => void;
 type EntityHook = (event: EntityEventLike) => void;
 
-/** The Prisma middleware surface this watcher touches. */
+/** The Prisma middleware surface, which Prisma 5 and earlier have. */
 interface PrismaMiddlewareParams {
   model?: string;
   action?: string;
@@ -36,15 +36,44 @@ interface PrismaMiddlewareParams {
 
 type PrismaNext = (params: PrismaMiddlewareParams) => Promise<unknown>;
 
-interface PrismaClientLike {
+interface PrismaWithMiddleware {
   $use: (
     middleware: (params: PrismaMiddlewareParams, next: PrismaNext) => Promise<unknown>,
   ) => void;
 }
 
-function isPrismaClient(value: unknown): value is PrismaClientLike {
+/**
+ * What a client extension is handed for one operation.
+ *
+ * Prisma removed `$use` in its 6.0 — the package does not carry it at all —
+ * and client extensions are the supported replacement. The shape is the same
+ * information under different names: `operation` for `action`, and `query` for
+ * `next`.
+ */
+interface PrismaOperation {
+  model?: string;
+  operation: string;
+  args?: { where?: unknown };
+  query: (args: unknown) => Promise<unknown>;
+}
+
+interface PrismaWithExtensions {
+  $extends: (extension: unknown) => unknown;
+}
+
+function hasMiddleware(value: unknown): value is PrismaWithMiddleware {
   return (
-    !!value && typeof value === 'object' && typeof (value as PrismaClientLike).$use === 'function'
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as PrismaWithMiddleware).$use === 'function'
+  );
+}
+
+function hasExtensions(value: unknown): value is PrismaWithExtensions {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    typeof (value as PrismaWithExtensions).$extends === 'function'
   );
 }
 
@@ -229,58 +258,116 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Setup Prisma client interceptors.
-   * Call this manually with your Prisma client instance.
+   * Records what a Prisma client runs, and hands back the client to use.
+   *
+   * Two integrations, because Prisma has had two. `$use` is the middleware API
+   * of Prisma 5 and earlier; Prisma removed it in 6.0 — the package does not
+   * carry it at all — and client extensions took its place. This watcher knew
+   * only the first, so on Prisma 6 and 7 the documented setup recorded nothing
+   * and said `Invalid Prisma client provided`, blaming a client that was
+   * perfectly valid.
+   *
+   * **Use the client this returns.** A middleware is installed into the client
+   * it was given, so there it is the same object; an extension is not — Prisma
+   * returns a new client with the extension applied, and queries run through
+   * the original are not recorded. Returning it either way makes one line
+   * correct on both:
+   *
+   * ```ts
+   * this.prisma = this.modelWatcher.setupPrismaClient(this.prisma);
+   * ```
    */
-  setupPrismaClient(prismaClient: unknown): void {
-    if (!isPrismaClient(prismaClient)) {
-      this.logger.warn('Invalid Prisma client provided');
-      return;
+  setupPrismaClient<T>(prismaClient: T): T {
+    if (hasMiddleware(prismaClient)) {
+      prismaClient.$use(async (params: PrismaMiddlewareParams, next: PrismaNext) =>
+        this.recordPrismaOperation(params.model, params.action ?? '', params.args, () =>
+          next(params),
+        ),
+      );
+
+      this.logger.log('Model interceptors installed for Prisma (middleware)');
+
+      return prismaClient;
     }
 
-    // Use Prisma middleware to track operations
-    prismaClient.$use(async (params: PrismaMiddlewareParams, next: PrismaNext) => {
-      const startTime = Date.now();
-      const entity = params.model || 'unknown';
-      const action = this.mapPrismaAction(params.action ?? '');
+    if (hasExtensions(prismaClient)) {
+      const watcher = this;
 
-      // Skip if entity should be ignored
-      if (this.config.ignoreEntities?.includes(entity)) {
-        return next(params);
-      }
+      const extended = prismaClient.$extends({
+        query: {
+          $allModels: {
+            async $allOperations({ model, operation, args, query }: PrismaOperation) {
+              return watcher.recordPrismaOperation(model, operation, args, () => query(args));
+            },
+          },
+        },
+      }) as T;
 
-      try {
-        const result = await next(params);
-        const duration = Date.now() - startTime;
+      this.logger.log('Model interceptors installed for Prisma (client extension)');
 
-        this.collectEntry(
-          action,
-          entity,
-          'prisma',
-          duration,
-          Array.isArray(result) ? result.length : result ? 1 : 0,
-          this.config.captureData ? this.captureEntity(result) : undefined,
-          params.args?.where,
-        );
+      return extended;
+    }
 
-        return result;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        this.collectEntry(
-          action,
-          entity,
-          'prisma',
-          duration,
-          0,
-          undefined,
-          params.args?.where,
-          error instanceof Error ? error.message : String(error),
-        );
-        throw error;
-      }
-    });
+    // Neither, which is not a Prisma client at all — the message says what was
+    // looked for rather than pronouncing on what was passed.
+    this.logger.warn(
+      'ModelWatcher: the object passed to setupPrismaClient() has neither `$use` (Prisma 5 and ' +
+        'earlier) nor `$extends` (Prisma 6 and later), so nothing is being recorded for it.',
+    );
 
-    this.logger.log('Model interceptors installed for Prisma');
+    return prismaClient;
+  }
+
+  /**
+   * One operation, timed and recorded, whichever integration reported it.
+   *
+   * The two APIs name the same things differently — `action`/`operation`,
+   * `next`/`query` — and everything after that is identical, so it lives here
+   * rather than twice.
+   */
+  private async recordPrismaOperation(
+    model: string | undefined,
+    operation: string,
+    args: { where?: unknown } | undefined,
+    run: () => Promise<unknown>,
+  ): Promise<unknown> {
+    const entity = model || 'unknown';
+
+    if (this.config.ignoreEntities?.includes(entity)) {
+      return run();
+    }
+
+    const action = this.mapPrismaAction(operation);
+    const startTime = Date.now();
+
+    try {
+      const result = await run();
+
+      this.collectEntry(
+        action,
+        entity,
+        'prisma',
+        Date.now() - startTime,
+        Array.isArray(result) ? result.length : result ? 1 : 0,
+        this.config.captureData ? this.captureEntity(result) : undefined,
+        args?.where,
+      );
+
+      return result;
+    } catch (error) {
+      this.collectEntry(
+        action,
+        entity,
+        'prisma',
+        Date.now() - startTime,
+        0,
+        undefined,
+        args?.where,
+        error instanceof Error ? error.message : String(error),
+      );
+
+      throw error;
+    }
   }
 
   private handleAfterLoad(entity: unknown, event: EntityEventLike): void {

@@ -43,7 +43,7 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
   private readonly maxEntries: number;
 
   constructor(config: MemoryStorageConfig = {}) {
-    this.maxEntries = config.maxEntries ?? 10000;
+    this.maxEntries = Math.max(0, config.maxEntries ?? 10000);
   }
 
   async initialize(): Promise<void> {
@@ -621,6 +621,13 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
    * cannot drift.
    */
   private enforceMaxEntries(): void {
+    // `0` is no ceiling, which is what the option documents and what the other
+    // two drivers do with it. Read as a limit it meant the opposite — the
+    // store evicted every entry as it arrived, so an application that asked to
+    // keep everything recorded nothing: 250 entries in, 0 kept, while SQLite
+    // kept all 250 from the same setting.
+    if (this.maxEntries <= 0) return;
+
     while (this.entries.size > this.maxEntries) {
       while (this.oldestId < this.nextId && !this.entries.has(this.oldestId)) {
         this.oldestId += 1;

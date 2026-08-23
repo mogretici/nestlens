@@ -392,6 +392,14 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
 
       // Collect the entry
       await adapter.collectEntry(payload, requestId);
+
+      // And what it threw, if anything: a failed operation is an exception the
+      // application had, and everything that reads exceptions was blind to it.
+      await adapter.recordErrors(responseErrors, {
+        name: operationName,
+        type: operationType,
+        requestId,
+      });
     };
 
     return {

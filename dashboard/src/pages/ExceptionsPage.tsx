@@ -13,7 +13,7 @@ import EntrySearchInput from '../components/EntrySearchInput';
 import DataTable, { Column, TextCell } from '../components/DataTable';
 import ClickableBadge from '../components/ClickableBadge';
 import { ExceptionEntry, isExceptionEntry } from '../types';
-import { resolveEntry, unresolveEntry } from '../api';
+import { EntryGoneError, resolveEntry, unresolveEntry } from '../api';
 import { useStats } from '../contexts/useStats';
 import toast from 'react-hot-toast';
 
@@ -99,6 +99,16 @@ export default function ExceptionsPage() {
         // Refresh stats to update sidebar badge count
         await refreshStats();
       } catch (error) {
+        // An entry that is gone is not a failure to retry: pruning deletes by
+        // age and the store evicts by size, so one can go while this page is
+        // open. Said plainly, and the row goes with it — clicking a row that
+        // is no longer there is the one thing worth preventing.
+        if (error instanceof EntryGoneError) {
+          toast(error.message);
+          await refresh();
+          return;
+        }
+
         // The circle stayed as it was and nothing said why, so the reader
         // clicks again — and again — against an API that is refusing.
         console.error('Failed to toggle resolution:', error);
@@ -107,7 +117,7 @@ export default function ExceptionsPage() {
         setResolvingId(null);
       }
     },
-    [updateEntry, refreshStats],
+    [updateEntry, refreshStats, refresh],
   );
 
   // Table columns definition

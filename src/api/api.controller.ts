@@ -295,23 +295,37 @@ export class NestLensApiController {
   // ==================== Resolution Endpoints ====================
 
   /**
-   * Mark an entry (exception) as resolved
+   * Mark an entry (exception) as resolved.
+   *
+   * An entry that is not there answers 404 rather than `success: true` with
+   * nothing attached. Both are reachable while a page is open — pruning
+   * deletes by age, the store evicts by size — and the dashboard applied what
+   * came back to the row it clicked, so `null` reached a list update and
+   * failed there instead, with a message about a property of null.
    */
   @Patch('entries/:id/resolve')
   async resolveEntry(@Param('id', ParseIntPipe) id: number, @Res() _res?: unknown) {
     await this.storage.resolveEntry(id);
-    const entry = await this.storage.findById(id);
-    return { success: true, data: entry };
+
+    return { success: true, data: this.entryOr404(await this.storage.findById(id), id) };
   }
 
   /**
-   * Mark an entry as unresolved
+   * Mark an entry as unresolved. See {@link resolveEntry} for the 404.
    */
   @Patch('entries/:id/unresolve')
   async unresolveEntry(@Param('id', ParseIntPipe) id: number, @Res() _res?: unknown) {
     await this.storage.unresolveEntry(id);
-    const entry = await this.storage.findById(id);
-    return { success: true, data: entry };
+
+    return { success: true, data: this.entryOr404(await this.storage.findById(id), id) };
+  }
+
+  private entryOr404(entry: Entry | null, id: number): Entry {
+    if (!entry) {
+      throw NestLensApiException.entryNotFound(id);
+    }
+
+    return entry;
   }
 
   // ==================== Recording Control Endpoints ====================

@@ -12,7 +12,9 @@ The GraphQL Watcher tracks all GraphQL operations (queries, mutations, and subsc
 - Operation name and query string
 - Variables (with sensitive value masking)
 - Response data (optional)
-- GraphQL errors
+- GraphQL errors — and, for what a resolver threw, an `exception` entry beside
+  the operation, so the Exceptions page, `stats`, `sampling.always` and alerting
+  work here as they do for HTTP (see `recordExceptions`)
 - Execution timing (parsing, validation, execution)
 - Field-level resolver traces (optional)
 - N+1 query detection
@@ -68,6 +70,7 @@ NestLensModule.forRoot({
 | `sensitiveVariables` | string[] \| `{ replace: string[] }` | `['password', 'token', ...]` | Variable names to mask, added to the defaults and to `security.dataMasking.sensitiveParams` |
 | `ignoreIntrospection` | boolean | `true` | Ignore introspection queries |
 | `ignoreOperations` | string[] | `[]` | Operation names to ignore |
+| `recordExceptions` | boolean | `true` | Also record what a resolver threw as an `exception` entry |
 | `traceFieldResolvers` | boolean | `false` | Enable field-level resolver tracing |
 | `traceSlowResolvers` | number | `undefined` | Only trace resolvers slower than this (ms) |
 | `resolverTracingSampleRate` | number | `0.1` | Sample rate for resolver tracing (0-1) |
