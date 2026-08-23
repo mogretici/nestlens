@@ -11,6 +11,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { DEFAULT_CONFIG } from '../../nestlens.config';
 import { GRAPHQL_DEFAULTS } from '../../watchers/graphql/types';
+import { DataMaskerService } from '../../core/data-masker.service';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const docsDir = join(REPO_ROOT, 'docs', 'docs');
@@ -176,6 +177,32 @@ describe('Documentation consistency with code', () => {
 
   describe('the limits of masking are documented', () => {
     const masking = () => readDoc('security/data-masking.md');
+
+    /**
+     * The overview promised *credit card numbers and personal data*. Card
+     * numbers are masked by name; an email address, a phone number and a date
+     * of birth are not — and a reader deploying this in production reads that
+     * line as a promise about their users' data.
+     */
+    it('does not claim to mask personal data in general', () => {
+      const masker = new DataMaskerService({});
+      const masked = masker.maskBody({
+        email: 'ada@example.com',
+        phone: '+44 7700 900000',
+        dateOfBirth: '1990-01-01',
+      }) as Record<string, string>;
+
+      // What the code does.
+      expect(masked.email).toBe('ada@example.com');
+      expect(masked.phone).toBe('+44 7700 900000');
+      expect(masked.dateOfBirth).toBe('1990-01-01');
+
+      // What the page says about it.
+      const page = readDoc(join('security', 'data-masking.md'));
+      expect(page).not.toMatch(/Credit card numbers and personal data/);
+      expect(page).toMatch(/What it does not protect/);
+      expect(page).toMatch(/sensitiveParams/);
+    });
 
     it('says what masking cannot reach', () => {
       // Anyone storing production traffic needs to know which watchers record

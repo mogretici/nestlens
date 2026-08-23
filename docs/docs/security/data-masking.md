@@ -11,9 +11,33 @@ NestLens automatically masks sensitive data to protect credentials, tokens, and 
 Data masking protects:
 - Authentication tokens and passwords
 - API keys and secrets
-- Credit card numbers and personal data
+- Card numbers, card verification codes and national identifiers
 - Session cookies and credentials
 - Database connection strings
+
+### What it does not protect
+
+Masking works by field name, and the names it knows are credentials and
+payment details. Everything else your application handles reaches storage as
+it was — including personal data that is not a credential:
+
+```json
+{ "email": "ada@example.com", "phone": "+44 7700 900000", "dateOfBirth": "1990-01-01" }
+```
+
+That is deliberate: a mail watcher that hid every recipient would have nothing
+to show, and the body you are debugging is usually the point. Where a field is
+sensitive in your domain, name it — `sensitiveParams` is read on every payload,
+and [Masking Only What You Name](#masking-only-what-you-name) narrows the list
+instead of extending it:
+
+```typescript
+security: {
+  dataMasking: {
+    sensitiveParams: ['email', 'phone', 'dateOfBirth', 'iban'],
+  },
+}
+```
 
 ## Automatic Masking
 
