@@ -39,10 +39,18 @@ import { serializePayload } from './serialize-payload';
  * - {prefix}family:{hash} - Set of entry IDs with this family hash
  */
 /**
- * Bumped when the meaning of an index score changes, so an existing database is
+ * Bumped when the meaning of an index changes, so an existing database is
  * rewritten once rather than read with the wrong assumption.
+ *
+ *   4  entries scored by id rather than by save time
+ *   5  the set of tag names `getAllTags` reads
+ *
+ * Five exists because four did not: the tag list moved from a counts hash to a
+ * set of names without a bump, so a store written by the version before it
+ * skipped the migration and answered with no tags at all — a dashboard whose
+ * tag filter was empty while every entry still carried its tags.
  */
-const INDEX_SCHEMA_VERSION = '4';
+const INDEX_SCHEMA_VERSION = '5';
 
 /**
  * How many ids one pipeline carries.
@@ -284,7 +292,41 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       this.logger.log(`Rescored ${rescored} entries onto the sequence index`);
     }
 
+    await this.rebuildTagNames();
+
     await client.set(schemaKey, INDEX_SCHEMA_VERSION);
+  }
+
+  /**
+   * Rebuilds the set of tag names from the indexes that already exist.
+   *
+   * A tag is in use when something has its index set, which is what the tag
+   * list is derived from; the set of names is only how they are enumerated
+   * without scanning the keyspace on every read.
+   */
+  private async rebuildTagNames(): Promise<void> {
+    const client = this.getClient();
+    const prefix = this.key('tags', 'index', '');
+    const names: string[] = [];
+    let cursor = '0';
+
+    do {
+      const [next, keys] = await client.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 500);
+      cursor = next;
+
+      for (const key of keys) {
+        const name = key.slice(prefix.length);
+        if (name.length > 0) names.push(name);
+      }
+    } while (cursor !== '0');
+
+    for (const chunk of inChunks(names)) {
+      await client.sadd(this.key('tags', 'names'), ...chunk);
+    }
+
+    if (names.length > 0) {
+      this.logger.log(`Rebuilt the tag list from ${names.length} tag(s) already stored`);
+    }
   }
 
   /** Reads the GraphQL flag out of a stored payload, which may be anything. */

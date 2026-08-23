@@ -174,6 +174,63 @@ describeWithRedis('migrating a Redis store onto the current indexes', () => {
     });
   });
 
+  /**
+   * The tag list moved from a counts hash to a set of names without the schema
+   * version being bumped, so a store written by 0.10.0 skipped the migration
+   * and answered with no tags at all — a dashboard whose tag filter was empty
+   * while every entry still carried its tags. Measured on a store seeded by
+   * the published 0.10.0 and read by this build: `getAllTags` returned 4 on
+   * the file driver and 0 on this one.
+   */
+  describe('a store whose tags were written before the tag list moved', () => {
+    beforeEach(async () => {
+      await removeEverything();
+      await writeOldEntry(10, 'request', '2026-08-01T10:00:00.000Z', {
+        method: 'GET',
+        path: '/a',
+        duration: 1,
+      });
+
+      // The layout 0.10.0 wrote: an index set per tag, a counts hash, a schema
+      // marked current, and no set of names.
+      await raw.sadd(key('tags', '10'), 'LEGACY', 'CHECKOUT');
+      await raw.sadd(key('tags', 'index', 'LEGACY'), '10');
+      await raw.sadd(key('tags', 'index', 'CHECKOUT'), '10');
+      await raw.hset(key('tags', 'counts'), 'LEGACY', 1, 'CHECKOUT', 1);
+      await raw.set(key('schema'), '4');
+    });
+
+    it('lists the tags that were already there', async () => {
+      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
+      await storage.initialize();
+
+      const tags = (await storage.getAllTags()).map((tag) => tag.tag).sort();
+      expect(tags).toEqual(['CHECKOUT', 'LEGACY']);
+    });
+
+    it('counts the entries behind each of them', async () => {
+      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
+      await storage.initialize();
+
+      const counts = (await storage.getAllTags()).map((tag) => `${tag.tag}:${tag.count}`).sort();
+      expect(counts).toEqual(['CHECKOUT:1', 'LEGACY:1']);
+    });
+
+    it('still finds the entries by tag', async () => {
+      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
+      await storage.initialize();
+
+      expect(await storage.findByTags(['LEGACY'])).toHaveLength(1);
+    });
+
+    it('marks the store as current afterwards', async () => {
+      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
+      await storage.initialize();
+
+      expect(await raw.get(key('schema'))).toBe('5');
+    });
+  });
+
   describe('what it does with what it cannot read', () => {
     it('skips an entry with no type rather than indexing a broken one', async () => {
       await removeEverything();
