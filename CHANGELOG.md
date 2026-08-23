@@ -1,3 +1,18 @@
+# [0.12.0](https://github.com/mogretici/nestlens/compare/v0.11.0...v0.12.0) (2026-08-23)
+
+
+### Bug Fixes
+
+* **api:** resolving an entry that is gone is not a success ([568a680](https://github.com/mogretici/nestlens/commit/568a680356b0e4008792e94f88357f8a7acca2aa))
+* **collector:** a batch filter that returns the wrong thing keeps the entries ([c4a6041](https://github.com/mogretici/nestlens/commit/c4a60413fef7454e5061fdb02ef39d317ceb73c5))
+* **storage:** the entry ceiling an application configures is the one it gets ([42dc4f7](https://github.com/mogretici/nestlens/commit/42dc4f7ae258ee265ae8e8d9e73d1ddadb988620))
+
+
+### Features
+
+* **graphql:** a failed operation is an exception, like a failed request ([ce69c7f](https://github.com/mogretici/nestlens/commit/ce69c7f9c5f4f5a20b08bd03ca736fe01ccad519))
+* **model:** record Prisma on the Prisma people are running ([8e1e13f](https://github.com/mogretici/nestlens/commit/8e1e13f771c0423de1f745762454cebe7922464e))
+
 # [0.11.0](https://github.com/mogretici/nestlens/compare/v0.10.1...v0.11.0) (2026-08-23)
 
 
