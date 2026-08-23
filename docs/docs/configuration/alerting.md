@@ -121,13 +121,20 @@ A dead webhook URL will not slow down or break your app.
 
 ## Choosing what to alert on
 
-`events` accepts any entry type. Useful combinations:
+`events` accepts any entry type, or the word `'failures'`:
 
 ```typescript
-events: ['exception']            // default — failures only
-events: ['exception', 'job']     // add failed background jobs
+events: 'failures'               // everything that went wrong, whatever its type
+events: ['exception']            // default — exceptions only
+events: ['exception', 'job']     // add background jobs, failed or not
 events: ['exception', 'query']   // noisy; pair with a filter
 ```
+
+`'failures'` is what a pager is usually for and takes a list plus an entry
+filter to say otherwise: exceptions, 5xx requests, failed operations, failed
+jobs, schedules, mail and notifications, and error logs. A 4xx is deliberately
+not among them — a malformed query is the caller's mistake, and a webhook
+anyone with curl can ring is a pager anyone with curl can ring.
 
 For finer control — say, only exceptions from a specific route — use the
 [entry filter](/docs/advanced/filtering-entries) to drop entries before they

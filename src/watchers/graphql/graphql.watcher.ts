@@ -122,8 +122,13 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
   private warnIfNothingWillBeRecorded(): void {
     if (this.config.recordExceptions) return;
 
-    const naming = (events: readonly string[] | undefined): boolean =>
-      !!events?.length && events.includes('exception') && !events.includes('graphql');
+    // `'failures'` names what it means whatever the entry type is, so it is
+    // never the blind configuration this warns about.
+    const naming = (events: readonly string[] | 'failures' | undefined): boolean =>
+      Array.isArray(events) &&
+      events.length > 0 &&
+      events.includes('exception') &&
+      !events.includes('graphql');
 
     const sampling = this.nestlensConfig.sampling;
     const blindSampling = sampling !== undefined && naming(sampling.always ?? ['exception']);

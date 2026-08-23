@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import { PATH_METADATA, VERSION_METADATA } from '@nestjs/common/constants';
 import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core';
+import { applyPreset } from './presets';
+import { startupSummary } from './startup-summary';
 import {
   DEFAULT_CONFIG,
   NestLensConfig,
@@ -437,7 +439,11 @@ export class NestLensModule implements NestModule, OnModuleInit {
     }
   }
 
-  private static mergeConfig(config: NestLensConfig): NestLensConfig {
+  private static mergeConfig(input: NestLensConfig): NestLensConfig {
+    // A preset is settings, not behaviour: it is folded in first so everything
+    // written here overrides it, exactly as a default would.
+    const config = applyPreset(input);
+
     return {
       ...DEFAULT_CONFIG,
       ...config,
@@ -457,6 +463,8 @@ export class NestLensModule implements NestModule, OnModuleInit {
   }
 
   async onModuleInit() {
-    NestLensModule.logger.log('NestLens initialized');
+    // What it is doing, not that it started: three of the four configuration
+    // mistakes an application reported are visible in this line.
+    NestLensModule.logger.log(startupSummary(this.config));
   }
 }

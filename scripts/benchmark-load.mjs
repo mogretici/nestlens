@@ -162,6 +162,11 @@ const CASES = [
     },
   ],
   ['request watcher only', { watchers: { query: false, log: false } }],
+  // The production stance the documentation recommends: nothing ordinary is
+  // kept, so this is what leaving NestLens on actually costs an application
+  // that is not failing. `entries` should be 0 here, and a case that records
+  // nothing has to be read together with that column.
+  ['preset: failures-only', { preset: 'failures-only' }],
 ];
 
 const rows = [];

@@ -1,25 +1,39 @@
 import { GraphQLEntry } from './graphql.types';
 
-export type EntryType =
-  | 'request'
-  | 'query'
-  | 'exception'
-  | 'log'
-  | 'cache'
-  | 'event'
-  | 'job'
-  | 'schedule'
-  | 'mail'
-  | 'http-client'
-  | 'redis'
-  | 'model'
-  | 'notification'
-  | 'view'
-  | 'command'
-  | 'gate'
-  | 'batch'
-  | 'dump'
-  | 'graphql';
+/**
+ * Every kind of entry there is, at runtime.
+ *
+ * Declared as a value rather than only as a union because code has to iterate
+ * it: the Redis driver's `getStats()` counted from a hand-written list of
+ * eighteen and `EntryType` had nineteen, so `graphql` entries were invisible to
+ * the dashboard's headline figures — measured on a deployment as
+ * `{ total: 0, byType: {} }` while the entries themselves were being recorded
+ * and listed correctly. The memory and SQLite drivers count from the data and
+ * could not drift; only the literal could.
+ */
+export const ENTRY_TYPES = [
+  'request',
+  'query',
+  'exception',
+  'log',
+  'cache',
+  'event',
+  'job',
+  'schedule',
+  'mail',
+  'http-client',
+  'redis',
+  'model',
+  'notification',
+  'view',
+  'command',
+  'gate',
+  'batch',
+  'dump',
+  'graphql',
+] as const;
+
+export type EntryType = (typeof ENTRY_TYPES)[number];
 
 export interface BaseEntry {
   id?: number;
