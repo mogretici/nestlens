@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Entry, MonitoredTag, TagWithCount } from '../types';
 import { STORAGE, StorageInterface } from './storage/storage.interface';
-import { boundTag, normalizeTag } from './storage/tag-normalization';
+import { MAX_TAGS_PER_ENTRY, boundTag, normalizeTag } from './storage/tag-normalization';
 
 /**
  * Service for managing tags and auto-tagging entries
@@ -84,7 +84,7 @@ export class TagService {
     // Bounded here rather than at each of the thirty pushes above: every one
     // of them can carry application data, and one place is one place to be
     // right. See `MAX_TAG_LENGTH`.
-    const bounded = tags.map(boundTag);
+    const bounded = tags.slice(0, MAX_TAGS_PER_ENTRY).map(boundTag);
 
     // Add tags to storage if entry has an ID
     if (entry.id && bounded.length > 0) {

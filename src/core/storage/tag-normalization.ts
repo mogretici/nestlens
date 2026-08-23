@@ -28,3 +28,17 @@ export const MAX_TAG_LENGTH = 100;
 /** A tag no longer than {@link MAX_TAG_LENGTH}. */
 export const boundTag = (tag: string): string =>
   tag.length <= MAX_TAG_LENGTH ? tag : `${tag.slice(0, MAX_TAG_LENGTH - 1)}…`;
+
+/**
+ * How many tags one entry may carry.
+ *
+ * The same hundred the API allows a reader to write, and the same hundred that
+ * bounds a filter's values. A `tags` callback is the application's own code —
+ * a loop that builds one tag per item would put a row per item in the tag
+ * index, on every request:
+ *
+ * ```text
+ * tags: () => items.map(…)   ->  5,002 tags on one entry
+ * ```
+ */
+export const MAX_TAGS_PER_ENTRY = 100;

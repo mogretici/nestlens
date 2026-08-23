@@ -13,7 +13,7 @@
  * stored per entry, indexed by tag in all three backends, and listed in the
  * dashboard's tag filter.
  */
-import { MAX_TAG_LENGTH } from '../../core/storage/tag-normalization';
+import { MAX_TAGS_PER_ENTRY, MAX_TAG_LENGTH } from '../../core/storage/tag-normalization';
 import { StorageInterface } from '../../core/storage/storage.interface';
 import { TagService } from '../../core/tag.service';
 import { Entry } from '../../types';
@@ -31,6 +31,62 @@ beforeEach(() => {
 
 const tag = async (entry: Partial<Entry>): Promise<string[]> =>
   service().autoTag({ id: 1, ...entry } as Entry);
+
+describe('how many tags one entry may carry', () => {
+  /**
+   * A `tags` callback is the application's own code, and a loop that builds
+   * one tag per item would put a row per item in the tag index, on every
+   * request: 5,002 tags on one entry, measured. The API allows a reader a
+   * hundred; this is the same hundred.
+   */
+  it('records no more than the API would accept', async () => {
+    const tags = await tag({
+      type: 'request',
+      payload: {
+        method: 'GET',
+        url: '/x',
+        path: '/x',
+        statusCode: 200,
+        duration: 1,
+        tags: Array.from({ length: 5_000 }, (_, i) => `tag${i}`),
+      },
+    } as Partial<Entry>);
+
+    expect(tags.length).toBeLessThanOrEqual(MAX_TAGS_PER_ENTRY);
+  });
+
+  it('writes no more than it returns', async () => {
+    await tag({
+      type: 'request',
+      payload: {
+        method: 'GET',
+        url: '/x',
+        path: '/x',
+        statusCode: 200,
+        duration: 1,
+        tags: Array.from({ length: 5_000 }, (_, i) => `tag${i}`),
+      },
+    } as Partial<Entry>);
+
+    expect(written.length).toBeLessThanOrEqual(MAX_TAGS_PER_ENTRY);
+  });
+
+  it('keeps an ordinary set of tags whole', async () => {
+    const tags = await tag({
+      type: 'request',
+      payload: {
+        method: 'GET',
+        url: '/x',
+        path: '/x',
+        statusCode: 200,
+        duration: 1,
+        tags: ['checkout'],
+      },
+    } as Partial<Entry>);
+
+    expect(tags).toEqual(expect.arrayContaining(['SUCCESS', 'GET', 'CHECKOUT']));
+  });
+});
 
 describe('the length of a tag NestLens writes', () => {
   const long = 'x'.repeat(5_000);
