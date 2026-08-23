@@ -172,7 +172,7 @@ export class SubscriptionTracker {
 
     this.metrics.totalDisconnections++;
 
-    const connection = this.connectionStore.removeConnection(connectionId);
+    const connection = this.connectionStore.getConnection(connectionId);
 
     if (!connection) {
       return;
@@ -183,14 +183,27 @@ export class SubscriptionTracker {
       activeSubscriptions: connection.activeSubscriptions.size,
     });
 
-    // Complete all active subscriptions
-    for (const subscription of connection.activeSubscriptions.values()) {
+    /*
+     * Completed while the connection is still in the store.
+     *
+     * It used to be removed first, and `handleComplete` begins by removing the
+     * subscription from that connection — which was no longer there, so it
+     * returned before recording anything. A client closing its socket is how a
+     * subscription ordinarily ends, so every one of them stayed open on the
+     * page forever, and the buffer holding its messages was never emptied.
+     *
+     * Iterated over a copy, because completing a subscription removes it from
+     * the map being walked.
+     */
+    for (const subscription of [...connection.activeSubscriptions.values()]) {
       await this.handleComplete({
         connectionId,
         subscriptionId: subscription.subscriptionId,
         event: 'complete',
       });
     }
+
+    this.connectionStore.removeConnection(connectionId);
   }
 
   /**
@@ -335,7 +348,16 @@ export class SubscriptionTracker {
 
     this.metrics.totalErrors++;
 
-    const subscription = this.connectionStore.getSubscription(
+    /*
+     * Taken out of the connection before anything is awaited.
+     *
+     * An error ends a subscription, and `handleComplete` removes it first for
+     * the same reason. Reading it here and removing it only after the entry
+     * had been written left it listed as active across an await — long enough
+     * for the disconnection that follows an error to find it and report a
+     * second ending for one stream.
+     */
+    const subscription = this.connectionStore.removeSubscription(
       event.connectionId,
       event.subscriptionId,
     );
@@ -343,6 +365,8 @@ export class SubscriptionTracker {
     if (!subscription) {
       return;
     }
+
+    this.messageBuffer.delete(`${event.connectionId}:${event.subscriptionId}`);
 
     this.debugLog('Subscription error', {
       connectionId: event.connectionId,
@@ -378,13 +402,6 @@ export class SubscriptionTracker {
 
     // Use immediate collection for errors
     await this.collector.collectImmediate('graphql', payload, subscription.requestId);
-
-    // Remove subscription
-    this.connectionStore.removeSubscription(event.connectionId, event.subscriptionId);
-
-    // Clear message buffer
-    const bufferKey = `${event.connectionId}:${event.subscriptionId}`;
-    this.messageBuffer.delete(bufferKey);
   }
 
   /**
