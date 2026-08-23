@@ -145,16 +145,34 @@ export const instrumentSubscriptions = (
 
       const source = original.apply(this, args);
 
+      /**
+       * The stream as it is, if watching it cannot be set up.
+       *
+       * Failing here would fail the client's subscription — the calls inside
+       * `track` are already kept away from the stream, and this is the setup
+       * around them: reading an address off a connection object the transport
+       * supplied, and asking the tracker to open one.
+       */
+      const watched = (iterable: AsyncIterable<unknown>): AsyncIterable<unknown> => {
+        try {
+          return track(iterable, context, info);
+        } catch (error) {
+          logger.debug(`Subscription tracking failed to start: ${error}`);
+
+          return iterable;
+        }
+      };
+
       // A `subscribe` may return a promise for the iterable, or the iterable,
       // or an error result the server turns into a response. Only the last of
       // those is not a subscription.
       if (isThenable(source)) {
         return source.then((resolved) =>
-          isAsyncIterable(resolved) ? track(resolved, context, info) : resolved,
+          isAsyncIterable(resolved) ? watched(resolved) : resolved,
         );
       }
 
-      return isAsyncIterable(source) ? track(source, context, info) : source;
+      return isAsyncIterable(source) ? watched(source) : source;
     };
   }
 

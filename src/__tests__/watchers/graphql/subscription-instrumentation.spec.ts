@@ -261,6 +261,36 @@ describe('instrumenting a schema', () => {
       ).resolves.toEqual(messages);
     });
 
+    /**
+     * The calls into the tracker were already kept away from the stream; the
+     * setup around them was not. It reads an address off whatever object the
+     * transport put on the context, and a context that answers differently —
+     * a getter that throws, a proxy — would have failed the client's
+     * subscription rather than gone unrecorded.
+     */
+    it('still subscribes when the tracking cannot be set up', async () => {
+      const { entries, collector } = recorder();
+      const messages = [{ a: 1 }, { a: 2 }];
+      const field: Field = { subscribe: () => yielding(messages) };
+      instrumentSubscriptions(schemaWith({ orderCreated: field }), trackerFor(collector));
+
+      const hostile = {
+        extra: {
+          get request(): never {
+            throw new Error('this context does not answer');
+          },
+        },
+      };
+
+      await expect(
+        drain(field.subscribe({}, {}, hostile, info('subscription { x }')) as never),
+      ).resolves.toEqual(messages);
+      await settle();
+
+      // Unrecorded is the cost; the subscription is not.
+      expect(entries).toHaveLength(0);
+    });
+
     it('passes through a subscribe that returns a promise', async () => {
       const { entries, collector } = recorder();
       const field: Field = { subscribe: async () => yielding([{ a: 1 }]) };
