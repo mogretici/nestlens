@@ -220,6 +220,7 @@ NestLensModule.forRoot({
     driver: 'redis',
     redis: {
       url: process.env.REDIS_URL,
+      db: 1, // a database of NestLens's own — see below
     },
   },
 })
@@ -248,10 +249,23 @@ interface RedisStorageConfig {
   password?: string;      // Redis password
   db?: number;            // Redis database number (default: 0)
   keyPrefix?: string;     // Key prefix (default: 'nestlens:')
-  url?: string;           // Connection URL (overrides host/port/password/db)
+  url?: string;           // Connection URL (overrides host/port/password)
   commandTimeout?: number; // Command timeout in ms (default: 5000)
 }
 ```
+
+:::caution Give NestLens a database of its own
+`REDIS_URL` usually points at the database the application already uses, and
+that is database 0. `keyPrefix` keeps the keys distinct; it does not keep them
+safe. A `FLUSHDB` meant for the cache takes the entries with it, and under an
+eviction policy such as `allkeys-lru` the entries and the application's own data
+compete for the same memory and evict each other — the debugging tool then
+shortens the history of the thing it is watching.
+
+`db` decides the database whether or not a `url` is given: NestLens puts it into
+the URL, which is the one place ioredis reads it from. Set both and they must
+agree, or the disagreement is reported at startup.
+:::
 
 ### Redis Key Structure
 

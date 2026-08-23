@@ -17,6 +17,7 @@ import { StorageInterface } from './storage.interface';
 import { normalizeTag } from './tag-normalization';
 import { RedisStorageConfig } from '../../nestlens.config';
 import { serializePayload } from './serialize-payload';
+import { withDatabase } from './redis-url';
 
 /**
  * Redis storage implementation for NestLens.
@@ -139,7 +140,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
       const commandTimeout = this.config.commandTimeout ?? 5000;
 
       const client = this.config.url
-        ? new RedisClient(this.config.url, { commandTimeout })
+        ? new RedisClient(withDatabase(this.config.url, this.config.db), { commandTimeout })
         : new RedisClient({
             host: this.config.host ?? 'localhost',
             port: this.config.port ?? 6379,

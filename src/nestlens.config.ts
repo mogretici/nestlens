@@ -432,11 +432,18 @@ export interface RedisStorageConfig {
   port?: number;
   /** Redis password */
   password?: string;
-  /** Redis database number. Default: 0 */
+  /**
+   * Redis database number. Default: 0.
+   *
+   * Decides the database whether or not `url` is given — it is written into the
+   * URL, which is the one place ioredis reads it from. Give NestLens one of its
+   * own: `keyPrefix` keeps the keys distinct from the application's, and a
+   * `FLUSHDB` or an `allkeys-lru` eviction policy does not care about prefixes.
+   */
   db?: number;
   /** Key prefix for all NestLens keys. Default: 'nestlens:' */
   keyPrefix?: string;
-  /** Redis connection URL (overrides host/port/password/db if provided) */
+  /** Redis connection URL (overrides host, port and password if provided) */
   url?: string;
   /** Command timeout in milliseconds. Default: 5000 */
   commandTimeout?: number;
