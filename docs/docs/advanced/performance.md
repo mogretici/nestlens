@@ -421,6 +421,35 @@ A normal flush is milliseconds, so the deadline only ever applies when storage
 is already failing — and entries it will not accept were not going to be kept
 either way.
 
+## The production stance, in one setting
+
+Recording only what failed takes five settings that are only correct together,
+and the ordering below is the part nobody guesses. `preset: 'failures-only'`
+is those settings:
+
+```typescript
+NestLensModule.forRoot({
+  preset: 'failures-only',
+  storage: { driver: 'redis', redis: { url: process.env.REDIS_URL, db: 1 } },
+})
+```
+
+It sets `sampling.rate: 0` with the failing types in `sampling.always`, a filter
+that narrows those types to their failures, and turns off GraphQL response
+capture and resolver tracing. Anything you write beside it wins — except
+`filter`, which composes: under a preset, a filter of your own means "the
+failures, and this too".
+
+Measured with `npm run benchmark:load`, 32 concurrent connections:
+
+| | GET /ping | POST /order (2.5 KB body) | RSS at rest |
+|---|---:|---:|---:|
+| without NestLens | 34,573 req/s | 17,937 req/s | 126 MB |
+| defaults | 21,242 req/s | 14,732 req/s | 308 MB |
+| `failures-only` | 24,475 req/s | 18,241 req/s | 182 MB |
+
+The rest of this section is what the preset is made of.
+
 ## Sampling
 
 NestLens records everything by default, which is the point of it. When that is

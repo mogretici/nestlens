@@ -5,6 +5,7 @@ import {
   StoredEntry,
   EntryFilter,
   EntryStats,
+  ENTRY_TYPES,
   EntryType,
   CursorPaginationParams,
   CursorPaginatedResponse,
@@ -869,29 +870,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   async getStats(): Promise<EntryStats> {
-    // Get counts by type
-    const types: EntryType[] = [
-      'request',
-      'query',
-      'exception',
-      'log',
-      'cache',
-      'event',
-      'job',
-      'schedule',
-      'mail',
-      'http-client',
-      'redis',
-      'model',
-      'notification',
-      'view',
-      'command',
-      'gate',
-      'batch',
-      'dump',
-    ];
-
-    const { byType, total } = await this.countByType(types);
+    // Every type there is, from the one list that defines them. Written out
+    // here, this fell one behind the union — `graphql` was missing, so those
+    // entries were invisible to stats however many the store held.
+    const { byType, total } = await this.countByType([...ENTRY_TYPES]);
 
     const [unresolvedExceptions, slowQueries, avgResponseTime] = await Promise.all([
       this.countUnresolvedExceptions(),
@@ -990,28 +972,9 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   async getStorageStats(): Promise<StorageStats> {
     const client = this.getClient();
 
-    const types: EntryType[] = [
-      'request',
-      'query',
-      'exception',
-      'log',
-      'cache',
-      'event',
-      'job',
-      'schedule',
-      'mail',
-      'http-client',
-      'redis',
-      'model',
-      'notification',
-      'view',
-      'command',
-      'gate',
-      'batch',
-      'dump',
-    ];
-
-    const { byType, total } = await this.countByType(types);
+    // The same one list, for the same reason: written out here, this was the
+    // second place `graphql` was missing from.
+    const { byType, total } = await this.countByType([...ENTRY_TYPES]);
 
     const [oldest, newest] = await client
       .pipeline()

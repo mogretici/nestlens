@@ -86,30 +86,26 @@ describe('the database a URL-configured store writes to', () => {
       const url = new URL(REDIS_URL as string);
       url.pathname = '/0';
 
-      const configured = new RedisStorage({
-        url: url.toString(),
-        db: 15,
-        keyPrefix: 'nestlens-db-test:',
-      });
+      const store = (db: number): RedisStorage =>
+        new RedisStorage({ url: url.toString(), db, keyPrefix: 'nestlens-db-test:' });
+
+      // The database the URL names, emptied first: what is being measured is
+      // where this write lands, not what an earlier run left behind.
+      const urlDatabase = store(0);
+      await urlDatabase.initialize();
+      await urlDatabase.clear();
+
+      const configured = store(15);
       await configured.initialize();
       await configured.clear();
       await configured.save(entry());
 
       expect(await configured.count()).toBe(1);
-
-      // The same prefix on the database the URL named holds nothing.
-      const elsewhere = new RedisStorage({
-        url: url.toString(),
-        db: 0,
-        keyPrefix: 'nestlens-db-test:',
-      });
-      await elsewhere.initialize();
-
-      expect(await elsewhere.count()).toBe(0);
+      expect(await urlDatabase.count()).toBe(0);
 
       await configured.clear();
       await configured.close();
-      await elsewhere.close();
+      await urlDatabase.close();
     });
   });
 });

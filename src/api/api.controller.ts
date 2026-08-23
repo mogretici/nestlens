@@ -351,11 +351,21 @@ export class NestLensApiController {
   }
 
   /**
-   * Get recording status
+   * Whether recording is on, and what it has been doing.
+   *
+   * The counts are here because "nothing was recorded" and "nothing happened"
+   * look identical on a dashboard: an application spent two days deciding
+   * which of the two it was looking at. Sampling and the filter each drop
+   * entries deliberately, and this says how many.
    */
   @Get('recording/status')
   async getRecordingStatus(@Res() _res?: unknown) {
-    const status = this.collectorService.getRecordingStatus();
-    return { data: status };
+    return {
+      data: {
+        ...this.collectorService.getRecordingStatus(),
+        counts: this.collectorService.getRecordingCounts(),
+        buffer: this.collectorService.getBufferSize(),
+      },
+    };
   }
 }

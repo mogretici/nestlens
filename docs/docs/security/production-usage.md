@@ -6,27 +6,76 @@ sidebar_position: 5
 
 Best practices and recommendations for using NestLens safely in production environments.
 
-## Should You Use NestLens in Production?
+## Running NestLens in production
 
-### Recommended Approach
+This page used to open by telling you not to. That was the right advice when
+the dashboard could only be mounted on the application's own server and the
+only setting was *record everything* — and it is no longer what the package is.
+A listener of its own, sampling, a failures-only preset, alerting, pruning,
+masking and stack-trace sanitisation exist for one deployment: production.
 
-**Disable NestLens in production by default:**
+### The shape that is safe
 
 ```typescript
 NestLensModule.forRoot({
-  enabled: process.env.NODE_ENV !== 'production',
+  preset: 'failures-only',
+  // A socket of its own on a private interface, not a path on your public one.
+  server: { host: process.env.NESTLENS_HOST, port: 3001 },
+  storage: {
+    driver: 'redis',
+    redis: { url: process.env.REDIS_URL, db: 1 },
+  },
+  alerting: {
+    enabled: true,
+    webhooks: [{ url: process.env.ALERT_WEBHOOK, type: 'slack', events: 'failures' }],
+  },
 })
 ```
 
-### When to Enable in Production
+Four things are doing the work:
 
-Consider enabling NestLens in production only if:
+- **`preset: 'failures-only'`** records nothing that went right. Everything
+  else on this page is about protecting data NestLens holds; this is about not
+  holding it.
+- **`server`** binds the dashboard to an address you choose. On a VPN address
+  or a container network it is not merely protected from the internet but
+  absent from it — see [Network isolation](./network-isolation.md).
+- **A database of NestLens's own** keeps its entries out of the keyspace your
+  application's cache lives in.
+- **`events: 'failures'`** says what a pager is for without a filter to write.
 
-1. **Debugging Critical Issues** - Temporary activation to debug production problems
-2. **Strict Security Controls** - Multiple layers of authentication and authorization
-3. **Limited Time Windows** - Enable only when needed, disable after investigation
-4. **Non-Sensitive Applications** - Internal tools without sensitive data
-5. **Isolated Environments** - Production-like staging environment
+### What it costs
+
+Measured with `npm run benchmark:load` — 32 concurrent connections, the server
+in a process of its own:
+
+| | GET /ping | POST /order (2.5 KB body) | RSS at rest |
+|---|---:|---:|---:|
+| without NestLens | 34,573 req/s | 17,937 req/s | 126 MB |
+| defaults (record everything) | 21,242 req/s | 14,732 req/s | 308 MB |
+| `preset: 'failures-only'` | 24,475 req/s | 18,241 req/s | 182 MB |
+
+`/ping` returns a constant and does nothing else, so it is the harshest case
+there is: the overhead is the whole of the request. On the endpoint that does
+some work the preset is within noise of not running NestLens at all, and it
+stores nothing while nothing is failing.
+
+Run the benchmark on your own hardware rather than trusting these figures on
+somebody else's.
+
+### When not to run it
+
+Narrowly, and it is still true:
+
+- **Mounted on the application's own server, recording everything, without
+  authorization.** Anything that reaches your application then reaches the
+  dashboard, and the dashboard holds request bodies and headers.
+- **Where the data may not leave the process at all.** Masking reduces what is
+  recorded; it does not make a store of request payloads into something else.
+- **Where you cannot give it an address of its own and cannot put an
+  authenticated proxy in front of it.**
+
+Everything below is how to hold to that.
 
 ## Secure Production Configuration
 
@@ -487,11 +536,18 @@ middleware: (req, res, next) => {
 
 ## Conclusion
 
-**The safest approach**: Don't use NestLens in production.
+**Run it the shape at the top of this page**: `failures-only`, a listener of its
+own on a private address, a database of its own, and alerting that names
+failures. That configuration records nothing while nothing is wrong and is
+within noise of not running it at all on an endpoint that does real work.
 
-**If you must**: Follow all security best practices, enable temporarily, and disable as soon as debugging is complete.
+**Do not run it mounted on your public server, recording everything, without
+authorization.** That is the case this page used to be about, and it is still a
+bad idea.
 
-**Better alternatives**: Use production-ready APM tools or enhanced logging for production monitoring.
+**Alongside, not instead of**: an APM tool answers "how is the system
+behaving"; NestLens answers "what exactly did this request do". Neither
+replaces the other.
 
 ## Next Steps
 

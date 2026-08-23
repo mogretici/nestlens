@@ -71,6 +71,13 @@ describe('NestLensApiController', () => {
       pause: jest.fn(),
       resume: jest.fn(),
       getRecordingStatus: jest.fn(),
+      getRecordingCounts: jest.fn().mockReturnValue({
+        recorded: 0,
+        droppedBySampling: 0,
+        droppedByFilter: 0,
+        droppedByBuffer: 0,
+      }),
+      getBufferSize: jest.fn().mockReturnValue({ pending: 0, capacity: 1000, dropped: 0 }),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -1092,7 +1099,10 @@ describe('NestLensApiController', () => {
       const result = await controller.getRecordingStatus();
 
       expect(mockCollectorService.getRecordingStatus).toHaveBeenCalled();
-      expect(result).toEqual({ data: status });
+      // The counts sit beside the status: "nothing was recorded" and "nothing
+      // happened" look identical without them.
+      expect(result.data).toMatchObject(status);
+      expect(result.data.counts).toMatchObject({ recorded: 0, droppedBySampling: 0 });
     });
 
     it('should return paused status with details', async () => {
@@ -1105,7 +1115,7 @@ describe('NestLensApiController', () => {
 
       const result = await controller.getRecordingStatus();
 
-      expect(result.data).toEqual(status);
+      expect(result.data).toMatchObject(status);
     });
   });
 

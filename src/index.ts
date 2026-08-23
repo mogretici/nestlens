@@ -1,4 +1,6 @@
 // Main module
+export type { NestLensPreset } from './presets';
+
 export { NestLensModule } from './nestlens.module';
 
 // Config
@@ -40,6 +42,7 @@ export {
   // Alerting
   AlertingConfig,
   AlertingWebhook,
+  AlertingEvents,
   AlertingWebhookType,
   // Storage config
   StorageConfig,

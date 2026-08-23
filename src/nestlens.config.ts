@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { Entry, EntryType } from './types';
 import { MaskingTerms } from './core/masking-terms';
+import type { NestLensPreset } from './presets';
 
 /**
  * Payload format for an alerting webhook.
@@ -11,6 +12,18 @@ import { MaskingTerms } from './core/masking-terms';
 export type AlertingWebhookType = 'slack' | 'discord' | 'generic';
 
 /**
+ * What a webhook is told about.
+ *
+ * A list of entry types, or `'failures'` — which is what most destinations are
+ * for and takes a list plus an entry filter to say otherwise: exceptions, 5xx
+ * requests, failed operations, failed jobs, schedules, mail and notifications,
+ * and error logs. A 4xx is deliberately not among them: a malformed query is
+ * the caller's mistake, and a webhook anyone with curl can ring is a pager
+ * anyone with curl can ring.
+ */
+export type AlertingEvents = EntryType[] | 'failures';
+
+/**
  * A single alerting destination.
  */
 export interface AlertingWebhook {
@@ -18,8 +31,11 @@ export interface AlertingWebhook {
   url: string;
   /** Payload format. Default: 'generic'. */
   type?: AlertingWebhookType;
-  /** Entry types that trigger this webhook. Default: ['exception']. */
-  events?: EntryType[];
+  /**
+   * What triggers this webhook: entry types, or `'failures'` for everything
+   * that went wrong. Default: `['exception']`.
+   */
+  events?: AlertingEvents;
   /** Minimum milliseconds between alerts sharing the same dedup key. Default: 60000. */
   throttleMs?: number;
 }
@@ -494,10 +510,26 @@ export interface StorageConfig {
   memory?: MemoryStorageConfig;
 }
 
+/**
+ * When old entries are deleted, and how often that is checked.
+ *
+ * The two are in different units, which is worth saying out loud because they
+ * sit next to each other: `pruning: { maxAge: 14 * 24, interval: 60 }` is a
+ * fortnight checked hourly, and a reader who took both for hours would have
+ * written an application that prunes every sixty *days*. Reported by someone
+ * who found the units by reading `pruning.service.ts`.
+ *
+ * They are kept as they are — an age is naturally hours and a check interval
+ * naturally minutes — and both are named in the line NestLens prints at
+ * startup, with their units.
+ */
 export interface PruningConfig {
-  enabled?: boolean; // default: true
-  maxAge?: number; // hours, default: 24
-  interval?: number; // minutes, default: 60
+  /** Default: true. */
+  enabled?: boolean;
+  /** How old an entry may get, **in hours**. Default: 24. */
+  maxAge?: number;
+  /** How often pruning runs, **in minutes**. Default: 60. */
+  interval?: number;
 }
 
 /**
@@ -588,6 +620,30 @@ export interface NestLensConfig {
   // General
   enabled?: boolean;
   path?: string; // default: '/nestlens'
+
+  /**
+   * A configuration for a job people keep writing out themselves.
+   *
+   * `'failures-only'` is the production stance: record nothing ordinary, keep
+   * the failures whole, and stop paying for payload capture nothing will keep.
+   * It sets `sampling.rate: 0` with the failing types in `sampling.always`, a
+   * filter that narrows those types to their failures, and turns off GraphQL
+   * response capture and resolver tracing.
+   *
+   * Everything the application writes wins over it, except `filter`, which
+   * composes: under a preset, a filter of your own means "the failures, and
+   * this too".
+   *
+   * ```ts
+   * NestLensModule.forRoot({
+   *   preset: 'failures-only',
+   *   server: { host: '0.0.0.0', port: 3001 },
+   *   storage: { driver: 'redis', redis: { url: process.env.REDIS_URL, db: 1 } },
+   *   alerting: { webhooks: [{ url: process.env.ALERT_WEBHOOK, type: 'slack' }] },
+   * })
+   * ```
+   */
+  preset?: NestLensPreset;
 
   /**
    * Trust the `X-Forwarded-Prefix` header when building the dashboard's asset
@@ -692,6 +748,7 @@ export interface NestLensConfig {
 export const DEFAULT_CONFIG: Required<
   Omit<
     NestLensConfig,
+    | 'preset'
     | 'authorization'
     | 'filter'
     | 'filterBatch'
@@ -709,6 +766,7 @@ export const DEFAULT_CONFIG: Required<
   security?: SecurityConfig;
   server?: DashboardServerConfig;
   sampling?: SamplingConfig;
+  preset?: NestLensPreset;
 } = {
   enabled: true,
   path: '/nestlens',

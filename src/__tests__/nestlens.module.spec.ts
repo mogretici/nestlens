@@ -661,7 +661,7 @@ describe('NestLensModule', () => {
       await module.onModuleInit();
 
       // Assert
-      expect(logSpy).toHaveBeenCalledWith('NestLens initialized');
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('recording everything'));
 
       // Cleanup
       logSpy.mockRestore();

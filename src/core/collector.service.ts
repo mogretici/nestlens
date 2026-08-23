@@ -45,6 +45,10 @@ export class CollectorService implements OnModuleDestroy {
    */
   private storageIsFailing = false;
   private droppedEntries = 0;
+  /** Counted where they are decided; read by `getRecordingCounts`. */
+  private recordedEntries = 0;
+  private droppedBySampling = 0;
+  private droppedByFilter = 0;
   private isPaused = false;
   private pausedAt?: Date;
   private pauseReason?: string;
@@ -160,6 +164,28 @@ export class CollectorService implements OnModuleDestroy {
   }
 
   /**
+   * What was recorded, and what was dropped on the way in.
+   *
+   * "Nothing was recorded" and "nothing happened" look identical on the
+   * dashboard, and an application spent two days deciding which of the two it
+   * was looking at. Sampling and the filter each drop entries deliberately;
+   * saying how many turns that question into a glance.
+   */
+  getRecordingCounts(): {
+    recorded: number;
+    droppedBySampling: number;
+    droppedByFilter: number;
+    droppedByBuffer: number;
+  } {
+    return {
+      recorded: this.recordedEntries,
+      droppedBySampling: this.droppedBySampling,
+      droppedByFilter: this.droppedByFilter,
+      droppedByBuffer: this.droppedEntries,
+    };
+  }
+
+  /**
    * Collect an entry
    * Uses discriminated union pattern - the type parameter determines the expected payload type
    */
@@ -190,6 +216,7 @@ export class CollectorService implements OnModuleDestroy {
     } as Extract<Entry, { type: T }>;
 
     if (this.sampler && !this.sampler.shouldRecord(entry)) {
+      this.droppedBySampling += 1;
       return;
     }
 
@@ -198,6 +225,7 @@ export class CollectorService implements OnModuleDestroy {
     // there stored, streamed and posted to webhooks — is masked.
     const shouldCollect = await this.applyFilter(entry);
     if (!shouldCollect) {
+      this.droppedByFilter += 1;
       return;
     }
 
@@ -211,6 +239,7 @@ export class CollectorService implements OnModuleDestroy {
       return;
     }
 
+    this.recordedEntries += 1;
     this.enforceBufferLimit();
 
     // Flush if buffer is full — unless storage is already failing, in which
@@ -243,17 +272,20 @@ export class CollectorService implements OnModuleDestroy {
     } as Extract<Entry, { type: T }>;
 
     if (this.sampler && !this.sampler.shouldRecord(entry)) {
+      this.droppedBySampling += 1;
       return null;
     }
 
     // Apply filter
     const shouldCollect = await this.applyFilter(entry);
     if (!shouldCollect) {
+      this.droppedByFilter += 1;
       return null;
     }
 
     try {
       const savedEntry = await this.storage.save(this.mask(entry));
+      this.recordedEntries += 1;
 
       // Apply auto-tagging and family hash after saving
       await this.applyAutoTagging(savedEntry);

@@ -9,6 +9,7 @@ import {
 import { Subscription } from 'rxjs';
 import {
   AlertingConfig,
+  AlertingEvents,
   AlertingWebhook,
   NestLensConfig,
   NESTLENS_CONFIG,
@@ -39,6 +40,44 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
  * expire, and a cap alone would evict live keys under load.
  */
 const MAX_THROTTLE_KEYS = 5_000;
+
+/**
+ * Whether a webhook is for this entry.
+ *
+ * `events` is a list of types, and the thing people actually want to be told
+ * about is *failures* — which needs a list per type plus an entry filter that
+ * knows the shape of each payload. An application reported reaching that at a
+ * hundred lines of configuration. `'failures'` says it directly.
+ *
+ * A 4xx is not a failure here: a malformed query or a bad request is the
+ * caller's mistake, and a webhook anyone with curl can ring is a pager anyone
+ * with curl can ring.
+ */
+const announces = (events: AlertingEvents, entry: Entry): boolean => {
+  if (events === 'failures') return isFailure(entry);
+
+  return events.includes(entry.type);
+};
+
+const isFailure = (entry: Entry): boolean => {
+  switch (entry.type) {
+    case 'exception':
+      return true;
+    case 'graphql':
+      return entry.payload.hasErrors === true && (entry.payload.statusCode ?? 500) >= 500;
+    case 'request':
+      return (entry.payload.statusCode ?? 0) >= 500;
+    case 'job':
+    case 'schedule':
+    case 'mail':
+    case 'notification':
+      return entry.payload.status === 'failed';
+    case 'log':
+      return entry.payload.level === 'error';
+    default:
+      return false;
+  }
+};
 
 /** Concise, safe summary of an entry used to build webhook payloads. */
 interface AlertSummary {
@@ -98,7 +137,7 @@ export class AlertingService implements OnModuleInit, OnModuleDestroy {
     const webhooks = this.config?.webhooks ?? [];
     await Promise.all(
       webhooks
-        .filter((webhook) => (webhook.events ?? DEFAULT_EVENTS).includes(entry.type))
+        .filter((webhook) => announces(webhook.events ?? DEFAULT_EVENTS, entry))
         .filter((webhook) => !this.isThrottled(webhook, entry))
         .map((webhook) => this.send(webhook, entry)),
     );
