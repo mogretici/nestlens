@@ -24,6 +24,7 @@ import { ApolloAdapter } from '../../../watchers/graphql/adapters/apollo.adapter
 import { createMercuriusAdapter } from '../../../watchers/graphql/adapters/mercurius.adapter';
 import { forgetReported } from '../../../watchers/graphql/never-breaks-the-response';
 import { resolveGraphQLConfig } from '../../../watchers/graphql/types';
+import { describeMercurius } from '../../support/mercurius-pairing';
 
 const SCHEMA = `type Query { hello: String! }`;
 const RESOLVERS = { Query: { hello: (): string => 'world' } };
@@ -57,7 +58,7 @@ describe('a watcher that fails while recording', () => {
     warnSpy.mockRestore();
   });
 
-  describe('on Mercurius', () => {
+  describeMercurius('on Mercurius', () => {
     let app: FastifyInstance;
 
     beforeEach(async () => {

@@ -19,6 +19,7 @@ import { NestLensModule } from '../../nestlens.module';
 import { STORAGE, StorageInterface } from '../../core/storage/storage.interface';
 import { GraphQLWatcher } from '../../watchers/graphql/graphql.watcher';
 import { Entry } from '../../types';
+import { describeMercurius } from '../support/mercurius-pairing';
 
 const SCHEMA = `
   type Product { name: String! }
@@ -77,7 +78,7 @@ const RESOLVERS = {
 })
 class MercuriusApp {}
 
-describe('Mercurius with nothing wired by hand', () => {
+describeMercurius('Mercurius with nothing wired by hand', () => {
   jest.setTimeout(60_000);
 
   let app: NestFastifyApplication;

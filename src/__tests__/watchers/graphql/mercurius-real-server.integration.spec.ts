@@ -25,6 +25,7 @@ import { createMercuriusAdapter } from '../../../watchers/graphql/adapters/mercu
 import { resolveGraphQLConfig } from '../../../watchers/graphql/types';
 import { GraphQLWatcherConfig } from '../../../nestlens.config';
 import { GraphQLPayload } from '../../../types';
+import { describeMercurius } from '../../support/mercurius-pairing';
 
 const SCHEMA = `
   type Order {
@@ -115,7 +116,7 @@ const ask = (
     })
     .then((response) => ({ statusCode: response.statusCode, body: response.body }));
 
-describe('Mercurius, running', () => {
+describeMercurius('Mercurius, running', () => {
   jest.setTimeout(30_000);
 
   let app: FastifyInstance | undefined;

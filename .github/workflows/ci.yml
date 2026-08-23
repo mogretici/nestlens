@@ -139,12 +139,23 @@ jobs:
           # Companion packages have their own peer ranges, so each NestJS
           # version is paired with the release an application on that version
           # would actually install.
+          #
+          # Mercurius is here for the same reason and a sharper one: NestJS 9
+          # and 10 bring Fastify 4, and Mercurius has needed Fastify 5 since
+          # its 15.0.0. The repository's own dependency is 16, so on those rows
+          # the GraphQL suites met `expected '5.x' fastify version, '4.28.1' is
+          # installed` and six of the nine jobs failed on a pairing no
+          # application would ever have. 14 is the last release that runs on
+          # Fastify 4, which is what an application on NestJS 9 or 10 installs.
           - nestjs: 9
             schedule: 3
+            mercurius: 14
           - nestjs: 10
             schedule: 4
+            mercurius: 14
           - nestjs: 11
             schedule: 6
+            mercurius: 16
 
     steps:
       - name: Checkout
@@ -166,7 +177,8 @@ jobs:
             @nestjs/platform-express@${{ matrix.nestjs }} \
             @nestjs/platform-fastify@${{ matrix.nestjs }} \
             @nestjs/testing@${{ matrix.nestjs }} \
-            @nestjs/schedule@${{ matrix.schedule }}
+            @nestjs/schedule@${{ matrix.schedule }} \
+            mercurius@${{ matrix.mercurius }}
 
       # Installing a companion package can drag NestJS back up through peer
       # resolution, which would quietly test the wrong version.
