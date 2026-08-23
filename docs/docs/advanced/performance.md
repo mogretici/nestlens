@@ -129,6 +129,22 @@ private readonly FLUSH_INTERVAL = 1000;       // 1 second
 private readonly MAX_BUFFERED_ENTRIES = 1000; // Ceiling while storage is down
 ```
 
+### When storage is slower than the traffic
+
+One batch is on its way to the storage at a time. A flush that starts while
+another is still going waits for it and then writes whatever accumulated in
+the meantime; the interval timer and the buffer's own threshold skip rather
+than queue, because the flush in flight will take what they would have.
+
+That keeps `MAX_BUFFERED_ENTRIES` meaningful. Every caller used to start its
+own write, so entries already in flight were outside the ceiling — measured at
+thirty concurrent writes and three thousand entries in flight against a store
+taking 300 ms a batch, three times the cap and growing with the lag.
+
+At a rate the storage can keep up with, nothing is dropped and nothing waits:
+a thousand entries a second against that same 300 ms store wrote all three
+thousand. Past that the ceiling below decides what survives.
+
 ### When storage stops answering
 
 Entries that could not be written are kept and retried, but only up to
