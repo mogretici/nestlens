@@ -51,6 +51,7 @@ import { calculateDepth } from '../utils/depth-calculator';
 import { createFieldTracer, FieldTracer } from '../utils/field-tracer';
 import { BaseGraphQLAdapter, isPackageAvailable } from './base.adapter';
 import { capturePayload } from '../../capture-payload';
+import { recording } from '../never-breaks-the-response';
 
 /**
  * Mercurius context type
@@ -183,6 +184,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
    * Get the Mercurius hooks object
    */
   getPlugin(): MercuriusHooks {
+    return contained(this.buildHooks());
+  }
+
+  private buildHooks(): MercuriusHooks {
     const adapter = this;
 
     return {
@@ -562,6 +567,33 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
 
     return parts.join('.');
   }
+}
+
+/**
+ * The same hooks, with each one unable to reach the response.
+ *
+ * Measured against Mercurius 16: a hook that throws in `onResolution` empties
+ * the result and puts its own message in front of the caller —
+ * `{"data":null,"errors":[{"message":"watcher blew up"}]}` — so a failure while
+ * recording is an answer the application never gave, and its internals in a
+ * client's response.
+ *
+ * Applied to the object rather than to each hook so a hook added later is
+ * covered by having been added.
+ */
+function contained(hooks: MercuriusHooks): MercuriusHooks {
+  const guarded: Record<string, unknown> = {};
+
+  for (const [name, hook] of Object.entries(hooks)) {
+    if (typeof hook !== 'function') continue;
+
+    guarded[name] = (...args: unknown[]): Promise<void> =>
+      recording(`the ${name} hook`, () =>
+        (hook as (...hookArgs: unknown[]) => Promise<void>)(...args),
+      );
+  }
+
+  return guarded as MercuriusHooks;
 }
 
 /**
