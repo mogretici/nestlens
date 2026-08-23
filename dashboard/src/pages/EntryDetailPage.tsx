@@ -28,6 +28,8 @@ import {
   isGraphQLEntry,
 } from '../types';
 import Tabs from '../components/Tabs';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import JsonViewer from '../components/JsonViewer';
 import { ControlledInlineJson } from '../components/JsonViewerWithToolbar';
 import { useJsonToolbar } from '../components/useJsonToolbar';
 import ClickableBadge from '../components/ClickableBadge';
@@ -45,6 +47,278 @@ import { getEntryTypeConfig } from '../config/entryTypes';
  * Holds the page's height while a detail view arrives, so the layout does not
  * jump. The chunks are small and same-origin, so this is usually a single frame.
  */
+/**
+ * What is shown when a detail view cannot read its entry.
+ *
+ * The views read their payload's fields directly — `payload.method`,
+ * `payload.level`, `payload.listeners` — and a payload does not always have
+ * them: an entry written by an older version, or one whose payload could not
+ * be serialised and was replaced by the reason. Without this the whole page
+ * became *Something went wrong*, which is a worse answer than the entry
+ * itself: the data is there, only the view for it did not fit.
+ */
+/**
+ * The heading, as its own component so the boundary above it can do its job.
+ *
+ * A boundary catches what its descendants throw, not what the component
+ * rendering it throws — and this JSX used to be inline in the page, so a
+ * payload without the fields its type declares took the whole page down
+ * before the fallback could be reached.
+ */
+function EntryHeading({ entry }: { entry: Entry }) {
+  return (
+    <div className="flex items-center space-x-3">
+              {/* Request entries: show method badge + path */}
+              {isRequestEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="requests">
+                    {getDisplayMethod(entry.payload.path, entry.payload.method)}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.path}
+                  </h1>
+                </>
+              ) : isQueryEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="queries" filterType="types">
+                    {getQueryType(entry.payload.query)}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.query.length > 100
+                      ? entry.payload.query.substring(0, 100) + '...'
+                      : entry.payload.query}
+                  </h1>
+                </>
+              ) : isExceptionEntry(entry) ? (
+                (() => {
+                  const exceptionName = entry.payload.name && entry.payload.name.toLowerCase() !== 'error'
+                    ? entry.payload.name
+                    : entry.payload.code
+                      ? String(entry.payload.code)
+                      : 'Exception';
+                  return (
+                    <>
+                      <ClickableBadge listType="exceptions" filterType="names">
+                        {exceptionName}
+                      </ClickableBadge>
+                      <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                        {entry.payload.request?.url || entry.payload.message}
+                      </h1>
+                    </>
+                  );
+                })()
+              ) : isLogEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="logs" filterType="levels">
+                    {entry.payload.level.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.message.length > 100
+                      ? entry.payload.message.substring(0, 100) + '...'
+                      : entry.payload.message}
+                  </h1>
+                </>
+              ) : isEventEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="events" filterType="names">
+                    {entry.payload.name}
+                  </ClickableBadge>
+                  <h1 className="text-sm text-gray-600 dark:text-gray-300">
+                    {entry.payload.listeners.length} listener{entry.payload.listeners.length !== 1 ? 's' : ''} &middot; {entry.payload.duration}ms
+                  </h1>
+                </>
+              ) : isJobEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="jobs" filterType="statuses" filterValue={entry.payload.status}>
+                    {entry.payload.status.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.name}
+                  </h1>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {entry.payload.queue} &middot; {entry.payload.duration ? `${entry.payload.duration}ms` : '-'}
+                  </span>
+                </>
+              ) : isCacheEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="cache" filterType="operations" filterValue={entry.payload.operation}>
+                    {entry.payload.operation.toUpperCase()}
+                  </ClickableBadge>
+                  {entry.payload.operation === 'get' && (
+                    <ClickableBadge listType="cache">
+                      {entry.payload.hit ? 'HIT' : 'MISS'}
+                    </ClickableBadge>
+                  )}
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.key.length > 60 ? entry.payload.key.substring(0, 60) + '...' : entry.payload.key}
+                  </h1>
+                </>
+              ) : isMailEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="mail" filterType="statuses" filterValue={entry.payload.status}>
+                    {entry.payload.status.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm text-gray-900 dark:text-white truncate">
+                    {entry.payload.subject.length > 60 ? entry.payload.subject.substring(0, 60) + '...' : entry.payload.subject}
+                  </h1>
+                </>
+              ) : isScheduleEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="schedule" filterType="statuses" filterValue={entry.payload.status}>
+                    {entry.payload.status.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.name}
+                  </h1>
+                  {entry.payload.cron && (
+                    <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                      {entry.payload.cron}
+                    </span>
+                  )}
+                </>
+              ) : isHttpClientEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="http-client" filterType="methods" filterValue={entry.payload.method}>
+                    {entry.payload.method}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.hostname || entry.payload.url}
+                  </h1>
+                </>
+              ) : isRedisEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="redis" filterType="commands" filterValue={entry.payload.command}>
+                    {entry.payload.command}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.keyPattern || 'Redis Command'}
+                  </h1>
+                </>
+              ) : isModelEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="models" filterType="actions" filterValue={entry.payload.action}>
+                    {entry.payload.action.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.entity}
+                  </h1>
+                </>
+              ) : isNotificationEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="notifications" filterType="types" filterValue={entry.payload.type}>
+                    {entry.payload.type}
+                  </ClickableBadge>
+                  <h1 className="text-sm text-gray-900 dark:text-white truncate">
+                    {entry.payload.title || entry.payload.recipient}
+                  </h1>
+                </>
+              ) : isViewEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="views" filterType="statuses" filterValue={entry.payload.status}>
+                    {entry.payload.status.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.template}
+                  </h1>
+                </>
+              ) : isCommandEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="commands" filterType="statuses" filterValue={entry.payload.status}>
+                    {entry.payload.status.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.name}
+                  </h1>
+                </>
+              ) : isGateEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="gates" filterType="results" filterValue={entry.payload.allowed ? 'ALLOWED' : 'DENIED'}>
+                    {entry.payload.allowed ? 'ALLOWED' : 'DENIED'}
+                  </ClickableBadge>
+                  <h1 className="text-sm text-gray-900 dark:text-white truncate">
+                    {entry.payload.gate}
+                  </h1>
+                </>
+              ) : isBatchEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="batches" filterType="statuses" filterValue={entry.payload.status}>
+                    {entry.payload.status.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.name}
+                  </h1>
+                </>
+              ) : isDumpEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="dumps" filterType="operations" filterValue={entry.payload.operation}>
+                    {entry.payload.operation.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.format}
+                  </h1>
+                </>
+              ) : isGraphQLEntry(entry) ? (
+                <>
+                  <ClickableBadge listType="graphql" filterType="operationTypes" filterValue={entry.payload.operationType}>
+                    {entry.payload.operationType.toUpperCase()}
+                  </ClickableBadge>
+                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                    {entry.payload.operationName || '(anonymous)'}
+                  </h1>
+                  {entry.payload.hasErrors && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                      Error
+                    </span>
+                  )}
+                </>
+              ) : (
+                (() => {
+                  const unknownEntry = entry as Entry;
+                  return (
+                    <>
+                      <ClickableBadge clickable={false}>
+                        {unknownEntry.type.toUpperCase()}
+                      </ClickableBadge>
+                      <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+                        {unknownEntry.requestId || `#${unknownEntry.id}`}
+                      </h1>
+                    </>
+                  );
+                })()
+              )}
+    </div>
+  );
+}
+
+/** The heading for an entry whose payload does not carry what its type declares. */
+function PlainHeading({ entry }: { entry: Entry }) {
+  return (
+    <div className="flex items-center space-x-3" data-testid="plain-heading">
+      <ClickableBadge clickable={false}>{entry.type.toUpperCase()}</ClickableBadge>
+      <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
+        {entry.requestId || `#${entry.id}`}
+      </h1>
+    </div>
+  );
+}
+
+function RawPayload({ entry }: { entry: Entry }) {
+  return (
+    <div className="card" data-testid="raw-payload">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Entry payload</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          This entry does not have the shape the {entry.type} view expects, so it is shown as it
+          was recorded.
+        </p>
+      </div>
+      <div className="p-4">
+        <JsonViewer data={(entry.payload ?? {}) as unknown as JsonValue} inline />
+      </div>
+    </div>
+  );
+}
+
 function DetailViewSkeleton() {
   return (
     <div className="animate-pulse space-y-3" aria-hidden="true">
@@ -295,226 +569,16 @@ export default function EntryDetailPage() {
             <ArrowLeft className="h-5 w-5 text-gray-500" />
           </Link>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-3">
-              {/* Request entries: show method badge + path */}
-              {isRequestEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="requests">
-                    {getDisplayMethod(entry.payload.path, entry.payload.method)}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.path}
-                  </h1>
-                </>
-              ) : isQueryEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="queries" filterType="types">
-                    {getQueryType(entry.payload.query)}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.query.length > 100
-                      ? entry.payload.query.substring(0, 100) + '...'
-                      : entry.payload.query}
-                  </h1>
-                </>
-              ) : isExceptionEntry(entry) ? (
-                (() => {
-                  const exceptionName = entry.payload.name && entry.payload.name.toLowerCase() !== 'error'
-                    ? entry.payload.name
-                    : entry.payload.code
-                      ? String(entry.payload.code)
-                      : 'Exception';
-                  return (
-                    <>
-                      <ClickableBadge listType="exceptions" filterType="names">
-                        {exceptionName}
-                      </ClickableBadge>
-                      <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                        {entry.payload.request?.url || entry.payload.message}
-                      </h1>
-                    </>
-                  );
-                })()
-              ) : isLogEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="logs" filterType="levels">
-                    {entry.payload.level.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.message.length > 100
-                      ? entry.payload.message.substring(0, 100) + '...'
-                      : entry.payload.message}
-                  </h1>
-                </>
-              ) : isEventEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="events" filterType="names">
-                    {entry.payload.name}
-                  </ClickableBadge>
-                  <h1 className="text-sm text-gray-600 dark:text-gray-300">
-                    {entry.payload.listeners.length} listener{entry.payload.listeners.length !== 1 ? 's' : ''} &middot; {entry.payload.duration}ms
-                  </h1>
-                </>
-              ) : isJobEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="jobs" filterType="statuses" filterValue={entry.payload.status}>
-                    {entry.payload.status.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.name}
-                  </h1>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {entry.payload.queue} &middot; {entry.payload.duration ? `${entry.payload.duration}ms` : '-'}
-                  </span>
-                </>
-              ) : isCacheEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="cache" filterType="operations" filterValue={entry.payload.operation}>
-                    {entry.payload.operation.toUpperCase()}
-                  </ClickableBadge>
-                  {entry.payload.operation === 'get' && (
-                    <ClickableBadge listType="cache">
-                      {entry.payload.hit ? 'HIT' : 'MISS'}
-                    </ClickableBadge>
-                  )}
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.key.length > 60 ? entry.payload.key.substring(0, 60) + '...' : entry.payload.key}
-                  </h1>
-                </>
-              ) : isMailEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="mail" filterType="statuses" filterValue={entry.payload.status}>
-                    {entry.payload.status.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm text-gray-900 dark:text-white truncate">
-                    {entry.payload.subject.length > 60 ? entry.payload.subject.substring(0, 60) + '...' : entry.payload.subject}
-                  </h1>
-                </>
-              ) : isScheduleEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="schedule" filterType="statuses" filterValue={entry.payload.status}>
-                    {entry.payload.status.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.name}
-                  </h1>
-                  {entry.payload.cron && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-                      {entry.payload.cron}
-                    </span>
-                  )}
-                </>
-              ) : isHttpClientEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="http-client" filterType="methods" filterValue={entry.payload.method}>
-                    {entry.payload.method}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.hostname || entry.payload.url}
-                  </h1>
-                </>
-              ) : isRedisEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="redis" filterType="commands" filterValue={entry.payload.command}>
-                    {entry.payload.command}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.keyPattern || 'Redis Command'}
-                  </h1>
-                </>
-              ) : isModelEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="models" filterType="actions" filterValue={entry.payload.action}>
-                    {entry.payload.action.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.entity}
-                  </h1>
-                </>
-              ) : isNotificationEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="notifications" filterType="types" filterValue={entry.payload.type}>
-                    {entry.payload.type}
-                  </ClickableBadge>
-                  <h1 className="text-sm text-gray-900 dark:text-white truncate">
-                    {entry.payload.title || entry.payload.recipient}
-                  </h1>
-                </>
-              ) : isViewEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="views" filterType="statuses" filterValue={entry.payload.status}>
-                    {entry.payload.status.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.template}
-                  </h1>
-                </>
-              ) : isCommandEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="commands" filterType="statuses" filterValue={entry.payload.status}>
-                    {entry.payload.status.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.name}
-                  </h1>
-                </>
-              ) : isGateEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="gates" filterType="results" filterValue={entry.payload.allowed ? 'ALLOWED' : 'DENIED'}>
-                    {entry.payload.allowed ? 'ALLOWED' : 'DENIED'}
-                  </ClickableBadge>
-                  <h1 className="text-sm text-gray-900 dark:text-white truncate">
-                    {entry.payload.gate}
-                  </h1>
-                </>
-              ) : isBatchEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="batches" filterType="statuses" filterValue={entry.payload.status}>
-                    {entry.payload.status.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.name}
-                  </h1>
-                </>
-              ) : isDumpEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="dumps" filterType="operations" filterValue={entry.payload.operation}>
-                    {entry.payload.operation.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.format}
-                  </h1>
-                </>
-              ) : isGraphQLEntry(entry) ? (
-                <>
-                  <ClickableBadge listType="graphql" filterType="operationTypes" filterValue={entry.payload.operationType}>
-                    {entry.payload.operationType.toUpperCase()}
-                  </ClickableBadge>
-                  <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                    {entry.payload.operationName || '(anonymous)'}
-                  </h1>
-                  {entry.payload.hasErrors && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
-                      Error
-                    </span>
-                  )}
-                </>
-              ) : (
-                (() => {
-                  const unknownEntry = entry as Entry;
-                  return (
-                    <>
-                      <ClickableBadge clickable={false}>
-                        {unknownEntry.type.toUpperCase()}
-                      </ClickableBadge>
-                      <h1 className="text-sm font-mono text-gray-900 dark:text-white truncate">
-                        {unknownEntry.requestId || `#${unknownEntry.id}`}
-                      </h1>
-                    </>
-                  );
-                })()
-              )}
-            </div>
+            {/*
+              The heading reads the fields its entry type declares, and a
+              payload does not always have them — one written by an older
+              version, or one replaced by the reason it could not be
+              serialised. Falling back to the type and the id keeps the header
+              on a page whose view below has already degraded gracefully.
+            */}
+            <ErrorBoundary key={`heading-${entry.id}`} fallback={<PlainHeading entry={entry} />}>
+              <EntryHeading entry={entry} />
+            </ErrorBoundary>
           </div>
         </div>
       </div>
@@ -523,7 +587,9 @@ export default function EntryDetailPage() {
       <div className="pt-16 space-y-6">
 
       {/* Type-specific Detail View */}
-      <Suspense fallback={<DetailViewSkeleton />}>{renderDetailView()}</Suspense>
+      <ErrorBoundary key={entry.id} fallback={<RawPayload entry={entry} />}>
+        <Suspense fallback={<DetailViewSkeleton />}>{renderDetailView()}</Suspense>
+      </ErrorBoundary>
 
       {/* Related Entries */}
       {related.length > 0 && (
