@@ -11,7 +11,6 @@ import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { WrappedMethods } from './wrap-method';
-import { assignKey } from '../core/safe-assign';
 import { capturePayload } from './capture-payload';
 
 /**
@@ -67,18 +66,13 @@ export const NESTLENS_MODEL_SUBSCRIBER = Symbol('NESTLENS_MODEL_SUBSCRIBER');
 /**
  * Sensitive field names that should be masked in data capture
  */
-const SENSITIVE_FIELDS = [
-  'password',
-  'passwordHash',
-  'secret',
-  'token',
-  'apiKey',
-  'accessToken',
-  'refreshToken',
-  'creditCard',
-  'ssn',
-  'privateKey',
-];
+/**
+ * How much of an entity is recorded when `captureData` is on.
+ *
+ * The same 64KB the request watcher gives a body: an ORM result can be a page
+ * of rows, and one that is too large is recorded as its size.
+ */
+const MAX_ENTITY_SIZE = 64 * 1024;
 
 /**
  * ModelWatcher tracks ORM operations (TypeORM and Prisma) including
@@ -265,7 +259,7 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
           'prisma',
           duration,
           Array.isArray(result) ? result.length : result ? 1 : 0,
-          this.config.captureData ? this.maskSensitiveData(result) : undefined,
+          this.config.captureData ? this.captureEntity(result) : undefined,
           params.args?.where,
         );
 
@@ -330,7 +324,7 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
       'typeorm',
       duration,
       1,
-      this.config.captureData ? this.maskSensitiveData(event.entity) : undefined,
+      this.config.captureData ? this.captureEntity(event.entity) : undefined,
     );
   }
 
@@ -356,7 +350,7 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
       'typeorm',
       duration,
       1,
-      this.config.captureData ? this.maskSensitiveData(event.entity) : undefined,
+      this.config.captureData ? this.captureEntity(event.entity) : undefined,
     );
   }
 
@@ -426,27 +420,22 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   /**
    * Mask sensitive fields in entity data
    */
-  private maskSensitiveData(data: unknown): unknown {
-    if (!data || typeof data !== 'object') {
-      return data;
-    }
-
-    if (Array.isArray(data)) {
-      return data.map((item) => this.maskSensitiveData(item));
-    }
-
-    const masked: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (SENSITIVE_FIELDS.some((field) => key.toLowerCase().includes(field.toLowerCase()))) {
-        assignKey(masked, key, '***MASKED***');
-      } else if (typeof value === 'object' && value !== null) {
-        assignKey(masked, key, this.maskSensitiveData(value));
-      } else {
-        assignKey(masked, key, value);
-      }
-    }
-
-    return masked;
+  /**
+   * An entity as it is recorded.
+   *
+   * This used to walk the entity itself, masking by field name, with no bound
+   * on depth and no memory of where it had been — so an entity with a relation
+   * pointing back at its parent, which is what a bidirectional mapping is,
+   * ended in `RangeError: Maximum call stack size exceeded`. Thrown from
+   * inside TypeORM's subscriber, that reached the application's own `save()`:
+   * enabling `captureData` broke the query it was meant to describe.
+   *
+   * The collector masks every payload it is given — by the same field names,
+   * and with a cycle, a depth and a walk bound behind them — so this only has
+   * to decide how much of the entity is worth keeping.
+   */
+  private captureEntity(data: unknown): unknown {
+    return capturePayload(data, MAX_ENTITY_SIZE);
   }
 
   /**

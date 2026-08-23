@@ -8,6 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 import { ModelWatcher, NESTLENS_MODEL_SUBSCRIBER } from '../../watchers/model.watcher';
+import { DataMaskerService } from '../../core/data-masker.service';
 
 describe('ModelWatcher', () => {
   let watcher: ModelWatcher;
@@ -597,115 +598,92 @@ describe('ModelWatcher', () => {
   // Sensitive Data Masking
   // ============================================================================
 
+  /**
+   * The watcher used to mask entities itself, by field name, with no bound on
+   * depth and no memory of where it had been — so a bidirectional relation
+   * ended in `RangeError: Maximum call stack size exceeded`, thrown out of
+   * TypeORM's subscriber and into the application's own `save()`. The
+   * collector masks every payload it is given, by the same field names; these
+   * check the entity survives the watcher and is masked on the way to storage.
+   */
   describe('Sensitive Data Masking', () => {
+    const throughCollector = (payload: unknown): Record<string, unknown> =>
+      new DataMaskerService({}).maskBody(payload) as Record<string, unknown>;
+
+    const recordedData = (): unknown =>
+      throughCollector((mockCollector.collect as jest.Mock).mock.calls[0][1]).data;
+
     it('should mask password field', async () => {
-      // Arrange
       mockConfig.watchers = { model: { enabled: true, captureData: true } };
       const subscriber = createEntitySubscriber();
       watcher = await createWatcher(mockConfig, subscriber);
       watcher.onModuleInit();
 
-      // Act
       subscriber.beforeInsert({ metadata: { name: 'User' } });
       subscriber.afterInsert({
         metadata: { name: 'User' },
         entity: { id: 1, email: 'test@example.com', password: 'secret123' },
       });
 
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'model',
-        expect.objectContaining({
-          data: expect.objectContaining({
-            email: 'test@example.com',
-            password: '***MASKED***',
-          }),
-        }),
+      expect(recordedData()).toEqual(
+        expect.objectContaining({ email: 'test@example.com', password: '***REDACTED***' }),
       );
     });
 
     it('should mask token field', async () => {
-      // Arrange
       mockConfig.watchers = { model: { enabled: true, captureData: true } };
       const subscriber = createEntitySubscriber();
       watcher = await createWatcher(mockConfig, subscriber);
       watcher.onModuleInit();
 
-      // Act
       subscriber.beforeInsert({ metadata: { name: 'Session' } });
       subscriber.afterInsert({
         metadata: { name: 'Session' },
         entity: { id: 1, token: 'abc123', userId: 1 },
       });
 
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'model',
-        expect.objectContaining({
-          data: expect.objectContaining({
-            token: '***MASKED***',
-            userId: 1,
-          }),
-        }),
+      expect(recordedData()).toEqual(
+        expect.objectContaining({ token: '***REDACTED***', userId: 1 }),
       );
     });
 
     it('should mask apiKey field', async () => {
-      // Arrange
       mockConfig.watchers = { model: { enabled: true, captureData: true } };
       const subscriber = createEntitySubscriber();
       watcher = await createWatcher(mockConfig, subscriber);
       watcher.onModuleInit();
 
-      // Act
       subscriber.beforeInsert({ metadata: { name: 'ApiCredential' } });
       subscriber.afterInsert({
         metadata: { name: 'ApiCredential' },
         entity: { id: 1, apiKey: 'key-123', name: 'My API' },
       });
 
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'model',
-        expect.objectContaining({
-          data: expect.objectContaining({
-            apiKey: '***MASKED***',
-            name: 'My API',
-          }),
-        }),
+      expect(recordedData()).toEqual(
+        expect.objectContaining({ apiKey: '***REDACTED***', name: 'My API' }),
       );
     });
 
     it('should mask nested sensitive fields', async () => {
-      // Arrange
       mockConfig.watchers = { model: { enabled: true, captureData: true } };
       const subscriber = createEntitySubscriber();
       watcher = await createWatcher(mockConfig, subscriber);
       watcher.onModuleInit();
 
-      // Act
       subscriber.beforeInsert({ metadata: { name: 'Config' } });
       subscriber.afterInsert({
         metadata: { name: 'Config' },
         entity: { id: 1, settings: { secret: 'hidden', visible: 'shown' } },
       });
 
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'model',
+      expect(recordedData()).toEqual(
         expect.objectContaining({
-          data: expect.objectContaining({
-            settings: expect.objectContaining({
-              secret: '***MASKED***',
-              visible: 'shown',
-            }),
-          }),
+          settings: expect.objectContaining({ secret: '***REDACTED***', visible: 'shown' }),
         }),
       );
     });
 
     it('should mask sensitive fields in arrays', async () => {
-      // Arrange
       mockConfig.watchers = { model: { enabled: true, captureData: true } };
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
@@ -722,19 +700,28 @@ describe('ModelWatcher', () => {
       ]);
       const params = { model: 'User', action: 'findMany', args: {} };
 
-      // Act
       await middleware!(params, next);
 
-      // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'model',
-        expect.objectContaining({
-          data: [
-            { id: 1, email: 'a@example.com', password: '***MASKED***' },
-            { id: 2, email: 'b@example.com', password: '***MASKED***' },
-          ],
-        }),
-      );
+      expect(recordedData()).toEqual([
+        { id: 1, email: 'a@example.com', password: '***REDACTED***' },
+        { id: 2, email: 'b@example.com', password: '***REDACTED***' },
+      ]);
+    });
+
+    it('does not throw into the ORM on a bidirectional relation', async () => {
+      mockConfig.watchers = { model: { enabled: true, captureData: true } };
+      const subscriber = createEntitySubscriber();
+      watcher = await createWatcher(mockConfig, subscriber);
+      watcher.onModuleInit();
+
+      const order: Record<string, unknown> = { id: 1, items: [] as unknown[] };
+      (order.items as unknown[]).push({ id: 10, order });
+
+      subscriber.beforeInsert({ metadata: { name: 'Order' } });
+
+      expect(() =>
+        subscriber.afterInsert({ metadata: { name: 'Order' }, entity: order }),
+      ).not.toThrow();
     });
   });
 
