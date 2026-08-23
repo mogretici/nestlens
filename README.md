@@ -54,7 +54,7 @@ Watch requests, queries, and exceptions as they happen. No more console.log debu
 
 ### ✨ Zero Configuration
 
-Import and go. Works with Express & Fastify. Auto-detects TypeORM, Prisma, Bull, and more.
+Import and go. Works with Express & Fastify. Finds your TypeORM queries, GraphQL server and scheduled tasks on its own; Prisma, Bull and the rest take one line each.
 
 </td>
 <td width="33%" valign="top">
