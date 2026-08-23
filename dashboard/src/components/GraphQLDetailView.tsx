@@ -141,14 +141,30 @@ function N1WarningsSection({ warnings }: { warnings: GraphQLEntry['payload']['po
 }
 
 // GraphQL Errors section
-function GraphQLErrorsSection({ errors }: { errors: GraphQLEntry['payload']['errors'] }) {
+/**
+ * How many errors there were, and how many of them are here.
+ *
+ * An operation can fail a hundred ways at once — graphql-js stops validating
+ * there — and only the first few are recorded. Printing the recorded count on
+ * its own would report ten errors for an operation that had a hundred and one.
+ */
+const errorHeading = (recorded: number, total?: number): string =>
+  total && total > recorded ? `${recorded} of ${total}` : String(recorded);
+
+function GraphQLErrorsSection({
+  errors,
+  errorCount,
+}: {
+  errors: GraphQLEntry['payload']['errors'];
+  errorCount?: number;
+}) {
   if (!errors || errors.length === 0) return null;
 
   return (
     <div className="card border-red-200 dark:border-red-800">
       <div className="px-4 py-3 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
         <h2 className="text-lg font-semibold text-red-800 dark:text-red-200">
-          GraphQL Errors ({errors.length})
+          GraphQL Errors ({errorHeading(errors.length, errorCount)})
         </h2>
       </div>
       <div className="divide-y divide-red-100 dark:divide-red-900/30">
@@ -291,7 +307,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
 
   // Errors tab content
   const errorsContent = payload.errors && payload.errors.length > 0 ? (
-    <GraphQLErrorsSection errors={payload.errors} />
+    <GraphQLErrorsSection errors={payload.errors} errorCount={payload.errorCount} />
   ) : (
     <div className="p-8 text-center text-gray-500 dark:text-gray-400">
       No errors
@@ -325,7 +341,11 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   // Server-side tabs (what the server returned/processed)
   const serverTabs = [
     { id: 'response', label: 'Response', content: responseContent },
-    { id: 'errors', label: `Errors${payload.errors?.length ? ` (${payload.errors.length})` : ''}`, content: errorsContent },
+    {
+      id: 'errors',
+      label: `Errors${payload.errors?.length ? ` (${errorHeading(payload.errors.length, payload.errorCount)})` : ''}`,
+      content: errorsContent,
+    },
     { id: 'resolvers', label: 'Resolvers', content: resolversContent },
   ];
 

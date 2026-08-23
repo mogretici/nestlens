@@ -6,7 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { GraphQLPayload } from '../../../types';
+import { MAX_RECORDED_ERRORS, GraphQLPayload } from '../../../types';
 import {
   hashQuery,
   truncateQuery,
@@ -360,8 +360,10 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
           executionDuration,
           statusCode,
           hasErrors,
+          errorCount: errors.length > MAX_RECORDED_ERRORS ? errors.length : undefined,
+          // The first few, and how many there were; see the Apollo adapter.
           errors: hasErrors
-            ? errors.map((e) => ({
+            ? errors.slice(0, MAX_RECORDED_ERRORS).map((e) => ({
                 message: e.message,
                 path: e.path,
                 locations: e.locations,

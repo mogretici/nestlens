@@ -6,7 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { GraphQLPayload } from '../../../types';
+import { MAX_RECORDED_ERRORS, GraphQLPayload } from '../../../types';
 import {
   hashQuery,
   truncateQuery,
@@ -387,12 +387,21 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
               executionDuration,
               statusCode,
               hasErrors: responseErrors && responseErrors.length > 0,
-              errors: responseErrors?.map((e) => ({
+              // The first few, and how many there were. graphql-js stops
+              // validating at a hundred and each error carries a message, a
+              // path and a position: one rejected query recorded a
+              // 152,749-byte entry, repeatable by anyone who can reach the
+              // endpoint. See `MAX_RECORDED_ERRORS`.
+              errors: responseErrors?.slice(0, MAX_RECORDED_ERRORS).map((e) => ({
                 message: e.message,
                 path: e.path as (string | number)[] | undefined,
                 locations: e.locations as { line: number; column: number }[] | undefined,
                 extensions: e.extensions,
               })),
+              errorCount:
+                responseErrors && responseErrors.length > MAX_RECORDED_ERRORS
+                  ? responseErrors.length
+                  : undefined,
               responseData,
               resolverCount,
               fieldCount: depthResult.maxDepth > 0 ? resolverCount : undefined,

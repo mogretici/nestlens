@@ -8,6 +8,22 @@ export type GraphQLOperationType = 'query' | 'mutation' | 'subscription';
 /**
  * GraphQL error information
  */
+/**
+ * How many of an operation's errors are recorded.
+ *
+ * graphql-js stops validating at a hundred, and each error carries a message,
+ * a path and a position. One rejected query recorded all of them:
+ *
+ * ```text
+ * { nope0 … nope499 }  ->  400 Bad Request, a 152,749-byte entry
+ * ```
+ *
+ * repeatable by anyone who can reach the endpoint. The first few are what a
+ * reader debugging an operation looks at; `errorCount` keeps the rest from
+ * being hidden.
+ */
+export const MAX_RECORDED_ERRORS = 10;
+
 export interface GraphQLErrorInfo {
   message: string;
   path?: (string | number)[];
@@ -96,8 +112,10 @@ export interface GraphQLPayload {
   statusCode: number;
   /** Whether the response contains any errors */
   hasErrors: boolean;
-  /** GraphQL errors from the response */
+  /** GraphQL errors from the response, at most {@link MAX_RECORDED_ERRORS} of them */
   errors?: GraphQLErrorInfo[];
+  /** How many errors the response carried, when more than were recorded */
+  errorCount?: number;
   /** Response data (if captured) */
   responseData?: unknown;
 
