@@ -453,6 +453,35 @@ the rule depends on what is *inside* the entry:
 `rate: 0` records nothing except what `always` names — exceptions only, which is
 a reasonable way to run in production if you mostly want the error pages.
 
+:::note What sampling does not save
+The decision is made in the collector, and a watcher has already built the
+payload by the time it is asked. With `captureResponse: true`, a GraphQL
+response is serialized and walked for every operation, including ones sampling
+then discards. To stop paying for the capture itself, use the watcher's own
+`graphql.samplingRate`, which is applied before anything is read.
+:::
+
+:::caution Sampling runs first, and `filter` only sees what survives it
+The order is `sampling` → `filter` → mask → buffer. An entry sampling dropped
+never reaches `filter`, so the two narrow rather than combine: "only failed
+GraphQL operations" needs the type kept by sampling **and then** narrowed by the
+filter.
+
+```typescript
+NestLensModule.forRoot({
+  sampling: {
+    rate: 0.1,
+    // Kept whatever the rate says — `filter` decides which of them to write.
+    always: ['exception', 'graphql'],
+  },
+  filter: (entry) =>
+    entry.type !== 'graphql' ? true : entry.payload.hasErrors === true,
+})
+```
+
+Naming a type in `filter` alone does nothing for a type sampling is dropping.
+:::
+
 ## Entry Filtering Performance
 
 ### Use Efficient Filters

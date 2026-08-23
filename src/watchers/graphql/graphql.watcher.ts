@@ -101,6 +101,45 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
       // A watcher that cannot start must not stop the application.
       this.logger.error('Failed to initialize GraphQL watcher', error);
     }
+
+    this.warnIfNothingWillBeRecorded();
+  }
+
+  /**
+   * Says so when the configuration cannot record what it is asking for.
+   *
+   * `sampling.always` and an alerting webhook's `events` both default to
+   * `['exception']`, and with `recordExceptions` turned off a GraphQL API has
+   * no exceptions at all — a resolver's failure lives on its `graphql` entry.
+   * A deployment reported exactly this: `rate: 0` with the documented
+   * defaults, 2,240 entries recorded, every one a health check, and a webhook
+   * that never fired.
+   *
+   * Only for the configuration that really is blind. With `recordExceptions`
+   * on, which is the default, `['exception']` means what it says on GraphQL
+   * too and there is nothing to warn about.
+   */
+  private warnIfNothingWillBeRecorded(): void {
+    if (this.config.recordExceptions) return;
+
+    const naming = (events: readonly string[] | undefined): boolean =>
+      !!events?.length && events.includes('exception') && !events.includes('graphql');
+
+    const sampling = this.nestlensConfig.sampling;
+    const blindSampling = sampling !== undefined && naming(sampling.always ?? ['exception']);
+    const blindWebhooks = (this.nestlensConfig.alerting?.webhooks ?? []).some((webhook) =>
+      naming(webhook.events ?? ['exception']),
+    );
+
+    if (!blindSampling && !blindWebhooks) return;
+
+    this.logger.warn(
+      'GraphQL is being watched with `recordExceptions: false`, and ' +
+        `${blindSampling && blindWebhooks ? '`sampling.always` and an alerting webhook name' : blindSampling ? '`sampling.always` names' : 'an alerting webhook names'} ` +
+        '`exception` without `graphql`. A resolver that throws is recorded on its `graphql` ' +
+        'entry, not as an exception, so nothing here will keep or announce it. Either leave ' +
+        '`recordExceptions` on, or add `graphql` and narrow it with `filter`.',
+    );
   }
 
   /**

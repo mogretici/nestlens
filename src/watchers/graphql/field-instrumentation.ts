@@ -48,7 +48,10 @@ export type ResolveInfo = unknown;
  * The context is the third resolver argument, which is where the adapters keep
  * what they are tracking for the operation.
  */
-export type FieldObserver = (info: ResolveInfo, context: unknown) => (() => void) | undefined;
+export type FieldObserver = (
+  info: ResolveInfo,
+  context: unknown,
+) => ((error?: unknown) => void) | undefined;
 
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
   typeof (value as { then?: unknown })?.then === 'function';
@@ -104,16 +107,24 @@ export function instrumentFieldResolvers(schema: unknown, observe: FieldObserver
         const context = args[2];
         const info = args[3];
 
-        let done: (() => void) | undefined;
+        let done: ((error?: unknown) => void) | undefined;
         try {
           done = observe(info, context);
         } catch {
           // Recording must never reach the resolver.
         }
 
-        const finish = (): void => {
+        /**
+         * Called however the field ended, with what it threw if it threw.
+         *
+         * The error is the only place a Mercurius resolver's own exception can
+         * be seen: by the time its `onResolution` hook runs, the errors have
+         * been formatted into `{ message, locations, path }` — no name, no
+         * stack, nothing of what was thrown.
+         */
+        const finish = (error?: unknown): void => {
           try {
-            done?.();
+            done?.(error);
           } catch {
             // As above.
           }
@@ -123,7 +134,7 @@ export function instrumentFieldResolvers(schema: unknown, observe: FieldObserver
         try {
           result = original.apply(this, args);
         } catch (error) {
-          finish();
+          finish(error);
           throw error;
         }
 
@@ -134,7 +145,7 @@ export function instrumentFieldResolvers(schema: unknown, observe: FieldObserver
               return value;
             },
             (error) => {
-              finish();
+              finish(error);
               throw error;
             },
           );

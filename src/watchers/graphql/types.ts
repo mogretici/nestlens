@@ -20,6 +20,7 @@ export interface ResolvedGraphQLConfig {
   traceSlowResolvers?: number;
   resolverTracingSampleRate: number;
   detectN1Queries: boolean;
+  recordExceptions: boolean;
   n1Threshold: number;
   subscriptions: ResolvedSubscriptionConfig;
   samplingRate: number;
@@ -93,6 +94,7 @@ export const GRAPHQL_DEFAULTS = {
   traceFieldResolvers: false,
   resolverTracingSampleRate: 0.1, // 10% when enabled
   detectN1Queries: true,
+  recordExceptions: true,
   n1Threshold: 10,
   samplingRate: 1.0, // Track all by default
   captureResponse: false,
@@ -198,6 +200,7 @@ export function resolveGraphQLConfig(
     resolverTracingSampleRate:
       config.resolverTracingSampleRate ?? GRAPHQL_DEFAULTS.resolverTracingSampleRate,
     detectN1Queries: config.detectN1Queries ?? GRAPHQL_DEFAULTS.detectN1Queries,
+    recordExceptions: config.recordExceptions ?? GRAPHQL_DEFAULTS.recordExceptions,
     n1Threshold: config.n1Threshold ?? GRAPHQL_DEFAULTS.n1Threshold,
     samplingRate: config.samplingRate ?? GRAPHQL_DEFAULTS.samplingRate,
     captureResponse: config.captureResponse ?? GRAPHQL_DEFAULTS.captureResponse,

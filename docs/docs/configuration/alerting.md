@@ -132,3 +132,30 @@ events: ['exception', 'query']   // noisy; pair with a filter
 For finer control — say, only exceptions from a specific route — use the
 [entry filter](/docs/advanced/filtering-entries) to drop entries before they
 reach the collector. Anything filtered out never triggers an alert.
+
+:::info On a GraphQL API
+`['exception']` covers resolvers too: the [GraphQL watcher](/docs/watchers/graphql)
+records what a resolver threw as an `exception` entry beside the operation, so
+this webhook fires for it. A malformed query is not among them — nobody threw,
+the caller made the mistake, and a webhook anyone with curl can trigger is a
+pager anyone with curl can ring.
+
+Adding `'graphql'` alerts on *every* operation rather than the failed ones;
+narrow it with a filter if that is what you want:
+
+```typescript
+sampling: { rate: 0, always: ['exception', 'graphql'] },
+filter: (entry) => entry.type !== 'graphql' || entry.payload.hasErrors === true,
+```
+
+`sampling` runs before `filter`, which is why the type has to be named in both.
+:::
+
+### Sending somewhere else
+
+`type: 'slack'` posts `{ "text": "..." }`, which is also what Telegram's
+`sendMessage` accepts — pointing a Slack-shaped webhook at
+`https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>` works with no
+adapter in between. Confirmed against a real bot. Anything that accepts a
+JSON body with a `text` field works the same way; `type: 'generic'` posts the
+whole entry when the receiver wants the detail.

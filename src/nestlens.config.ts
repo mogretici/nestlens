@@ -330,6 +330,22 @@ export interface GraphQLWatcherConfig {
   /** Threshold for N+1 warnings (number of calls to same resolver). Default: 10 */
   n1Threshold?: number;
 
+  /**
+   * Also record what a failed operation threw, as an exception. Default: true.
+   *
+   * A failed HTTP request produces two entries — the request and the exception
+   * the handler threw — and a failed operation used to produce only the
+   * operation. Everything that reads exceptions was therefore empty on a
+   * GraphQL API however the application was configured: the Exceptions page,
+   * `stats.unresolvedExceptions`, `sampling.always: ['exception']` and an
+   * alerting webhook on `events: ['exception']`, both of which are the
+   * defaults.
+   *
+   * Set to `false` where the operation entry is enough — the errors are on it
+   * either way, up to the first five.
+   */
+  recordExceptions?: boolean;
+
   // Subscriptions
   /** Subscription tracking configuration */
   subscriptions?: GraphQLSubscriptionConfig;

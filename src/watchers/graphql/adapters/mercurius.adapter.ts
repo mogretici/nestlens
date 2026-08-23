@@ -163,6 +163,15 @@ interface RequestTrackingData {
   fieldTracer?: FieldTracer;
   resolverCount: number;
   errors: unknown[];
+  /**
+   * What a resolver threw, by the field it threw from.
+   *
+   * `onResolution` is handed formatted errors — `{ message, locations, path }`
+   * and nothing else — so the thrown error's name and stack are only visible
+   * at the resolver itself. Kept here until the operation ends, and read back
+   * by path.
+   */
+  thrown?: Map<string, unknown>;
 }
 
 const TRACKING_KEY = Symbol('nestlens_graphql_tracking');
@@ -410,6 +419,16 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
         // Collect the entry
         await adapter.collectEntry(payload, tracking.requestId);
 
+        // And what it threw, if anything: a failed operation is an exception
+        // the application had, and everything that reads exceptions was blind
+        // to it.
+        await adapter.recordErrors(errors, {
+          name: tracking.operationName,
+          type: tracking.operationType,
+          requestId: tracking.requestId,
+          thrown: tracking.thrown,
+        });
+
         // Cleanup
         delete (context as Record<symbol, unknown>)[TRACKING_KEY];
       },
@@ -518,7 +537,7 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
   trackResolver(
     event: MercuriusResolutionEvent,
     context: MercuriusContext,
-  ): (() => void) | undefined {
+  ): ((error?: unknown) => void) | undefined {
     const tracking = (context as Record<symbol, unknown>)[TRACKING_KEY] as
       RequestTrackingData | undefined;
 
@@ -527,6 +546,20 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
     }
 
     tracking.resolverCount++;
+
+    const path = this.buildFieldPath(event.info.path);
+
+    /** Remembers what this field threw, for the entry written at the end. */
+    const remember = (error?: unknown): void => {
+      if (error === undefined) return;
+
+      tracking.thrown ??= new Map<string, unknown>();
+      // Bounded by the same rule as the operation's error list: a document can
+      // fail in a hundred fields and the entry keeps the first few.
+      if (tracking.thrown.size < MAX_RECORDED_ERRORS) {
+        tracking.thrown.set(path, error);
+      }
+    };
 
     // N+1 tracking, for fields that return something there is more to fetch
     // from. See `N1Detector.recordCall`.
@@ -540,17 +573,20 @@ export class MercuriusAdapter extends BaseGraphQLAdapter {
     // Field tracing
     const fieldTracer = tracking.fieldTracer;
     if (!fieldTracer?.isActive()) {
-      return undefined;
+      return remember;
     }
 
     const traceId = fieldTracer.startField(
-      this.buildFieldPath(event.info.path),
+      path,
       event.info.parentType.name,
       event.info.fieldName,
       event.info.returnType.toString(),
     );
 
-    return traceId ? () => fieldTracer.endField(traceId) : undefined;
+    return (error?: unknown): void => {
+      remember(error);
+      if (traceId) fieldTracer.endField(traceId);
+    };
   }
 
   /**
