@@ -41,9 +41,22 @@ class Work {
 class WorkController {
   constructor(private readonly work: Work) {}
 
+  /**
+   * Descending delays, so the requests finish in the opposite order to
+   * starting — which is the only thing this fixture needs them for.
+   *
+   * Taken from here rather than from the query string. A duration a caller
+   * chooses is a denial of service in anything that ships, and CodeQL is right
+   * to say so wherever it reads one; the test has no use for the freedom.
+   */
+  private static readonly DELAYS_MS = [96, 84, 72, 60, 48, 36, 24, 12];
+  private served = 0;
+
   @Get()
-  async go(@Query('label') label: string, @Query('delay') delay: string): Promise<{ ok: true }> {
-    await this.work.run(label, Number(delay));
+  async go(@Query('label') label: string): Promise<{ ok: true }> {
+    const delay = WorkController.DELAYS_MS[this.served++ % WorkController.DELAYS_MS.length];
+
+    await this.work.run(label, delay);
     return { ok: true };
   }
 }
@@ -76,10 +89,8 @@ describe('correlation under concurrency', () => {
   /** Fires several overlapping requests and reads back what they recorded. */
   const overlapping = async (count: number): Promise<Entry[]> => {
     await Promise.all(
-      Array.from({ length: count }, (_, i) =>
-        // Descending delays, so they finish in the opposite order to starting.
-        fetch(`${url}/work?label=job-${i}&delay=${(count - i) * 12}`),
-      ),
+      // The fixture spaces them out; see `WorkController.DELAYS_MS`.
+      Array.from({ length: count }, (_, i) => fetch(`${url}/work?label=job-${i}`)),
     );
 
     await app.get(CollectorService).flush();
