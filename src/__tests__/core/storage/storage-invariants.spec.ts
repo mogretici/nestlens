@@ -22,7 +22,7 @@ import { RedisStorage } from '../../../core/storage/redis.storage';
 import { SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { StorageInterface } from '../../../core/storage/storage.interface';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 const random = (seed: number): (() => number) => {
   let state = seed >>> 0;
@@ -109,9 +109,7 @@ describe('every backend, given whatever an application produced', () => {
         backends.push({ name: 'redis', storage: redis });
       } catch (error) {
         await redis.close().catch(() => undefined);
-        if (process.env.CI) {
-          throw new Error(`Redis was expected at ${REDIS_URL}: ${String(error)}`);
-        }
+        throw new Error(`Redis was expected at ${REDIS_URL}: ${String(error)}`);
       }
     }
   });

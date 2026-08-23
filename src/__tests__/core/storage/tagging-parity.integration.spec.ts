@@ -24,7 +24,7 @@ import { StorageInterface } from '../../../core/storage/storage.interface';
 import { TagService } from '../../../core/tag.service';
 import { Entry } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 const entry = (i: number): Entry =>
   ({
@@ -76,9 +76,7 @@ describe('the backends agree about tagging', () => {
         backends.push({ name: 'redis', storage: redis });
       } catch (error) {
         await redis.close().catch(() => undefined);
-        if (process.env.CI) {
-          throw new Error(`Redis was expected at ${REDIS_URL}: ${String(error)}`);
-        }
+        throw new Error(`Redis was expected at ${REDIS_URL}: ${String(error)}`);
       }
     }
 
@@ -169,7 +167,7 @@ describe('the backends agree about tagging', () => {
     // tests whether or not Redis was among them, so the only way to tell what
     // was actually compared is to say so.
     expect(backends.map(({ name }) => name)).toEqual(
-      process.env.CI ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
+      REDIS_URL ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
     );
   });
 

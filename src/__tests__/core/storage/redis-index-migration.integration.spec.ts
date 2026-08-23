@@ -16,7 +16,7 @@ import Redis from 'ioredis';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 import { Entry } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 const PREFIX = 'nestlens-migration-test:';
 const DB = 13;
 

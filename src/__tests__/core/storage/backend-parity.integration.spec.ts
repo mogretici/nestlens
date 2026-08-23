@@ -12,9 +12,9 @@
  * answers, rather than asserting a hand-written expectation per backend — the
  * hand-written ones are what drifted.
  *
- * Redis runs only where a server is reachable (`REDIS_URL`, or localhost in
- * CI). Its unit tests are written against a mock, which is why its tag counts
- * could drift for as long as they did: the mock agreed with the code.
+ * Redis runs where `REDIS_URL` names a server, and where one is named it has to
+ * answer. Its unit tests are written against a mock, which is why its tag
+ * counts could drift for as long as they did: the mock agreed with the code.
  */
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -25,7 +25,7 @@ import { RedisStorage } from '../../../core/storage/redis.storage';
 import { StorageInterface } from '../../../core/storage/storage.interface';
 import { Entry, EntryType } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 /** How long a reachable Redis is allowed to take to answer the first command. */
 const REDIS_DEADLINE_MS = 5_000;
@@ -113,21 +113,26 @@ describe('storage backends agree', () => {
         redisReachable = true;
         backends.push({ name: 'redis', storage: redis });
       } catch (error) {
-        // Locally, a developer without a server still gets the two other
-        // backends compared. In CI it is a failure: the suite reports the same
+        // A server that was named has to answer. Without `REDIS_URL` the
+        // suite compares the two other backends and says so; with one, a
+        // failure to reach it is the failure — the suite reports the same
         // number of green tests whether or not Redis was among them, so a
         // service that did not come up would take the coverage with it and say
         // nothing at all.
+        //
+        // Named, rather than inferred from `CI`: the compatibility matrix runs
+        // on CI with no Redis service, and inferring one there left every one
+        // of its nine jobs trying to reach a server that was never started —
+        // failing, then hanging on the client still retrying, until the job hit
+        // its fifteen-minute timeout and reported nothing at all.
         // Nothing left retrying: ioredis reconnects for as long as the
         // process lives, so a client that never answered still holds the
         // event loop open and the run hangs after the failure.
         await redis.close().catch(() => undefined);
 
-        if (process.env.CI) {
-          throw new Error(
-            `Redis was expected at ${REDIS_URL} and could not be reached: ${String(error)}`,
-          );
-        }
+        throw new Error(
+          `Redis was expected at ${REDIS_URL} and could not be reached: ${String(error)}`,
+        );
       }
     }
 
@@ -174,7 +179,7 @@ describe('storage backends agree', () => {
     // tests whether or not Redis was among them, so the only way to tell what
     // was actually compared is to say so.
     expect(backends.map(({ name }) => name)).toEqual(
-      process.env.CI ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
+      REDIS_URL ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
     );
   });
 

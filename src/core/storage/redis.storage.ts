@@ -89,6 +89,8 @@ const inChunks = <T>(items: T[], size = PIPELINE_CHUNK): T[][] => {
 export class RedisStorage implements StorageInterface, OnModuleDestroy {
   private readonly logger = new Logger(RedisStorage.name);
   private client: Redis | null = null;
+  /** Set by `close()`, and never unset: a closed storage stays closed. */
+  private closed = false;
   private readonly keyPrefix: string;
   /**
    * The most entries to keep, or `0` to keep everything.
@@ -207,7 +209,20 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   }
 
   async initialize(): Promise<void> {
-    this.client = await this.loadRedisClient();
+    const client = await this.loadRedisClient();
+
+    // Closed while this was still running, which is what happens when a caller
+    // gives up on an unreachable server and shuts down: `close()` had nothing
+    // to close yet, and the client created here afterwards was never closed —
+    // a socket retrying for as long as the process lives, and a process that
+    // therefore never ends. An application that stops while its Redis is
+    // unreachable has to stop.
+    if (this.closed) {
+      client.disconnect();
+      return;
+    }
+
+    this.client = client;
 
     // ioredis connects in the background, so this is the first command anything
     // sends — and the first chance for an unreachable Redis to throw. NestLens
@@ -218,6 +233,14 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Could not prepare the entry indexes: ${reason}`);
+    }
+
+    // And again, because the await above is the long one: a five-second command
+    // timeout is five seconds in which a shutdown can arrive.
+    if (this.closed) {
+      client.disconnect();
+      this.client = null;
+      return;
     }
 
     this.logger.log('Redis storage initialized');
@@ -772,6 +795,10 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
    * shutdown for a question that cannot be answered.
    */
   async close(): Promise<void> {
+    // Set before anything is awaited, so an `initialize()` still in flight
+    // finds it and closes what it created rather than leaving it connected.
+    this.closed = true;
+
     const client = this.client;
     this.client = null;
 

@@ -30,7 +30,7 @@ import { StorageInterface } from '../../../core/storage/storage.interface';
 import { NestLensConfig } from '../../../nestlens.config';
 import { Entry } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 /** Longer than the collector's flush interval, so a batch really waits. */
 const HELD_FOR_MS = 1_200;

@@ -24,7 +24,7 @@ import { RedisStorage } from '../../../core/storage/redis.storage';
 import { SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { StorageInterface } from '../../../core/storage/storage.interface';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 /** A payload no serialiser can take, and one masking does not know about. */
 const poisoned = (): Record<string, unknown> => ({

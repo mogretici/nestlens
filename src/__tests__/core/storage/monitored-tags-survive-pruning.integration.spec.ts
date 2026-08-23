@@ -19,7 +19,7 @@ import { SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { StorageInterface } from '../../../core/storage/storage.interface';
 import { Entry } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 const OLD = '2020-01-01T00:00:00.000Z';
 
@@ -60,9 +60,7 @@ describe('a monitored tag, when pruning runs', () => {
         backends.push({ name: 'redis', storage: redis });
       } catch (error) {
         await redis.close().catch(() => undefined);
-        if (process.env.CI) {
-          throw new Error(`Redis was expected at ${REDIS_URL}: ${String(error)}`);
-        }
+        throw new Error(`Redis was expected at ${REDIS_URL}: ${String(error)}`);
       }
     }
 

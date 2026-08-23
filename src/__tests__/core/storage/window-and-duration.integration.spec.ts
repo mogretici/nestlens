@@ -22,7 +22,7 @@ import { SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { StorageInterface } from '../../../core/storage/storage.interface';
 import { Entry } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 describe('the window and the duration', () => {
   jest.setTimeout(60_000);

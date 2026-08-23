@@ -41,12 +41,30 @@ describe('hashing a very large query', () => {
    */
   const long = (characters: number): string => `query { ${'a '.repeat(characters / 2)}}`;
 
+  /**
+   * The fastest of several runs, not one.
+   *
+   * Hashing five megabytes takes about a millisecond now that the input is
+   * bounded, and a budget of a hundred is checking that the bound is still
+   * there. Timed once, though, what it really measured was whether a garbage
+   * collection landed inside the measurement — which, in a full run under
+   * memory pressure, it sometimes did: this failed twice in one afternoon and
+   * passed on every rerun, blocking a push each time.
+   *
+   * A regression to the 226ms this used to cost fails every sample; a pause
+   * that hits one of them no longer fails the suite.
+   */
   it('is quick', () => {
-    const started = Date.now();
+    const query = long(5_000_000);
 
-    hashQuery(long(5_000_000));
+    let fastest = Number.POSITIVE_INFINITY;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const started = Date.now();
+      hashQuery(query);
+      fastest = Math.min(fastest, Date.now() - started);
+    }
 
-    expect(Date.now() - started).toBeLessThan(100);
+    expect(fastest).toBeLessThan(100);
   });
 
   it('gives one query one hash', () => {

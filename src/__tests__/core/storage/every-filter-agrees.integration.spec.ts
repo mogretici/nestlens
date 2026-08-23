@@ -25,7 +25,7 @@ import { SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { StorageInterface } from '../../../core/storage/storage.interface';
 import { CursorPaginationParams, Entry, EntryType } from '../../../types';
 
-const REDIS_URL = process.env.REDIS_URL ?? (process.env.CI ? 'redis://127.0.0.1:6379' : undefined);
+const REDIS_URL = process.env.REDIS_URL;
 
 /** How long a reachable Redis is allowed to take to answer the first command. */
 const REDIS_DEADLINE_MS = 5_000;
@@ -403,11 +403,9 @@ describe('every filter agrees across backends', () => {
         // event loop open and the run hangs after the failure.
         await redis.close().catch(() => undefined);
 
-        if (process.env.CI) {
-          throw new Error(
-            `Redis was expected at ${REDIS_URL} and could not be reached: ${String(error)}`,
-          );
-        }
+        throw new Error(
+          `Redis was expected at ${REDIS_URL} and could not be reached: ${String(error)}`,
+        );
       }
     }
 
@@ -447,7 +445,7 @@ describe('every filter agrees across backends', () => {
     // tests whether or not Redis was among them, so the only way to tell what
     // was actually compared is to say so.
     expect(backends.map(({ name }) => name)).toEqual(
-      process.env.CI ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
+      REDIS_URL ? ['memory', 'sqlite', 'redis'] : expect.arrayContaining(['memory', 'sqlite']),
     );
   });
 
