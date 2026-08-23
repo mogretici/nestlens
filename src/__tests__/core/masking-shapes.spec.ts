@@ -197,6 +197,35 @@ describe('masking objects that do not keep their contents in properties', () => 
   });
 });
 
+describe('masking a field that holds a function', () => {
+  /**
+   * `JSON.stringify` drops a function, so the file and Redis drivers stored
+   * nothing for it while the in-memory one kept the function itself — one
+   * payload, two shapes. And a function copied across is a function that runs
+   * later: an own `toJSON` that throws made the masked copy unserialisable, so
+   * an entry that had already been masked still could not be written. Found by
+   * the property test beside this one, in 53 of 300 random payloads.
+   */
+  it('records that there was one', () => {
+    expect(mask({ handler: () => 1 })).toEqual({ handler: '[Function]' });
+  });
+
+  it('does not carry a toJSON that throws into the storage', () => {
+    const hostile = {
+      id: 1,
+      toJSON(): never {
+        throw new Error('no');
+      },
+    };
+
+    expect(() => JSON.stringify(mask({ hostile }))).not.toThrow();
+  });
+
+  it('keeps the rest of the object', () => {
+    expect(mask({ id: 7, handler: () => 1 })).toEqual({ id: 7, handler: '[Function]' });
+  });
+});
+
 describe('masking a value the storage cannot serialise', () => {
   /**
    * The file and Redis drivers write `JSON.stringify(payload)`, which refuses

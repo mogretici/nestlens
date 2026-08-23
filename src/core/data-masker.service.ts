@@ -175,6 +175,16 @@ const MAX_MASK_DEPTH = 32;
  */
 const MAX_MASK_NODES = 10_000;
 const CIRCULAR = '[Circular]';
+/**
+ * What a function-valued field is recorded as.
+ *
+ * `JSON.stringify` drops a function, so the file and Redis drivers stored
+ * nothing for it while the in-memory one kept the function itself — the same
+ * payload, two shapes. Worse, a function copied across is a function that runs
+ * later: an own `toJSON` that throws made the masked copy unserialisable, so
+ * an entry that had already been masked could still not be written.
+ */
+const FUNCTION = '[Function]';
 const TOO_DEEP = '[Max depth exceeded]';
 const TRUNCATED = '[Truncated]';
 
@@ -446,6 +456,10 @@ export class DataMaskerService {
     // the entries behind it down with it. Written the way it is printed.
     if (typeof value === 'bigint') {
       return `${value}n`;
+    }
+
+    if (typeof value === 'function') {
+      return FUNCTION;
     }
 
     if (value === null || typeof value !== 'object') {
