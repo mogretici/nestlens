@@ -1,3 +1,10 @@
+## [0.14.1](https://github.com/mogretici/nestlens/compare/v0.14.0...v0.14.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* **dashboard:** the application keeps its logger when the dashboard binds ([54084d4](https://github.com/mogretici/nestlens/commit/54084d428050bb136e7712b0fdf4555dec983a3c))
+
 # [0.14.0](https://github.com/mogretici/nestlens/compare/v0.13.0...v0.14.0) (2026-08-24)
 
 
