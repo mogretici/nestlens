@@ -11,6 +11,7 @@ import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens
 import { CacheEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { capturePayload } from './capture-payload';
+import { MethodOutcome, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * The cache-manager surface this watcher touches. Every method is optional
@@ -119,69 +120,48 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       reset: this.cacheManager.reset?.bind(this.cacheManager),
     };
 
-    // Wrap get method
-    const originalGet = this.originalMethods.get;
-    if (originalGet) {
-      this.cacheManager.get = async (key: string): Promise<unknown> => {
-        const startTime = Date.now();
-        let hit = false;
-        let value: unknown;
+    // Wrapped so a caller gets back exactly what it did before.
+    //
+    // These were `async`, which turns a synchronous method into one that
+    // returns a promise. `@nestjs/cache-manager` is asynchronous by contract,
+    // but the object under `CACHE_MANAGER` is whatever the application
+    // provided — and a store with a synchronous `get` handed every caller a
+    // promise instead of a value the moment this watcher was enabled:
+    // `const cached = cache.get(key); if (cached) ...` then took the cached
+    // branch always, because a promise is always truthy. The same shape took
+    // an authorization service down once; the helper exists for it.
+    const wrap = <T extends (...args: never[]) => unknown>(
+      original: T | undefined,
+      record: (outcome: MethodOutcome) => void,
+    ): T | undefined => (original ? wrapMethodPreservingShape(original, record) : undefined);
 
-        try {
-          value = await originalGet(key);
-          hit = value !== undefined && value !== null;
-          return value;
-        } finally {
-          const duration = Date.now() - startTime;
-          this.collectEntry('get', key, hit, duration, value);
-        }
-      };
-    }
+    const get = wrap(this.originalMethods.get, ({ args, result, durationMs }) => {
+      const hit = result !== undefined && result !== null;
+      this.collectEntry('get', String(args[0]), hit, durationMs, result);
+    });
+    if (get) manager.get = get;
 
-    // Wrap set method
-    const originalSet = this.originalMethods.set;
-    if (originalSet) {
-      this.cacheManager.set = async (key: string, value: unknown, ttl?: number): Promise<void> => {
-        const startTime = Date.now();
+    const set = wrap(this.originalMethods.set, ({ args, durationMs }) => {
+      this.collectEntry(
+        'set',
+        String(args[0]),
+        undefined,
+        durationMs,
+        args[1],
+        args[2] as number | undefined,
+      );
+    });
+    if (set) manager.set = set;
 
-        try {
-          return await originalSet(key, value, ttl);
-        } finally {
-          const duration = Date.now() - startTime;
-          this.collectEntry('set', key, undefined, duration, value, ttl);
-        }
-      };
-    }
+    const del = wrap(this.originalMethods.del, ({ args, durationMs }) => {
+      this.collectEntry('del', String(args[0]), undefined, durationMs);
+    });
+    if (del) manager.del = del;
 
-    // Wrap del method
-    const originalDel = this.originalMethods.del;
-    if (originalDel) {
-      this.cacheManager.del = async (key: string): Promise<void> => {
-        const startTime = Date.now();
-
-        try {
-          return await originalDel(key);
-        } finally {
-          const duration = Date.now() - startTime;
-          this.collectEntry('del', key, undefined, duration);
-        }
-      };
-    }
-
-    // Wrap reset method (clear all)
-    const originalReset = this.originalMethods.reset;
-    if (originalReset) {
-      this.cacheManager.reset = async (): Promise<void> => {
-        const startTime = Date.now();
-
-        try {
-          return await originalReset();
-        } finally {
-          const duration = Date.now() - startTime;
-          this.collectEntry('clear', '*', undefined, duration);
-        }
-      };
-    }
+    const reset = wrap(this.originalMethods.reset, ({ durationMs }) => {
+      this.collectEntry('clear', '*', undefined, durationMs);
+    });
+    if (reset) manager.reset = reset;
 
     this.logger.log('Cache interceptors installed');
   }
