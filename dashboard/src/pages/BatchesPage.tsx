@@ -157,6 +157,7 @@ export default function BatchesPage() {
         iconColor="text-blue-600 dark:text-blue-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'batch', label: 'batches', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

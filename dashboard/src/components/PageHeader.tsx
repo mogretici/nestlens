@@ -1,5 +1,7 @@
 import { ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { LucideIcon, RefreshCw, X } from 'lucide-react';
+import ClearTypeButton from './ClearTypeButton';
+import { EntryType } from '../types';
 
 interface FilterItem {
   category: string;
@@ -24,6 +26,13 @@ interface PageHeaderProps {
 
   // Actions
   onRefresh?: () => void;
+  /**
+   * The kind of entry this page lists, which puts a "Clear" beside Refresh.
+   *
+   * Pruning deletes by age and the sidebar's button deletes everything; this
+   * is how a reader says "these, now".
+   */
+  clearable?: { type: EntryType; label: string; onCleared: () => void };
   autoRefreshEnabled?: boolean;
   onAutoRefreshToggle?: (enabled: boolean) => void;
   /** Real-time SSE connection is open — shows a "Live" indicator. */
@@ -50,6 +59,7 @@ export default function PageHeader({
   loading,
   refreshing,
   onRefresh,
+  clearable,
   autoRefreshEnabled,
   onAutoRefreshToggle,
   live,
@@ -176,6 +186,15 @@ export default function PageHeader({
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
               <span>Auto Refresh</span>
             </button>
+          )}
+
+          {/* Clear this type */}
+          {clearable && (
+            <ClearTypeButton
+              type={clearable.type}
+              label={clearable.label}
+              onCleared={clearable.onCleared}
+            />
           )}
 
           {/* Refresh Button */}

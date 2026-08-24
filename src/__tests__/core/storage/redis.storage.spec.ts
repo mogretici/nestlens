@@ -551,7 +551,8 @@ describe('RedisStorage', () => {
     });
 
     it('handles an empty store', async () => {
-      await expect(storage.clear()).resolves.toBeUndefined();
+      // Answers with what it deleted, which is nothing.
+      await expect(storage.clear()).resolves.toBe(0);
     });
 
     it('leaves keys that are not ours alone', async () => {

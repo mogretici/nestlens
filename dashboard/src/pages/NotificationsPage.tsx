@@ -148,6 +148,7 @@ export default function NotificationsPage() {
         iconColor="text-indigo-600 dark:text-indigo-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'notification', label: 'notifications', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

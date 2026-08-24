@@ -150,6 +150,7 @@ export default function ViewsPage() {
         iconColor="text-teal-600 dark:text-teal-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'view', label: 'views', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

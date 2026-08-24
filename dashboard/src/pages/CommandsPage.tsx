@@ -139,6 +139,7 @@ export default function CommandsPage() {
         iconColor="text-green-600 dark:text-green-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'command', label: 'commands', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

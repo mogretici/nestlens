@@ -227,13 +227,33 @@ export class MemoryStorage implements StorageInterface, OnModuleDestroy {
     return results.length;
   }
 
-  async clear(): Promise<void> {
+  async clear(type?: EntryType): Promise<number> {
+    if (type) {
+      let deleted = 0;
+
+      for (const [id, entry] of this.entries) {
+        if (entry.type !== type) continue;
+
+        this.entries.delete(id);
+        this.removeEntryTagsInternal(id);
+        deleted += 1;
+      }
+
+      this.logger.log(`Cleared ${deleted} ${type} entries`);
+
+      return deleted;
+    }
+
+    const deleted = this.entries.size;
+
     this.entries.clear();
     this.entryTags.clear();
     this.tagIndex.clear();
     this.nextId = 1;
     this.oldestId = 1;
     this.logger.log('Storage cleared');
+
+    return deleted;
   }
 
   async close(): Promise<void> {

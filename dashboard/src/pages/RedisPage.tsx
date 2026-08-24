@@ -139,6 +139,7 @@ export default function RedisPage() {
         iconColor="text-red-600 dark:text-red-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'redis', label: 'redis', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

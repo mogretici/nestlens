@@ -136,6 +136,7 @@ export default function CachePage() {
         iconColor="text-cyan-600 dark:text-cyan-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'cache', label: 'cache', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

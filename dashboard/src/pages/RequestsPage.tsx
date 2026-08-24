@@ -158,6 +158,7 @@ export default function RequestsPage() {
         iconColor="text-blue-600 dark:text-blue-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'request', label: 'requests', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

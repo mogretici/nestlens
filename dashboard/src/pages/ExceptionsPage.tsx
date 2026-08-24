@@ -238,6 +238,7 @@ export default function ExceptionsPage() {
         iconColor="text-red-600 dark:text-red-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'exception', label: 'exceptions', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

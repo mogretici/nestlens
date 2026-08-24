@@ -182,6 +182,7 @@ export default function SchedulePage() {
         iconColor="text-gray-600 dark:text-gray-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'schedule', label: 'schedule', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

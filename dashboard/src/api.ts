@@ -57,20 +57,31 @@ export async function getStats(): Promise<ApiResponse<Stats>> {
  * back as an ordinary value and the dashboard reported *All entries cleared*
  * over a list that still had everything in it.
  */
-export async function clearEntries(): Promise<{ success: boolean; message: string }> {
-  const response = await fetch(`${API_BASE}/entries`, { method: 'DELETE' });
+export async function clearEntries(
+  type?: EntryType,
+): Promise<{ success: boolean; message: string; deleted: number }> {
+  const query = type ? `?type=${encodeURIComponent(type)}` : '';
+  const response = await fetch(`${API_BASE}/entries${query}`, { method: 'DELETE' });
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
 
-  const body = (await response.json()) as ApiResponse<{ message?: string }> & {
+  const body = (await response.json()) as ApiResponse<{ deleted?: number }> & {
     success?: boolean;
+    message?: string;
   };
   if (body.success === false) {
     throw new Error(body.error ?? 'The request was refused');
   }
 
-  return { success: true, message: body.data?.message ?? 'All entries cleared' };
+  const deleted = body.data?.deleted ?? 0;
+
+  return {
+    success: true,
+    // What happened, from the server, rather than what was assumed here.
+    message: body.message ?? `Cleared ${deleted} entries`,
+    deleted,
+  };
 }
 
 /**

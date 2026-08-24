@@ -126,6 +126,7 @@ export default function EventsPage() {
         iconColor="text-emerald-600 dark:text-emerald-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'event', label: 'events', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

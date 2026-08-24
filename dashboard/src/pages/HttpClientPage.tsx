@@ -160,6 +160,7 @@ export default function HttpClientPage() {
         iconColor="text-cyan-600 dark:text-cyan-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'http-client', label: 'http client', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

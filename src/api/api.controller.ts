@@ -28,6 +28,7 @@ import {
   DEFAULT_LIMIT,
   EntriesQueryDto,
   LatestSequenceQueryDto,
+  ClearEntriesQueryDto,
   LogsQueryDto,
   PauseRecordingDto,
   QueriesQueryDto,
@@ -286,10 +287,28 @@ export class NestLensApiController {
     };
   }
 
+  /**
+   * Deletes entries — all of them, or all of one type.
+   *
+   * Different from pruning, which deletes by age and leaves a monitored tag's
+   * entries alone. This is somebody pressing delete: age is not consulted and
+   * a monitored tag does not stand in the way, because monitoring says *do not
+   * let pruning take these*, which is a different sentence.
+   *
+   * Answers with how many went, so the page that asked can say so rather than
+   * assume.
+   */
   @Delete('entries')
-  async clearEntries(@Res() _res?: unknown) {
-    await this.storage.clear();
-    return { success: true, message: 'All entries cleared' };
+  async clearEntries(@Query() query: ClearEntriesQueryDto, @Res() _res?: unknown) {
+    const deleted = await this.storage.clear(query.type);
+
+    return {
+      success: true,
+      data: { deleted, type: query.type ?? null },
+      message: query.type
+        ? `Cleared ${deleted} ${query.type} ${deleted === 1 ? 'entry' : 'entries'}`
+        : `Cleared ${deleted} ${deleted === 1 ? 'entry' : 'entries'}`,
+    };
   }
 
   // ==================== Resolution Endpoints ====================

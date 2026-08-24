@@ -81,9 +81,17 @@ export interface StorageInterface {
   pruneByType(type: EntryType, before: Date): Promise<number>;
 
   /**
-   * Delete all entries
+   * Delete entries — all of them, or all of one type.
+   *
+   * Different from pruning in two ways, both deliberate: age is not consulted,
+   * and an entry carrying a monitored tag goes with the rest. Monitoring says
+   * *do not let pruning take these*; somebody pressing a button that says
+   * delete has said something else.
+   *
+   * Returns how many were deleted, because a reader who pressed it deserves to
+   * be told what happened.
    */
-  clear(): Promise<void>;
+  clear(type?: EntryType): Promise<number>;
 
   /**
    * Close the storage connection

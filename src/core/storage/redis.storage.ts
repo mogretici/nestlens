@@ -759,10 +759,23 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
    * batches, and the deletes go out in pipelines rather than as one `DEL` with
    * a million arguments.
    */
-  async clear(): Promise<void> {
+  async clear(type?: EntryType): Promise<number> {
+    if (type) {
+      // Every id of that type, whatever its age and whether or not a monitored
+      // tag protects it from *pruning*: this is somebody deleting, not the
+      // timer tidying.
+      const ids = await this.getClient().zrange(this.key('entries', 'type', type), 0, -1);
+
+      await this.deleteEntries(ids);
+      this.logger.log(`Cleared ${ids.length} ${type} entries`);
+
+      return ids.length;
+    }
+
     const client = this.getClient();
     let cursor = '0';
     let removed = 0;
+    const total = await client.zcard(this.key('entries', 'all'));
 
     do {
       const [next, keys] = await client.scan(cursor, 'MATCH', `${this.keyPrefix}*`, 'COUNT', 500);
@@ -779,6 +792,8 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
     } while (cursor !== '0');
 
     this.logger.log(`Storage cleared (${removed} keys)`);
+
+    return total;
   }
 
   /**
