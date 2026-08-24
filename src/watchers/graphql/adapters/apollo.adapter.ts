@@ -335,7 +335,26 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
         : undefined;
 
       // Get response errors
+      // What the client was sent: formatted, and the right thing to put on the
+      // entry — a reader wants to see what the caller saw.
       const responseErrors = ctx.response.body?.singleResult?.errors ?? errors;
+
+      /**
+       * What was actually thrown, which is a different list.
+       *
+       * Apollo formats its errors before `willSendResponse`: measured on a real
+       * server, the errors here are plain objects carrying
+       * `message, locations, path, extensions` and no `originalError`.
+       * `didEncounterErrors` is handed the `GraphQLError`s themselves, which is
+       * the only place a resolver's own exception — its name, its stack — can
+       * be seen.
+       *
+       * Recording read the formatted list and found nothing thrown, so a
+       * failed operation produced no exception entry at all on a real Apollo
+       * server. Every test that said otherwise had fed the hook errors it had
+       * built itself, with `originalError` attached.
+       */
+      const thrownErrors = errors.length > 0 ? errors : responseErrors;
 
       // Calculate depth. Nothing to walk when the text never arrived, which
       // is an APQ hash the server could not resolve.
@@ -439,7 +458,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
 
       // And what it threw, if anything: a failed operation is an exception the
       // application had, and everything that reads exceptions was blind to it.
-      await adapter.recordErrors(responseErrors, {
+      await adapter.recordErrors(thrownErrors, {
         name: operationName,
         type: operationType,
         requestId,
