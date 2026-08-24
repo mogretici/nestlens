@@ -4,6 +4,7 @@ import {
   INestApplication,
   Injectable,
   Logger,
+  LoggerService,
   Module,
   OnModuleDestroy,
   OnApplicationBootstrap,
@@ -48,6 +49,41 @@ const LIFECYCLE_HOOKS = new Set([
   'onApplicationShutdown',
   'beforeApplicationShutdown',
 ]);
+
+/**
+ * The host application's logger, put back once the dashboard's own is silent.
+ *
+ * `NestFactory.create` applies its `logger` option through
+ * `Logger.overrideLogger`, which is static and therefore process-wide: passing
+ * `logger: false` to a second application silences the first one as well, for
+ * the rest of its life. Measured on a deployment before this existed — the
+ * host logged normally through startup, reached this hook inside
+ * `app.listen()`, and never logged again. Not its guards, not its errors, not
+ * even the message below explaining a dashboard that could not bind. A
+ * debugging tool that blinds the application it reports on is worse than no
+ * debugging tool.
+ *
+ * `staticInstanceRef` is `protected static`, so a subclass is the typed way to
+ * read it and hand it back; nothing here reaches around the type system.
+ */
+class HostLogger extends Logger {
+  static capture(): LoggerService | undefined {
+    return HostLogger.staticInstanceRef;
+  }
+
+  /**
+   * Assigning `HostLogger.staticInstanceRef` would not do this: a write to a
+   * static through a subclass creates an own property on the subclass, and the
+   * base class — the one every `Logger` call reads — keeps the value it had.
+   * The test that pins this failed on exactly that first.
+   *
+   * `false` is how `overrideLogger` spells "no instance", which is the state a
+   * host that never installed a logger of its own is in.
+   */
+  static restore(instance: LoggerService | undefined): void {
+    Logger.overrideLogger(instance ?? false);
+  }
+}
 
 /**
  * The same object, minus its lifecycle hooks.
@@ -189,18 +225,41 @@ export class NestLensDashboardServer implements OnApplicationBootstrap, OnModule
    * reachable before the thing it reports on is ready.
    */
   async onApplicationBootstrap(): Promise<void> {
-    const application = await NestFactory.create(
-      NestLensDashboardModule.forRoot(this.sharedProviders()),
-      createAdapter(this.hostAdapterType()),
-      // Its own bootstrap log — route mappings for controllers the application
-      // already described — would read as a second application starting up.
-      { logger: false },
-    );
+    // Its own bootstrap log — route mappings for controllers the application
+    // already described — would read as a second application starting up. The
+    // silence is scoped to that: whatever the host was logging with is taken
+    // first and handed back in `finally`, so a failure on either line below
+    // still leaves the application able to speak. See `HostLogger`.
+    //
+    // The host is silent for the width of these two calls, which is
+    // unavoidable: Nest applies a `logger` option through a static, so there is
+    // no way to quieten one application without quietening the process. It is
+    // a few milliseconds inside `listen()`, against a dashboard that would
+    // otherwise announce itself as a second application every boot.
+    const hostLogger = HostLogger.capture();
+    Logger.overrideLogger(false);
+
+    let application: INestApplication;
+    let bindError: unknown;
 
     try {
-      await application.listen(this.server.port, this.server.host);
-    } catch (error) {
-      await application.close().catch(() => undefined);
+      application = await NestFactory.create(
+        NestLensDashboardModule.forRoot(this.sharedProviders()),
+        createAdapter(this.hostAdapterType()),
+      );
+
+      try {
+        await application.listen(this.server.port, this.server.host);
+      } catch (error) {
+        bindError = error;
+        await application.close().catch(() => undefined);
+      }
+    } finally {
+      HostLogger.restore(hostLogger);
+    }
+
+    if (bindError) {
+      const error = bindError;
 
       // Reported, not thrown. A port already taken or an address the host does
       // not hold is a deployment's condition rather than a mistake in its
