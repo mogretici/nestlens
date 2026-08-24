@@ -14,7 +14,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
+import { HttpAdapterHost, ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG } from '../../nestlens.config';
 import { ResolvedGraphQLConfig, resolveGraphQLConfig } from './types';
@@ -268,6 +268,27 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
    * Detect which GraphQL server is installed
    */
   detectServer(): DetectedServer {
+    // Mercurius runs on Fastify and nowhere else, so an application on Fastify
+    // with Mercurius installed is running Mercurius — and one on Express
+    // cannot be, whatever it has in `node_modules`.
+    //
+    // This used to be the package list alone, first match wins, with Apollo
+    // first. An application carrying both — a monorepo, a dependency left
+    // behind, `@nestjs/apollo` beside a Fastify app — got the Apollo adapter,
+    // whose hooks were then installed on a server nobody was using: not one
+    // operation recorded, and nothing said why. This repository put itself in
+    // exactly that state the moment `@apollo/server` was added for testing.
+    //
+    // The driver the application registered would be a better answer still,
+    // and it cannot be had: `moduleRef.get(MercuriusDriver)` does not resolve —
+    // measured — because `GraphQLModule` does not provide it under that token.
+    // An application that really is running Apollo on Fastify with Mercurius
+    // installed can say `server: 'apollo'`.
+    if (isPackageAvailable('mercurius') && this.platform() === 'fastify') {
+      this.logger.debug('Detected Mercurius, on Fastify');
+      return 'mercurius';
+    }
+
     // Check for Apollo Server
     if (isPackageAvailable('@apollo/server')) {
       this.logger.debug('Detected Apollo Server');
@@ -282,6 +303,20 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
 
     // No GraphQL server found
     return 'none';
+  }
+
+  /**
+   * Which HTTP platform the application is running on, where that is knowable.
+   *
+   * Read through the module reference rather than injected, so a watcher built
+   * in a test without an HTTP adapter still starts.
+   */
+  private platform(): string | undefined {
+    try {
+      return this.moduleRef.get(HttpAdapterHost, { strict: false })?.httpAdapter?.getType?.();
+    } catch {
+      return undefined;
+    }
   }
 
   /**

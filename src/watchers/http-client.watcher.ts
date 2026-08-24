@@ -62,8 +62,21 @@ interface InstalledInterceptor {
   id: unknown;
 }
 
+/**
+ * An axios instance is callable, so `typeof` reports `'function'`.
+ *
+ * This checked for `'object'` alone, which no axios instance has ever
+ * satisfied: `axios.create()` returns a wrapped function with the interceptor
+ * managers hung off it, and `HttpService.axiosRef` hands back that same
+ * function. So every client this watcher was ever given — the documented
+ * `NESTLENS_HTTP_CLIENT` token included — was answered with
+ * `Invalid axios instance provided` and nothing was recorded. Measured against
+ * `@nestjs/axios` 4: `typeof axiosRef` is `'function'`.
+ *
+ * The rest of the check is what actually identifies one, and it is unchanged.
+ */
 function hasInterceptors(value: unknown): value is AxiosLike {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return false;
   const { interceptors } = value as { interceptors?: unknown };
   if (!interceptors || typeof interceptors !== 'object') return false;
 
