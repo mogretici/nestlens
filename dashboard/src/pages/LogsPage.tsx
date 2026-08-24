@@ -126,6 +126,7 @@ export default function LogsPage() {
         iconColor="text-green-600 dark:text-green-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'log', label: 'logs', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

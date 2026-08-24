@@ -161,6 +161,7 @@ export default function MailPage() {
         iconColor="text-pink-600 dark:text-pink-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'mail', label: 'mail', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

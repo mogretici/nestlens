@@ -156,6 +156,7 @@ export default function ModelsPage() {
         iconColor="text-purple-600 dark:text-purple-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'model', label: 'models', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

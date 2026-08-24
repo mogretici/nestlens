@@ -90,9 +90,25 @@ export interface GraphQLPayload {
   operationName?: string;
   /** Type of operation: query, mutation, or subscription */
   operationType: GraphQLOperationType;
-  /** The GraphQL query/mutation/subscription string */
+  /**
+   * The query, mutation or subscription as text.
+   *
+   * Empty only when a persisted query's hash could not be resolved to one:
+   * the server answered, and what it answered is on the entry, but there is no
+   * document to show.
+   */
   query: string;
-  /** Hash of the query for deduplication and grouping */
+  /**
+   * An identity for the query text: the same document produces the same hash
+   * whichever operation ran it, so two entries can be told apart from two
+   * calls of one thing.
+   *
+   * Shown on the detail page. Nothing groups by it — the comment here used to
+   * say "for deduplication", which was an intention, not a behaviour.
+   *
+   * For a persisted query whose hash the server could not resolve, this is the
+   * client's hash: it is the only identity that operation has.
+   */
   queryHash: string;
   /** Variables passed to the operation (sensitive values masked) */
   variables?: Record<string, unknown>;

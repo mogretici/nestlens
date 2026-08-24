@@ -5,3 +5,4 @@ export * from './recording.dto';
 export * from './tags.dto';
 export * from './entries-query.dto';
 export * from './entry-types';
+export * from './clear-entries.dto';

@@ -1366,9 +1366,30 @@ export class SqliteStorage implements StorageInterface, OnModuleInit, OnModuleDe
     };
   }
 
-  async clear(): Promise<void> {
+  async clear(type?: EntryType): Promise<number> {
+    if (type) {
+      // The tags go with their entries; `ON DELETE CASCADE` is not relied on
+      // because the tag table is written to by a separate path.
+      this.db
+        .prepare(
+          `DELETE FROM nestlens_tags WHERE entry_id IN
+             (SELECT id FROM nestlens_entries WHERE type = ?)`,
+        )
+        .run(type);
+
+      const { changes } = this.db.prepare('DELETE FROM nestlens_entries WHERE type = ?').run(type);
+
+      return Number(changes);
+    }
+
+    const { total } = this.db.prepare('SELECT COUNT(*) as total FROM nestlens_entries').get() as {
+      total: number;
+    };
+
     this.db.exec('DELETE FROM nestlens_tags');
     this.db.exec('DELETE FROM nestlens_entries');
+
+    return Number(total);
   }
 
   async close(): Promise<void> {

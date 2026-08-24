@@ -158,6 +158,7 @@ export default function GatesPage() {
         iconColor="text-amber-600 dark:text-amber-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'gate', label: 'gates', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

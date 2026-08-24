@@ -143,6 +143,7 @@ export default function JobsPage() {
         iconColor="text-yellow-600 dark:text-yellow-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'job', label: 'jobs', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

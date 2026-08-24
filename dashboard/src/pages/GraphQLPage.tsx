@@ -231,6 +231,7 @@ export default function GraphQLPage() {
         iconColor="text-purple-600 dark:text-purple-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'graphql', label: 'graphql', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

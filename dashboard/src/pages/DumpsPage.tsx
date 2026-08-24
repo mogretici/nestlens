@@ -168,6 +168,7 @@ export default function DumpsPage() {
         iconColor="text-slate-600 dark:text-slate-400"
         count={entries.length}
         totalCount={meta?.total}
+        clearable={{ type: 'dump', label: 'dumps', onCleared: refresh }}
         refreshing={refreshing}
         autoRefreshEnabled={autoRefreshEnabled}
         live={live}

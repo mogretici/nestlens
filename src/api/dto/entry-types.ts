@@ -1,4 +1,4 @@
-import { EntryType } from '@/types';
+import { ENTRY_TYPES as CANONICAL_ENTRY_TYPES, EntryType } from '@/types';
 
 /**
  * Every type an entry can have.
@@ -7,24 +7,13 @@ import { EntryType } from '@/types';
  * does not record, or rejects one it does, is a filter that silently returns
  * nothing.
  */
-export const ENTRY_TYPES: EntryType[] = [
-  'request',
-  'query',
-  'exception',
-  'log',
-  'cache',
-  'event',
-  'job',
-  'schedule',
-  'mail',
-  'http-client',
-  'redis',
-  'model',
-  'notification',
-  'view',
-  'command',
-  'gate',
-  'batch',
-  'dump',
-  'graphql',
-];
+/**
+ * Every type an entry can have, from the one list that defines them.
+ *
+ * Written out here as well until the Redis driver's copy of the same list fell
+ * one type behind and made `graphql` entries invisible to stats. A DTO that
+ * accepts a type the storage does not record, or rejects one it does, is a
+ * filter that silently returns nothing — so this is the same list, not another
+ * one.
+ */
+export const ENTRY_TYPES: EntryType[] = [...CANONICAL_ENTRY_TYPES];

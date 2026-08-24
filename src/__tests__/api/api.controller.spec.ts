@@ -1006,12 +1006,22 @@ describe('NestLensApiController', () => {
 
   describe('clearEntries', () => {
     it('should clear all entries', async () => {
-      mockStorage.clear.mockResolvedValue(undefined);
+      mockStorage.clear.mockResolvedValue(12);
 
-      const result = await controller.clearEntries();
+      const result = await controller.clearEntries({});
 
-      expect(mockStorage.clear).toHaveBeenCalled();
-      expect(result).toEqual({ success: true, message: 'All entries cleared' });
+      expect(mockStorage.clear).toHaveBeenCalledWith(undefined);
+      expect(result).toMatchObject({ success: true, data: { deleted: 12, type: null } });
+    });
+
+    it('should clear one type when asked', async () => {
+      mockStorage.clear.mockResolvedValue(3);
+
+      const result = await controller.clearEntries({ type: 'query' });
+
+      expect(mockStorage.clear).toHaveBeenCalledWith('query');
+      expect(result).toMatchObject({ success: true, data: { deleted: 3, type: 'query' } });
+      expect(result.message).toContain('3 query entries');
     });
   });
 

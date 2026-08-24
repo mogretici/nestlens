@@ -177,6 +177,29 @@ measures.
 All three drivers honour it, and stopping monitoring lets the entries go at the
 next prune.
 
+## Deleting on purpose
+
+Pruning is a rule about age. Two things are not:
+
+| | What it deletes |
+|---|---|
+| **Clear** on a list page | Every entry of that kind, whatever its age |
+| **Clear all entries** in the sidebar | Everything, every kind |
+
+Neither consults `maxAge`, and neither leaves a monitored tag's entries behind:
+monitoring says *do not let pruning take these*, and pressing delete says
+something else. Both answer with how many went.
+
+```bash
+# Just the queries
+curl -X DELETE 'http://localhost:3000/nestlens/__nestlens__/api/entries?type=query'
+
+# Everything
+curl -X DELETE 'http://localhost:3000/nestlens/__nestlens__/api/entries'
+```
+
+`type` accepts any entry type; anything else is refused rather than ignored.
+
 ## Configuration Examples
 
 ### Development Environment
