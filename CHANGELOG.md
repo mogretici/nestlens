@@ -1,3 +1,16 @@
+# [0.14.0](https://github.com/mogretici/nestlens/compare/v0.13.0...v0.14.0) (2026-08-24)
+
+
+### Bug Fixes
+
+* **cache:** watching a cache does not change what it returns ([610cc72](https://github.com/mogretici/nestlens/commit/610cc72adff0518d871850d64f83f7a8f2b646af))
+* **graphql:** a persisted query is still an operation ([2672aef](https://github.com/mogretici/nestlens/commit/2672aef116bfcc837a10b7a1c7f86f90196313a6))
+
+
+### Features
+
+* **api:** delete the entries of one watcher, on purpose ([2a7b60e](https://github.com/mogretici/nestlens/commit/2a7b60e47ee4587d2ea22fb8a54c542635ae1242))
+
 # [0.13.0](https://github.com/mogretici/nestlens/compare/v0.12.0...v0.13.0) (2026-08-23)
 
 
