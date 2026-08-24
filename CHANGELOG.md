@@ -1,3 +1,10 @@
+## [0.14.2](https://github.com/mogretici/nestlens/compare/v0.14.1...v0.14.2) (2026-08-24)
+
+
+### Bug Fixes
+
+* **http-client:** an axios instance is a function, and was refused as one ([13a0dc7](https://github.com/mogretici/nestlens/commit/13a0dc7111c7489babba9f046665c90149564530))
+
 ## [0.14.1](https://github.com/mogretici/nestlens/compare/v0.14.0...v0.14.1) (2026-08-24)
 
 
