@@ -36,14 +36,32 @@ interface ApolloRequestContext {
     http?: {
       headers: Map<string, string>;
     };
+    /**
+     * What an automatic persisted query sends instead of the query.
+     *
+     * After the first call a client sends only this hash, and Apollo resolves
+     * the text from its APQ cache *after* `requestDidStart` — which is why
+     * nothing here may read `request.query` and give up when it is missing.
+     */
+    extensions?: { persistedQuery?: { sha256Hash?: string } };
   };
+  /** The query text, once Apollo has resolved it. See `didResolveSource`. */
+  source?: string;
   contextValue?: Record<string, unknown>;
 }
 
 interface ApolloRequestListener {
+  /**
+   * Where the query text becomes available.
+   *
+   * With an automatic persisted query the request carries a hash and no text;
+   * Apollo resolves the text from its cache and puts it here. This is the
+   * earliest hook that has it, which is why recording waits for it.
+   */
+  didResolveSource?: (ctx: ApolloRequestContext) => Promise<void>;
   parsingDidStart?: () => Promise<void | (() => void)>;
   validationDidStart?: () => Promise<void | (() => void)>;
-  didResolveOperation?: (ctx: { operationName?: string }) => Promise<void>;
+  didResolveOperation?: (ctx: ApolloRequestContext & { operationName?: string }) => Promise<void>;
   executionDidStart?: () => Promise<void | {
     willResolveField?: (params: ApolloFieldResolverParams) => (() => void) | void;
     executionDidEnd?: () => Promise<void>;
@@ -212,33 +230,52 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
     adapter.startedRequests.add(requestContext);
 
     const { request } = requestContext;
-    const query = request.query;
-
-    // Skip if no query
-    if (!query) {
-      return;
-    }
 
     // Check sampling
     if (!adapter.shouldSample()) {
       return;
     }
 
-    // Extract operation info
-    const operationName = extractOperationName(query, request.operationName);
-    // Which operation ran, for a document that declares more than one.
-    const operationType = extractOperationType(query, request.operationName);
-
-    // Check if should ignore
-    if (adapter.shouldIgnoreOperation(operationName, query)) {
-      return;
-    }
-
     // Initialize operation context
     const requestId = uuidv4();
     const startTime = process.hrtime.bigint();
-    const queryHash = hashQuery(query);
-    const truncatedQuery = truncateQuery(query, adapter.config.maxQuerySize);
+
+    /**
+     * What the operation is, once its text is known.
+     *
+     * This used to be read at `requestDidStart` from `request.query`, and the
+     * hook returned when there was none. With an automatic persisted query
+     * there *is* none: after the first call a client sends the hash alone and
+     * Apollo resolves the text from its cache a hook later. So every operation
+     * was recorded exactly once, on its first call, and never again — measured
+     * against a client using APQ as four requests answered and one entry
+     * written. The drop was before the collector, so `droppedBySampling`,
+     * `droppedByFilter` and `droppedByBuffer` all stayed at zero and
+     * `recording/status` reported that nothing was wrong.
+     *
+     * Filled by whichever hook first has the text, and the operation is
+     * recorded whether or not that happened.
+     */
+    let query: string | undefined;
+    let operationName: string | undefined;
+    let operationType: 'query' | 'mutation' | 'subscription' = 'query';
+    let queryHash = request.extensions?.persistedQuery?.sha256Hash ?? '';
+    let truncatedQuery = '';
+    let ignored = false;
+
+    const learnQuery = (text: string | undefined): void => {
+      if (query || !text) return;
+
+      query = text;
+      operationName = extractOperationName(text, request.operationName);
+      // Which operation ran, for a document that declares more than one.
+      operationType = extractOperationType(text, request.operationName);
+      queryHash = hashQuery(text);
+      truncatedQuery = truncateQuery(text, adapter.config.maxQuerySize);
+      ignored = adapter.shouldIgnoreOperation(operationName, text);
+    };
+
+    learnQuery(request.query);
 
     // Initialize trackers
     const n1Detector = adapter.config.detectN1Queries
@@ -273,6 +310,12 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
     const headers = adapter.extractHeaders(requestContext, httpRequest);
 
     const record = async (ctx: ApolloResponseContext): Promise<void> => {
+      // `ignoreOperations` and `ignoreIntrospection` are decided from the query
+      // text, which may only have arrived after this operation began. Applied
+      // here, where the answer is known, rather than at a hook that could not
+      // have had it.
+      if (ignored) return;
+
       const endTime = process.hrtime.bigint();
       const duration = adapter.nsToMs(endTime - startTime);
 
@@ -294,8 +337,9 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
       // Get response errors
       const responseErrors = ctx.response.body?.singleResult?.errors ?? errors;
 
-      // Calculate depth
-      const depthResult = calculateDepth(query);
+      // Calculate depth. Nothing to walk when the text never arrived, which
+      // is an APQ hash the server could not resolve.
+      const depthResult = query ? calculateDepth(query) : { maxDepth: 0 };
 
       // N+1 detection
       const n1Warnings = n1Detector ? n1Detector.detect().warnings : [];
@@ -374,7 +418,7 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
           const tags = await adapter.config.tags({
             operationName,
             operationType,
-            query,
+            query: query ?? '',
             variables: request.variables,
             request: {
               ip,
@@ -403,6 +447,14 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
     };
 
     return {
+      /**
+       * The earliest hook that has the query text, and with an automatic
+       * persisted query the only one: the request itself carried a hash.
+       */
+      async didResolveSource(resolved: ApolloRequestContext) {
+        learnQuery(resolved.source ?? resolved.request?.query);
+      },
+
       async parsingDidStart() {
         parsingStartTime = process.hrtime.bigint();
         return () => {
@@ -417,8 +469,10 @@ export class ApolloAdapter extends BaseGraphQLAdapter {
         };
       },
 
-      async didResolveOperation() {
-        // Operation has been resolved - we could do additional checks here
+      async didResolveOperation(resolved) {
+        // A second chance at the text, for a server or a version that does not
+        // call `didResolveSource`.
+        learnQuery(resolved?.source ?? resolved?.request?.query);
       },
 
       async executionDidStart() {

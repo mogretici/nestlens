@@ -23,6 +23,19 @@ The GraphQL Watcher tracks all GraphQL operations (queries, mutations, and subsc
 - Authenticated user information
 - Batch operation tracking
 
+:::info Persisted queries
+Automatic persisted queries are recorded like any other operation. With APQ a
+client sends the document once and only its hash afterwards, and Apollo
+resolves the text from its cache after the request has started — an adapter
+that reads the query when the request begins sees nothing on every call but the
+first. NestLens waits for the text and records all of them, and an operation
+whose hash the server could not resolve is recorded under that hash, since a
+cache that keeps missing is worth seeing.
+
+Mercurius resolves a persisted query before its hooks run, so nothing there is
+affected.
+:::
+
 ## Supported GraphQL Servers
 
 NestLens automatically detects and supports:
