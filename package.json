@@ -4,6 +4,9 @@
   "description": "Laravel Telescope-like debugging and monitoring tool for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "nestlens-mcp": "dist/mcp/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,7 +20,11 @@
       "types": "./dist/core/storage/redis.storage.d.ts",
       "default": "./dist/core/storage/redis.storage.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "default": "./dist/mcp/index.js"
+    }
   },
   "typesVersions": {
     "*": {
@@ -26,6 +33,9 @@
       ],
       "storage/redis": [
         "dist/core/storage/redis.storage.d.ts"
+      ],
+      "mcp": [
+        "dist/mcp/index.d.ts"
       ]
     }
   },
@@ -79,7 +89,9 @@
     "apollo",
     "mercurius",
     "subscriptions",
-    "n+1"
+    "n+1",
+    "mcp",
+    "model-context-protocol"
   ],
   "author": "mogretici",
   "license": "MIT",
@@ -93,6 +105,7 @@
   },
   "peerDependencies": {
     "@apollo/server": "^4.0.0 || ^5.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "@nestjs/apollo": "^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0",
     "@nestjs/cache-manager": "^1.0.0 || ^2.0.0 || ^3.0.0",
     "@nestjs/common": "^9.0.0 || ^10.0.0 || ^11.0.0",
@@ -109,6 +122,9 @@
   },
   "peerDependenciesMeta": {
     "@apollo/server": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
       "optional": true
     },
     "@nestjs/apollo": {
@@ -150,6 +166,7 @@
   },
   "devDependencies": {
     "@apollo/server": "^5.5.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@nestjs/apollo": "^13.4.5",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/cache-manager": "^3.1.3",
