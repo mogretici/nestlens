@@ -101,6 +101,16 @@ export class AppModule {}
 
 Visit **http://localhost:3000/nestlens** and start debugging.
 
+### Let an AI agent read it
+
+`nestlens-mcp` is an [MCP](https://modelcontextprotocol.io) server over a running NestLens. It is a hub of two tools — one lists everything NestLens can do, the other runs it — read from your application each time, so a new endpoint is available to an agent without a new release. It is read-only unless you pass `--allow-write`.
+
+```bash
+claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
+```
+
+For a NestLens on a development or production server, run `nestlens-mcp --http` next to it and give the agent a URL. Setup for Claude Code, Cursor, VS Code and Claude Desktop is in the [MCP guide](https://nestlens-docs.vercel.app/docs/integrations/mcp).
+
 <br/>
 
 <p align="center">
