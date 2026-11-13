@@ -99,6 +99,28 @@ describe('the manifest of the real controllers', () => {
     }
   });
 
+  it('finds the API root from its end, so a mount that contains one does not confuse it', () => {
+    const api = Reflect.getMetadata(PATH_METADATA, NestLensApiController);
+    const tags = Reflect.getMetadata(PATH_METADATA, TagController);
+    Reflect.defineMetadata(
+      PATH_METADATA,
+      'dev/__nestlens__/api/__nestlens__/api',
+      NestLensApiController,
+    );
+    Reflect.defineMetadata(
+      PATH_METADATA,
+      'dev/__nestlens__/api/__nestlens__/api/tags',
+      TagController,
+    );
+
+    try {
+      expect(buildToolManifest([NestLensApiController, TagController])).toEqual(manifest);
+    } finally {
+      Reflect.defineMetadata(PATH_METADATA, api, NestLensApiController);
+      Reflect.defineMetadata(PATH_METADATA, tags, TagController);
+    }
+  });
+
   describe('what changes data', () => {
     it('is exactly what is not a GET', () => {
       for (const candidate of manifest.tools) {

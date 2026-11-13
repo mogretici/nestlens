@@ -85,7 +85,9 @@ const joinPath = (...parts: string[]): string => {
 const relativeControllerPath = (controller: Controller): string => {
   const full = firstPath(Reflect.getMetadata(PATH_KEY, controller));
   const marker = `${NESTLENS_API_PREFIX}/api`;
-  const at = full.indexOf(marker);
+  // The last one: `path` may itself contain the marker, and the controller's own
+  // prefix is always appended after the mount.
+  const at = full.lastIndexOf(marker);
   return at === -1 ? full : full.slice(at + marker.length);
 };
 
