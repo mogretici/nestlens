@@ -1,5 +1,7 @@
-export { createNestLensMcpServer } from './server';
+export { createNestLensMcpServer, ToolCatalog } from './server';
 export type { NestLensMcpServerOptions } from './server';
+export { startNestLensMcpHttp, MCP_PATH } from './http';
+export type { NestLensMcpHttpOptions, RunningNestLensMcpHttp } from './http';
 export {
   NestLensClient,
   NestLensApiError,

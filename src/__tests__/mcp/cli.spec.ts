@@ -6,6 +6,7 @@ describe('parseCliOptions', () => {
       url: 'http://localhost:3000/nestlens',
       headers: {},
       allowWrite: false,
+      http: false,
       help: false,
     });
   });
@@ -36,6 +37,23 @@ describe('parseCliOptions', () => {
     const options = parseCliOptions(['--header', 'X-A: 1', '--header', 'Cookie: a=b:c'], {});
 
     expect(options.headers).toEqual({ 'X-A': '1', Cookie: 'a=b:c' });
+  });
+
+  it('takes the HTTP options, and the token from the environment', () => {
+    expect(
+      parseCliOptions(['--http', '--host', '0.0.0.0', '--port', '9000'], {
+        NESTLENS_MCP_TOKEN: 'secret',
+      }),
+    ).toMatchObject({ http: true, host: '0.0.0.0', port: 9000, token: 'secret' });
+    expect(
+      parseCliOptions(['--http', '--token', 'flag'], { NESTLENS_MCP_TOKEN: 'env' }).token,
+    ).toBe('flag');
+    expect(parseCliOptions([], { NESTLENS_MCP_PORT: '9100' }).port).toBe(9100);
+  });
+
+  it('refuses a port that is not one', () => {
+    expect(() => parseCliOptions(['--port', 'http'], {})).toThrow(/port number/);
+    expect(() => parseCliOptions(['--port', '70000'], {})).toThrow(/port number/);
   });
 
   it('takes --allow-write, --timeout and --help', () => {

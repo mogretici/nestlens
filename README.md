@@ -109,7 +109,7 @@ Visit **http://localhost:3000/nestlens** and start debugging.
 claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
 ```
 
-See the [MCP guide](https://nestlens-docs.vercel.app/docs/integrations/mcp).
+For a NestLens on a development or production server, run `nestlens-mcp --http` next to it and give the agent a URL. Setup for Claude Code, Cursor, VS Code and Claude Desktop is in the [MCP guide](https://nestlens-docs.vercel.app/docs/integrations/mcp).
 
 <br/>
 

@@ -1,5 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { NestLensClient } from './client';
+import { startNestLensMcpHttp } from './http';
 import { createNestLensMcpServer } from './server';
 
 export interface CliOptions {
@@ -7,6 +8,12 @@ export interface CliOptions {
   headers: Record<string, string>;
   allowWrite: boolean;
   timeoutMs?: number;
+  /** Serve over HTTP at a URL instead of over stdio. */
+  http: boolean;
+  host?: string;
+  port?: number;
+  /** What an HTTP caller must present as a bearer token. */
+  token?: string;
   help: boolean;
 }
 
@@ -23,14 +30,34 @@ Options:
   --allow-write        Enable the tools that change data (clear, prune, pause, resolve,
                        tags). Off by default.  (env: NESTLENS_MCP_ALLOW_WRITE=1)
   --timeout <ms>       Per-request timeout. Default 15000.
+
+Serve it at a URL, so an agent can be given a link instead of a command:
+  --http               Listen for MCP over HTTP at http://<host>:<port>/mcp
+  --host <address>     Interface to listen on. Default 127.0.0.1 (this machine only).
+  --port <number>      Default 8787.  (env: NESTLENS_MCP_PORT)
+  --token <secret>     Bearer token callers must send. Required unless --host is a
+                       loopback address.  (env: NESTLENS_MCP_TOKEN, preferred: an
+                       argument is visible in the process list)
+
   -h, --help           This text.
 
 Add it to an MCP client, for example Claude Code:
   claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
+
+Or, for a NestLens on a server, run this next to it with --http and give the client the URL:
+  claude mcp add --transport http nestlens https://mcp.example.com/mcp --header "Authorization: Bearer <token>"
 `;
 
 const truthy = (value: string | undefined): boolean =>
   value !== undefined && ['1', 'true', 'yes'].includes(value.toLowerCase());
+
+const parsePort = (raw: string, name: string): number => {
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`${name} must be a port number between 0 and 65535`);
+  }
+  return port;
+};
 
 const parseHeader = (raw: string): [string, string] => {
   const at = raw.indexOf(':');
@@ -65,8 +92,12 @@ export const parseCliOptions = (
     url: env.NESTLENS_URL ?? 'http://localhost:3000/nestlens',
     headers: envHeaders(env.NESTLENS_HEADERS),
     allowWrite: truthy(env.NESTLENS_MCP_ALLOW_WRITE),
+    http: false,
+    token: env.NESTLENS_MCP_TOKEN || undefined,
     help: false,
   };
+
+  if (env.NESTLENS_MCP_PORT) options.port = parsePort(env.NESTLENS_MCP_PORT, 'NESTLENS_MCP_PORT');
 
   for (let i = 0; i < argv.length; i += 1) {
     const argument = argv[i] as string;
@@ -96,6 +127,18 @@ export const parseCliOptions = (
         options.timeoutMs = timeout;
         break;
       }
+      case '--http':
+        options.http = true;
+        break;
+      case '--host':
+        options.host = value();
+        break;
+      case '--port':
+        options.port = parsePort(value(), '--port');
+        break;
+      case '--token':
+        options.token = value();
+        break;
       case '-h':
       case '--help':
         options.help = true;
@@ -137,18 +180,35 @@ export const main = async (
     return;
   }
 
-  const server = createNestLensMcpServer({
-    client: new NestLensClient({
-      baseUrl: options.url,
-      headers: options.headers,
-      timeoutMs: options.timeoutMs,
-    }),
-    allowWrite: options.allowWrite,
-    version: packageVersion(),
+  const client = new NestLensClient({
+    baseUrl: options.url,
+    headers: options.headers,
+    timeoutMs: options.timeoutMs,
   });
+  const version = packageVersion();
+  const mode = options.allowWrite ? 'read and write' : 'read-only';
+
+  if (options.http) {
+    const running = await startNestLensMcpHttp({
+      client,
+      host: options.host,
+      port: options.port,
+      token: options.token,
+      allowWrite: options.allowWrite,
+      version,
+    });
+    process.stderr.write(`nestlens-mcp: ${running.url} serving ${options.url} (${mode})\n`);
+
+    const stop = (): void => {
+      void running.close().then(() => process.exit(0));
+    };
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    return;
+  }
+
+  const server = createNestLensMcpServer({ client, allowWrite: options.allowWrite, version });
 
   await server.connect(new StdioServerTransport());
-  process.stderr.write(
-    `nestlens-mcp: serving ${options.url} (${options.allowWrite ? 'read and write' : 'read-only'})\n`,
-  );
+  process.stderr.write(`nestlens-mcp: serving ${options.url} (${mode})\n`);
 };

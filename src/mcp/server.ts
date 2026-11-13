@@ -22,6 +22,30 @@ export interface NestLensMcpServerOptions {
   version?: string;
   /** How long a fetched tool list is trusted, in milliseconds. Default 30000. */
   manifestTtlMs?: number;
+  /**
+   * Where the tool list is kept between calls. A server built per request, as
+   * the HTTP mode does, passes one in so the list is fetched once and not once
+   * per request.
+   */
+  catalog?: ToolCatalog;
+}
+
+/** The tool list last read from the application, and how long it is trusted. */
+export class ToolCatalog {
+  private cached: { at: number; tools: NestLensToolDescriptor[] } | undefined;
+
+  constructor(
+    private readonly client: NestLensClient,
+    private readonly ttlMs: number = DEFAULT_MANIFEST_TTL_MS,
+  ) {}
+
+  /** `fresh` reads the application again whatever is kept. */
+  async tools(fresh: boolean): Promise<NestLensToolDescriptor[]> {
+    if (!fresh && this.cached && Date.now() - this.cached.at < this.ttlMs) return this.cached.tools;
+    const manifest = await this.client.manifest();
+    this.cached = { at: Date.now(), tools: manifest.tools };
+    return this.cached.tools;
+  }
 }
 
 const DEFAULT_MAX_RESPONSE_CHARS = 60_000;
@@ -151,21 +175,14 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
   const { client } = options;
   const allowWrite = options.allowWrite === true;
   const maxChars = options.maxResponseChars ?? DEFAULT_MAX_RESPONSE_CHARS;
-  const ttl = options.manifestTtlMs ?? DEFAULT_MANIFEST_TTL_MS;
+  const catalog = options.catalog ?? new ToolCatalog(client, options.manifestTtlMs);
 
   const server = new Server(
     { name: 'nestlens', version: options.version ?? '0.0.0' },
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 
-  let cached: { at: number; tools: NestLensToolDescriptor[] } | undefined;
-
-  const tools = async (fresh: boolean): Promise<NestLensToolDescriptor[]> => {
-    if (!fresh && cached && Date.now() - cached.at < ttl) return cached.tools;
-    const manifest = await client.manifest();
-    cached = { at: Date.now(), tools: manifest.tools };
-    return cached.tools;
-  };
+  const tools = (fresh: boolean): Promise<NestLensToolDescriptor[]> => catalog.tools(fresh);
 
   const clip = (value: string): string =>
     value.length <= maxChars
