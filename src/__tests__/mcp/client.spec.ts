@@ -85,7 +85,7 @@ describe('NestLensClient.invoke', () => {
     expect(calls[0]?.init.method).toBe('DELETE');
   });
 
-  it('sends the rest as a query: lists joined, booleans as words, nothing for an absent value', async () => {
+  it('sends the rest as a query: a list as one key per element, booleans as words, nothing for an absent value', async () => {
     const { client, calls } = setup();
     const tool = descriptor({
       parameters: [
@@ -104,9 +104,27 @@ describe('NestLensClient.invoke', () => {
     });
 
     expect(calls[0]?.url).toBe(
-      'http://localhost:3000/nestlens/__nestlens__/api/things?levels=error%2Cwarn&slow=true&limit=5',
+      'http://localhost:3000/nestlens/__nestlens__/api/things?levels=error&levels=warn&slow=true&limit=5',
     );
     expect(calls[0]?.init.body).toBeUndefined();
+  });
+
+  it('keeps a comma inside one list element, which the API would otherwise split', async () => {
+    const { client, calls } = setup();
+    const tool = descriptor({
+      parameters: [{ name: 'tags', in: 'query', type: 'array', items: 'string', required: true }],
+    });
+
+    await client.invoke(tool, { tags: ['A,B', 'C'] });
+    await client.invoke(tool, { tags: ['A,B'] });
+    await client.invoke(tool, { tags: ['A'] });
+
+    expect(calls.map((call) => new URL(call.url).searchParams.getAll('tags'))).toEqual([
+      ['A,B', 'C'],
+      // One element with a comma needs an empty companion to arrive as a list.
+      ['A,B', ''],
+      ['A'],
+    ]);
   });
 
   it('sends a body as JSON, and an empty one when every field is optional', async () => {

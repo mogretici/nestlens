@@ -57,8 +57,28 @@ export class NestLensArgumentError extends Error {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const queryValue = (value: unknown): string =>
-  Array.isArray(value) ? value.map(String).join(',') : String(value);
+/**
+ * Adds one argument to the query string.
+ *
+ * A list goes as one key per element, not as a comma-joined string. The API
+ * reads a comma in a single value as a separator, so `tags=ALPHA,BETA` is two
+ * tags — and a tag may contain a comma (an application's own tags are built
+ * from its data), so a list joined here could never say "one tag, with a comma
+ * in it". Repeated keys arrive as an array, and the API keeps an array as it is.
+ *
+ * One element is the exception that needs care: a single `tags=ALPHA,BETA` is a
+ * string again, and is split. An empty companion value makes it an array, and
+ * the API drops empty values from a list.
+ */
+const appendQuery = (query: URLSearchParams, name: string, value: unknown): void => {
+  if (!Array.isArray(value)) {
+    query.append(name, String(value));
+    return;
+  }
+
+  for (const element of value) query.append(name, String(element));
+  if (value.length === 1 && String(value[0]).includes(',')) query.append(name, '');
+};
 
 /** What the API said was wrong, in one line, from either of the shapes it uses. */
 const messageOf = (status: number, body: unknown): string => {
@@ -158,7 +178,7 @@ export class NestLensClient {
       } else if (parameter?.in === 'body') {
         body[name] = value;
       } else {
-        query.set(name, queryValue(value));
+        appendQuery(query, name, value);
       }
     }
 

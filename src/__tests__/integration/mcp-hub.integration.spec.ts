@@ -157,6 +157,29 @@ describe('nestlens-mcp against a running application', () => {
     expect(resumed.data.isPaused).toBe(false);
   });
 
+  describe('a tag that contains a comma', () => {
+    // The API reads a comma in a query value as a separator, so a list sent as
+    // one comma-joined string cannot say "this one tag has a comma in it".
+    it.each([
+      ['alone', ['ALPHA,BETA']],
+      ['beside another', ['ALPHA,BETA', 'GAMMA']],
+    ])('is found as one tag, %s', async (_label, wanted) => {
+      const agent = await connect(true);
+      const [first, second] = json(
+        await call(agent, 'get_entries', { type: 'request', limit: 2 }),
+      ).data;
+      await call(agent, 'add_tags_to_entry', { id: first.id, tags: ['ALPHA,BETA'] });
+      await call(agent, 'add_tags_to_entry', { id: second.id, tags: ['ALPHA'] });
+
+      const found = json(await call(agent, 'get_entries_by_tags', { tags: wanted, logic: 'OR' }));
+      const ids = found.data.map((entry: { id: number }) => entry.id);
+
+      expect(ids).toContain(first.id);
+      // `ALPHA` alone would match the second entry if the comma had split the tag.
+      expect(ids).not.toContain(second.id);
+    });
+  });
+
   it('reaches the tag endpoints, whose paths sit under /tags', async () => {
     const agent = await connect(true);
 
