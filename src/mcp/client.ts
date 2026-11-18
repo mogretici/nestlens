@@ -1,4 +1,4 @@
-import type { NestLensToolDescriptor, NestLensToolManifest } from '../api/tools';
+import type { NestLensToolDescriptor, NestLensToolManifest, ToolParameter } from '../api/tools';
 
 /**
  * Where the API lives under the dashboard's mount point.
@@ -56,6 +56,48 @@ export class NestLensArgumentError extends Error {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isPlain = (value: unknown): boolean =>
+  typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+
+/**
+ * Refuses a value whose shape is not the one its parameter declares.
+ *
+ * The hub's own input schema cannot say this per tool, so it is said here,
+ * before serialization: a list given for a single value would otherwise be
+ * flattened into a query string, and an empty one would vanish from it. For a
+ * tool that deletes, a vanished filter is not "no change" but "everything" —
+ * `clear_entries` with `type: []` would clear every type.
+ *
+ * A list may still be one plain value (`"error,warn"`), which is how the API
+ * itself reads a list.
+ */
+const checkShape = (tool: string, parameter: ToolParameter, value: unknown): void => {
+  if (parameter.type !== 'array') {
+    if (!isPlain(value)) {
+      throw new NestLensArgumentError(
+        `${tool} takes one value for ${parameter.name}, not a list or an object.`,
+      );
+    }
+    return;
+  }
+
+  if (isPlain(value)) return;
+
+  if (!Array.isArray(value)) {
+    throw new NestLensArgumentError(`${tool} takes a list for ${parameter.name}, not an object.`);
+  }
+  if (value.length === 0) {
+    throw new NestLensArgumentError(
+      `${tool} needs at least one value in ${parameter.name}, or leave ${parameter.name} out.`,
+    );
+  }
+  if (!value.every(isPlain)) {
+    throw new NestLensArgumentError(
+      `${tool} takes plain values in ${parameter.name}, not lists or objects.`,
+    );
+  }
+};
 
 /**
  * Adds one argument to the query string.
@@ -165,12 +207,19 @@ export class NestLensClient {
       );
     }
 
+    const present = Object.entries(args).filter(
+      ([, value]) => value !== undefined && value !== null,
+    );
+    for (const parameter of tool.parameters) {
+      const value = args[parameter.name];
+      if (value !== undefined && value !== null) checkShape(tool.name, parameter, value);
+    }
+
     let path = tool.path;
     const query = new URLSearchParams();
     const body: Record<string, unknown> = {};
 
-    for (const [name, value] of Object.entries(args)) {
-      if (value === undefined || value === null) continue;
+    for (const [name, value] of present) {
       const parameter = known.get(name);
 
       if (parameter?.in === 'path') {

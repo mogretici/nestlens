@@ -155,6 +155,79 @@ describe('NestLensClient.invoke', () => {
     expect(calls).toHaveLength(0);
   });
 
+  describe('refuses an argument whose shape does not fit its parameter, before anything is sent', () => {
+    const clearEntries = descriptor({
+      method: 'DELETE',
+      path: '/entries',
+      mutates: true,
+      destructive: true,
+      parameters: [
+        { name: 'type', in: 'query', type: 'string', required: false, enum: ['request', 'log'] },
+      ],
+    });
+
+    it.each([
+      ['an empty list', []],
+      ['a list', ['request']],
+      ['an object', { value: 'request' }],
+    ])('%s for a single value (which would otherwise clear every type)', async (_label, value) => {
+      const { client, calls } = setup();
+
+      await expect(client.invoke(clearEntries, { type: value })).rejects.toThrow(
+        new NestLensArgumentError('tool takes one value for type, not a list or an object.'),
+      );
+      expect(calls).toHaveLength(0);
+    });
+
+    it('a list for a path or a body parameter', async () => {
+      const { client, calls } = setup();
+      const tool = descriptor({
+        method: 'POST',
+        path: '/things/:id',
+        parameters: [
+          { name: 'id', in: 'path', type: 'integer', required: true },
+          { name: 'reason', in: 'body', type: 'string', required: false },
+        ],
+      });
+
+      await expect(client.invoke(tool, { id: [1, 2] })).rejects.toThrow(/one value for id/);
+      await expect(client.invoke(tool, { id: 1, reason: ['a'] })).rejects.toThrow(
+        /one value for reason/,
+      );
+      expect(calls).toHaveLength(0);
+    });
+
+    it('an empty list, or a list of objects, for a list', async () => {
+      const { client, calls } = setup();
+      const tool = descriptor({
+        parameters: [
+          { name: 'tags', in: 'query', type: 'array', items: 'string', required: false },
+        ],
+      });
+
+      await expect(client.invoke(tool, { tags: [] })).rejects.toThrow(
+        new NestLensArgumentError('tool needs at least one value in tags, or leave tags out.'),
+      );
+      await expect(client.invoke(tool, { tags: [{ name: 'a' }] })).rejects.toThrow(
+        new NestLensArgumentError('tool takes plain values in tags, not lists or objects.'),
+      );
+      expect(calls).toHaveLength(0);
+    });
+
+    it('but still takes a list written as one comma-separated value, as the API reads it', async () => {
+      const { client, calls } = setup();
+      const tool = descriptor({
+        parameters: [
+          { name: 'levels', in: 'query', type: 'array', items: 'string', required: false },
+        ],
+      });
+
+      await client.invoke(tool, { levels: 'error,warn' });
+
+      expect(new URL(calls[0]!.url).searchParams.getAll('levels')).toEqual(['error,warn']);
+    });
+  });
+
   it('refuses a call that leaves out what is required', async () => {
     const { client, calls } = setup();
     const tool = descriptor({
