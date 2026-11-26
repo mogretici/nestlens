@@ -77,11 +77,16 @@ const PATH_TRAVERSAL = new Set(['', '.', '..']);
 const isBlank = (value: unknown): boolean => typeof value === 'string' && value.trim() === '';
 
 /**
- * The API reads a blank parameter, or a blank item of a list, as one not
- * given. Sent, it would narrow nothing while the agent believes it narrowed
- * something.
+ * The API reads a blank query parameter, or a blank item of a query list, as
+ * one not given. Sent, it would narrow nothing while the agent believes it
+ * narrowed something.
+ *
+ * Only the query string loses this. A body arrives as the JSON it was written
+ * as, so what a blank means there is the API's to say, as every other rule on
+ * a body's content is: this client checks only what encoding a value loses.
  */
-const refuseBlank = (tool: string, parameter: ToolParameter): never => {
+const refuseBlank = (tool: string, parameter: ToolParameter): void => {
+  if (parameter.in !== 'query') return;
   throw new NestLensArgumentError(
     `${tool} was given a blank value for ${parameter.name}, which NestLens reads as not given. ` +
       `Leave ${parameter.name} out instead.`,

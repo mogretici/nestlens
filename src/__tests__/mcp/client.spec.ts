@@ -414,7 +414,6 @@ describe('NestLensClient.invoke', () => {
         [{ levels: ' ' }, 'levels'],
         [{ levels: ' , ,' }, 'levels'],
         [{ levels: ['error', ''] }, 'levels'],
-        [{ reason: '\t' }, 'reason'],
       ])('%j is refused', async (args, name) => {
         const { client, calls } = setup();
 
@@ -425,6 +424,21 @@ describe('NestLensClient.invoke', () => {
           ),
         );
         expect(calls).toHaveLength(0);
+      });
+
+      it('is left to the API in a body, which arrives as JSON, exactly as given', async () => {
+        const { client, calls } = setup();
+        const pausing = descriptor({
+          method: 'POST',
+          parameters: [
+            { name: 'reason', in: 'body', type: 'string', required: false },
+            { name: 'tags', in: 'body', type: 'array', items: 'string', required: false },
+          ],
+        });
+
+        await client.invoke(pausing, { reason: '\t', tags: ['a', ''] });
+
+        expect(calls[0]?.init.body).toBe('{"reason":"\\t","tags":["a",""]}');
       });
 
       it('still refuses a limit that is not a number', async () => {

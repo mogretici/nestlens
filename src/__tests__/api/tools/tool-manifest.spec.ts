@@ -22,6 +22,7 @@ import {
   toSnakeCase,
 } from '../../../api/tools/tool-manifest';
 import { ENTRY_TYPES } from '../../../types';
+import { MAX_FILTER_VALUES } from '../../../api/dto/transformers';
 
 const manifest = buildToolManifest([NestLensApiController, TagController]);
 const tool = (name: string) => {
@@ -284,7 +285,14 @@ describe('the manifest of the real controllers', () => {
         [
           'get_entries_by_tags',
           'tags',
-          { type: 'array', items: 'string', required: true, minItems: 1, itemMaxLength: 100 },
+          {
+            type: 'array',
+            items: 'string',
+            required: true,
+            minItems: 1,
+            maxItems: 100,
+            itemMaxLength: 100,
+          },
         ],
         [
           'add_tags_to_entry',
@@ -322,10 +330,20 @@ describe('the manifest of the real controllers', () => {
         expect(shape(toolName, name)).toEqual(expected);
       });
 
-      it('says that the two cursors go one at a time', () => {
-        expect(parameter('get_entries_with_cursor', 'afterSequence').description).toMatch(
-          /not together with beforeSequence/i,
+      it('says on both cursors that they go one at a time, from the one decorator', () => {
+        expect(parameter('get_entries_with_cursor', 'afterSequence').description).toBe(
+          'Not together with beforeSequence.',
         );
+        expect(parameter('get_entries_with_cursor', 'beforeSequence').description).toBe(
+          'Not together with afterSequence.',
+        );
+      });
+
+      it('bounds every filter list by the number of values the validator allows', () => {
+        for (const name of ['levels', 'paths', 'tags', 'statuses']) {
+          expect(parameter('get_entries_with_cursor', name).maxItems).toBe(MAX_FILTER_VALUES);
+        }
+        expect(parameter('get_entries_by_tags', 'tags').maxItems).toBe(MAX_FILTER_VALUES);
       });
 
       it('marks as required only what has no optional marker, in every tool', () => {

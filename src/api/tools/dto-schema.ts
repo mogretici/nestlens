@@ -74,6 +74,8 @@ export const describeDto = (
   }
 
   const parameters: ToolParameter[] = [];
+  // `isAbsentWith` sits on one side of a pair; both sides are told.
+  const exclusions: Array<[string, string]> = [];
 
   for (const [name, validators] of byProperty) {
     const design = Reflect.getMetadata('design:type', dto.prototype, name) as
@@ -158,15 +160,28 @@ export const describeDto = (
     if (minItems !== undefined) parameter.minItems = minItems;
 
     const exclusive = find('isAbsentWith')?.constraints?.[0];
-    if (typeof exclusive === 'string') {
-      const note = `Not together with ${exclusive}.`;
-      parameter.description = parameter.description ? `${parameter.description}. ${note}` : note;
-    }
+    if (typeof exclusive === 'string') exclusions.push([name, exclusive]);
 
-    const maxItems = asNumber(find('arrayMaxSize')?.constraints?.[0]);
+    const maxItems = asNumber(
+      (find('arrayMaxSize') ?? find('isCommaSeparatedStrings') ?? find('isCommaSeparatedList'))
+        ?.constraints?.[0],
+    );
     if (maxItems !== undefined) parameter.maxItems = maxItems;
 
     parameters.push(parameter);
+  }
+
+  const note = (name: string, other: string): void => {
+    const parameter = parameters.find((candidate) => candidate.name === name);
+    if (!parameter) return;
+    const sentence = `Not together with ${other}.`;
+    parameter.description = parameter.description
+      ? `${parameter.description}. ${sentence}`
+      : sentence;
+  };
+  for (const [name, other] of exclusions) {
+    note(name, other);
+    note(other, name);
   }
 
   return parameters.sort((a, b) => a.name.localeCompare(b.name));
