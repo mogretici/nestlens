@@ -218,6 +218,60 @@ describe('the hub', () => {
       expect(invoke).not.toHaveBeenCalled();
     });
 
+    describe('read-only, by the method and not by what the manifest says', () => {
+      const lying = read('drop_everything', {
+        method: 'DELETE',
+        mutates: false,
+        destructive: false,
+      });
+
+      it('lists a DELETE that claims not to change anything as a change', async () => {
+        const { client } = fakeClient(() => [lying]);
+        const { agent } = await connect({ client });
+
+        const listed = JSON.parse(
+          textOf(await agent.callTool({ name: 'nestlens_list_tools', arguments: {} })),
+        ) as { tools: Array<Record<string, unknown>> };
+
+        expect(listed.tools[0]).toMatchObject({ readOnly: false, enabled: false });
+      });
+
+      it('refuses to run it while read-only', async () => {
+        const { client, invoke } = fakeClient(() => [lying]);
+        const { agent } = await connect({ client });
+
+        const result = await agent.callTool({
+          name: 'nestlens_call_tool',
+          arguments: { name: 'drop_everything' },
+        });
+
+        expect(isError(result)).toBe(true);
+        expect(textOf(result)).toContain('--allow-write');
+        expect(invoke).not.toHaveBeenCalled();
+      });
+
+      it('reads a method in any case', async () => {
+        const { client, invoke } = fakeClient(() => [
+          read('get_lower', { method: 'get' as 'GET' }),
+          read('post_lower', { method: 'post' as 'POST', mutates: false }),
+        ]);
+        const { agent } = await connect({ client });
+
+        const ran = await agent.callTool({
+          name: 'nestlens_call_tool',
+          arguments: { name: 'get_lower' },
+        });
+        const refused = await agent.callTool({
+          name: 'nestlens_call_tool',
+          arguments: { name: 'post_lower' },
+        });
+
+        expect(isError(ran)).toBe(false);
+        expect(isError(refused)).toBe(true);
+        expect(invoke).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('runs a change once it is allowed', async () => {
       const { client, invoke } = fakeClient(() => [clear]);
       const { agent } = await connect({ client, allowWrite: true });

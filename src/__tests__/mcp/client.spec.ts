@@ -143,6 +143,20 @@ describe('NestLensClient.invoke', () => {
     expect(calls[1]?.init.body).toBe('{}');
   });
 
+  it('sends a method in upper case, and refuses one it does not know', async () => {
+    const { client, calls } = setup();
+
+    await client.invoke(descriptor({ method: 'delete' as 'DELETE' }));
+    await expect(client.invoke(descriptor({ method: 'TRACE' as 'GET' }))).rejects.toThrow(
+      new NestLensArgumentError(
+        'tool is described with method TRACE, which nestlens-mcp does not send. ' +
+          'It sends GET, POST, PUT, PATCH and DELETE.',
+      ),
+    );
+
+    expect(calls.map((call) => call.init.method)).toEqual(['DELETE']);
+  });
+
   it('refuses an argument the tool does not take, and says what it does take', async () => {
     const { client, calls } = setup();
     const tool = descriptor({

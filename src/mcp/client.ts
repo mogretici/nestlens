@@ -54,6 +54,18 @@ export class NestLensArgumentError extends Error {
   }
 }
 
+const METHODS: readonly string[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+/**
+ * Whether a tool changes data, read from its method.
+ *
+ * The manifest says `mutates` as well, and read-only mode does not take its
+ * word for it: anything but a GET is a change, which is what the API itself
+ * means by one, whatever a manifest from an older or a modified NestLens says.
+ */
+export const changesData = (tool: Pick<NestLensToolDescriptor, 'method'>): boolean =>
+  String(tool.method).toUpperCase() !== 'GET';
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -188,6 +200,14 @@ export class NestLensClient {
 
   /** Runs one tool. The answer is the API's own body, envelope and all. */
   async invoke(tool: NestLensToolDescriptor, args: Record<string, unknown> = {}): Promise<unknown> {
+    const method = String(tool.method).toUpperCase();
+    if (!METHODS.includes(method)) {
+      throw new NestLensArgumentError(
+        `${tool.name} is described with method ${method}, which nestlens-mcp does not send. ` +
+          'It sends GET, POST, PUT, PATCH and DELETE.',
+      );
+    }
+
     const known = new Map(tool.parameters.map((parameter) => [parameter.name, parameter]));
 
     const unknown = Object.keys(args).filter((name) => !known.has(name));
@@ -234,11 +254,7 @@ export class NestLensClient {
     const search = query.toString();
     const hasBody = tool.parameters.some((parameter) => parameter.in === 'body');
 
-    return this.request(
-      tool.method,
-      search ? `${path}?${search}` : path,
-      hasBody ? body : undefined,
-    );
+    return this.request(method, search ? `${path}?${search}` : path, hasBody ? body : undefined);
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {

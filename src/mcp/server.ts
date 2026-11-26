@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { NestLensToolDescriptor, ToolParameter } from '../api/tools';
 import {
+  changesData,
   NestLensApiError,
   NestLensArgumentError,
   NestLensClient,
@@ -31,6 +32,12 @@ export interface NestLensMcpServerOptions {
   catalog?: ToolCatalog;
 }
 
+/** A tool whose `mutates` and `destructive` follow its method, not the manifest's word. */
+const byMethod = (tool: NestLensToolDescriptor): NestLensToolDescriptor => {
+  const mutates = changesData(tool);
+  return { ...tool, mutates, destructive: mutates && tool.destructive === true };
+};
+
 /** The tool list last read from the application, and how long it is trusted. */
 export class ToolCatalog {
   private cached: { at: number; tools: NestLensToolDescriptor[] } | undefined;
@@ -44,7 +51,7 @@ export class ToolCatalog {
   async tools(fresh: boolean): Promise<NestLensToolDescriptor[]> {
     if (!fresh && this.cached && Date.now() - this.cached.at < this.ttlMs) return this.cached.tools;
     const manifest = await this.client.manifest();
-    this.cached = { at: Date.now(), tools: manifest.tools };
+    this.cached = { at: Date.now(), tools: manifest.tools.map(byMethod) };
     return this.cached.tools;
   }
 }
