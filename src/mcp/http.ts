@@ -47,6 +47,18 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 export const isLoopback = (host: string): boolean => LOOPBACK_HOSTS.has(host.toLowerCase());
 
+/**
+ * Refuses an address other than this machine's when no token guards it:
+ * anyone who can reach such a listener could read what NestLens recorded.
+ */
+export const assertListenable = (host: string, token: string | undefined): void => {
+  if (token || isLoopback(host)) return;
+  throw new Error(
+    `Refusing to listen on ${host} without a token: anyone who can reach it could read what ` +
+      'NestLens recorded. Set --token (or NESTLENS_MCP_TOKEN), or listen on 127.0.0.1.',
+  );
+};
+
 const digest = (value: string): Buffer => Buffer.from(value, 'utf8');
 
 /** Constant-time, and not fooled by a length difference. */
@@ -164,13 +176,7 @@ export const startNestLensMcpHttp = async (
 ): Promise<RunningNestLensMcpHttp> => {
   const host = options.host ?? '127.0.0.1';
   const token = options.token && options.token.length > 0 ? options.token : undefined;
-
-  if (!token && !isLoopback(host)) {
-    throw new Error(
-      `Refusing to listen on ${host} without a token: anyone who can reach it could read what ` +
-        'NestLens recorded. Set --token (or NESTLENS_MCP_TOKEN), or listen on 127.0.0.1.',
-    );
-  }
+  assertListenable(host, token);
 
   const catalog = new ToolCatalog(options.client);
   const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;

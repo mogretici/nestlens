@@ -11,6 +11,7 @@ import type { NestLensToolDescriptor, NestLensToolManifest } from '../../api/too
 import type { NestLensClient } from '../../mcp/client';
 import {
   MCP_PATH,
+  assertListenable,
   bearerToken,
   startNestLensMcpHttp,
   type RunningNestLensMcpHttp,
@@ -143,10 +144,31 @@ describe('the hub over HTTP', () => {
       ).rejects.toThrow(/without a token/);
     });
 
-    it('listens on a network address once there is a token', async () => {
-      const { server } = await start({ host: '0.0.0.0', token: 'secret' });
+    // Decided before anything listens: the suite may not bind a wildcard
+    // address (see support/loopback-listen.ts), and the decision is the point.
+    it.each([
+      ['0.0.0.0', 'secret'],
+      ['::', 'secret'],
+      ['192.168.1.20', 'secret'],
+      ['127.0.0.1', undefined],
+      ['::1', undefined],
+      ['localhost', undefined],
+    ])('allows %s with token %j', (host, token) => {
+      expect(() => assertListenable(host, token)).not.toThrow();
+    });
 
-      expect(server.url).toContain('0.0.0.0');
+    it.each([
+      ['0.0.0.0', undefined],
+      ['::', ''],
+      ['192.168.1.20', undefined],
+    ])('refuses %s with token %j', (host, token) => {
+      expect(() => assertListenable(host, token)).toThrow(/without a token/);
+    });
+
+    it('listens, with a token, where it is told to', async () => {
+      const { server } = await start({ host: '127.0.0.1', token: 'secret' });
+
+      expect(server.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
     });
 
     it('answers 401 to a caller with no token or the wrong one', async () => {
