@@ -124,7 +124,7 @@ export function TransformOffset() {
  * different with one: SQLite threw `RangeError: Invalid time value` out of
  * `toISOString`, which the reader saw as a 500, while the other two compared
  * against NaN and answered with nothing. Leaving the original string in place
- * lets `IsDate` fail it, so an unusable date is a 400 that names the parameter.
+ * lets `IsDateLike` fail it, so an unusable date is a 400 that names the parameter.
  */
 export function TransformDate() {
   return Transform(({ value }: TransformFnParams) => {

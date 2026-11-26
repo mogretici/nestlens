@@ -104,17 +104,102 @@ export function IsBooleanLike(validationOptions?: ValidationOptions) {
 }
 
 /**
- * A whole number from zero, or the digits of one when @Transform did not run.
+ * A whole number from zero, at most `max` when one is given, or the digits of
+ * one when @Transform did not run.
  */
-export function IsWholeNumberLike(validationOptions?: ValidationOptions) {
+export function IsWholeNumberLike(
+  bounds: { max?: number } = {},
+  validationOptions?: ValidationOptions,
+) {
+  const { max } = bounds;
+  const withinMax = (value: number): boolean => max === undefined || value <= max;
+
   return ValidateBy(
     {
       name: 'isWholeNumberLike',
+      constraints: [max],
       validator: {
         validate: (value: unknown): boolean =>
-          (typeof value === 'number' && Number.isInteger(value) && value >= 0) ||
-          (typeof value === 'string' && /^\d+$/.test(value)),
-        defaultMessage: buildMessage(() => '$property must be a whole number', validationOptions),
+          (typeof value === 'number' &&
+            Number.isInteger(value) &&
+            value >= 0 &&
+            withinMax(value)) ||
+          (typeof value === 'string' && /^\d+$/.test(value) && withinMax(Number(value))),
+        defaultMessage: buildMessage(
+          () =>
+            max === undefined
+              ? '$property must be a whole number'
+              : `$property must be a whole number no greater than ${max}`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}
+
+/**
+ * A Date the runtime could read, or a string it can read into one when
+ * TransformDate did not run.
+ */
+export function IsDateLike(validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isDateLike',
+      validator: {
+        validate: (value: unknown): boolean =>
+          (value instanceof Date || typeof value === 'string') &&
+          !Number.isNaN(new Date(value).getTime()),
+        defaultMessage: buildMessage(() => '$property must be a date', validationOptions),
+      },
+    },
+    validationOptions,
+  );
+}
+
+/** The items of a list as TransformCommaSeparatedArray would leave them. */
+const itemsOf = (value: unknown): unknown[] | undefined =>
+  Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',').filter(Boolean)
+      : undefined;
+
+/**
+ * A list with at least one item, or a comma-separated string naming one.
+ */
+export function IsNonEmptyListLike(validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isNonEmptyListLike',
+      validator: {
+        validate: (value: unknown): boolean => (itemsOf(value)?.length ?? 0) > 0,
+        defaultMessage: buildMessage(
+          () => '$property must name at least one value',
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}
+
+/**
+ * Every item a string of at most `max` characters, counted per item whether
+ * the list arrived split or as the comma-separated string.
+ */
+export function HasItemsOfMaxLength(max: number, validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'hasItemsOfMaxLength',
+      constraints: [max],
+      validator: {
+        validate: (value: unknown): boolean =>
+          itemsOf(value)?.every((item) => typeof item === 'string' && item.length <= max) ?? false,
+        defaultMessage: buildMessage(
+          () => `each value in $property must be shorter than or equal to ${max} characters`,
+          validationOptions,
+        ),
       },
     },
     validationOptions,

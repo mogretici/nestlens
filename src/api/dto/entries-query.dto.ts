@@ -1,4 +1,4 @@
-import { IsDate, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ENTRY_TYPES } from './entry-types';
 import {
   MAX_OFFSET,
@@ -7,6 +7,7 @@ import {
   TransformOffset,
   TransformSequence,
   TransformToInt,
+  IsDateLike,
   IsWholeNumberLike,
 } from './transformers';
 import { EntryType } from '@/types';
@@ -41,32 +42,31 @@ export class EntriesQueryDto {
   limit?: number;
 
   @IsOptional()
-  @Max(MAX_OFFSET, {
-    message: `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further`,
-  })
+  @IsWholeNumberLike(
+    { max: MAX_OFFSET },
+    { message: `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further` },
+  )
   @TransformOffset()
   offset?: number;
 
   @IsOptional()
-  @IsDate({ message: 'from must be a date the runtime can read, such as an ISO 8601 string' })
+  @IsDateLike({ message: 'from must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   from?: Date;
 
   @IsOptional()
-  @IsDate({ message: 'to must be a date the runtime can read, such as an ISO 8601 string' })
+  @IsDateLike({ message: 'to must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   to?: Date;
 
   /** Bounds on `duration`, in milliseconds. See `CursorQueryDto`. */
   @IsOptional()
-  @IsInt({ message: 'minDuration must be a whole number of milliseconds' })
-  @Min(0)
+  @IsWholeNumberLike({}, { message: 'minDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   minDuration?: number;
 
   @IsOptional()
-  @IsInt({ message: 'maxDuration must be a whole number of milliseconds' })
-  @Min(0)
+  @IsWholeNumberLike({}, { message: 'maxDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   maxDuration?: number;
 }

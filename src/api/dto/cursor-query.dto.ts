@@ -1,4 +1,4 @@
-import { IsInt, IsISO8601, IsOptional, IsIn, IsString, MaxLength, Min } from 'class-validator';
+import { IsISO8601, IsOptional, IsIn, IsString, MaxLength } from 'class-validator';
 import {
   TransformLimit,
   TransformSequence,
@@ -76,14 +76,12 @@ export class CursorQueryDto {
    * question anybody asks a debugging tool.
    */
   @IsOptional()
-  @IsInt({ message: 'minDuration must be a whole number of milliseconds' })
-  @Min(0)
+  @IsWholeNumberLike({}, { message: 'minDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   minDuration?: number;
 
   @IsOptional()
-  @IsInt({ message: 'maxDuration must be a whole number of milliseconds' })
-  @Min(0)
+  @IsWholeNumberLike({}, { message: 'maxDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   maxDuration?: number;
 
