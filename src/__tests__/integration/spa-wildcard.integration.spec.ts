@@ -12,18 +12,19 @@
  * These boot real applications on both adapters and check both halves: the
  * warning is gone, and deep links still resolve. The unit tests below cover the
  * versions this machine cannot install; the compatibility matrix in CI runs the
- * whole thing on NestJS 9, 10 and 11.
+ * whole thing on NestJS 9, 10, 11 and 12.
  */
 import { ConsoleLogger, INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import request from 'supertest';
 import { NestLensModule } from '../../nestlens.module';
 import { DashboardController } from '../../api/dashboard.controller';
-import { toSpaWildcard } from '../../api/spa-wildcard';
+import { readExpressMajor, toSpaWildcard } from '../../api/spa-wildcard';
 
 const dashboardPublic = join(process.cwd(), 'dist', 'dashboard', 'public');
 const hasBuiltDashboard = existsSync(join(dashboardPublic, 'index.html'));
@@ -70,6 +71,61 @@ describe('toSpaWildcard', () => {
   it('falls back to the bare star when it cannot tell', () => {
     expect(toSpaWildcard(undefined, undefined)).toBe('*');
     expect(toSpaWildcard('express', undefined)).toBe('*');
+  });
+});
+
+/**
+ * The Express that counts is the one the adapter runs, not whichever one sits
+ * at the top of node_modules.
+ *
+ * NestJS 9 and 10 bring Express 4 through `@nestjs/platform-express`, while
+ * `@modelcontextprotocol/sdk` brings Express 5 — so npm hoists 5 and nests 4
+ * under the adapter. Read from NestLens's own location, that answered 5,
+ * mounted `*path` on an Express 4 router, and every deep link into the
+ * dashboard was a 404.
+ *
+ * CI never saw it. The compatibility rows did not build the dashboard, so the
+ * deep-link suite below skipped on exactly the NestJS 9 and 10 rows that could
+ * fail it; those rows build now. It surfaced when the rows were run locally
+ * with a build on disk, and fails there on 0.15.0's code as well.
+ */
+describe('readExpressMajor', () => {
+  let root: string;
+
+  const manifest = (dir: string, contents: Record<string, unknown>): void => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(contents));
+  };
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'nestlens-express-major-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('reads the Express nested under the adapter before a hoisted one', () => {
+    manifest(join(root, 'node_modules', 'express'), { name: 'express', version: '5.3.0' });
+    const adapter = join(root, 'node_modules', '@nestjs', 'platform-express');
+    manifest(adapter, { name: '@nestjs/platform-express', version: '10.4.20' });
+    manifest(join(adapter, 'node_modules', 'express'), { name: 'express', version: '4.21.2' });
+
+    expect(readExpressMajor([root])).toBe(4);
+  });
+
+  it('reads the hoisted Express when the adapter shares it', () => {
+    manifest(join(root, 'node_modules', 'express'), { name: 'express', version: '5.3.0' });
+    manifest(join(root, 'node_modules', '@nestjs', 'platform-express'), {
+      name: '@nestjs/platform-express',
+      version: '11.1.0',
+    });
+
+    expect(readExpressMajor([root])).toBe(5);
+  });
+
+  it('answers undefined when there is no Express to read', () => {
+    expect(readExpressMajor([root])).toBeUndefined();
   });
 });
 

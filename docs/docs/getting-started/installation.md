@@ -6,12 +6,23 @@ sidebar_position: 1
 
 ## Requirements
 
-- Node.js >= 20.0.0
-- NestJS >= 9.0.0 (supports 9, 10, 11)
+- Node.js >= 20.0.0 — **20.19 or 22.12 and later on NestJS 12**
+- NestJS >= 9.0.0 (supports 9, 10, 11, 12)
 - TypeScript >= 4.7
 
 Every release is tested against Node 20, 22 and 24 on each of those NestJS
 versions, with both the Express and Fastify adapters.
+
+### NestJS 12 and Node.js
+
+NestJS 12 ships as ESM only, and a CommonJS application — NestLens included —
+loads it through `require(esm)`. Node enables that from **20.19** and **22.12**
+onwards, so those are the real floor on NestJS 12; NestJS 9 to 11 still run on
+any Node 20.
+
+On AWS Lambda's Node.js runtimes `require(esm)` is disabled by default. NestJS's
+[migration guide](https://docs.nestjs.com/migration-guide) has the function set
+`NODE_OPTIONS=--experimental-require-module`.
 
 ## Entry points
 
@@ -41,8 +52,8 @@ npm install nestlens
 
 NestLens requires these peer dependencies (likely already in your NestJS project):
 
-- `@nestjs/common` ^9.0.0 || ^10.0.0 || ^11.0.0
-- `@nestjs/core` ^9.0.0 || ^10.0.0 || ^11.0.0
+- `@nestjs/common` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0
+- `@nestjs/core` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0
 - `reflect-metadata` ^0.1.13 || ^0.2.0
 - `rxjs` ^7.0.0
 

@@ -29,6 +29,25 @@ const gatedSuites = (): string[] =>
     /hasBuiltDashboard/.test(readFileSync(join(INTEGRATION, file), 'utf8')),
   );
 
+interface Job {
+  readonly name: string;
+  readonly steps: string;
+}
+
+/** The jobs in ci.yml that run the library tests, each with its own text. */
+const testingJobs = (): Job[] => {
+  const workflow = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const jobs = workflow.slice(workflow.indexOf('\njobs:\n'));
+  const starts = [...jobs.matchAll(/^ {2}([\w-]+):$/gm)];
+
+  return starts
+    .map((match, index) => ({
+      name: match[1] as string,
+      steps: jobs.slice(match.index, starts[index + 1]?.index ?? jobs.length),
+    }))
+    .filter(({ steps }) => steps.includes('run: npm test'));
+};
+
 describe('coverage that depends on the build', () => {
   it('there are suites that gate on it', () => {
     expect(gatedSuites().length).toBeGreaterThanOrEqual(5);
@@ -44,6 +63,29 @@ describe('coverage that depends on the build', () => {
 
     expect(build).toBeGreaterThan(-1);
     expect(build).toBeLessThan(test);
+  });
+
+  /**
+   * Every job, not the first one. The check above finds the unit-test job and
+   * stops; the compatibility matrix ran `npm test` with nothing built, so on
+   * every NestJS row these suites skipped — including the Express 4 deep-link
+   * test that exists for exactly the NestJS 9 and 10 rows.
+   */
+  it.each(testingJobs().map(({ name }) => name))('the %s job builds before it tests', (name) => {
+    const { steps } = testingJobs().find((job) => job.name === name) as Job;
+
+    const build = steps.indexOf('run: npm run build');
+    const dashboard = steps.search(/run: npm (ci|install)[^\n]*\n\s+working-directory: dashboard/);
+
+    expect(dashboard).toBeGreaterThan(-1);
+    expect(build).toBeGreaterThan(dashboard);
+    expect(build).toBeLessThan(steps.indexOf('run: npm test'));
+  });
+
+  it('finds every job that runs the tests', () => {
+    expect(testingJobs().map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['test', 'compatibility']),
+    );
   });
 
   it('says so when the bundle is missing, rather than only skipping', () => {

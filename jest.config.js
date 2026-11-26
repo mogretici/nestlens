@@ -1,20 +1,20 @@
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',
-  // path-to-regexp 9 is ESM-only, and `@fastify/middie` >= 9.3.7 (which
-  // `@nestjs/platform-fastify` 11.2.12 pins) loads it with require(). Node
-  // allows that since 20.19 and 22.12; Jest's module runtime does not, so that
-  // one package is compiled to CommonJS here and everything else in
-  // node_modules is still left alone. The nested `(.*/node_modules/)?` lets the
-  // copy installed under `@fastify/middie/node_modules` through as well.
+  // NestJS 12 ships every `@nestjs/*` package as ESM only, and an application
+  // on NestJS 11 already installs a few ESM-only packages too — path-to-regexp
+  // 9 under `@fastify/middie`, cookie under `light-my-request`. Node loads them
+  // from CommonJS with require(esm); Jest's module runtime does not. So every
+  // file in node_modules goes through `jest/esm-to-commonjs.js`, which compiles
+  // the ESM ones and hands every other file back untouched — on NestJS 9 to 11
+  // that includes all of the `@nestjs/*` packages but `@nestjs/cache-manager`
+  // 12. Hence `transformIgnorePatterns` is empty: the default would skip
+  // node_modules before the transform could decide.
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
-    '/node_modules/(.*/node_modules/)?path-to-regexp/.+\\.js$': [
-      'ts-jest',
-      { tsconfig: { allowJs: true }, diagnostics: false },
-    ],
+    '/node_modules/.+\\.m?js$': '<rootDir>/jest/esm-to-commonjs.js',
   },
-  transformIgnorePatterns: ['/node_modules/(?!(.*/node_modules/)?path-to-regexp/)'],
+  transformIgnorePatterns: [],
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.spec.ts', '**/__tests__/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],

@@ -117,10 +117,13 @@ jobs:
         run: npx vitest run
         working-directory: dashboard
 
-  # package.json promises NestJS 9/10/11 on Node >= 18. Until this matrix
-  # existed the promise was only ever exercised on one of those combinations,
-  # so a peer range that had quietly stopped being true would have shipped
-  # unnoticed.
+  # package.json promises NestJS 9/10/11/12. Until this matrix existed the
+  # promise was only ever exercised on one of those combinations, so a peer
+  # range that had quietly stopped being true would have shipped unnoticed.
+  #
+  # NestJS 12 is ESM only. NestLens stays CommonJS and loads it through
+  # require(esm) — Node 20.19 and 22.12 onwards, which every row here runs —
+  # while Jest loads it through `jest/esm-to-commonjs.js`.
   compatibility:
     name: NestJS ${{ matrix.nestjs }} on Node ${{ matrix.node }}
     runs-on: ubuntu-latest
@@ -129,7 +132,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nestjs: [9, 10, 11]
+        nestjs: [9, 10, 11, 12]
         # The Node versions still receiving security updates. 18 was dropped
         # once it went end-of-life: testing a runtime nobody should be running
         # costs a third of this matrix and proves nothing about the ones people
@@ -152,15 +155,59 @@ jobs:
           # `TypeError: (0 , util_1.isString) is not a function` before a test
           # runs. 4 is also what npm installs for an application on NestJS 9
           # today, since 5 requires NestJS 10.
+          #
+          # The repository's own devDependencies are on the NestJS 12 line, and
+          # so are their companions: `@nestjs/graphql`, `@nestjs/apollo` and
+          # `@nestjs/mercurius` 14 require NestJS 12 outright. Every row pins
+          # the newest release whose peer range admits its NestJS, read from
+          # `npm view <package>@<major> peerDependencies`:
+          #
+          #   graphql — `@nestjs/graphql`, `@nestjs/apollo`, `@nestjs/mercurius`:
+          #     12 for NestJS 9 and 10, 13 for 11, 14 for 12. 12 is also the
+          #     last line on Apollo Server 4 and Fastify 4.
+          #   apollo-server — `@apollo/server`: `@nestjs/apollo` 12 wants 4,
+          #     13 and 14 want 5.
+          #   typeorm — `@nestjs/typeorm`: 10 is the last to admit NestJS 9,
+          #     12 admits 10 to 12.
+          #   axios — `@nestjs/axios`: 3 is the last to admit NestJS 9, 12
+          #     admits 10 to 12.
+          #   schedule — `@nestjs/schedule`: 6 is the last for NestJS 10, 12
+          #     admits 11 and 12.
+          #   cache-manager — `@nestjs/cache-manager` 12 admits NestJS 9 to 12,
+          #     so every application installs it. It is ESM only, which is
+          #     worth knowing on the NestJS 9 to 11 rows.
           - nestjs: 9
             schedule: 4
             mercurius: 14
+            graphql: 12
+            apollo-server: 4
+            typeorm: 10
+            axios: 3
+            cache-manager: 12
           - nestjs: 10
-            schedule: 4
-            mercurius: 14
-          - nestjs: 11
             schedule: 6
+            mercurius: 14
+            graphql: 12
+            apollo-server: 4
+            typeorm: 12
+            axios: 12
+            cache-manager: 12
+          - nestjs: 11
+            schedule: 12
             mercurius: 16
+            graphql: 13
+            apollo-server: 5
+            typeorm: 12
+            axios: 12
+            cache-manager: 12
+          - nestjs: 12
+            schedule: 12
+            mercurius: 16
+            graphql: 14
+            apollo-server: 5
+            typeorm: 12
+            axios: 12
+            cache-manager: 12
 
     steps:
       - name: Checkout
@@ -174,6 +221,19 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Install dashboard dependencies
+        run: npm ci
+        working-directory: dashboard
+
+      # The same reason as in the unit-test job: five integration suites serve
+      # the real bundle and skip without it. Here that included the Express 4
+      # deep-link test, which only the NestJS 9 and 10 rows can run — so the one
+      # place able to catch `*path` mounted on an Express 4 router never ran it.
+      # Built before the pin, against the devDependencies, because that is the
+      # build that ships.
+      - name: Build
+        run: npm run build
+
       - name: Pin NestJS to ${{ matrix.nestjs }}
         run: |
           npm install --no-save --legacy-peer-deps --no-audit --no-fund \
@@ -183,17 +243,53 @@ jobs:
             @nestjs/platform-fastify@${{ matrix.nestjs }} \
             @nestjs/testing@${{ matrix.nestjs }} \
             @nestjs/schedule@${{ matrix.schedule }} \
+            @nestjs/graphql@${{ matrix.graphql }} \
+            @nestjs/apollo@${{ matrix.graphql }} \
+            @nestjs/mercurius@${{ matrix.graphql }} \
+            @apollo/server@${{ matrix.apollo-server }} \
+            @nestjs/typeorm@${{ matrix.typeorm }} \
+            @nestjs/axios@${{ matrix.axios }} \
+            @nestjs/cache-manager@${{ matrix.cache-manager }} \
             mercurius@${{ matrix.mercurius }}
 
       # Installing a companion package can drag NestJS back up through peer
-      # resolution, which would quietly test the wrong version.
+      # resolution, which would quietly test the wrong version — and with the
+      # devDependencies on the NestJS 12 line, a companion left unpinned would
+      # quietly test one that requires a NestJS the row does not have. Every
+      # package pinned above is read back from node_modules, which is what the
+      # suite loads.
       - name: Report resolved versions
+        env:
+          EXPECTED: >-
+            {
+            "@nestjs/common": "${{ matrix.nestjs }}",
+            "@nestjs/core": "${{ matrix.nestjs }}",
+            "@nestjs/platform-express": "${{ matrix.nestjs }}",
+            "@nestjs/platform-fastify": "${{ matrix.nestjs }}",
+            "@nestjs/testing": "${{ matrix.nestjs }}",
+            "@nestjs/schedule": "${{ matrix.schedule }}",
+            "@nestjs/graphql": "${{ matrix.graphql }}",
+            "@nestjs/apollo": "${{ matrix.graphql }}",
+            "@nestjs/mercurius": "${{ matrix.graphql }}",
+            "@apollo/server": "${{ matrix.apollo-server }}",
+            "@nestjs/typeorm": "${{ matrix.typeorm }}",
+            "@nestjs/axios": "${{ matrix.axios }}",
+            "@nestjs/cache-manager": "${{ matrix.cache-manager }}",
+            "mercurius": "${{ matrix.mercurius }}"
+            }
         run: |
-          node -e "for (const m of ['@nestjs/core','@nestjs/common','@nestjs/platform-fastify','@nestjs/schedule']) \
-            console.log(m, require(m + '/package.json').version)"
-          node -e "const major = require('@nestjs/core/package.json').version.split('.')[0]; \
-            if (major !== '${{ matrix.nestjs }}') { \
-              console.error('Expected NestJS ${{ matrix.nestjs }}, resolved ' + major); process.exit(1); }"
+          node -e "
+            const { readFileSync } = require('node:fs');
+            const expected = JSON.parse(process.env.EXPECTED);
+            let wrong = 0;
+            for (const [name, major] of Object.entries(expected)) {
+              const { version } = JSON.parse(readFileSync('node_modules/' + name + '/package.json', 'utf8'));
+              const ok = version.split('.')[0] === major;
+              console.log((ok ? '  ' : '✗ ') + name + ' ' + version + (ok ? '' : ' (expected ' + major + '.x)'));
+              if (!ok) wrong++;
+            }
+            if (wrong) { console.error(wrong + ' package(s) resolved to the wrong line'); process.exit(1); }
+          "
 
       - name: Run library tests
         run: npm test

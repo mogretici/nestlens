@@ -26,7 +26,7 @@ interface ControllerResponse<T> {
  * Nest's own key for `@HttpCode()`. Inlined rather than imported from
  * `@nestjs/common/constants`, which is not part of the package's public API and
  * would tie NestLens to one major version of the framework — the value has been
- * stable across Nest 9, 10 and 11. `api-response.interceptor.spec.ts` asserts it
+ * stable across Nest 9, 10, 11 and 12. `api-response.interceptor.spec.ts` asserts it
  * still matches the framework's constant, so a rename fails a test rather than
  * silently changing every status code NestLens returns.
  */

@@ -3,11 +3,11 @@
  *
  * The exception watcher is a global filter, so it decides what every unhandled
  * failure returns — and it was writing its own response rather than Nest's.
- * The two did not agree. Nest's `BaseExceptionFilter` recognises the shape the
- * `http-errors` package throws, `{ statusCode, message }`, which is what
- * body-parser, serve-static and a great many middlewares raise, and answers
- * with the status it carries. Measured on the same controller, one application
- * with the watcher and one without:
+ * The two did not agree. Nest's `BaseExceptionFilter` recognises the errors the
+ * `http-errors` package creates — an `Error` carrying `status`, `statusCode`
+ * and `expose` — which is what body-parser, serve-static and a great many
+ * middlewares raise, and answers with the status they carry. Measured on the
+ * same controller, one application with the watcher and one without:
  *
  *     GET /boom/http-error
  *       without   413  {"statusCode":413,"message":"request entity too large"}
@@ -36,35 +36,27 @@ import {
   Res,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import createError from 'http-errors';
 import { NestLensModule } from '../../nestlens.module';
-
-/** The shape `http-errors` throws, which is not an `HttpException`. */
-class PayloadTooLargeError extends Error {
-  statusCode = 413;
-
-  constructor() {
-    super('request entity too large');
-  }
-}
-
-class BadJsonError extends Error {
-  statusCode = 400;
-
-  constructor() {
-    super('Unexpected token } in JSON at position 4');
-  }
-}
 
 @Controller('boom')
 class BoomController {
   @Get('http-error')
   httpError(): never {
-    throw new PayloadTooLargeError();
+    throw createError(413, 'request entity too large');
   }
 
   @Get('bad-json')
   badJson(): never {
-    throw new BadJsonError();
+    throw createError(400, 'Unexpected token } in JSON at position 4');
+  }
+
+  // A 5xx is created with `expose: false`, and NestJS 12.2 answers it with the
+  // reason phrase rather than the message. Whatever the version does, the
+  // watched application has to do the same.
+  @Get('http-error-hidden')
+  httpErrorHidden(): never {
+    throw createError(503, 'upstream at 10.0.0.7 refused the connection');
   }
 
   @Get('plain')
@@ -182,6 +174,7 @@ describe('an application answers the same with NestLens as without', () => {
   it.each([
     ['an http-errors 413', '/boom/http-error'],
     ['an http-errors 400', '/boom/bad-json'],
+    ['an http-errors 503', '/boom/http-error-hidden'],
     ['a plain Error', '/boom/plain'],
     ['a NotFoundException', '/boom/nest'],
     ['a ForbiddenException with no message', '/boom/forbidden'],
@@ -262,6 +255,13 @@ describe('an application answers the same with NestLens as without', () => {
   it('keeps the status the error carried', async () => {
     // Named on its own because this is the one that changed for every client.
     expect(await answer(watched, '/boom/http-error')).toContain('413');
+  });
+
+  it('keeps the status of a 5xx the error carried', async () => {
+    // What the body says depends on the version — the message on NestJS 9 to
+    // 12.1, the reason phrase from 12.2 — and is covered by the comparison
+    // above. The status does not.
+    expect(await answer(watched, '/boom/http-error-hidden')).toMatch(/^503 /);
   });
 
   it('does not put the thrown message in the body', async () => {

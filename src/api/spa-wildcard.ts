@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { HttpAdapterHost } from '@nestjs/core';
+import { dirname } from 'path';
 import { DashboardController } from './dashboard.controller';
 
 /**
@@ -39,16 +40,52 @@ export const toSpaWildcard = (
   return (expressMajor ?? 0) >= 5 ? '*path' : '*';
 };
 
+/** Where `request` resolves from `paths`, or `undefined` when it does not. */
+const resolveFrom = (request: string, paths: string[] | undefined): string | undefined => {
+  try {
+    return paths ? require.resolve(request, { paths }) : require.resolve(request);
+  } catch {
+    return undefined;
+  }
+};
+
 /**
- * Express's major version, or `undefined` when it cannot be read.
+ * The major version of the Express that `@nestjs/platform-express` runs, or
+ * `undefined` when it cannot be read.
+ *
+ * Resolved from the adapter's own directory, because that is the copy the
+ * adapter loads. NestJS 9 and 10 bring Express 4, and when anything else in
+ * the application wants Express 5 — `@modelcontextprotocol/sdk`, which
+ * NestLens's own MCP server uses, is one — npm hoists 5 to the top of
+ * node_modules and nests 4 under the adapter. Read from here, that answered 5
+ * to an Express 4 router, which then took `*path` literally and 404'd every
+ * deep link into the dashboard.
+ *
+ * The package, not the running application: an application can hand NestJS
+ * its own Express, and every Express 4 release has `app.lazyrouter` where 5
+ * does not, but no supported pairing needs it. Measured: the NestJS 11 and 12
+ * adapters read `app.router`, which throws on Express 4 before NestLens is
+ * reached, and on NestJS 10 an Express 5 application dies registering any
+ * `forRoutes('*')` middleware — path-to-regexp 8's "Missing parameter name".
+ * In every pairing that boots, the running Express has the adapter's major.
  *
  * Required lazily: Express is not a dependency of this package, and an
  * application on Fastify has no reason to have it installed. Only reached when
- * the adapter has already identified itself as Express.
+ * the adapter has already identified itself as Express. `paths` is where
+ * resolution starts, for tests; by default it is this package's location.
  */
-export const readExpressMajor = (): number | undefined => {
+export const readExpressMajor = (paths?: string[]): number | undefined => {
+  const adapter = resolveFrom('@nestjs/platform-express/package.json', paths);
+  const manifest =
+    (adapter ? resolveFrom('express/package.json', [dirname(adapter)]) : undefined) ??
+    resolveFrom('express/package.json', paths);
+
+  if (!manifest) {
+    return undefined;
+  }
+
   try {
-    const { version } = require('express/package.json') as { version?: string };
+    const { version } = require(manifest) as { version?: string };
     const major = Number.parseInt(version ?? '', 10);
 
     return Number.isNaN(major) ? undefined : major;

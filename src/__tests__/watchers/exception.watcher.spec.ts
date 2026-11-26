@@ -8,6 +8,7 @@ import { ArgumentsHost, HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpAdapterHost } from '@nestjs/core';
 import { Response } from 'express';
+import createError from 'http-errors';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 import { NestLensRequest } from '../../types';
@@ -456,8 +457,11 @@ describe('ExceptionWatcher', () => {
     it('keeps the status an http-errors failure carries', async () => {
       // What body-parser, serve-static and much else throw: not an
       // `HttpException`, but carrying its own status. This used to answer 500.
+      // A real `http-errors` error, not a lookalike: NestJS 12 recognises it by
+      // `expose` and `status` as well as `statusCode`, and an `Error` with only
+      // `statusCode` attached is a 500 there.
       const host = createMockHost(createMockRequest(), mockResponse);
-      const error = Object.assign(new Error('request entity too large'), { statusCode: 413 });
+      const error = createError(413, 'request entity too large');
 
       watcher.catch(error, host);
 
