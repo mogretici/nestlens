@@ -27,9 +27,12 @@ import {
   CursorQueryDto,
   DEFAULT_LIMIT,
   EntriesQueryDto,
+  FamilyQueryDto,
+  GroupedEntriesQueryDto,
   LatestSequenceQueryDto,
   ClearEntriesQueryDto,
   LogsQueryDto,
+  PageQueryDto,
   PauseRecordingDto,
   QueriesQueryDto,
 } from './dto';
@@ -107,7 +110,7 @@ export class NestLensApiController {
    */
   private async filteredPage(
     type: EntryType | undefined,
-    query: EntriesQueryDto,
+    query: PageQueryDto,
     filters?: CursorPaginationParams['filters'],
   ) {
     const limit = query.limit ?? DEFAULT_LIMIT;
@@ -189,7 +192,7 @@ export class NestLensApiController {
       'Group entries by family hash: identical queries, repeated exceptions and similar requests collapse into one row with a count. Use it to find the noisy ones — the same exception thrown 400 times, the same query run on every request.',
   })
   @Get('entries/grouped')
-  async getGroupedEntries(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
+  async getGroupedEntries(@Query() query: GroupedEntriesQueryDto, @Res() _res?: unknown) {
     const groups = await this.storage.getGroupedByFamilyHash(
       query.type,
       query.limit ?? DEFAULT_LIMIT,
@@ -210,7 +213,7 @@ export class NestLensApiController {
     // A family hash is a fixed-width digest; the parameter is a path segment a
     // caller writes, and it becomes part of a Redis key.
     @Param('hash') hash: string,
-    @Query() query: EntriesQueryDto,
+    @Query() query: FamilyQueryDto,
     @Res() _res?: unknown,
   ) {
     const entries = await this.storage.findByFamilyHash(hash, query.limit ?? DEFAULT_LIMIT);
@@ -260,8 +263,8 @@ export class NestLensApiController {
       'List recorded HTTP requests, newest first. Same filters as get_entries; for filtering by method, path or status use get_entries_with_cursor with type=request.',
   })
   @Get('requests')
-  async getRequests(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
-    return this.getEntries({ ...query, type: 'request' });
+  async getRequests(@Query() query: PageQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage('request', query);
   }
 
   @NestLensTool({
@@ -277,8 +280,8 @@ export class NestLensApiController {
     description: 'List recorded exceptions, newest first, with their stack traces.',
   })
   @Get('exceptions')
-  async getExceptions(@Query() query: EntriesQueryDto, @Res() _res?: unknown) {
-    return this.getEntries({ ...query, type: 'exception' });
+  async getExceptions(@Query() query: PageQueryDto, @Res() _res?: unknown) {
+    return this.filteredPage('exception', query);
   }
 
   @NestLensTool({

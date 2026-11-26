@@ -197,6 +197,32 @@ describe('the manifest of the real controllers', () => {
       expect(parameter('pause_recording', 'reason')).toMatchObject({ in: 'body', required: false });
     });
 
+    describe('advertises only what the handler reads', () => {
+      const names = (toolName: string): string[] =>
+        tool(toolName).parameters.map((candidate) => candidate.name);
+
+      it.each([
+        ['get_grouped_entries', ['limit', 'type']],
+        ['get_entries_by_family_hash', ['hash', 'limit']],
+      ])('%s takes %j and nothing else', (toolName, expected) => {
+        expect(names(toolName).sort()).toEqual(expected);
+      });
+
+      it.each(['get_requests', 'get_queries', 'get_exceptions', 'get_logs'])(
+        '%s does not offer a type it would override',
+        (toolName) => {
+          expect(names(toolName)).not.toContain('type');
+          expect(names(toolName)).toEqual(expect.arrayContaining(['limit', 'offset', 'from']));
+        },
+      );
+
+      it('keeps what narrows the logs and the queries', () => {
+        expect(names('get_logs')).toContain('level');
+        expect(names('get_queries')).toContain('slow');
+        expect(names('get_entries')).toContain('type');
+      });
+    });
+
     it('lists no parameters for a handler that takes none', () => {
       expect(tool('get_stats').parameters).toEqual([]);
     });

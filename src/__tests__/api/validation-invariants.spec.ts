@@ -20,8 +20,13 @@ import {
   CursorQueryDto,
   EntriesQueryDto,
   EntryTagsDto,
+  FamilyQueryDto,
+  GroupedEntriesQueryDto,
+  LogsQueryDto,
   MAX_OFFSET,
+  PageQueryDto,
   PauseRecordingDto,
+  QueriesQueryDto,
   TagEntriesQueryDto,
 } from '../../api/dto';
 import { MAX_LIMIT } from '../../api/dto/transformers';
@@ -105,6 +110,11 @@ const SEEDS = Array.from({ length: 400 }, (_, i) => i + 1);
 const DTOS = [
   ['the cursor query', CursorQueryDto, 'query'],
   ['the entries query', EntriesQueryDto, 'query'],
+  ['the one-type page query', PageQueryDto, 'query'],
+  ['the logs query', LogsQueryDto, 'query'],
+  ['the queries query', QueriesQueryDto, 'query'],
+  ['the grouped query', GroupedEntriesQueryDto, 'query'],
+  ['the family query', FamilyQueryDto, 'query'],
   ['the tag query', TagEntriesQueryDto, 'query'],
   ['the tags body', EntryTagsDto, 'body'],
   ['the pause body', PauseRecordingDto, 'body'],
