@@ -19,6 +19,7 @@ import { DEFAULT_LIMIT, EntryTagsDto, MonitoredTagDto, TagEntriesQueryDto } from
 import { NestLensGuard } from './api.guard';
 import { NestLensApiExceptionFilter } from './filters/api-exception.filter';
 import { NestLensApiResponseInterceptor } from './interceptors/api-response.interceptor';
+import { NestLensTool } from './tools';
 import { NestLensValidationPipe } from './pipes';
 
 /**
@@ -38,6 +39,10 @@ export class TagController {
   /**
    * Get all tags with their counts
    */
+  @NestLensTool({
+    description:
+      'Every tag in use with how many entries carry it. NestLens tags entries automatically from their content, and tags can be added by hand.',
+  })
   @Get()
   async getAllTags(@Res() _res?: unknown) {
     const tags = await this.tagService.getAllTags();
@@ -47,6 +52,10 @@ export class TagController {
   /**
    * Get entries by tag(s)
    */
+  @NestLensTool({
+    description:
+      'Entries carrying one or more tags. `logic` is OR (any of the tags, the default) or AND (all of them).',
+  })
   @Get('entries')
   async getEntriesByTags(@Query() query: TagEntriesQueryDto, @Res() _res?: unknown) {
     const entries = await this.tagService.findByTags(
@@ -60,6 +69,9 @@ export class TagController {
   /**
    * Get tags for a specific entry
    */
+  @NestLensTool({
+    description: 'The tags on one entry.',
+  })
   @Get('entry/:id')
   async getEntryTags(@Param('id', ParseIntPipe) id: number, @Res() _res?: unknown) {
     const tags = await this.tagService.getEntryTags(id);
@@ -69,6 +81,9 @@ export class TagController {
   /**
    * Add tags to an entry
    */
+  @NestLensTool({
+    description: 'Add tags to an entry.',
+  })
   @Post('entry/:id')
   async addTagsToEntry(
     @Param('id', ParseIntPipe) id: number,
@@ -83,6 +98,9 @@ export class TagController {
   /**
    * Remove tags from an entry
    */
+  @NestLensTool({
+    description: 'Remove tags from an entry.',
+  })
   @Delete('entry/:id')
   async removeTagsFromEntry(
     @Param('id', ParseIntPipe) id: number,
@@ -99,6 +117,10 @@ export class TagController {
   /**
    * Get all monitored tags
    */
+  @NestLensTool({
+    description:
+      'Tags that are monitored, with their entry counts. Pruning never deletes an entry that carries one.',
+  })
   @Get('monitored')
   async getMonitoredTags(@Res() _res?: unknown) {
     const tags = await this.tagService.getMonitoredTagsWithCounts();
@@ -108,6 +130,9 @@ export class TagController {
   /**
    * Add a monitored tag
    */
+  @NestLensTool({
+    description: 'Monitor a tag, so pruning keeps every entry that carries it.',
+  })
   @Post('monitored')
   async addMonitoredTag(@Body() body: MonitoredTagDto, @Res() _res?: unknown) {
     const tag = await this.tagService.addMonitoredTag(body.tag);
@@ -117,6 +142,9 @@ export class TagController {
   /**
    * Remove a monitored tag
    */
+  @NestLensTool({
+    description: 'Stop monitoring a tag. Entries it protected become eligible for pruning again.',
+  })
   @Delete('monitored/:tag')
   async removeMonitoredTag(@Param('tag') tag: string, @Res() _res?: unknown) {
     await this.tagService.removeMonitoredTag(tag);

@@ -33,8 +33,11 @@ import {
   ClearEntriesQueryDto,
   CursorQueryDto,
   EntriesQueryDto,
+  FamilyQueryDto,
+  GroupedEntriesQueryDto,
   LatestSequenceQueryDto,
   LogsQueryDto,
+  PageQueryDto,
   QueriesQueryDto,
   TagEntriesQueryDto,
 } from '../../api/dto';
@@ -93,6 +96,9 @@ type Method = 'get' | 'delete';
 const ENDPOINTS = new Map<Dto, [Method, string]>([
   [CursorQueryDto, ['get', '/entries/cursor']],
   [EntriesQueryDto, ['get', '/entries']],
+  [PageQueryDto, ['get', '/requests']],
+  [GroupedEntriesQueryDto, ['get', '/entries/grouped']],
+  [FamilyQueryDto, ['get', '/entries/family/0123456789abcdef']],
   [LogsQueryDto, ['get', '/logs']],
   [QueriesQueryDto, ['get', '/queries']],
   [CheckNewQueryDto, ['get', '/entries/check-new']],

@@ -49,6 +49,7 @@ export function IsCommaSeparatedStrings(validationOptions?: ValidationOptions) {
   return ValidateBy(
     {
       name: 'isCommaSeparatedStrings',
+      constraints: [MAX_FILTER_VALUES],
       validator: {
         validate: (value: unknown): boolean =>
           withinFilterLimit(value) &&
@@ -74,6 +75,7 @@ export function IsCommaSeparatedList(validationOptions?: ValidationOptions) {
   return ValidateBy(
     {
       name: 'isCommaSeparatedList',
+      constraints: [MAX_FILTER_VALUES],
       validator: {
         validate: (value: unknown): boolean =>
           withinFilterLimit(value) && (typeof value === 'string' || Array.isArray(value)),

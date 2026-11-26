@@ -113,6 +113,7 @@ const sidebars: SidebarsConfig = {
         'integrations/prisma',
         'integrations/bull-bullmq',
         'integrations/redis',
+        'integrations/mcp',
         'integrations/custom-integrations',
       ],
     },

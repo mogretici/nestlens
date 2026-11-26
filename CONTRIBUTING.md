@@ -106,6 +106,23 @@ npm run build
 5. Create dashboard page in `dashboard/src/pages/`
 6. Add tests in `src/__tests__/watchers/`
 
+## Adding an API Endpoint
+
+Every route under `__nestlens__/api` is also a tool for AI agents, through the
+`nestlens-mcp` server. Decorate the handler and it is one — nothing else changes:
+
+```typescript
+@NestLensTool({ description: 'What it returns or changes, and when to use it.' })
+@Get('entries/recent')
+async getRecentEntries(@Query() query: RecentQueryDto, @Res() _res?: unknown) { ... }
+```
+
+The tool is named after the method, and its parameters are read from the DTOs the
+handler already validates with. `src/__tests__/api/tools/tool-coverage.spec.ts`
+fails for a route that is neither decorated nor excluded on purpose. A new
+controller under `__nestlens__/api` also has to be added to the list in
+`NestLensApiController.getTools`.
+
 ## Reporting Issues
 
 When reporting issues, please include:

@@ -118,6 +118,7 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
 - **NestLensApiController** - REST endpoints for dashboard (`__nestlens__/*`)
 - **DashboardController** - Serves React SPA with catch-all route
 - **NestLensGuard** - Authorization (IP whitelist, role-based, custom function)
+- **`@NestLensTool`** (`src/api/tools/`) - Marks a handler as a tool for AI agents. `GET .../api/tools` builds the manifest from the controllers' metadata and the DTOs' validators, and `src/mcp/` (the `nestlens-mcp` binary, `nestlens/mcp`) is a hub over it, so a decorated endpoint needs no change in the MCP server. `tool-coverage.spec.ts` fails for an undecorated route
 - DTOs use class-validator for input validation
 
 ### Dashboard (`dashboard/src/`)
