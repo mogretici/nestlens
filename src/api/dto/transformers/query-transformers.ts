@@ -55,13 +55,36 @@ export function TransformCommaSeparatedNumbersOrErr() {
 }
 
 /**
- * Transforms string "true"/"false" to boolean
+ * A transform for a parameter declared `boolean` or `number`, which arrives as
+ * a string and stays one until this transform reads it.
+ *
+ * TypeScript records the declared type as `design:type`, and class-transformer's
+ * implicit conversion — NestLens' own pipe asks for it, and so does many a
+ * host's global ValidationPipe — applies `Boolean()` or `Number()` by it before
+ * any @Transform runs. `Boolean('false')` is `true`, so `?resolved=false` listed
+ * the resolved exceptions; `Number('')` is `0`, so `?limit=` asked for one entry.
+ * `design:type` lives in the global Reflect registry, so this is the one place
+ * every copy of class-transformer reads, and it runs after the compiler's own
+ * `design:type` decorator, which TypeScript always applies first.
  */
-export function TransformStringToBoolean() {
-  return Transform(({ value }: TransformFnParams) => {
-    if (value === undefined || value === null) return undefined;
-    if (typeof value === 'boolean') return value;
-    return value === 'true';
+const FromQueryString =
+  (read: (value: unknown) => unknown): PropertyDecorator =>
+  (target, property) => {
+    Transform(({ value }: TransformFnParams) => read(value))(target, property as string);
+    Reflect.defineMetadata('design:type', String, target, property);
+  };
+
+/**
+ * Reads 'true' and 'false'. Anything else is left for IsBooleanLike to refuse:
+ * reading it as false — or as true, which is what `Boolean()` did — answers a
+ * question the caller did not ask.
+ */
+export function TransformStringToBoolean(): PropertyDecorator {
+  return FromQueryString((value) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
   });
 }
 
@@ -74,16 +97,24 @@ export function TransformStringToBoolean() {
  * no default it is left as it arrived, so the validator beside it refuses it:
  * dropping it instead meant `?minDuration=slow` narrowed nothing and said
  * nothing, which reads as "no entry is that slow".
+ *
+ * Read with `Number()`, which is what implicit conversion applied before this
+ * ever saw the value: `12abc` is unreadable and `1e3` is a thousand, as they
+ * always were. A blank is a parameter not given.
  */
-export function TransformToInt(options?: { min?: number; max?: number; default?: number }) {
-  return Transform(({ value }: TransformFnParams) => {
-    if (value === undefined || value === null || value === '') {
+export function TransformToInt(options?: {
+  min?: number;
+  max?: number;
+  default?: number;
+}): PropertyDecorator {
+  return FromQueryString((value) => {
+    if (value === undefined || value === null || String(value).trim() === '') {
       return options?.default;
     }
 
-    const parsed = parseInt(String(value), 10);
+    const parsed = Math.trunc(Number(value));
 
-    if (isNaN(parsed)) {
+    if (!Number.isFinite(parsed)) {
       return options?.default ?? value;
     }
 

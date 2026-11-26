@@ -83,6 +83,15 @@ export function IsCommaSeparatedList(validationOptions?: ValidationOptions) {
 }
 
 /**
+ * A parameter given blank, which the transforms read as not given at all.
+ *
+ * Only a host's pipe, running without NestLens' transforms, ever shows one to a
+ * validator; NestLens' own pipe has turned it into `undefined` first, so a
+ * required parameter given blank is still refused there.
+ */
+const isBlank = (value: unknown): boolean => value === '';
+
+/**
  * Accepts a boolean or the strings 'true'/'false' (raw query param form,
  * before TransformStringToBoolean has run).
  */
@@ -92,7 +101,7 @@ export function IsBooleanLike(validationOptions?: ValidationOptions) {
       name: 'isBooleanLike',
       validator: {
         validate: (value: unknown): boolean =>
-          typeof value === 'boolean' || value === 'true' || value === 'false',
+          typeof value === 'boolean' || value === 'true' || value === 'false' || isBlank(value),
         defaultMessage: buildMessage(
           (eachPrefix) => `${eachPrefix}$property must be a boolean or 'true'/'false'`,
           validationOptions,
@@ -124,7 +133,8 @@ export function IsWholeNumberLike(
             Number.isInteger(value) &&
             value >= 0 &&
             withinMax(value)) ||
-          (typeof value === 'string' && /^\d+$/.test(value) && withinMax(Number(value))),
+          (typeof value === 'string' && /^\d+$/.test(value) && withinMax(Number(value))) ||
+          isBlank(value),
         defaultMessage: buildMessage(
           () =>
             max === undefined

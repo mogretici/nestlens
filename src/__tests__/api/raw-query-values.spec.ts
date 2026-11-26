@@ -201,6 +201,27 @@ describe('query DTOs, given the raw strings of a URL', () => {
     expect(Object.keys(RAW).filter((property) => !declared.has(property))).toEqual([]);
   });
 
+  /**
+   * Implicit conversion — a host's, and the one NestLens' own pipe asks for —
+   * converts by `design:type` before any `@Transform` runs, so a `Boolean` or
+   * `Number` there reads `'false'` as `true` and `''` as `0` whatever the
+   * transform beside it says. `Date` is left: `new Date(value)` is the parse
+   * `TransformDate` makes.
+   */
+  it('declares no property with a type implicit conversion would misread', () => {
+    const misread = QUERY_DTOS.flatMap((dto) =>
+      propertiesOf(dto)
+        .map((property) => ({
+          property,
+          type: Reflect.getMetadata('design:type', dto.prototype, property) as unknown,
+        }))
+        .filter(({ type }) => type === Boolean || type === Number)
+        .map(({ property, type }) => `${dto.name}.${property}: ${(type as Dto).name}`),
+    );
+
+    expect(misread).toEqual([]);
+  });
+
   it('accepts each property as a string, without any transform', async () => {
     const refused: string[] = [];
 
@@ -346,6 +367,57 @@ describe('query DTOs, through NestLensValidationPipe', () => {
 
   it.each(cases)('refuses %s, saying why', async (_name, dto, query, messages) => {
     expect(await refusal(dto, query)).toEqual(messages);
+  });
+
+  /**
+   * How a number has been read until now. Implicit conversion applied
+   * `Number()` before `TransformToInt` saw the value, so `12abc` was refused
+   * and `1e3` was a thousand; taking implicit conversion out of the path must
+   * not change that.
+   */
+  it.each([
+    ['1e3', 1000],
+    ['1.5', 1],
+    [' 12 ', 12],
+    ['-5', 0],
+  ])('reads minDuration=%p as %p, as it always has', async (raw, expected) => {
+    const result = (await new NestLensValidationPipe().transform(
+      { minDuration: raw },
+      { type: 'query', metatype: dtos.CursorQueryDto, data: '' },
+    )) as dtos.CursorQueryDto;
+
+    expect(result.minDuration).toBe(expected);
+  });
+
+  it.each(['12abc', 'Infinity', '0x'])('refuses minDuration=%p, as it always has', async (raw) => {
+    expect(await refusal(dtos.CursorQueryDto, { minDuration: raw })).toEqual([
+      DURATION('minDuration'),
+    ]);
+  });
+
+  it.each([
+    ['1e3', 1000],
+    ['abc', 50],
+    ['0', 1],
+  ])('reads limit=%p as %p, as it always has', async (raw, expected) => {
+    const result = (await new NestLensValidationPipe().transform(
+      { limit: raw },
+      { type: 'query', metatype: dtos.CursorQueryDto, data: '' },
+    )) as dtos.CursorQueryDto;
+
+    expect(result.limit).toBe(expected);
+  });
+
+  /**
+   * `Boolean()` read anything but a blank as `true`, so `?slow=yes` narrowed
+   * to the slow queries and `?resolved=false` to the resolved exceptions. A
+   * value that is neither word is now the validator's to refuse, as an
+   * unreadable number already was.
+   */
+  it.each(['yes', '1', 'FALSE'])('refuses slow=%p rather than reading it as true', async (raw) => {
+    expect(await refusal(dtos.CursorQueryDto, { slow: raw })).toEqual([
+      "slow must be a boolean or 'true'/'false'",
+    ]);
   });
 
   it('still reads what it accepts into numbers and dates', async () => {
