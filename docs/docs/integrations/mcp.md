@@ -198,6 +198,8 @@ An agent starts with `nestlens_list_tools`, then calls what it needs. Today the 
 
 ### Long answers
 
+A tool with a `limit` returns 10 entries when the agent does not pass one — fewer than the API's own default of 50, because an agent reads every entry it is given. The agent can ask for up to 1000.
+
 An answer is kept under 60,000 characters. A list that is longer keeps as many whole entries as fit, keeps its `meta`, and adds a `truncated` note saying how many were shown and the `beforeSequence`, `afterSequence` or `offset` to pass to continue from the last one. Anything else that is too long is cut by characters, and the note says the text is no longer valid JSON.
 
 ### Things to try

@@ -159,6 +159,51 @@ describe('the hub', () => {
       expect(JSON.parse(textOf(result))).toMatchObject({ data: { ran: 'get_stats' } });
     });
 
+    describe('a page size the agent leaves out', () => {
+      const paged = read('get_logs', {
+        parameters: [
+          { name: 'limit', in: 'query', type: 'integer', required: false, maximum: 1000 },
+        ],
+      });
+
+      it('is 10 here, not the API default', async () => {
+        const { client, invoke } = fakeClient(() => [paged]);
+        const { agent } = await connect({ client });
+
+        await agent.callTool({ name: 'nestlens_call_tool', arguments: { name: 'get_logs' } });
+        await agent.callTool({
+          name: 'nestlens_call_tool',
+          arguments: { name: 'get_logs', arguments: { limit: 200 } },
+        });
+
+        expect(invoke.mock.calls.map(([, args]) => args)).toEqual([{ limit: 10 }, { limit: 200 }]);
+      });
+
+      it('is not added to a tool that has no limit', async () => {
+        const { client, invoke } = fakeClient(() => [read('get_stats')]);
+        const { agent } = await connect({ client });
+
+        await agent.callTool({ name: 'nestlens_call_tool', arguments: { name: 'get_stats' } });
+
+        expect(invoke).toHaveBeenCalledWith(expect.anything(), {});
+      });
+
+      it('is said in the description the agent reads', async () => {
+        const { client } = fakeClient(() => [paged]);
+        const { agent } = await connect({ client });
+
+        const listed = JSON.parse(
+          textOf(await agent.callTool({ name: 'nestlens_list_tools', arguments: {} })),
+        ) as {
+          tools: Array<{ arguments: { properties: Record<string, { description?: string }> } }>;
+        };
+
+        expect(listed.tools[0]?.arguments.properties.limit?.description).toContain(
+          'defaults to 10 here; up to 1000',
+        );
+      });
+    });
+
     it('refuses a change while read-only, without sending anything', async () => {
       const { client, invoke } = fakeClient(() => [clear]);
       const { agent } = await connect({ client });

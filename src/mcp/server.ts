@@ -63,8 +63,41 @@ const INSTRUCTIONS = [
   '- nestlens_call_tool runs one of them by name.',
   '',
   'Start with get_stats for the shape of what was recorded, then narrow with',
-  'get_entries_with_cursor. Answers can be large: pass `limit`, and filter by `type`.',
+  'get_entries_with_cursor. A list returns 10 entries unless you pass `limit` (up to 1000);',
+  'filter by `type` and the type-specific filters rather than reading pages.',
 ].join('\n');
+
+/**
+ * The page size sent when an agent does not choose one.
+ *
+ * The API's own default (50) suits a dashboard that renders a page; an agent
+ * reads every entry into its context, and fifty full entries are most of an
+ * answer's budget before it has asked anything specific.
+ */
+const AGENT_DEFAULT_LIMIT = 10;
+
+const isPageSize = (parameter: ToolParameter): boolean =>
+  parameter.name === 'limit' && (parameter.type === 'integer' || parameter.type === 'number');
+
+/** A parameter as the agent should read it: what this server does with it included. */
+const asSeenHere = (parameter: ToolParameter): ToolParameter => {
+  if (!isPageSize(parameter)) return parameter;
+  const bound = parameter.maximum === undefined ? '' : `; up to ${parameter.maximum}`;
+  const own = `defaults to ${AGENT_DEFAULT_LIMIT} here${bound}`;
+  return {
+    ...parameter,
+    description: parameter.description ? `${parameter.description}; ${own}` : own,
+  };
+};
+
+/** The arguments as sent: a page size the agent left out is this server's, not the API's. */
+const withDefaults = (
+  tool: NestLensToolDescriptor,
+  args: Record<string, unknown>,
+): Record<string, unknown> =>
+  tool.parameters.some(isPageSize) && args.limit === undefined
+    ? { ...args, limit: AGENT_DEFAULT_LIMIT }
+    : args;
 
 const jsonType = (parameter: ToolParameter): Record<string, unknown> => {
   const schema: Record<string, unknown> = { type: parameter.type };
@@ -93,7 +126,7 @@ const present = (tool: NestLensToolDescriptor, allowWrite: boolean): Record<stri
       : { disabled: 'This changes data. Start nestlens-mcp with --allow-write to use it.' }),
     arguments: {
       type: 'object',
-      properties: Object.fromEntries(tool.parameters.map((p) => [p.name, jsonType(p)])),
+      properties: Object.fromEntries(tool.parameters.map((p) => [p.name, jsonType(asSeenHere(p))])),
       required: tool.parameters.filter((p) => p.required).map((p) => p.name),
       additionalProperties: false,
     },
@@ -236,7 +269,10 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
       );
     }
 
-    const toolArgs = (args.arguments as Record<string, unknown> | undefined) ?? {};
+    const toolArgs = withDefaults(
+      tool,
+      (args.arguments as Record<string, unknown> | undefined) ?? {},
+    );
     const result = await client.invoke(tool, toolArgs);
     return text(fitResponse(result, maxChars, tool, toolArgs));
   };
