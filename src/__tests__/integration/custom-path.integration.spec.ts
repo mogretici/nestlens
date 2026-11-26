@@ -23,7 +23,7 @@ const bootWithPath = async (path?: string): Promise<INestApplication> => {
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
-  await app.init();
+  await app.listen(0, '127.0.0.1');
   return app;
 };
 
@@ -127,7 +127,7 @@ describe('issue #10 - configurable path', () => {
       const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
       app = moduleRef.createNestApplication();
       app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-      await app.init();
+      await app.listen(0, '127.0.0.1');
     });
 
     afterAll(async () => {

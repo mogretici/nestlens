@@ -5,6 +5,9 @@
  */
 
 import 'reflect-metadata';
+import { installLoopbackListenGuard } from './support/loopback-listen';
+
+installLoopbackListenGuard();
 
 // Increase timeout for async operations
 jest.setTimeout(10000);

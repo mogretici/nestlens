@@ -46,9 +46,9 @@ const bootAndRecord = async (
     logger: false,
   });
   if (globalPrefix) app.setGlobalPrefix(globalPrefix);
-  await app.listen(0);
+  await app.listen(0, '127.0.0.1');
 
-  const origin = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('::1', '127.0.0.1');
+  const origin = await app.getUrl();
   const prefix = globalPrefix ? `/${globalPrefix}` : '';
   const nestlens = `${origin}${prefix}${dashboardPath}`;
 
