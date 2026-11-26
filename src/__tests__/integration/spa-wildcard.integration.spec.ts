@@ -93,7 +93,7 @@ describeWithDashboard('the mounted catch-all', () => {
     // build puts it under `dist/`.
     (app.get(DashboardController) as unknown as { dashboardPath: string }).dashboardPath =
       dashboardPublic;
-    await app.init();
+    await app.listen(0, '127.0.0.1');
 
     // Assert
     const routeComplaints = logger.warnings.filter((line) => line.includes('route path'));

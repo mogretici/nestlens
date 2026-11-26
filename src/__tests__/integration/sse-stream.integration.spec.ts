@@ -99,10 +99,7 @@ async function createApp(adapter: AdapterName, globalPrefix?: string): Promise<I
         })
       : await NestFactory.create(AppModule, new ExpressAdapter(), { logger: false });
   if (globalPrefix) app.setGlobalPrefix(globalPrefix);
-  await app.listen(0);
-  if (adapter === 'Fastify') {
-    await (app as NestFastifyApplication).getHttpAdapter().getInstance().ready();
-  }
+  await app.listen(0, '127.0.0.1');
   return app;
 }
 
@@ -112,8 +109,7 @@ describe.each<AdapterName>(['Express', 'Fastify'])('SSE live-tail on %s adapter'
 
   beforeAll(async () => {
     app = await createApp(adapter);
-    // Normalize IPv6 loopback so the raw http client connects reliably.
-    baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('::1', '127.0.0.1');
+    baseUrl = await app.getUrl();
   });
 
   afterAll(async () => {
@@ -183,7 +179,7 @@ describe('SSE live-tail under a global prefix', () => {
 
   beforeAll(async () => {
     app = await createApp('Express', 'api');
-    baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1').replace('::1', '127.0.0.1');
+    baseUrl = await app.getUrl();
   });
 
   afterAll(async () => {
