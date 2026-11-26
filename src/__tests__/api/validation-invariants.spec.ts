@@ -186,6 +186,27 @@ describe.each(DTOS)('%s, given anything', (_name, metatype, type) => {
     expect(wrong).toEqual([]);
   });
 
+  it('never returns a sequence that is not a whole number from zero', async () => {
+    const wrong: number[] = [];
+
+    for (const seed of SEEDS) {
+      const result = await run(metatype, type, inputFor(seed));
+      if (!result.ok) continue;
+
+      const { beforeSequence, afterSequence } = result.value as {
+        beforeSequence?: unknown;
+        afterSequence?: unknown;
+      };
+      for (const sequence of [beforeSequence, afterSequence]) {
+        if (sequence !== undefined && (!Number.isInteger(sequence) || (sequence as number) < 0)) {
+          wrong.push(seed);
+        }
+      }
+    }
+
+    expect(wrong).toEqual([]);
+  });
+
   it('never returns a prototype-polluting key as its own', async () => {
     const polluted: number[] = [];
 

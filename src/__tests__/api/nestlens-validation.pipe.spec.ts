@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import { validate } from 'class-validator';
 import { NestLensValidationPipe } from '../../api/pipes/nestlens-validation.pipe';
-import { CursorQueryDto } from '../../api/dto';
+import { CheckNewQueryDto, CursorQueryDto } from '../../api/dto';
 
 const queryMeta = (): ArgumentMetadata => ({
   type: 'query',
@@ -63,6 +63,33 @@ describe('NestLensValidationPipe', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    const refusal = (value: Record<string, unknown>): Promise<string> =>
+      pipe.transform(value, queryMeta()).then(
+        () => '',
+        (error: BadRequestException) => JSON.stringify(error.getResponse()),
+      );
+
+    it.each(['beforeSequence', 'afterSequence'])(
+      'refuses a %s that is not a number, rather than paging to nothing',
+      async (cursor) => {
+        expect(await refusal({ [cursor]: 'abc' })).toContain(`${cursor} must be a whole number`);
+      },
+    );
+
+    it('refuses both cursors at once, which each storage read differently', async () => {
+      expect(await refusal({ beforeSequence: '300', afterSequence: '100' })).toContain(
+        'Pass beforeSequence or afterSequence, not both',
+      );
+    });
+
+    it('still takes either cursor alone', async () => {
+      const result = (await pipe.transform(
+        { afterSequence: '100' },
+        queryMeta(),
+      )) as CursorQueryDto;
+      expect(result.afterSequence).toBe(100);
+    });
+
     it('passes the value through untouched for primitive metatypes', async () => {
       const result = await pipe.transform('raw', { type: 'query', metatype: String, data: '' });
       expect(result).toBe('raw');
@@ -88,6 +115,24 @@ describe('NestLensValidationPipe', () => {
       raw.statuses = '200,404';
       raw.slow = 'true';
       raw.tags = 'SUCCESS,USER:1';
+
+      const errors = await validate(dto, { whitelist: true });
+
+      expect(errors).toHaveLength(0);
+    });
+
+    it('accepts the raw sequence the live tail polls with', async () => {
+      const dto = new CheckNewQueryDto();
+      (dto as unknown as Record<string, unknown>).afterSequence = '100';
+
+      const errors = await validate(dto, { whitelist: true });
+
+      expect(errors).toHaveLength(0);
+    });
+
+    it('accepts a raw sequence that @Transform never ran on', async () => {
+      const dto = new CursorQueryDto();
+      (dto as unknown as Record<string, unknown>).beforeSequence = '300';
 
       const errors = await validate(dto, { whitelist: true });
 

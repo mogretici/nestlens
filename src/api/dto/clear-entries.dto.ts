@@ -1,6 +1,6 @@
-import { IsIn, IsOptional } from 'class-validator';
 import { EntryType } from '@/types';
 import { ENTRY_TYPES } from './entry-types';
+import { IsInUnlessBlank, IsOptionalScope } from './transformers';
 
 /**
  * Query of `DELETE entries`.
@@ -11,8 +11,8 @@ import { ENTRY_TYPES } from './entry-types';
  * called it: the capability was there and had no door.
  */
 export class ClearEntriesQueryDto {
-  @IsOptional()
-  @IsIn(ENTRY_TYPES, {
+  @IsOptionalScope()
+  @IsInUnlessBlank(ENTRY_TYPES, {
     message: `type must be one of: ${ENTRY_TYPES.join(', ')}`,
   })
   type?: EntryType;
