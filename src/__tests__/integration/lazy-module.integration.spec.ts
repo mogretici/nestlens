@@ -42,6 +42,7 @@ describe('NestLens loaded through LazyModuleLoader', () => {
     await loader.load(() => NestLensModule.forRoot({ watchers: {} })).catch(() => undefined);
 
     // Assert
+    await app.listen(0, '127.0.0.1');
     const response = await request(app.getHttpServer()).get('/nestlens');
     expect({ dashboard: response.status, everRouted: response.status !== 404 }).toEqual({
       dashboard: 404,
