@@ -311,7 +311,7 @@ For HTTP, `startNestLensMcpHttp({ client, port, token })` from the same module r
 - **It is the dashboard's door.** The server calls the same API, so [`allowedEnvironments`](../configuration/authorization), IP rules, `canAccess` and the [rate limit](../configuration/rate-limiting) all apply to it, from the address it connects from.
 - **What is masked stays masked.** [Data masking](../security/data-masking) happens when an entry is recorded, so the agent never sees a value the dashboard would not show.
 - **What is not masked reaches the model.** Recorded request bodies, query parameters and log lines can contain customer data, and an agent sends what it reads to its model provider. Use it against development and staging, as NestLens itself is meant to be used.
-- **Recorded text is data, not instructions.** An agent reading a log line or a request body that says "ignore your instructions" should not obey it, and read-only mode is what limits the damage when one does.
+- **Recorded text is data, not instructions.** An agent reading a log line or a request body that says "ignore your instructions" should not obey it. The server tells the agent so in its instructions, marks `nestlens_call_tool` as reaching the open world, and asks for your explicit request in the description of every destructive tool — but none of that is a guarantee, and read-only mode is what limits the damage when an agent obeys anyway.
 - **A URL is a door.** In HTTP mode keep the token secret, serve it over TLS, and prefer the SSH tunnel when one person needs it.
 
 ## Adding a tool
