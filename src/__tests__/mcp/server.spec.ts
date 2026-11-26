@@ -145,6 +145,7 @@ describe('the hub', () => {
             type: 'array',
             items: 'string',
             itemMaxLength: 50,
+            minItems: 1,
             maxItems: 100,
             required: true,
           },
@@ -160,6 +161,7 @@ describe('the hub', () => {
       expect(listed.tools[0]?.arguments.properties.tags).toEqual({
         type: 'array',
         items: { type: 'string', maxLength: 50 },
+        minItems: 1,
         maxItems: 100,
       });
     });

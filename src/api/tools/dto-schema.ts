@@ -22,6 +22,7 @@ export interface ToolParameter {
   minimum?: number;
   maximum?: number;
   maxLength?: number;
+  minItems?: number;
   /** For `array`, the longest each item may be. */
   itemMaxLength?: number;
   maxItems?: number;
@@ -90,6 +91,10 @@ export const describeDto = (
 
     if (names.has('isInt')) parameter.type = 'integer';
 
+    // A whole number from zero, at most its first constraint when it has one.
+    const wholeNumber = find('isWholeNumberLike');
+    if (wholeNumber) parameter.type = 'integer';
+
     // A parameter parsed into a bounded integer by the transformer rather than
     // checked by a validator: the API clamps it into this range.
     const bounds = Reflect.getMetadata(INTEGER_BOUNDS_METADATA, dto.prototype, name) as
@@ -112,7 +117,12 @@ export const describeDto = (
       parameter.description = 'Comma-separated list of values';
     }
 
-    if (names.has('isIso8601') || names.has('isDate') || design === Date) {
+    if (
+      names.has('isIso8601') ||
+      names.has('isDate') ||
+      names.has('isDateLike') ||
+      design === Date
+    ) {
       parameter.type = 'string';
       parameter.format = 'date-time';
       parameter.description = 'ISO 8601 instant, such as 2026-08-22T14:03:00Z';
@@ -121,10 +131,14 @@ export const describeDto = (
     const allowed = find('isIn')?.constraints?.[0];
     if (Array.isArray(allowed)) parameter.enum = allowed.map(String);
 
-    const minimum = asNumber(find('min')?.constraints?.[0]) ?? bounds?.min;
+    const minimum =
+      asNumber(find('min')?.constraints?.[0]) ?? bounds?.min ?? (wholeNumber ? 0 : undefined);
     if (minimum !== undefined) parameter.minimum = minimum;
 
-    const maximum = asNumber(find('max')?.constraints?.[0]) ?? bounds?.max;
+    const maximum =
+      asNumber(find('max')?.constraints?.[0]) ??
+      asNumber(wholeNumber?.constraints?.[0]) ??
+      bounds?.max;
     if (maximum !== undefined) parameter.maximum = maximum;
 
     const lengthRule = find('maxLength');
@@ -133,6 +147,20 @@ export const describeDto = (
       parameter.itemMaxLength = maxLength;
     } else if (maxLength !== undefined) {
       parameter.maxLength = maxLength;
+    }
+
+    const itemMaxLength = asNumber(find('hasItemsOfMaxLength')?.constraints?.[0]);
+    if (itemMaxLength !== undefined) parameter.itemMaxLength = itemMaxLength;
+
+    const minItems =
+      asNumber(find('arrayMinSize')?.constraints?.[0]) ??
+      (names.has('arrayNotEmpty') || names.has('isNonEmptyListLike') ? 1 : undefined);
+    if (minItems !== undefined) parameter.minItems = minItems;
+
+    const exclusive = find('isAbsentWith')?.constraints?.[0];
+    if (typeof exclusive === 'string') {
+      const note = `Not together with ${exclusive}.`;
+      parameter.description = parameter.description ? `${parameter.description}. ${note}` : note;
     }
 
     const maxItems = asNumber(find('arrayMaxSize')?.constraints?.[0]);

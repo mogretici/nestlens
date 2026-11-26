@@ -261,6 +261,98 @@ describe('the manifest of the real controllers', () => {
       });
     });
 
+    describe('under the query validators, which say what each parameter is', () => {
+      // The transformed query properties record `design:type` String, so none
+      // of this can come from the compiler: it is read off the validators.
+      const shape = (toolName: string, name: string): Record<string, unknown> => {
+        const { name: _n, in: _i, description: _d, ...rest } = parameter(toolName, name);
+        return rest;
+      };
+
+      it.each([
+        ['get_entries_with_cursor', 'resolved', { type: 'boolean', required: false }],
+        ['get_entries_with_cursor', 'slow', { type: 'boolean', required: false }],
+        ['get_queries', 'slow', { type: 'boolean', required: false }],
+        ['get_entries', 'minDuration', { type: 'integer', required: false, minimum: 0 }],
+        [
+          'get_entries',
+          'offset',
+          { type: 'integer', required: false, minimum: 0, maximum: 10_000 },
+        ],
+        ['get_entries', 'from', { type: 'string', required: false, format: 'date-time' }],
+        ['get_entries_with_cursor', 'to', { type: 'string', required: false, format: 'date-time' }],
+        [
+          'get_entries_by_tags',
+          'tags',
+          { type: 'array', items: 'string', required: true, minItems: 1, itemMaxLength: 100 },
+        ],
+        [
+          'add_tags_to_entry',
+          'tags',
+          {
+            type: 'array',
+            items: 'string',
+            required: true,
+            minItems: 1,
+            maxItems: 100,
+            itemMaxLength: 100,
+          },
+        ],
+        ['get_entries', 'limit', { type: 'integer', required: false, minimum: 1, maximum: 1000 }],
+        [
+          'get_entries_by_tags',
+          'limit',
+          { type: 'integer', required: false, minimum: 1, maximum: 1000 },
+        ],
+        ['check_new_entries', 'afterSequence', { type: 'integer', required: true, minimum: 0 }],
+        [
+          'get_entries_with_cursor',
+          'beforeSequence',
+          { type: 'integer', required: false, minimum: 0 },
+        ],
+        ['get_entries_by_tags', 'logic', { type: 'string', required: false, enum: ['AND', 'OR'] }],
+        ['clear_entries', 'type', { type: 'string', required: false, enum: [...ENTRY_TYPES] }],
+        [
+          'get_entries_with_cursor',
+          'type',
+          { type: 'string', required: false, enum: [...ENTRY_TYPES] },
+        ],
+        ['get_entries_with_cursor', 'search', { type: 'string', required: false, maxLength: 500 }],
+      ])('%s.%s is %j', (toolName, name, expected) => {
+        expect(shape(toolName, name)).toEqual(expected);
+      });
+
+      it('says that the two cursors go one at a time', () => {
+        expect(parameter('get_entries_with_cursor', 'afterSequence').description).toMatch(
+          /not together with beforeSequence/i,
+        );
+      });
+
+      it('marks as required only what has no optional marker, in every tool', () => {
+        const required = manifest.tools.flatMap((candidate) =>
+          candidate.parameters.filter((p) => p.required).map((p) => `${candidate.name}.${p.name}`),
+        );
+
+        expect(required.sort()).toEqual(
+          [
+            'add_monitored_tag.tag',
+            'add_tags_to_entry.id',
+            'add_tags_to_entry.tags',
+            'check_new_entries.afterSequence',
+            'get_entries_by_family_hash.hash',
+            'get_entries_by_tags.tags',
+            'get_entry.id',
+            'get_entry_tags.id',
+            'remove_monitored_tag.tag',
+            'remove_tags_from_entry.id',
+            'remove_tags_from_entry.tags',
+            'resolve_entry.id',
+            'unresolve_entry.id',
+          ].sort(),
+        );
+      });
+    });
+
     it('lists no parameters for a handler that takes none', () => {
       expect(tool('get_stats').parameters).toEqual([]);
     });

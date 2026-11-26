@@ -130,6 +130,7 @@ const jsonType = (parameter: ToolParameter): Record<string, unknown> => {
   if (parameter.minimum !== undefined) schema.minimum = parameter.minimum;
   if (parameter.maximum !== undefined) schema.maximum = parameter.maximum;
   if (parameter.maxLength !== undefined) schema.maxLength = parameter.maxLength;
+  if (parameter.minItems !== undefined) schema.minItems = parameter.minItems;
   if (parameter.maxItems !== undefined) schema.maxItems = parameter.maxItems;
   return schema;
 };
