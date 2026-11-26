@@ -272,7 +272,7 @@ Then add the URL to your agent as shown [above](#add-it-to-your-agent).
 | `--port <number>` | `NESTLENS_MCP_PORT` | `8787` |
 | `--token <secret>` | `NESTLENS_MCP_TOKEN` | none |
 
-If your `authorization.canAccess` wants a token or a cookie, pass it as a header. Prefer the environment variable: command-line arguments are visible to every user on the machine in the process list. A `--url` (or `NESTLENS_URL`) with credentials in it (`http://user:password@...`) is refused at startup, without repeating them: `fetch` refuses such an address, so it could never work — pass them as a header instead. A malformed `--header` is reported without its value either.
+If your `authorization.canAccess` wants a token or a cookie, pass it as a header. Prefer the environment variable: command-line arguments are visible to every user on the machine in the process list. A `--url` (or `NESTLENS_URL`) with credentials in it (`http://user:password@...`) is refused at startup, without repeating them: `fetch` refuses such an address, so it could never work — pass them as a header instead. So is one without `http://` or `https://` (`localhost:3000/nestlens`). A malformed `--header` is reported without its value either.
 
 ```bash
 NESTLENS_HEADERS='{"Authorization":"Bearer dev-token"}' npx nestlens-mcp --url http://localhost:3000/nestlens

@@ -76,12 +76,27 @@ describe('withoutCredentials', () => {
   it.each([
     ['http://user:hunter2@localhost:3000/nestlens', 'http://localhost:3000/nestlens'],
     ['https://token@app.example/nestlens?x=1', 'https://app.example/nestlens?x=1'],
-    ['http://a:b@c@host:1', 'http://host:1'],
+    ['http://a:b@c@host:1', 'http://host:1/'],
     ['http://localhost:3000/nestlens/a@b', 'http://localhost:3000/nestlens/a@b'],
     ['http://localhost:3000', 'http://localhost:3000'],
     ['not a url', 'not a url'],
+    // The authority ends at the first of / ? # and, for http, a backslash.
+    ['https://evil?u=a@b/c', 'https://evil?u=a@b/c'],
+    ['https://evil#a@b/c', 'https://evil#a@b/c'],
+    ['http:\\\\u:p@h/x', 'http://h/x'],
+    // Unparsable: read by position, with the same terminators.
+    ['http://u:p@[bad/x', 'http://[bad/x'],
+    ['http://[bad?u=a@b', 'http://[bad?u=a@b'],
+    ['http://[bad\\u=a@b', 'http://[bad\\u=a@b'],
   ])('shows %j as %j', (url, shown) => {
     expect(withoutCredentials(url)).toBe(shown);
+  });
+
+  it('reads a relative address against the one it answered', () => {
+    expect(withoutCredentials('//u:p@other.example/x', 'http://localhost:3000/nestlens')).toBe(
+      'http://other.example/x',
+    );
+    expect(withoutCredentials('/login', 'http://localhost:3000/nestlens')).toBe('/login');
   });
 });
 
@@ -102,9 +117,35 @@ describe('a base URL with credentials in it', () => {
     },
   );
 
-  it('is not confused with an @ in the path', () => {
-    expect(() => new NestLensClient({ baseUrl: 'http://localhost:3000/a@b' })).not.toThrow();
+  it.each(['http://localhost:3000/a@b', 'http://localhost:3000?next=a@b', 'http://h#a@b'])(
+    'is not confused with an @ after the authority: %s',
+    (baseUrl) => {
+      expect(() => new NestLensClient({ baseUrl })).not.toThrow();
+    },
+  );
+
+  it('is found behind a backslash, which fetch reads as a slash', () => {
+    expect(() => new NestLensClient({ baseUrl: 'http:\\\\u:hunter2@h/x' })).toThrow(
+      /contains credentials/,
+    );
   });
+});
+
+describe('a base URL fetch could not use', () => {
+  it.each(['u:hunter2@localhost:3000', 'localhost:3000/nestlens', 'ftp://h/x', 'not a url'])(
+    'is refused when the client is made, without repeating it: %s',
+    (baseUrl) => {
+      const make = (): unknown => new NestLensClient({ baseUrl });
+
+      expect(make).toThrow(
+        new Error(
+          'The NestLens URL must be an http:// or https:// address with the dashboard path, ' +
+            'such as http://localhost:3000/nestlens.',
+        ),
+      );
+      expect(make).not.toThrow(/hunter2/);
+    },
+  );
 });
 
 describe('NestLensClient.manifest', () => {

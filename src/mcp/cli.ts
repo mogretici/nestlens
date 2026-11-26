@@ -1,5 +1,5 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { assertNoCredentials, NestLensClient } from './client';
+import { assertUsableBaseUrl, NestLensClient } from './client';
 import { startNestLensMcpHttp } from './http';
 import { createNestLensMcpServer } from './server';
 
@@ -151,7 +151,7 @@ export const parseCliOptions = (
     }
   }
 
-  assertNoCredentials(options.url);
+  assertUsableBaseUrl(options.url);
   return options;
 };
 

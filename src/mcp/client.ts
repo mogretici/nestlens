@@ -170,39 +170,73 @@ const appendQuery = (query: URLSearchParams, name: string, value: unknown): void
   if (value.length === 1 && String(value[0]).includes(',')) query.append(name, '');
 };
 
-/**
- * A URL as it may be shown: without the `user:password@` an address can carry.
- *
- * The base URL is refused with credentials in it, so this is for addresses a
- * server sends back, such as a redirect's location. Read by position rather
- * than by `URL`, so an address that does not parse is still shown as written,
- * minus its credentials.
- */
-export const withoutCredentials = (url: string): string => {
+const isAuthorityEnd = (code: number): boolean =>
+  code === 0x2f || code === 0x3f || code === 0x23 || code === 0x5c;
+
+/** `user:password@` dropped by position, for an address the URL parser refuses. */
+const withoutUserinfoByPosition = (url: string): string => {
   const scheme = url.indexOf('://');
   if (scheme === -1) return url;
 
   const start = scheme + 3;
-  const slash = url.indexOf('/', start);
-  const end = slash === -1 ? url.length : slash;
+  let end = start;
+  while (end < url.length && !isAuthorityEnd(url.charCodeAt(end))) end += 1;
   const at = url.lastIndexOf('@', end - 1);
 
   return at < start ? url : `${url.slice(0, start)}${url.slice(at + 1)}`;
 };
 
 /**
- * Refuses a base URL that carries `user:password@`, without repeating it.
+ * A URL as it may be shown: without the `user:password@` an address can carry.
  *
- * Such an address can never work: `fetch` refuses to build a request from one,
- * and quotes it, credentials and all, when it does.
+ * For addresses a server sends back, such as a redirect's location, which may
+ * be relative to `base`. Read with the WHATWG parser that `fetch` itself uses,
+ * so what counts as credentials here is exactly what would be sent: the
+ * authority ends at `/`, `?`, `#` or, for http, a backslash. An address that
+ * does not parse is read by position with the same rule.
  */
-export const assertNoCredentials = (url: string): void => {
-  if (withoutCredentials(url) === url) return;
-  throw new Error(
-    'The NestLens URL contains credentials (user:password@). They cannot work: fetch refuses ' +
-      'an address that carries them, so no request could be sent. Pass them as a header ' +
-      'instead (--header "Authorization: ..." or NESTLENS_HEADERS).',
-  );
+export const withoutCredentials = (url: string, base?: string): string => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url, base);
+  } catch {
+    return withoutUserinfoByPosition(url);
+  }
+  if (!parsed.username && !parsed.password) return url;
+  parsed.username = '';
+  parsed.password = '';
+  return parsed.href;
+};
+
+/**
+ * Refuses a base URL `fetch` could not use, without repeating it.
+ *
+ * Read with the parser `fetch` uses. An address it cannot read, or one that is
+ * not http(s) — `localhost:3000` parses as the scheme `localhost:` — would fail
+ * on the first request, in an error that quotes it. One with credentials in it
+ * fails the same way: `fetch` refuses to build a request from it.
+ */
+export const assertUsableBaseUrl = (url: string): void => {
+  let parsed: URL | undefined;
+  try {
+    parsed = new URL(url);
+  } catch {
+    parsed = undefined;
+  }
+
+  if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
+    throw new Error(
+      'The NestLens URL must be an http:// or https:// address with the dashboard path, ' +
+        'such as http://localhost:3000/nestlens.',
+    );
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error(
+      'The NestLens URL contains credentials (user:password@). They cannot work: fetch refuses ' +
+        'an address that carries them, so no request could be sent. Pass them as a header ' +
+        'instead (--header "Authorization: ..." or NESTLENS_HEADERS).',
+    );
+  }
 };
 
 /** A loop rather than `/\/+$/`, which backtracks quadratically on slashes that do not end the string. */
@@ -244,7 +278,7 @@ export class NestLensClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: NestLensClientOptions) {
-    assertNoCredentials(options.baseUrl);
+    assertUsableBaseUrl(options.baseUrl);
     this.root = `${withoutTrailingSlashes(options.baseUrl)}/${API_ROOT}`;
     this.headers = options.headers ?? {};
     this.timeoutMs = options.timeoutMs ?? 15_000;
@@ -374,7 +408,7 @@ export class NestLensClient {
       throw new NestLensApiError(
         response.status,
         `NestLens at ${this.root} redirected (${response.status}` +
-          `${location ? ` to ${withoutCredentials(location)}` : ''}). ` +
+          `${location ? ` to ${withoutCredentials(location, url)}` : ''}). ` +
           'nestlens-mcp does not follow redirects, so ' +
           'the headers it was given go nowhere else; point --url at the final address.',
       );

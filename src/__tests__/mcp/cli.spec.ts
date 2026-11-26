@@ -90,6 +90,13 @@ describe('parseCliOptions', () => {
     expect(attempt).not.toThrow(/hunter2/);
   });
 
+  it('refuses a URL with no scheme, which is not one fetch can use', () => {
+    const attempt = (): unknown => parseCliOptions(['--url', 'u:hunter2@localhost:3000'], {});
+
+    expect(attempt).toThrow(/must be an http:\/\/ or https:\/\/ address/);
+    expect(attempt).not.toThrow(/hunter2/);
+  });
+
   it('refuses headers that are not a JSON object', () => {
     expect(() => parseCliOptions([], { NESTLENS_HEADERS: 'Authorization: x' })).toThrow(
       /JSON object/,
