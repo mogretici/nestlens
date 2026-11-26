@@ -270,6 +270,9 @@ export class NestLensClient {
           ...this.headers,
         },
         body: body === undefined ? undefined : JSON.stringify(body),
+        // `fetch` follows a redirect with every header it was given, to any
+        // origin — the credentials in `headers` included.
+        redirect: 'manual',
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
@@ -277,6 +280,16 @@ export class NestLensClient {
       throw new NestLensUnreachableError(
         `Could not reach NestLens at ${this.root} (${reason}). Is the application running, ` +
           'and is the URL the one the dashboard is mounted at?',
+      );
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      throw new NestLensApiError(
+        response.status,
+        `NestLens at ${this.root} redirected (${response.status}` +
+          `${location ? ` to ${location}` : ''}). nestlens-mcp does not follow redirects, so ` +
+          'the headers it was given go nowhere else; point --url at the final address.',
       );
     }
 

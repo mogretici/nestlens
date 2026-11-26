@@ -338,6 +338,7 @@ The tool is named after the method (`get_recent_entries`). Its parameters — th
 | `404` / `Not Found` for the package `nestlens-mcp` from `npx` | The client started it outside your project, so `npx` looked on npm for a package with that name. Use the `-p nestlens -p @modelcontextprotocol/sdk` form [above](#quick-start). |
 | `Could not reach NestLens` | The application is not running, or `--url` is wrong. |
 | `answered with something that is not JSON ... dashboard mount` | `--url` points at the application, not at the dashboard mount. Add the path, for example `/nestlens`. |
+| `redirected (301 to ...)` | `--url` is not the final address — often `http://` where the application redirects to `https://`, or a missing trailing path. Use the address it redirects to. Redirects are not followed, so the headers you pass are never sent anywhere else. |
 | `did not return a tool list` | The application runs a version of `nestlens` older than the one that added this endpoint. |
 | `answered 403` | The guard refused the connection: `allowedEnvironments`, `allowedIps` or `canAccess`. Pass credentials with `NESTLENS_HEADERS`. |
 | `answered 429` | The rate limit. The default is 100 requests a minute per address. |

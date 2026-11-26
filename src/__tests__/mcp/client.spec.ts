@@ -1,3 +1,5 @@
+import { createServer } from 'http';
+import type { AddressInfo } from 'net';
 import { NESTLENS_API_PREFIX } from '../../nestlens.config';
 import type { NestLensToolDescriptor } from '../../api/tools';
 import {
@@ -305,6 +307,59 @@ describe('NestLensClient.invoke', () => {
 
     expect(failure).toBeInstanceOf(NestLensUnreachableError);
     expect((failure as Error).message).toContain('http://localhost:3000/nestlens/__nestlens__/api');
+  });
+
+  describe('a redirect', () => {
+    it('is refused, not followed, and named', async () => {
+      const { client, calls } = setup(
+        () =>
+          new Response(null, {
+            status: 302,
+            headers: { Location: 'https://elsewhere.example/nestlens/__nestlens__/api/things' },
+          }),
+      );
+
+      const failure = await client.invoke(descriptor({})).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(NestLensApiError);
+      expect((failure as NestLensApiError).status).toBe(302);
+      expect((failure as Error).message).toContain('redirected');
+      expect((failure as Error).message).toContain('https://elsewhere.example/nestlens');
+      expect((failure as Error).message).toContain('--url');
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.init.redirect).toBe('manual');
+    });
+
+    it('does not carry the headers to where it points, over real HTTP', async () => {
+      const seen: Array<string | undefined> = [];
+      const target = createServer((request, response) => {
+        seen.push(request.headers['x-nestlens-token'] as string | undefined);
+        response.end('{}');
+      });
+      await new Promise<void>((done) => target.listen(0, '127.0.0.1', done));
+      const targetPort = (target.address() as AddressInfo).port;
+      const origin = createServer((_request, response) => {
+        response.writeHead(302, { Location: `http://127.0.0.1:${targetPort}/stolen` });
+        response.end();
+      });
+      await new Promise<void>((done) => origin.listen(0, '127.0.0.1', done));
+      const originPort = (origin.address() as AddressInfo).port;
+
+      try {
+        const client = new NestLensClient({
+          baseUrl: `http://127.0.0.1:${originPort}/nestlens`,
+          headers: { 'X-NestLens-Token': 'secret' },
+        });
+
+        await expect(client.invoke(descriptor({}))).rejects.toThrow(/redirected/);
+        expect(seen).toEqual([]);
+      } finally {
+        await Promise.all([
+          new Promise((done) => target.close(done)),
+          new Promise((done) => origin.close(done)),
+        ]);
+      }
+    });
   });
 
   it('points at the mount when the answer is not JSON', async () => {
