@@ -202,7 +202,11 @@ An agent starts with `nestlens_list_tools`, then calls what it needs. Today the 
 
 A tool with a `limit` returns 10 entries when the agent does not pass one — fewer than the API's own default of 50, because an agent reads every entry it is given. The agent can ask for up to 1000.
 
-An answer is kept under 60,000 characters. A list that is longer keeps as many whole entries as fit, keeps its `meta`, and adds a `truncated` note saying how many were shown and the `beforeSequence`, `afterSequence` or `offset` to pass to continue from the last one. Anything else that is too long is cut by characters, and the note says the text is no longer valid JSON.
+An answer is kept under 60,000 characters. A list that is longer keeps as many whole entries as fit — the ones nearest the cursor — and adds a `truncated` object: how many were shown of how many, a note, and a `resume` value (`beforeSequence`, `afterSequence` or `offset`) to pass, with the same arguments, to continue from the last one shown. The list's `meta` is kept, but its paging fields (`oldestSequence`, `newestSequence`, `hasMore`) are rewritten to describe the entries shown rather than the page the API returned, so following them does not skip what was left out. The `truncated` object counts toward the 60,000.
+
+An entry too large for an answer on its own is not shown: the answer has `shown: 0`, the note names its id so the agent can open it with `get_entry`, and `resume` steps past it, so paging still moves on.
+
+Anything else that is too long is cut at 60,000 characters, and a note saying the text is no longer valid JSON is added after them.
 
 ### Things to try
 
