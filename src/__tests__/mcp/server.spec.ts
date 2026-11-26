@@ -661,6 +661,25 @@ describe('the hub', () => {
       });
     });
 
+    it('pages backward when both cursors are given, as SQLite and Redis do', async () => {
+      // Both read below `beforeSequence` and then reverse the page because
+      // `afterSequence` is set, so it arrives oldest first.
+      const ascending = { ...page(150), data: [...page(150).data].reverse() };
+
+      const fitted = JSON.parse(
+        await callWith(cursorTool, ascending, { beforeSequence: 151, afterSequence: 10 }),
+      ) as Fitted;
+      const ids = fitted.data.map((entry) => entry.id);
+      const lowest = Math.min(...ids);
+
+      expect([...ids].sort((x, y) => y - x)).toEqual(
+        Array.from({ length: ids.length }, (_, i) => 150 - i),
+      );
+      expect(ids).toEqual([...ids].sort((x, y) => x - y));
+      expect(fitted.truncated.resume).toEqual({ beforeSequence: lowest });
+      expect(fitted.meta).toMatchObject({ oldestSequence: lowest, newestSequence: 150 });
+    });
+
     it('serializes compactly', async () => {
       const { client, invoke } = fakeClient(() => [read('get_stats')]);
       invoke.mockResolvedValueOnce({ success: true, data: { a: 1, b: [2] } });

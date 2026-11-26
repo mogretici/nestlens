@@ -33,11 +33,37 @@ const cutByCharacters = (serialized: string, maxChars: number): string => {
 };
 
 /**
+ * The entries to keep of a cursor page: the `shown` nearest its cursor.
+ *
+ * Chosen by id, not by position. The storages order a page newest first, but
+ * one asked for with both cursors is read below `beforeSequence` and then
+ * reversed by SQLite and Redis, so it arrives oldest first; keeping the first
+ * few by position would keep the ones furthest from the cursor and leave a gap.
+ */
+const nearestToCursor = (
+  data: readonly unknown[],
+  shown: number,
+  forward: boolean,
+): { entries: unknown[]; nearest?: number } => {
+  const ids = data.map(idOf);
+  if (ids.some((id) => id === undefined)) {
+    const entries = forward ? data.slice(data.length - shown) : data.slice(0, shown);
+    return { entries, nearest: idOf(forward ? data[data.length - 1] : data[0]) };
+  }
+
+  const order = (ids as number[]).slice().sort((x, y) => (forward ? x - y : y - x));
+  const kept = new Set(order.slice(0, shown));
+  return { entries: data.filter((_, i) => kept.has(ids[i] as number)), nearest: order[0] };
+};
+
+/**
  * What to keep of a list that does not fit, and how to ask for the rest.
  *
- * Every list endpoint answers newest first. A forward page (`afterSequence`)
- * holds the oldest entries after the cursor, so it is cut from the newest end:
- * cutting the other end would leave a gap between the cursor and what is shown.
+ * A forward page (`afterSequence` alone; with `beforeSequence` beside it every
+ * storage but the in-memory one reads backward) keeps the entries just after
+ * its cursor, a backward page the ones just before it. With nothing shown, the
+ * next page starts past the entry that did not fit, which the note names so it
+ * can be opened on its own.
  */
 const plan = (
   tool: NestLensToolDescriptor,
@@ -46,21 +72,20 @@ const plan = (
   shown: number,
 ): {
   entries: unknown[];
+  nearest?: number;
   resume?: Record<string, number>;
   cursor?: Record<string, unknown>;
 } => {
-  const forward = takes(tool, 'afterSequence') && typeof args.afterSequence === 'number';
-  const entries = forward ? data.slice(data.length - shown) : data.slice(0, shown);
-  const newest = idOf(entries[0]);
-  const oldest = idOf(entries[entries.length - 1]);
-  // With nothing shown, the next page starts past the entry that did not fit,
-  // which the note names so it can be opened on its own.
-  const nearest = idOf(forward ? data[data.length - 1] : data[0]);
-
   if (takes(tool, 'beforeSequence') || takes(tool, 'afterSequence')) {
+    const forward = typeof args.afterSequence === 'number' && args.beforeSequence === undefined;
+    const { entries, nearest } = nearestToCursor(data, shown, forward);
+    const ids = entries.map(idOf).filter((id): id is number => id !== undefined);
+    const newest = ids.length > 0 ? Math.max(...ids) : undefined;
+    const oldest = ids.length > 0 ? Math.min(...ids) : undefined;
     const at = shown === 0 ? nearest : forward ? newest : oldest;
     return {
       entries,
+      nearest,
       ...(at === undefined
         ? {}
         : { resume: forward ? { afterSequence: at } : { beforeSequence: at } }),
@@ -68,12 +93,14 @@ const plan = (
     };
   }
 
+  const entries = data.slice(0, shown);
+  const nearest = idOf(data[0]);
   if (takes(tool, 'offset')) {
     const offset = typeof args.offset === 'number' ? args.offset : 0;
-    return { entries, resume: { offset: offset + Math.max(shown, 1) } };
+    return { entries, nearest, resume: { offset: offset + Math.max(shown, 1) } };
   }
 
-  return { entries };
+  return { entries, nearest };
 };
 
 const noteFor = (
@@ -124,11 +151,11 @@ export const fitResponse = (
 
   const data = value.data;
   const build = (shown: number): string => {
-    const { entries, resume, cursor } = plan(tool, args, data, shown);
+    const { entries, nearest, resume, cursor } = plan(tool, args, data, shown);
     const truncated: Truncation = {
       shown,
       of: data.length,
-      note: noteFor(shown, data.length, resume, idOf(plan(tool, args, data, 1).entries[0])),
+      note: noteFor(shown, data.length, resume, nearest),
       ...(resume ? { resume } : {}),
     };
     const meta = isRecord(value.meta) && cursor ? { ...value.meta, ...cursor } : value.meta;
