@@ -18,12 +18,12 @@ import { describeThrown } from './thrown-value';
  * Records an exception and then answers exactly as Nest would have.
  *
  * It used to write its own response, and the two did not agree. Nest's
- * `BaseExceptionFilter` recognises the shape the `http-errors` package throws —
- * `{ statusCode, message }`, which is what body-parser, serve-static and a
- * great many middlewares raise — and answers with the status it carries. This
- * answered 500 to all of them, and put the thrown message in the body where
- * Nest deliberately does not. Measured on one application with the watcher and
- * one without:
+ * `BaseExceptionFilter` recognises the errors the `http-errors` package creates
+ * — an `Error` carrying `status`, `statusCode` and `expose`, which is what
+ * body-parser, serve-static and a great many middlewares raise — and answers
+ * with the status they carry. This answered 500 to all of them, and put the
+ * thrown message in the body where Nest deliberately does not. Measured on one
+ * application with the watcher and one without:
  *
  * ```text
  * without   413  {"statusCode":413,"message":"request entity too large"}

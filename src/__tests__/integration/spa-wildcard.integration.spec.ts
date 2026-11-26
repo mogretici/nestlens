@@ -12,7 +12,7 @@
  * These boot real applications on both adapters and check both halves: the
  * warning is gone, and deep links still resolve. The unit tests below cover the
  * versions this machine cannot install; the compatibility matrix in CI runs the
- * whole thing on NestJS 9, 10 and 11.
+ * whole thing on NestJS 9, 10, 11 and 12.
  */
 import { ConsoleLogger, INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
