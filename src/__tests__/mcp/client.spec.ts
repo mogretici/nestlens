@@ -518,6 +518,19 @@ describe('NestLensClient.invoke', () => {
       expect(calls[0]?.init.redirect).toBe('manual');
     });
 
+    it('releases the body it will not read', async () => {
+      const response = new Response('Moved', {
+        status: 302,
+        headers: { Location: 'https://elsewhere.example/' },
+      });
+      const cancel = jest.spyOn(response.body!, 'cancel');
+      const { client } = setup(() => response);
+
+      await expect(client.invoke(descriptor({}))).rejects.toThrow(/redirected/);
+
+      expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
     it('does not carry the headers to where it points, over real HTTP', async () => {
       const seen: Array<string | undefined> = [];
       const target = createServer((request, response) => {

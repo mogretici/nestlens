@@ -405,6 +405,8 @@ export class NestLensClient {
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
+      // Unread, the body keeps its connection from going back to the pool.
+      await response.body?.cancel();
       throw new NestLensApiError(
         response.status,
         `NestLens at ${this.root} redirected (${response.status}` +
