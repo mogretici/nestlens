@@ -334,7 +334,7 @@ The tool is named after the method (`get_recent_entries`). Its parameters — th
 
 | Symptom | Cause |
 | --- | --- |
-| The client shows `nestlens` as failed or does not list its tools | Run the same command in a terminal (`npx nestlens-mcp --url ...`). It prints why to stderr. A missing `@modelcontextprotocol/sdk` is the usual cause; so is a client started before the config was saved — restart it. |
+| The client shows `nestlens` as failed or does not list its tools | Run the same command in a terminal (`npx nestlens-mcp --url ...`). It prints why to stderr. A missing `@modelcontextprotocol/sdk` is the usual cause, and it says so with the command that installs it; so is a client started before the config was saved — restart it. |
 | `404` / `Not Found` for the package `nestlens-mcp` from `npx` | The client started it outside your project, so `npx` looked on npm for a package with that name. Use the `-p nestlens -p @modelcontextprotocol/sdk` form [above](#quick-start). |
 | `Could not reach NestLens` | The application is not running, or `--url` is wrong. |
 | `answered with something that is not JSON ... dashboard mount` | `--url` points at the application, not at the dashboard mount. Add the path, for example `/nestlens`. |
