@@ -133,10 +133,12 @@ describe('the field tracer', () => {
 
   describe('its threshold', () => {
     it('keeps only what took longer than it was told', () => {
+      // A second, not a few milliseconds: on a loaded machine a pause inside
+      // one empty field can outlast 5 ms, and the field is then rightly kept.
       const tracer = createFieldTracer(start, {
         enabled: true,
         sampleRate: 1,
-        slowThreshold: 5,
+        slowThreshold: 1_000,
       });
 
       resolveFields(tracer, 3, 0);
