@@ -809,7 +809,7 @@ describe('NestLensApiController', () => {
         meta: { hasMore: false, oldestSequence: null, newestSequence: null, total: 0 },
       });
 
-      await controller.getQueries({ slow: 'true' });
+      await controller.getQueries({ slow: true });
 
       expect(mockStorage.findWithCursor).toHaveBeenCalledWith(
         'query',
@@ -823,7 +823,7 @@ describe('NestLensApiController', () => {
         meta: { hasMore: false, oldestSequence: 1, newestSequence: 1, total: 1 },
       });
 
-      const result = await controller.getQueries({ slow: 'true' });
+      const result = await controller.getQueries({ slow: true });
 
       // The count used to be `storage.count('query')` — every query there is.
       expect(result.meta.total).toBe(1);

@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsString, MaxLength, ValidationArguments } from 'class-validator';
 import { ENTRY_TYPES } from './entry-types';
 import {
   MAX_OFFSET,
@@ -6,9 +6,13 @@ import {
   TransformLimit,
   TransformOffset,
   TransformSequence,
+  TransformStringToBoolean,
   TransformToInt,
+  IsBooleanLike,
   IsDateLike,
+  IsOptionalParameter,
   IsWholeNumberLike,
+  isWholeNumber,
 } from './transformers';
 import { EntryType } from '@/types';
 
@@ -27,45 +31,51 @@ import { EntryType } from '@/types';
  * through a DTO all along. These now do the same, so an unusable parameter is
  * a 400 that says which one, from every backend.
  */
+/**
+ * Where to page instead, said only to an offset that is a whole number past
+ * the bound; anything else is told what an offset is.
+ */
+const offsetRefusal = ({ value }: ValidationArguments): string =>
+  isWholeNumber(value)
+    ? `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further`
+    : `offset must be a whole number from 0 to ${MAX_OFFSET}`;
+
 export class EntriesQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsString()
   @MaxLength(200)
   requestId?: string;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformLimit()
   limit?: number;
 
-  @IsOptional()
-  @IsWholeNumberLike(
-    { max: MAX_OFFSET },
-    { message: `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further` },
-  )
+  @IsOptionalParameter()
+  @IsWholeNumberLike({ max: MAX_OFFSET }, { message: offsetRefusal })
   @TransformOffset()
   offset?: number;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsDateLike({ message: 'from must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   from?: Date;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsDateLike({ message: 'to must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   to?: Date;
 
   /** Bounds on `duration`, in milliseconds. See `CursorQueryDto`. */
-  @IsOptional()
+  @IsOptionalParameter()
   @IsWholeNumberLike({}, { message: 'minDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   minDuration?: number;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsWholeNumberLike({}, { message: 'maxDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   maxDuration?: number;
@@ -73,7 +83,7 @@ export class EntriesQueryDto {
 
 /** `GET logs`, which narrows by level. */
 export class LogsQueryDto extends EntriesQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsString()
   @MaxLength(50)
   level?: string;
@@ -81,10 +91,10 @@ export class LogsQueryDto extends EntriesQueryDto {
 
 /** `GET queries`, which narrows to the slow ones. */
 export class QueriesQueryDto extends EntriesQueryDto {
-  @IsOptional()
-  @IsString()
-  @IsIn(['true', 'false'])
-  slow?: string;
+  @IsOptionalParameter()
+  @TransformStringToBoolean()
+  @IsBooleanLike()
+  slow?: boolean;
 }
 
 /**
@@ -99,7 +109,7 @@ export class CheckNewQueryDto {
   @TransformSequence()
   afterSequence!: number;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 }
@@ -113,7 +123,7 @@ export class CheckNewQueryDto {
  * type index that cannot be there, and answered `null`. One API, one answer.
  */
 export class LatestSequenceQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 }

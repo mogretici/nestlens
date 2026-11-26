@@ -23,15 +23,17 @@ import { INestApplication, Module, ValidationPipe, ValidationPipeOptions } from 
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import request from 'supertest';
-import { getMetadataStorage } from 'class-validator';
+import { getMetadataStorage, ValidationTypes } from 'class-validator';
 import { NestLensModule } from '../../nestlens.module';
 import { STORAGE, StorageInterface } from '../../core';
 import { TagService } from '../../core/tag.service';
 import * as dtos from '../../api/dto';
 import {
   CheckNewQueryDto,
+  ClearEntriesQueryDto,
   CursorQueryDto,
   EntriesQueryDto,
+  LatestSequenceQueryDto,
   LogsQueryDto,
   QueriesQueryDto,
   TagEntriesQueryDto,
@@ -63,11 +65,18 @@ const ANSWERED: [string, Record<string, string>][] = [
   ['/queries', { slow: 'true', minDuration: '0' }],
   ['/entries/cursor', { type: 'request', minDuration: '500', maxDuration: '2000' }],
   ['/entries/cursor', { beforeSequence: '300', statuses: '200,404', slow: 'true' }],
+  ['/entries/cursor', { beforeSequence: '5', afterSequence: '' }],
+  ['/entries/cursor', { beforeSequence: '', afterSequence: '5' }],
+  ['/entries/cursor', { beforeSequence: '5', afterSequence: '   ' }],
+  ['/entries', { type: '', from: '', to: '', offset: '' }],
+  ['/queries', { slow: '' }],
   ['/entries/check-new', { afterSequence: '100' }],
   ['/tags/entries', { tags: 'SUCCESS,USER:1', logic: 'AND', limit: '10' }],
 ];
 
 const REFUSED: [string, Record<string, string>][] = [
+  ['/entries/cursor', { beforeSequence: '5', afterSequence: '6' }],
+  ['/entries/check-new', { afterSequence: '' }],
   ['/entries', { minDuration: 'abc' }],
   ['/entries', { offset: '10001' }],
   ['/entries', { from: 'yesterday' }],
@@ -77,28 +86,44 @@ const REFUSED: [string, Record<string, string>][] = [
 
 type Dto = new () => object;
 
+type Method = 'get' | 'delete';
+
 /** The endpoint each query DTO is read through, so its properties can be driven over HTTP. */
-const ENDPOINTS = new Map<Dto, string>([
-  [CursorQueryDto, '/entries/cursor'],
-  [EntriesQueryDto, '/entries'],
-  [LogsQueryDto, '/logs'],
-  [QueriesQueryDto, '/queries'],
-  [CheckNewQueryDto, '/entries/check-new'],
-  [TagEntriesQueryDto, '/tags/entries'],
+const ENDPOINTS = new Map<Dto, [Method, string]>([
+  [CursorQueryDto, ['get', '/entries/cursor']],
+  [EntriesQueryDto, ['get', '/entries']],
+  [LogsQueryDto, ['get', '/logs']],
+  [QueriesQueryDto, ['get', '/queries']],
+  [CheckNewQueryDto, ['get', '/entries/check-new']],
+  [LatestSequenceQueryDto, ['get', '/entries/latest-sequence']],
+  [ClearEntriesQueryDto, ['delete', '/entries']],
+  [TagEntriesQueryDto, ['get', '/tags/entries']],
 ]);
 
 /** What a query needs to be answered at all, so a property can be tried on its own. */
-const BASE = new Map<Dto, Record<string, string>>([[TagEntriesQueryDto, { tags: 'a' }]]);
+const BASE = new Map<Dto, Record<string, string>>([
+  [TagEntriesQueryDto, { tags: 'a' }],
+  [CheckNewQueryDto, { afterSequence: '1' }],
+]);
+
+const isRequired = (dto: Dto, property: string): boolean =>
+  !getMetadataStorage()
+    .getTargetValidationMetadatas(dto, '', true, false)
+    .some(
+      (metadata) =>
+        metadata.propertyName === property &&
+        metadata.type === ValidationTypes.CONDITIONAL_VALIDATION,
+    );
 
 type Property = [dtoName: string, property: string, dto: Dto];
 
-const pathOf = (dto: Dto): string => {
-  const path = ENDPOINTS.get(dto);
-  if (path === undefined) throw new Error(`No endpoint drives ${dto.name}`);
-  return path;
+const endpointOf = (dto: Dto): [Method, string] => {
+  const endpoint = ENDPOINTS.get(dto);
+  if (endpoint === undefined) throw new Error(`No endpoint drives ${dto.name}`);
+  return endpoint;
 };
 
-/** Every query DTO the package exports; one without an endpoint above fails in `pathOf`. */
+/** Every query DTO the package exports; one without an endpoint above fails in `endpointOf`. */
 const QUERY_DTOS = Object.values(dtos).filter(
   (value): value is Dto =>
     typeof value === 'function' && value.name.endsWith('QueryDto') && 'prototype' in value,
@@ -131,13 +156,24 @@ const NUMBERS: Property[] = [
   ).map((dto): Property => [dto.name, 'limit', dto]),
 ];
 
+/** Every property every query DTO declares. */
+const EVERY_PROPERTY: Property[] = QUERY_DTOS.flatMap((dto) =>
+  [
+    ...new Set(
+      getMetadataStorage()
+        .getTargetValidationMetadatas(dto, '', true, false)
+        .map((metadata): string => metadata.propertyName),
+    ),
+  ].map((property): Property => [dto.name, property, dto]),
+);
+
 describe.each([
   ['with no pipe of its own', undefined],
   ['without implicit conversion', {}],
   ['with implicit conversion', { transformOptions: { enableImplicitConversion: true } }],
 ])("NestLens' API behind a host ValidationPipe, %s", (_name, options) => {
   let app: INestApplication;
-  let reads: jest.Mock[];
+  let reads: [string, jest.SpyInstance][];
 
   beforeAll(async () => {
     app = await NestFactory.create(HostModule, new ExpressAdapter(), { logger: false });
@@ -150,14 +186,28 @@ describe.each([
         }),
       );
     }
-    await app.init();
+    // Listening once: left to supertest, an application that is not listening
+    // is given a server of its own per request, and twelve hundred of them
+    // ran this suite out of sockets on a loaded machine ("socket hang up").
+    await app.listen(0, '127.0.0.1');
 
-    const storage = app.get<StorageInterface>(STORAGE);
+    // Every method the storage has, so what a request reached is never judged
+    // by a list that forgot one.
+    const storage = app.get<StorageInterface>(STORAGE) as unknown as Record<string, unknown>;
+    const methods = new Set<string>();
+    for (let proto = Object.getPrototypeOf(storage); proto && proto !== Object.prototype;) {
+      Object.getOwnPropertyNames(proto)
+        .filter((name) => name !== 'constructor' && typeof storage[name] === 'function')
+        .forEach((name) => methods.add(name));
+      proto = Object.getPrototypeOf(proto);
+    }
     reads = [
-      jest.spyOn(storage, 'findWithCursor'),
-      jest.spyOn(storage, 'hasEntriesAfter'),
-      jest.spyOn(app.get(TagService), 'findByTags'),
-    ] as unknown as jest.Mock[];
+      ...[...methods].map((name): [string, jest.SpyInstance] => [
+        name,
+        jest.spyOn(storage as never, name as never),
+      ]),
+      ['findByTags', jest.spyOn(app.get(TagService), 'findByTags')],
+    ];
   });
 
   afterAll(async () => {
@@ -165,20 +215,29 @@ describe.each([
     await app?.close();
   });
 
-  /** The status, and every argument the storage was handed for the request. */
+  /** The status, and every call the storage was handed for the request. */
   const reached = async (
-    path: string,
+    [method, path]: [Method, string],
     query: Record<string, string>,
-  ): Promise<{ status: number; storage: unknown[][][] }> => {
-    reads.forEach((read) => read.mockClear());
-    const response = await request(app.getHttpServer()).get(`${API}${path}`).query(query);
+  ): Promise<{ status: number; storage: unknown[] }> => {
+    reads.forEach(([, read]) => read.mockClear());
+    const response = await request(app.getHttpServer())[method](`${API}${path}`).query(query);
 
-    return { status: response.status, storage: reads.map((read) => read.mock.calls) };
+    return {
+      status: response.status,
+      storage: reads
+        .filter(([, read]) => read.mock.calls.length > 0)
+        .map(([name, read]) => [name, read.mock.calls]),
+    };
   };
 
-  const filtersOf = (result: { storage: unknown[][][] }): Record<string, unknown> =>
-    ((result.storage[0][0]?.[1] as { filters?: Record<string, unknown> } | undefined)?.filters ??
+  const filtersOf = (result: { storage: unknown[] }): Record<string, unknown> => {
+    const call = (result.storage as [string, unknown[][]][]).find(
+      ([name]) => name === 'findWithCursor',
+    )?.[1][0];
+    return ((call?.[1] as { filters?: Record<string, unknown> } | undefined)?.filters ??
       {}) as Record<string, unknown>;
+  };
 
   it.each(ANSWERED)('answers %s %o', async (path, query) => {
     const response = await request(app.getHttpServer()).get(`${API}${path}`).query(query);
@@ -206,7 +265,7 @@ describe.each([
       ['false', false],
       ['true', true],
     ])('reaches the storage as %s', async (raw, expected) => {
-      const result = await reached(pathOf(dto), { ...BASE.get(dto), [property]: raw });
+      const result = await reached(endpointOf(dto), { ...BASE.get(dto), [property]: raw });
 
       expect({ status: result.status, value: filtersOf(result)[property] }).toEqual({
         status: 200,
@@ -215,11 +274,29 @@ describe.each([
     });
   });
 
-  describe.each([...BOOLEANS, ...NUMBERS])('%s.%s', (_dtoName, property, dto) => {
-    it('reads a blank one as not given', async () => {
-      expect(await reached(pathOf(dto), { ...BASE.get(dto), [property]: '' })).toEqual(
-        await reached(pathOf(dto), { ...BASE.get(dto) }),
-      );
+  it('finds a property of every kind to leave blank', () => {
+    expect(EVERY_PROPERTY.length).toBeGreaterThan(60);
+  });
+
+  describe.each(EVERY_PROPERTY)('%s.%s', (_dtoName, property, dto) => {
+    const omitted = (): Record<string, string> => {
+      const query = { ...BASE.get(dto) };
+      delete query[property];
+      return query;
+    };
+
+    it.each([
+      ['empty', ''],
+      ['whitespace', '   '],
+    ])('reads it %s as not given', async (_kind, blank) => {
+      const given = await reached(endpointOf(dto), { ...omitted(), [property]: blank });
+      const without = await reached(endpointOf(dto), omitted());
+
+      expect(given).toEqual(without);
+      // Not two empty answers agreeing: the request reached the storage, or
+      // it was refused because the property is required.
+      expect(without.status === 400 || without.storage.length > 0).toBe(true);
+      if (isRequired(dto, property)) expect(given.status).toBe(400);
     });
   });
 });

@@ -216,7 +216,11 @@ export class NestLensApiController {
 
   @Get('queries')
   async getQueries(@Query() query: QueriesQueryDto, @Res() _res?: unknown) {
-    return this.filteredPage('query', query, query.slow === 'true' ? { slow: true } : undefined);
+    return this.filteredPage(
+      'query',
+      query,
+      query.slow === undefined ? undefined : { slow: query.slow },
+    );
   }
 
   @Get('exceptions')

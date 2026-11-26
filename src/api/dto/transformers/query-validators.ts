@@ -1,4 +1,4 @@
-import { buildMessage, ValidateBy, ValidationOptions } from 'class-validator';
+import { buildMessage, ValidateBy, ValidateIf, ValidationOptions } from 'class-validator';
 
 /**
  * Duplicate-package-safe validators.
@@ -83,13 +83,33 @@ export function IsCommaSeparatedList(validationOptions?: ValidationOptions) {
 }
 
 /**
- * A parameter given blank, which the transforms read as not given at all.
- *
- * Only a host's pipe, running without NestLens' transforms, ever shows one to a
- * validator; NestLens' own pipe has turned it into `undefined` first, so a
- * required parameter given blank is still refused there.
+ * A parameter given blank — empty, or nothing but whitespace — which is a
+ * parameter not given. `?from=` and `?type=` are what a form submits for a
+ * field left empty.
  */
-const isBlank = (value: unknown): boolean => value === '';
+export const isBlank = (value: unknown): boolean =>
+  typeof value === 'string' && value.trim() === '';
+
+const isGiven = (value: unknown): boolean =>
+  value !== undefined && value !== null && !isBlank(value);
+
+/**
+ * `@IsOptional()` for a query parameter: missing, null or blank, and the
+ * property's validators do not run.
+ *
+ * `@IsOptional()` skips only null and undefined, so a host's pipe — which
+ * validates the query as the URL spelled it — refused `?type=` and `?from=`
+ * while NestLens' own pipe, which drops blank parameters first, ignored them.
+ * The same URL answered differently by application.
+ */
+export function IsOptionalParameter(validationOptions?: ValidationOptions): PropertyDecorator {
+  return ValidateIf((_object, value: unknown) => isGiven(value), validationOptions);
+}
+
+/** A whole number from zero, as a number or as the digits of one. */
+export const isWholeNumber = (value: unknown): boolean =>
+  (typeof value === 'number' && Number.isInteger(value) && value >= 0) ||
+  (typeof value === 'string' && /^\d+$/.test(value));
 
 /**
  * Accepts a boolean or the strings 'true'/'false' (raw query param form,
@@ -101,7 +121,7 @@ export function IsBooleanLike(validationOptions?: ValidationOptions) {
       name: 'isBooleanLike',
       validator: {
         validate: (value: unknown): boolean =>
-          typeof value === 'boolean' || value === 'true' || value === 'false' || isBlank(value),
+          typeof value === 'boolean' || value === 'true' || value === 'false',
         defaultMessage: buildMessage(
           (eachPrefix) => `${eachPrefix}$property must be a boolean or 'true'/'false'`,
           validationOptions,
@@ -128,13 +148,7 @@ export function IsWholeNumberLike(
       name: 'isWholeNumberLike',
       constraints: [max],
       validator: {
-        validate: (value: unknown): boolean =>
-          (typeof value === 'number' &&
-            Number.isInteger(value) &&
-            value >= 0 &&
-            withinMax(value)) ||
-          (typeof value === 'string' && /^\d+$/.test(value) && withinMax(Number(value))) ||
-          isBlank(value),
+        validate: (value: unknown): boolean => isWholeNumber(value) && withinMax(Number(value)),
         defaultMessage: buildMessage(
           () =>
             max === undefined
@@ -217,7 +231,7 @@ export function HasItemsOfMaxLength(max: number, validationOptions?: ValidationO
 }
 
 /**
- * Refuses the property when `other` is given too.
+ * Refuses the property when `other` is given too. A blank one is not given.
  */
 export function IsAbsentWith(other: string, validationOptions?: ValidationOptions) {
   return ValidateBy(
@@ -226,7 +240,7 @@ export function IsAbsentWith(other: string, validationOptions?: ValidationOption
       constraints: [other],
       validator: {
         validate: (value: unknown, args): boolean =>
-          value === undefined || (args?.object as Record<string, unknown>)[other] === undefined,
+          !isGiven(value) || !isGiven((args?.object as Record<string, unknown>)[other]),
         defaultMessage: buildMessage(
           () => `Pass ${other} or $property, not both`,
           validationOptions,

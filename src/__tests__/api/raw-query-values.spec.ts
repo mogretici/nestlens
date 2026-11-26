@@ -20,15 +20,19 @@
  */
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException, Type } from '@nestjs/common';
-import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
+import { DynamicModule } from '@nestjs/common';
+import {
+  CUSTOM_ROUTE_ARGS_METADATA,
+  PATH_METADATA,
+  ROUTE_ARGS_METADATA,
+} from '@nestjs/common/constants';
 import { RouteParamtypes } from '@nestjs/common/enums/route-paramtypes.enum';
 import { getMetadataStorage, validate, ValidationTypes } from 'class-validator';
 import * as dtos from '../../api/dto';
 import { MAX_OFFSET } from '../../api/dto';
-import { NestLensApiController } from '../../api/api.controller';
-import { DashboardController } from '../../api/dashboard.controller';
-import { NestLensStreamController } from '../../api/stream.controller';
-import { TagController } from '../../api/tag.controller';
+import * as api from '../../api';
+import { NestLensDashboardModule } from '../../api/dashboard-server';
+import { NestLensModule } from '../../nestlens.module';
 import { NestLensValidationPipe } from '../../api/pipes/nestlens-validation.pipe';
 
 const LIST = 'a,b';
@@ -127,34 +131,82 @@ const requiredOf = (dto: Dto): string[] => {
   return propertiesOf(dto).filter((property) => !optional.has(property));
 };
 
-/** What the controllers bind with `@Query()` — the DTOs a URL is parsed into. */
-const boundToQuery = (): Set<Dto> => {
-  const bound = new Set<Dto>();
-  const controllers = [
-    NestLensApiController,
-    TagController,
-    NestLensStreamController,
-    DashboardController,
-  ];
+type ModuleLike = Dto | DynamicModule | Promise<DynamicModule> | undefined;
 
-  for (const controller of controllers) {
+/**
+ * Every controller NestLens registers: on the host's application, and on the
+ * listener of its own when `server` is configured.
+ */
+const registeredControllers = (): Set<Dto> => {
+  const controllers = new Set<Dto>();
+  const seen = new Set<unknown>();
+
+  const visit = (module: ModuleLike): void => {
+    if (module === undefined || module instanceof Promise || seen.has(module)) return;
+    seen.add(module);
+
+    const dynamic = typeof module === 'function' ? undefined : module;
+    const target = dynamic?.module ?? (module as Dto);
+    const declared = [
+      ...((Reflect.getMetadata('controllers', target) ?? []) as Dto[]),
+      ...((dynamic?.controllers ?? []) as Dto[]),
+    ];
+    declared.forEach((controller) => controllers.add(controller));
+
+    [
+      ...((Reflect.getMetadata('imports', target) ?? []) as ModuleLike[]),
+      ...((dynamic?.imports ?? []) as ModuleLike[]),
+    ].forEach(visit);
+  };
+
+  visit(NestLensModule.forRoot({}));
+  visit(NestLensDashboardModule.forRoot([]));
+  return controllers;
+};
+
+/** Every controller `src/api` exports. */
+const exportedControllers = (): Set<Dto> =>
+  new Set(
+    Object.values(api)
+      .filter(isClass)
+      .filter((value) => Reflect.hasMetadata(PATH_METADATA, value)),
+  );
+
+/**
+ * What the controllers bind with `@Query()` — the DTOs a URL is parsed into —
+ * and anything bound some other way this guard cannot see into: a named
+ * `@Query('x')`, which no DTO validates, or a `createParamDecorator` argument.
+ */
+const boundToQuery = (): { bound: Set<Dto>; unknown: string[] } => {
+  const bound = new Set<Dto>();
+  const unknown: string[] = [];
+
+  for (const controller of new Set([...registeredControllers(), ...exportedControllers()])) {
     for (const method of Object.getOwnPropertyNames(controller.prototype)) {
       const args = (Reflect.getMetadata(ROUTE_ARGS_METADATA, controller, method) ?? {}) as Record<
         string,
-        { index: number }
+        { index: number; data?: unknown }
       >;
       const types = (Reflect.getMetadata('design:paramtypes', controller.prototype, method) ??
         []) as Dto[];
 
       for (const [key, arg] of Object.entries(args)) {
-        if (key.split(':')[0] === String(RouteParamtypes.QUERY)) {
-          bound.add(types[arg.index]);
+        const kind = key.split(':')[0];
+        const where = `${controller.name}.${method}, argument ${arg.index}`;
+
+        if (kind.includes(CUSTOM_ROUTE_ARGS_METADATA)) {
+          unknown.push(`${where}: a custom parameter decorator`);
+        } else if (!/^\d+$/.test(kind)) {
+          unknown.push(`${where}: route argument "${key}"`);
+        } else if (kind === String(RouteParamtypes.QUERY)) {
+          if (arg.data === undefined) bound.add(types[arg.index]);
+          else unknown.push(`${where}: @Query(${JSON.stringify(arg.data)}) outside a DTO`);
         }
       }
     }
   }
 
-  return bound;
+  return { bound, unknown };
 };
 
 const QUERY_DTOS = Object.values(dtos)
@@ -176,8 +228,20 @@ const errorsFor = async (instance: object): Promise<string[]> =>
   );
 
 describe('query DTOs, given the raw strings of a URL', () => {
+  it('finds the same controllers registered as exported', () => {
+    const names = (controllers: Set<Dto>): string[] =>
+      [...controllers].map((controller) => controller.name).sort();
+
+    expect(registeredControllers().size).toBeGreaterThanOrEqual(4);
+    expect(names(registeredControllers())).toEqual(names(exportedControllers()));
+  });
+
+  it('understands every way a controller reads a request', () => {
+    expect(boundToQuery().unknown).toEqual([]);
+  });
+
   it('finds every DTO a controller parses a query into, and only those', () => {
-    const bound = boundToQuery();
+    const { bound } = boundToQuery();
 
     expect(QUERY_DTOS.length).toBeGreaterThanOrEqual(7);
     expect([...bound].map((dto) => dto.name).sort()).toEqual(
@@ -205,8 +269,7 @@ describe('query DTOs, given the raw strings of a URL', () => {
    * Implicit conversion — a host's, and the one NestLens' own pipe asks for —
    * converts by `design:type` before any `@Transform` runs, so a `Boolean` or
    * `Number` there reads `'false'` as `true` and `''` as `0` whatever the
-   * transform beside it says. `Date` is left: `new Date(value)` is the parse
-   * `TransformDate` makes.
+   * transform beside it says, and a `Date` reads `''` as an Invalid Date.
    */
   it('declares no property with a type implicit conversion would misread', () => {
     const misread = QUERY_DTOS.flatMap((dto) =>
@@ -215,7 +278,7 @@ describe('query DTOs, given the raw strings of a URL', () => {
           property,
           type: Reflect.getMetadata('design:type', dto.prototype, property) as unknown,
         }))
-        .filter(({ type }) => type === Boolean || type === Number)
+        .filter(({ type }) => type === Boolean || type === Number || type === Date)
         .map(({ property, type }) => `${dto.name}.${property}: ${(type as Dto).name}`),
     );
 
@@ -237,6 +300,42 @@ describe('query DTOs, given the raw strings of a URL', () => {
     }
 
     expect(refused).toEqual([]);
+  });
+
+  /**
+   * A parameter given blank is a parameter not given, for every parameter:
+   * `?from=` and `?type=` are what a form submits for a field left empty, and
+   * a host's pipe refusing them while NestLens' own ignores them makes the
+   * same URL answer differently by application.
+   */
+  it.each([
+    ['empty', ''],
+    ['whitespace', '   '],
+  ])('accepts every optional property given %s', async (_name, blank) => {
+    const refused: string[] = [];
+
+    for (const dto of QUERY_DTOS) {
+      const required = requiredOf(dto);
+
+      for (const property of propertiesOf(dto).filter((name) => !required.includes(name))) {
+        const instance = rawInstance(dto, required) as Record<string, unknown>;
+        instance[property] = blank;
+        const errors = await errorsFor(instance);
+        if (errors.length > 0) refused.push(`${dto.name}.${property}: ${errors.join('; ')}`);
+      }
+    }
+
+    expect(refused).toEqual([]);
+  });
+
+  it.each([
+    [{ beforeSequence: '5', afterSequence: '' }],
+    [{ beforeSequence: '', afterSequence: '5' }],
+    [{ beforeSequence: '5', afterSequence: '  ' }],
+  ])('reads a blank cursor beside a given one as one cursor: %o', async (cursors) => {
+    const instance = Object.assign(new dtos.CursorQueryDto(), cursors);
+
+    expect(await errorsFor(instance)).toEqual([]);
   });
 
   it('accepts the bound values as strings too', async () => {
@@ -420,6 +519,60 @@ describe('query DTOs, through NestLensValidationPipe', () => {
     ]);
   });
 
+  /** What the pipe answers: the value it returns, or the messages it refuses with. */
+  const answer = async (dto: Dto, query: Record<string, unknown>): Promise<unknown> => {
+    try {
+      return {
+        value: {
+          ...((await new NestLensValidationPipe().transform(query, {
+            type: 'query',
+            metatype: dto,
+            data: '',
+          })) as object),
+        },
+      };
+    } catch (error) {
+      return {
+        refused: ((error as BadRequestException).getResponse() as { message: string[] }).message,
+      };
+    }
+  };
+
+  it.each([
+    ['empty', ''],
+    ['whitespace', '   '],
+  ])('answers every property given %s as though it were not given', async (_name, blank) => {
+    const differ: string[] = [];
+
+    for (const dto of QUERY_DTOS) {
+      const required = requiredOf(dto);
+
+      for (const property of propertiesOf(dto)) {
+        const base: Record<string, unknown> = {};
+        for (const name of required) if (name !== property) base[name] = RAW[name];
+
+        const given = await answer(dto, { ...base, [property]: blank });
+        const omitted = await answer(dto, base);
+        if (JSON.stringify(given) !== JSON.stringify(omitted)) {
+          differ.push(
+            `${dto.name}.${property}: ${JSON.stringify(given)} vs ${JSON.stringify(omitted)}`,
+          );
+        }
+        if (required.includes(property) && !('refused' in (given as object))) {
+          differ.push(`${dto.name}.${property}: required, and answered when blank`);
+        }
+      }
+    }
+
+    expect(differ).toEqual([]);
+  });
+
+  it('refuses offset past the bound with where to page instead, through the pipe', async () => {
+    expect(await refusal(dtos.EntriesQueryDto, { offset: String(MAX_OFFSET + 1) })).toEqual([
+      OFFSET,
+    ]);
+  });
+
   it('still reads what it accepts into numbers and dates', async () => {
     const result = (await new NestLensValidationPipe().transform(
       { offset: String(MAX_OFFSET), minDuration: '500', from: INSTANT },
@@ -450,6 +603,18 @@ describe('query DTOs, given a value a host pipe already converted', () => {
       `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further`,
     ]);
   });
+
+  it.each(['abc', '-1', '1.5'])(
+    'refuses a raw offset of %p as not a whole number, not as too deep',
+    async (raw) => {
+      const instance = new dtos.EntriesQueryDto() as Record<string, unknown>;
+      instance.offset = raw;
+
+      expect(await errorsFor(instance)).toEqual([
+        `offset must be a whole number from 0 to ${MAX_OFFSET}`,
+      ]);
+    },
+  );
 
   it('refuses a raw offset past the bound', async () => {
     const instance = new dtos.EntriesQueryDto() as Record<string, unknown>;

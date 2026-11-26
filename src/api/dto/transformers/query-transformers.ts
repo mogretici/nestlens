@@ -55,14 +55,16 @@ export function TransformCommaSeparatedNumbersOrErr() {
 }
 
 /**
- * A transform for a parameter declared `boolean` or `number`, which arrives as
- * a string and stays one until this transform reads it.
+ * A transform for a parameter declared `boolean`, `number` or `Date`, which
+ * arrives as a string and stays one until this transform reads it.
  *
  * TypeScript records the declared type as `design:type`, and class-transformer's
  * implicit conversion — NestLens' own pipe asks for it, and so does many a
  * host's global ValidationPipe — applies `Boolean()` or `Number()` by it before
  * any @Transform runs. `Boolean('false')` is `true`, so `?resolved=false` listed
- * the resolved exceptions; `Number('')` is `0`, so `?limit=` asked for one entry.
+ * the resolved exceptions; `Number('')` is `0`, so `?limit=` asked for one entry;
+ * `new Date('')` is an Invalid Date, so a host refused `?from=` that NestLens
+ * reads as not given.
  * `design:type` lives in the global Reflect registry, so this is the one place
  * every copy of class-transformer reads, and it runs after the compiler's own
  * `design:type` decorator, which TypeScript always applies first.
@@ -157,10 +159,10 @@ export function TransformOffset() {
  * against NaN and answered with nothing. Leaving the original string in place
  * lets `IsDateLike` fail it, so an unusable date is a 400 that names the parameter.
  */
-export function TransformDate() {
-  return Transform(({ value }: TransformFnParams) => {
+export function TransformDate(): PropertyDecorator {
+  return FromQueryString((value) => {
     if (value === undefined || value === null || value === '') return undefined;
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? value : value;
+    if (value instanceof Date) return value;
 
     const parsed = new Date(String(value));
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed;

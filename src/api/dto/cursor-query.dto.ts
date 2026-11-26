@@ -1,4 +1,4 @@
-import { IsISO8601, IsOptional, IsIn, IsString, MaxLength } from 'class-validator';
+import { IsISO8601, IsIn, IsString, MaxLength } from 'class-validator';
 import {
   TransformLimit,
   TransformSequence,
@@ -11,6 +11,7 @@ import {
   IsBooleanLike,
   IsWholeNumberLike,
   IsAbsentWith,
+  IsOptionalParameter,
   MAX_SEARCH_LENGTH,
 } from './transformers';
 import { ENTRY_TYPES } from './entry-types';
@@ -23,15 +24,15 @@ import { EntryType } from '@/types';
 export class CursorQueryDto {
   // ==================== Pagination ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformLimit()
   limit?: number;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformSequence()
   @IsWholeNumberLike()
   beforeSequence?: number;
@@ -40,7 +41,7 @@ export class CursorQueryDto {
    * One direction or the other. Given both, memory storage returned the range
    * between them while SQLite and Redis read below `beforeSequence` alone.
    */
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformSequence()
   @IsWholeNumberLike()
   @IsAbsentWith('beforeSequence')
@@ -57,11 +58,11 @@ export class CursorQueryDto {
    * `to` through a different path; `logs` and `queries` accepted them and
    * ignored them, which is worse than refusing.
    */
-  @IsOptional()
+  @IsOptionalParameter()
   @IsISO8601({}, { message: 'from must be an ISO 8601 instant, such as 2026-08-22T14:03:00Z' })
   from?: string;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsISO8601({}, { message: 'to must be an ISO 8601 instant, such as 2026-08-22T14:03:00Z' })
   to?: string;
 
@@ -75,276 +76,276 @@ export class CursorQueryDto {
    * watcher sets from its own threshold. "Requests over 500ms" is the first
    * question anybody asks a debugging tool.
    */
-  @IsOptional()
+  @IsOptionalParameter()
   @IsWholeNumberLike({}, { message: 'minDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   minDuration?: number;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsWholeNumberLike({}, { message: 'maxDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   maxDuration?: number;
 
   /** Everything one request produced, which is what a detail page shows. */
-  @IsOptional()
+  @IsOptionalParameter()
   @IsString()
   @MaxLength(200)
   requestId?: string;
 
   // ==================== Log Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   levels?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   contexts?: string[];
 
   // ==================== Query Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   queryTypes?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   sources?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformStringToBoolean()
   @IsBooleanLike()
   slow?: boolean;
 
   // ==================== Request/HTTP Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   methods?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   paths?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedNumbersOrErr()
   @IsCommaSeparatedList()
   statuses?: (number | 'ERR')[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   controllers?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   hostnames?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   ips?: string[];
 
   // ==================== Exception Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   names?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformStringToBoolean()
   @IsBooleanLike()
   resolved?: boolean;
 
   // ==================== Event Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   eventNames?: string[];
 
   // ==================== Schedule Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   scheduleStatuses?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   scheduleNames?: string[];
 
   // ==================== Job Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   jobStatuses?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   jobNames?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   queues?: string[];
 
   // ==================== Cache Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   cacheOperations?: string[];
 
   // ==================== Mail Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   mailStatuses?: string[];
 
   // ==================== Redis Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   redisStatuses?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   redisCommands?: string[];
 
   // ==================== Model Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   modelActions?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   entities?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   modelSources?: string[];
 
   // ==================== Notification Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   notificationTypes?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   notificationStatuses?: string[];
 
   // ==================== View Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   viewFormats?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   viewStatuses?: string[];
 
   // ==================== Command Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   commandStatuses?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   commandNames?: string[];
 
   // ==================== Gate Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   gateNames?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   gateResults?: string[];
 
   // ==================== Batch Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   batchStatuses?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   batchOperations?: string[];
 
   // ==================== Dump Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   dumpStatuses?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   dumpOperations?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   dumpFormats?: string[];
 
   // ==================== GraphQL Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   operationTypes?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   operationNames?: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformStringToBoolean()
   @IsBooleanLike()
   hasErrors?: boolean;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformStringToBoolean()
   @IsBooleanLike()
   hasN1?: boolean;
 
   // ==================== Common Filters ====================
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
   tags?: string[];
@@ -354,7 +355,7 @@ export class CursorQueryDto {
    * stringified and searched, and `security.validation.maxSearchLength` was
    * documented while nothing enforced it.
    */
-  @IsOptional()
+  @IsOptionalParameter()
   @IsString()
   @MaxLength(MAX_SEARCH_LENGTH)
   search?: string;
