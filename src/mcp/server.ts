@@ -114,7 +114,12 @@ const withDefaults = (
 
 const jsonType = (parameter: ToolParameter): Record<string, unknown> => {
   const schema: Record<string, unknown> = { type: parameter.type };
-  if (parameter.type === 'array') schema.items = { type: parameter.items ?? 'string' };
+  if (parameter.type === 'array') {
+    schema.items = {
+      type: parameter.items ?? 'string',
+      ...(parameter.itemMaxLength === undefined ? {} : { maxLength: parameter.itemMaxLength }),
+    };
+  }
   if (parameter.description) schema.description = parameter.description;
   if (parameter.enum) schema.enum = parameter.enum;
   if (parameter.format) schema.format = parameter.format;

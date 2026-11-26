@@ -136,6 +136,34 @@ describe('the hub', () => {
       });
     });
 
+    it('gives a list a bound on each of its items', async () => {
+      const tagged = read('get_entries_by_tags', {
+        parameters: [
+          {
+            name: 'tags',
+            in: 'query',
+            type: 'array',
+            items: 'string',
+            itemMaxLength: 50,
+            maxItems: 100,
+            required: true,
+          },
+        ],
+      });
+      const { client } = fakeClient(() => [tagged]);
+      const { agent } = await connect({ client });
+
+      const listed = JSON.parse(
+        textOf(await agent.callTool({ name: 'nestlens_list_tools', arguments: {} })),
+      ) as { tools: Array<{ arguments: { properties: Record<string, unknown> } }> };
+
+      expect(listed.tools[0]?.arguments.properties.tags).toEqual({
+        type: 'array',
+        items: { type: 'string', maxLength: 50 },
+        maxItems: 100,
+      });
+    });
+
     it('says which tools are switched off while read-only', async () => {
       const { client } = fakeClient(() => [read('get_stats'), clear]);
       const { agent } = await connect({ client });

@@ -1,5 +1,6 @@
 import { getMetadataStorage } from 'class-validator';
 import type { ValidationMetadata } from 'class-validator/types/metadata/ValidationMetadata';
+import { INTEGER_BOUNDS_METADATA, type IntegerBounds } from '../dto/transformers';
 
 /** The JSON types a parameter can take. */
 export type ToolParameterType = 'string' | 'integer' | 'number' | 'boolean' | 'array';
@@ -21,6 +22,8 @@ export interface ToolParameter {
   minimum?: number;
   maximum?: number;
   maxLength?: number;
+  /** For `array`, the longest each item may be. */
+  itemMaxLength?: number;
   maxItems?: number;
 }
 
@@ -87,6 +90,12 @@ export const describeDto = (
 
     if (names.has('isInt')) parameter.type = 'integer';
 
+    // A parameter parsed into a bounded integer by the transformer rather than
+    // checked by a validator: the API clamps it into this range.
+    const bounds = Reflect.getMetadata(INTEGER_BOUNDS_METADATA, dto.prototype, name) as
+      IntegerBounds | undefined;
+    if (bounds) parameter.type = 'integer';
+
     if (names.has('isBooleanLike') || names.has('isBoolean')) parameter.type = 'boolean';
 
     if (names.has('isArray') || names.has('isCommaSeparatedStrings')) {
@@ -112,14 +121,19 @@ export const describeDto = (
     const allowed = find('isIn')?.constraints?.[0];
     if (Array.isArray(allowed)) parameter.enum = allowed.map(String);
 
-    const minimum = asNumber(find('min')?.constraints?.[0]);
+    const minimum = asNumber(find('min')?.constraints?.[0]) ?? bounds?.min;
     if (minimum !== undefined) parameter.minimum = minimum;
 
-    const maximum = asNumber(find('max')?.constraints?.[0]);
+    const maximum = asNumber(find('max')?.constraints?.[0]) ?? bounds?.max;
     if (maximum !== undefined) parameter.maximum = maximum;
 
-    const maxLength = asNumber(find('maxLength')?.constraints?.[0]);
-    if (maxLength !== undefined) parameter.maxLength = maxLength;
+    const lengthRule = find('maxLength');
+    const maxLength = asNumber(lengthRule?.constraints?.[0]);
+    if (maxLength !== undefined && lengthRule?.each === true && parameter.type === 'array') {
+      parameter.itemMaxLength = maxLength;
+    } else if (maxLength !== undefined) {
+      parameter.maxLength = maxLength;
+    }
 
     const maxItems = asNumber(find('arrayMaxSize')?.constraints?.[0]);
     if (maxItems !== undefined) parameter.maxItems = maxItems;

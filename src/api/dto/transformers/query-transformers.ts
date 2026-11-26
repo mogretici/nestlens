@@ -66,6 +66,21 @@ export function TransformStringToBoolean() {
 }
 
 /**
+ * Where {@link TransformToInt} records the range it clamps into.
+ *
+ * It is a transformer, not a validator, so class-validator's metadata does not
+ * know the parameter is an integer or what its bounds are; the tool manifest
+ * reads them from here, and they stay written once, in the call that applies
+ * them.
+ */
+export const INTEGER_BOUNDS_METADATA = 'nestlens:integer-bounds';
+
+export interface IntegerBounds {
+  min?: number;
+  max?: number;
+}
+
+/**
  * Transforms a string into a bounded integer.
  *
  * A value that cannot be read falls back to the default where there is one —
@@ -75,8 +90,12 @@ export function TransformStringToBoolean() {
  * dropping it instead meant `?minDuration=slow` narrowed nothing and said
  * nothing, which reads as "no entry is that slow".
  */
-export function TransformToInt(options?: { min?: number; max?: number; default?: number }) {
-  return Transform(({ value }: TransformFnParams) => {
+export function TransformToInt(options?: {
+  min?: number;
+  max?: number;
+  default?: number;
+}): PropertyDecorator {
+  const transform = Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null || value === '') {
       return options?.default;
     }
@@ -92,6 +111,12 @@ export function TransformToInt(options?: { min?: number; max?: number; default?:
     if (options?.max !== undefined) result = Math.min(result, options.max);
     return result;
   });
+  const bounds: IntegerBounds = { min: options?.min, max: options?.max };
+
+  return (target: object, propertyKey: string | symbol): void => {
+    transform(target, propertyKey as string);
+    Reflect.defineMetadata(INTEGER_BOUNDS_METADATA, bounds, target, propertyKey);
+  };
 }
 
 /**

@@ -175,7 +175,45 @@ describe('the manifest of the real controllers', () => {
     });
 
     it('takes a type from the compiler where no validator says one', () => {
-      expect(parameter('get_entries_with_cursor', 'limit').type).toBe('number');
+      class Weighed {
+        @IsOptional()
+        weight?: number;
+      }
+      @Controller('__nestlens__/api')
+      class Scale {
+        @NestLensTool({ description: 'Weigh something, for the compiler-type test.' })
+        @Get('weigh')
+        weigh(@Query() _query: Weighed): void {}
+      }
+
+      expect(buildToolManifest([Scale]).tools[0]?.parameters[0]?.type).toBe('number');
+    });
+
+    it('presents a page size as the integer range the API applies', () => {
+      for (const toolName of ['get_entries', 'get_entries_with_cursor', 'get_entries_by_tags']) {
+        expect(parameter(toolName, 'limit')).toMatchObject({
+          type: 'integer',
+          minimum: 1,
+          maximum: 1000,
+        });
+      }
+      expect(parameter('get_entries_with_cursor', 'beforeSequence')).toMatchObject({
+        type: 'integer',
+        minimum: 0,
+      });
+      expect(parameter('get_entries', 'offset')).toMatchObject({
+        type: 'integer',
+        minimum: 0,
+        maximum: 10_000,
+      });
+    });
+
+    it('puts a per-item length on the items, not on the list', () => {
+      for (const toolName of ['add_tags_to_entry', 'get_entries_by_tags']) {
+        const tags = parameter(toolName, 'tags');
+        expect(tags.maxLength).toBeUndefined();
+        expect(tags.itemMaxLength).toBeGreaterThan(0);
+      }
     });
 
     it('carries a bound a validator declares', () => {
