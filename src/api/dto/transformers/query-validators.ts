@@ -1,4 +1,11 @@
-import { buildMessage, ValidateBy, ValidateIf, ValidationOptions } from 'class-validator';
+import {
+  buildMessage,
+  getMetadataStorage,
+  IsOptional,
+  ValidateBy,
+  ValidateIf,
+  ValidationOptions,
+} from 'class-validator';
 
 /**
  * Duplicate-package-safe validators.
@@ -105,6 +112,49 @@ const isGiven = (value: unknown): boolean =>
 export function IsOptionalParameter(validationOptions?: ValidationOptions): PropertyDecorator {
   return ValidateIf((_object, value: unknown) => isGiven(value), validationOptions);
 }
+
+const IS_NOT_BLANK = 'isNotBlank';
+
+/**
+ * `@IsOptional()` for a parameter that narrows what a mutating route changes:
+ * left out, it means every one; given blank, it is refused.
+ *
+ * Everywhere else a blank parameter is one not given. Here that would turn an
+ * empty form field into `DELETE entries` of every type — a client that sent
+ * `?type=` by accident would clear everything. Left out entirely, the route
+ * still means what it always has.
+ */
+export function IsOptionalScope(): PropertyDecorator {
+  return (target, property) => {
+    IsOptional()(target, property as string);
+    ValidateBy({
+      name: IS_NOT_BLANK,
+      validator: {
+        validate: (value: unknown): boolean => !isBlank(value),
+        defaultMessage: buildMessage(
+          () => '$property was given blank; leave it out to mean every one',
+        ),
+      },
+    })(target, property as string);
+  };
+}
+
+const blankRefusedCache = new WeakMap<object, ReadonlySet<string>>();
+
+/** The properties of `dto` declared with {@link IsOptionalScope}, read from its metadata. */
+export const blankRefusedIn = (dto: new (...args: never[]) => unknown): ReadonlySet<string> => {
+  const cached = blankRefusedCache.get(dto);
+  if (cached) return cached;
+
+  const properties = new Set(
+    getMetadataStorage()
+      .getTargetValidationMetadatas(dto, '', true, false)
+      .filter((metadata) => metadata.name === IS_NOT_BLANK)
+      .map((metadata) => metadata.propertyName),
+  );
+  blankRefusedCache.set(dto, properties);
+  return properties;
+};
 
 /** A whole number from zero, as a number or as the digits of one. */
 export const isWholeNumber = (value: unknown): boolean =>

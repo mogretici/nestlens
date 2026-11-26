@@ -40,6 +40,7 @@ import {
 } from '../../api/dto';
 import { DEFAULT_CONFIG, NESTLENS_API_PREFIX } from '../../nestlens.config';
 import { toBaseHref } from '../../api/route-path';
+import { mutatingQueryRoutes } from '../support/query-bindings';
 
 type TransformerPackage = NonNullable<ValidationPipeOptions['transformerPackage']>;
 
@@ -156,8 +157,26 @@ const NUMBERS: Property[] = [
   ).map((dto): Property => [dto.name, 'limit', dto]),
 ];
 
+/** The query DTOs of routes that change something, from the controllers' route metadata. */
+const MUTATING = new Set<Dto>(mutatingQueryRoutes().map((route) => route.dto));
+
+const propertiesOf = (dto: Dto): Property[] =>
+  [
+    ...new Set(
+      getMetadataStorage()
+        .getTargetValidationMetadatas(dto, '', true, false)
+        .map((metadata): string => metadata.propertyName),
+    ),
+  ].map((property): Property => [dto.name, property, dto]);
+
+/**
+ * Every property of a mutating route's query: what it narrows. Blank, it is
+ * refused — an empty form field must not widen a delete to everything.
+ */
+const SCOPE_PROPERTIES: Property[] = [...MUTATING].flatMap(propertiesOf);
+
 /** Every property every query DTO declares. */
-const EVERY_PROPERTY: Property[] = QUERY_DTOS.flatMap((dto) =>
+const EVERY_PROPERTY: Property[] = QUERY_DTOS.filter((dto) => !MUTATING.has(dto)).flatMap((dto) =>
   [
     ...new Set(
       getMetadataStorage()
@@ -276,6 +295,30 @@ describe.each([
 
   it('finds a property of every kind to leave blank', () => {
     expect(EVERY_PROPERTY.length).toBeGreaterThan(60);
+  });
+
+  it('finds a route that changes something and what narrows it', () => {
+    expect(SCOPE_PROPERTIES.map(([name, property]) => `${name}.${property}`)).toEqual(
+      expect.arrayContaining(['ClearEntriesQueryDto.type']),
+    );
+  });
+
+  describe.each(SCOPE_PROPERTIES)('%s.%s, narrowing a change', (_dtoName, property, dto) => {
+    it.each([
+      ['empty', ''],
+      ['whitespace', '   '],
+    ])('is refused %s, and nothing is changed', async (_kind, blank) => {
+      const given = await reached(endpointOf(dto), { ...BASE.get(dto), [property]: blank });
+
+      expect(given).toEqual({ status: 400, storage: [] });
+    });
+  });
+
+  it('still clears every type when type is left out entirely', async () => {
+    const result = await reached(endpointOf(ClearEntriesQueryDto), {});
+
+    expect(result.status).toBe(200);
+    expect(result.storage).toEqual([['clear', [[undefined]]]]);
   });
 
   describe.each(EVERY_PROPERTY)('%s.%s', (_dtoName, property, dto) => {

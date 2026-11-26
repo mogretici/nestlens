@@ -20,19 +20,15 @@
  */
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException, Type } from '@nestjs/common';
-import { DynamicModule } from '@nestjs/common';
-import {
-  CUSTOM_ROUTE_ARGS_METADATA,
-  PATH_METADATA,
-  ROUTE_ARGS_METADATA,
-} from '@nestjs/common/constants';
-import { RouteParamtypes } from '@nestjs/common/enums/route-paramtypes.enum';
 import { getMetadataStorage, validate, ValidationTypes } from 'class-validator';
 import * as dtos from '../../api/dto';
 import { MAX_OFFSET } from '../../api/dto';
-import * as api from '../../api';
-import { NestLensDashboardModule } from '../../api/dashboard-server';
-import { NestLensModule } from '../../nestlens.module';
+import {
+  boundToQuery,
+  exportedControllers,
+  mutatingQueryRoutes,
+  registeredControllers,
+} from '../support/query-bindings';
 import { NestLensValidationPipe } from '../../api/pipes/nestlens-validation.pipe';
 
 const LIST = 'a,b';
@@ -131,87 +127,20 @@ const requiredOf = (dto: Dto): string[] => {
   return propertiesOf(dto).filter((property) => !optional.has(property));
 };
 
-type ModuleLike = Dto | DynamicModule | Promise<DynamicModule> | undefined;
-
-/**
- * Every controller NestLens registers: on the host's application, and on the
- * listener of its own when `server` is configured.
- */
-const registeredControllers = (): Set<Dto> => {
-  const controllers = new Set<Dto>();
-  const seen = new Set<unknown>();
-
-  const visit = (module: ModuleLike): void => {
-    if (module === undefined || module instanceof Promise || seen.has(module)) return;
-    seen.add(module);
-
-    const dynamic = typeof module === 'function' ? undefined : module;
-    const target = dynamic?.module ?? (module as Dto);
-    const declared = [
-      ...((Reflect.getMetadata('controllers', target) ?? []) as Dto[]),
-      ...((dynamic?.controllers ?? []) as Dto[]),
-    ];
-    declared.forEach((controller) => controllers.add(controller));
-
-    [
-      ...((Reflect.getMetadata('imports', target) ?? []) as ModuleLike[]),
-      ...((dynamic?.imports ?? []) as ModuleLike[]),
-    ].forEach(visit);
-  };
-
-  visit(NestLensModule.forRoot({}));
-  visit(NestLensDashboardModule.forRoot([]));
-  return controllers;
-};
-
-/** Every controller `src/api` exports. */
-const exportedControllers = (): Set<Dto> =>
-  new Set(
-    Object.values(api)
-      .filter(isClass)
-      .filter((value) => Reflect.hasMetadata(PATH_METADATA, value)),
-  );
-
-/**
- * What the controllers bind with `@Query()` — the DTOs a URL is parsed into —
- * and anything bound some other way this guard cannot see into: a named
- * `@Query('x')`, which no DTO validates, or a `createParamDecorator` argument.
- */
-const boundToQuery = (): { bound: Set<Dto>; unknown: string[] } => {
-  const bound = new Set<Dto>();
-  const unknown: string[] = [];
-
-  for (const controller of new Set([...registeredControllers(), ...exportedControllers()])) {
-    for (const method of Object.getOwnPropertyNames(controller.prototype)) {
-      const args = (Reflect.getMetadata(ROUTE_ARGS_METADATA, controller, method) ?? {}) as Record<
-        string,
-        { index: number; data?: unknown }
-      >;
-      const types = (Reflect.getMetadata('design:paramtypes', controller.prototype, method) ??
-        []) as Dto[];
-
-      for (const [key, arg] of Object.entries(args)) {
-        const kind = key.split(':')[0];
-        const where = `${controller.name}.${method}, argument ${arg.index}`;
-
-        if (kind.includes(CUSTOM_ROUTE_ARGS_METADATA)) {
-          unknown.push(`${where}: a custom parameter decorator`);
-        } else if (!/^\d+$/.test(kind)) {
-          unknown.push(`${where}: route argument "${key}"`);
-        } else if (kind === String(RouteParamtypes.QUERY)) {
-          if (arg.data === undefined) bound.add(types[arg.index]);
-          else unknown.push(`${where}: @Query(${JSON.stringify(arg.data)}) outside a DTO`);
-        }
-      }
-    }
-  }
-
-  return { bound, unknown };
-};
-
 const QUERY_DTOS = Object.values(dtos)
   .filter(isClass)
   .filter((dto) => dto.name.endsWith('QueryDto'));
+
+/**
+ * The query DTOs of routes that change something. Each of their parameters
+ * narrows what is changed, so a blank one is refused instead of read as not
+ * given: `DELETE entries?type=` clearing every type is a form's empty field
+ * deleting everything.
+ */
+const MUTATING_DTOS = new Set<Dto>(mutatingQueryRoutes().map((route) => route.dto));
+
+/** The query DTOs where a blank parameter is one not given. */
+const READING_DTOS = QUERY_DTOS.filter((dto) => !MUTATING_DTOS.has(dto));
 
 /** The raw object a URL carrying only `properties` turns into. */
 const rawInstance = (dto: Dto, properties: string[]): object => {
@@ -314,7 +243,7 @@ describe('query DTOs, given the raw strings of a URL', () => {
   ])('accepts every optional property given %s', async (_name, blank) => {
     const refused: string[] = [];
 
-    for (const dto of QUERY_DTOS) {
+    for (const dto of READING_DTOS) {
       const required = requiredOf(dto);
 
       for (const property of propertiesOf(dto).filter((name) => !required.includes(name))) {
@@ -327,6 +256,37 @@ describe('query DTOs, given the raw strings of a URL', () => {
 
     expect(refused).toEqual([]);
   });
+
+  it('finds the routes that change something, and the scope each one takes', () => {
+    expect(
+      mutatingQueryRoutes().map((route) => `${route.controller.name}.${route.handler}`),
+    ).toEqual(expect.arrayContaining(['NestLensApiController.clearEntries']));
+    expect(MUTATING_DTOS.size).toBeGreaterThanOrEqual(1);
+  });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace', '   '],
+  ])(
+    'refuses every scope parameter of a route that changes something given %s',
+    async (_name, blank) => {
+      const accepted: string[] = [];
+
+      for (const dto of MUTATING_DTOS) {
+        for (const property of propertiesOf(dto)) {
+          const instance = rawInstance(
+            dto,
+            requiredOf(dto).filter((name) => name !== property),
+          );
+          (instance as Record<string, unknown>)[property] = blank;
+
+          if ((await errorsFor(instance)).length === 0) accepted.push(`${dto.name}.${property}`);
+        }
+      }
+
+      expect(accepted).toEqual([]);
+    },
+  );
 
   it.each([
     [{ beforeSequence: '5', afterSequence: '' }],
@@ -544,7 +504,7 @@ describe('query DTOs, through NestLensValidationPipe', () => {
   ])('answers every property given %s as though it were not given', async (_name, blank) => {
     const differ: string[] = [];
 
-    for (const dto of QUERY_DTOS) {
+    for (const dto of READING_DTOS) {
       const required = requiredOf(dto);
 
       for (const property of propertiesOf(dto)) {
@@ -565,6 +525,38 @@ describe('query DTOs, through NestLensValidationPipe', () => {
     }
 
     expect(differ).toEqual([]);
+  });
+
+  it.each([
+    ['empty', ''],
+    ['whitespace', '   '],
+  ])(
+    'refuses a scope parameter of a route that changes something given %s, through the pipe',
+    async (_name, blank) => {
+      const accepted: string[] = [];
+
+      for (const dto of MUTATING_DTOS) {
+        for (const property of propertiesOf(dto)) {
+          const answered = (await answer(dto, { [property]: blank })) as { refused?: string[] };
+          if (answered.refused === undefined) accepted.push(`${dto.name}.${property}`);
+          else if (
+            !answered.refused.includes(
+              `${property} was given blank; leave it out to mean every one`,
+            )
+          ) {
+            accepted.push(
+              `${dto.name}.${property}: refused without saying why: ${answered.refused.join('; ')}`,
+            );
+          }
+        }
+      }
+
+      expect(accepted).toEqual([]);
+    },
+  );
+
+  it('still clears every type when type is left out entirely', async () => {
+    expect(await answer(dtos.ClearEntriesQueryDto, {})).toEqual({ value: {} });
   });
 
   it('refuses offset past the bound with where to page instead, through the pipe', async () => {

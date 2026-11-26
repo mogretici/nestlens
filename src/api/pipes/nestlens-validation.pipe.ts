@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
-import { isBlank } from '../dto/transformers';
+import { blankRefusedIn, isBlank } from '../dto/transformers';
 
 /**
  * Drop-in replacement for Nest's ValidationPipe (transform + whitelist +
@@ -51,10 +51,14 @@ export class NestLensValidationPipe implements PipeTransform {
     // A blank query parameter is one not given, for every parameter at once.
     // Left in, it reached each transform and validator to be read as each of
     // them chose: `?limit=` a default, `?type=` a 400, `?requestId=` a filter
-    // matching nothing.
+    // matching nothing. Kept only where it narrows a change, so its validator
+    // refuses it rather than the change widening to everything.
+    const refused = blankRefusedIn(metatype);
     const input =
       metadata.type === 'query' && value
-        ? Object.fromEntries(Object.entries(value).filter(([, given]) => !isBlank(given)))
+        ? Object.fromEntries(
+            Object.entries(value).filter(([key, given]) => refused.has(key) || !isBlank(given)),
+          )
         : value;
 
     const entity = plainToInstance(metatype, input ?? {}, {
