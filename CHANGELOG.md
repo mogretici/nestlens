@@ -1,3 +1,15 @@
+# [0.16.0](https://github.com/mogretici/nestlens/compare/v0.15.0...v0.16.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* **dashboard:** read the Express the adapter runs ([ddb1a09](https://github.com/mogretici/nestlens/commit/ddb1a09838b66f5602fadfc921d7e9b8bd37e67c))
+
+
+### Features
+
+* support NestJS 12 ([0242a5a](https://github.com/mogretici/nestlens/commit/0242a5a13af2df51f46a46abd40c766815c9faf3)), closes [#92](https://github.com/mogretici/nestlens/issues/92) [#106](https://github.com/mogretici/nestlens/issues/106) [#119](https://github.com/mogretici/nestlens/issues/119)
+
 # [0.15.0](https://github.com/mogretici/nestlens/compare/v0.14.3...v0.15.0) (2026-11-26)
 
 
