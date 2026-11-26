@@ -9,6 +9,8 @@ import {
   IsCommaSeparatedStrings,
   IsCommaSeparatedList,
   IsBooleanLike,
+  IsWholeNumberLike,
+  IsAbsentWith,
   MAX_SEARCH_LENGTH,
 } from './transformers';
 import { ENTRY_TYPES } from './entry-types';
@@ -31,10 +33,17 @@ export class CursorQueryDto {
 
   @IsOptional()
   @TransformSequence()
+  @IsWholeNumberLike()
   beforeSequence?: number;
 
+  /**
+   * One direction or the other. Given both, memory storage returned the range
+   * between them while SQLite and Redis read below `beforeSequence` alone.
+   */
   @IsOptional()
   @TransformSequence()
+  @IsWholeNumberLike()
+  @IsAbsentWith('beforeSequence')
   afterSequence?: number;
 
   // ==================== The window ====================

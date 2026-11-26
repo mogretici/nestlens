@@ -102,3 +102,42 @@ export function IsBooleanLike(validationOptions?: ValidationOptions) {
     validationOptions,
   );
 }
+
+/**
+ * A whole number from zero, or the digits of one when @Transform did not run.
+ */
+export function IsWholeNumberLike(validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isWholeNumberLike',
+      validator: {
+        validate: (value: unknown): boolean =>
+          (typeof value === 'number' && Number.isInteger(value) && value >= 0) ||
+          (typeof value === 'string' && /^\d+$/.test(value)),
+        defaultMessage: buildMessage(() => '$property must be a whole number', validationOptions),
+      },
+    },
+    validationOptions,
+  );
+}
+
+/**
+ * Refuses the property when `other` is given too.
+ */
+export function IsAbsentWith(other: string, validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isAbsentWith',
+      constraints: [other],
+      validator: {
+        validate: (value: unknown, args): boolean =>
+          value === undefined || (args?.object as Record<string, unknown>)[other] === undefined,
+        defaultMessage: buildMessage(
+          () => `Pass ${other} or $property, not both`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}

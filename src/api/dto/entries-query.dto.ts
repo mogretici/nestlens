@@ -7,6 +7,7 @@ import {
   TransformOffset,
   TransformSequence,
   TransformToInt,
+  IsWholeNumberLike,
 } from './transformers';
 import { EntryType } from '@/types';
 
@@ -94,8 +95,7 @@ export class QueriesQueryDto extends EntriesQueryDto {
  * `zcount (NaN +inf`, answered with an error. Required and numeric here.
  */
 export class CheckNewQueryDto {
-  @IsInt({ message: 'afterSequence must be a whole number' })
-  @Min(0)
+  @IsWholeNumberLike()
   @TransformSequence()
   afterSequence!: number;
 
