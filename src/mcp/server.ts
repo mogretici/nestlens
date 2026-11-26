@@ -7,6 +7,7 @@ import {
   NestLensClient,
   NestLensUnreachableError,
 } from './client';
+import { fitResponse } from './fit';
 
 export interface NestLensMcpServerOptions {
   client: NestLensClient;
@@ -184,12 +185,6 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
 
   const tools = (fresh: boolean): Promise<NestLensToolDescriptor[]> => catalog.tools(fresh);
 
-  const clip = (value: string): string =>
-    value.length <= maxChars
-      ? value
-      : `${value.slice(0, maxChars)}\n\n[Cut off: ${maxChars} of ${value.length} characters shown. ` +
-        'Ask for less with `limit`, or narrow with filters.]';
-
   const listTools = async (args: Record<string, unknown>) => {
     const names = args.names;
     if (
@@ -205,15 +200,12 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
     const missing = wanted ? [...wanted].filter((name) => !all.some((t) => t.name === name)) : [];
 
     return text(
-      clip(
-        JSON.stringify(
-          {
-            tools: chosen.map((tool) => present(tool, allowWrite)),
-            ...(missing.length > 0 ? { unknown: missing } : {}),
-          },
-          null,
-          1,
-        ),
+      fitResponse(
+        {
+          tools: chosen.map((tool) => present(tool, allowWrite)),
+          ...(missing.length > 0 ? { unknown: missing } : {}),
+        },
+        maxChars,
       ),
     );
   };
@@ -244,8 +236,9 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
       );
     }
 
-    const result = await client.invoke(tool, (args.arguments as Record<string, unknown>) ?? {});
-    return text(clip(JSON.stringify(result, null, 1)));
+    const toolArgs = (args.arguments as Record<string, unknown> | undefined) ?? {};
+    const result = await client.invoke(tool, toolArgs);
+    return text(fitResponse(result, maxChars, tool, toolArgs));
   };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: HUB_TOOLS }));

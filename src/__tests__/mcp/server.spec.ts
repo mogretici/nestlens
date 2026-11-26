@@ -246,6 +246,143 @@ describe('the hub', () => {
     });
   });
 
+  describe('an answer over the limit', () => {
+    const cursorTool = read('get_entries_with_cursor', {
+      parameters: [
+        { name: 'beforeSequence', in: 'query', type: 'integer', required: false },
+        { name: 'afterSequence', in: 'query', type: 'integer', required: false },
+        { name: 'limit', in: 'query', type: 'integer', required: false },
+      ],
+    });
+    const offsetTool = read('get_entries', {
+      parameters: [
+        { name: 'offset', in: 'query', type: 'integer', required: false },
+        { name: 'limit', in: 'query', type: 'integer', required: false },
+      ],
+    });
+
+    // Fifty entries, newest first, as every list endpoint orders them.
+    const page = (newest: number) => ({
+      success: true,
+      data: Array.from({ length: 50 }, (_, i) => ({
+        id: newest - i,
+        type: 'log',
+        payload: { message: `line ${newest - i} `.padEnd(200, '.') },
+      })),
+      error: null,
+      meta: {
+        timestamp: '2026-11-26T00:00:00.000Z',
+        hasMore: true,
+        oldestSequence: newest - 49,
+        newestSequence: newest,
+        total: 500,
+      },
+    });
+
+    interface Fitted {
+      truncated: { shown: number; of: number; note: string; resume?: Record<string, number> };
+      data: Array<{ id: number }>;
+      meta: Record<string, unknown>;
+    }
+
+    const callWith = async (
+      tool: NestLensToolDescriptor,
+      answer: unknown,
+      args: Record<string, unknown> = {},
+    ): Promise<string> => {
+      const { client, invoke } = fakeClient(() => [tool]);
+      invoke.mockResolvedValueOnce(answer);
+      const { agent } = await connect({ client, maxResponseChars: 3_000 });
+      return textOf(
+        await agent.callTool({
+          name: 'nestlens_call_tool',
+          arguments: { name: tool.name, arguments: args },
+        }),
+      );
+    };
+
+    it('keeps whole entries and the meta, and says where the next page starts', async () => {
+      const out = await callWith(cursorTool, page(150), { limit: 50 });
+      const fitted = JSON.parse(out) as Fitted;
+      const shown = fitted.data.length;
+      const last = fitted.data[shown - 1]!.id;
+
+      expect(out.length).toBeLessThanOrEqual(3_000);
+      expect(shown).toBeGreaterThan(0);
+      expect(shown).toBeLessThan(50);
+      expect(fitted.data.map((entry) => entry.id)).toEqual(
+        Array.from({ length: shown }, (_, i) => 150 - i),
+      );
+      expect(fitted.truncated).toMatchObject({ shown, of: 50, resume: { beforeSequence: last } });
+      expect(fitted.truncated.note).toContain(`${shown} of 50 entries`);
+      expect(fitted.truncated.note).toContain(`beforeSequence: ${last}`);
+      // The API's meta described all fifty; the cursor in it now describes what is shown.
+      expect(fitted.meta).toMatchObject({
+        hasMore: true,
+        oldestSequence: last,
+        newestSequence: 150,
+        total: 500,
+      });
+    });
+
+    it('keeps the entries next to the cursor when paging forward', async () => {
+      const out = await callWith(cursorTool, page(150), { afterSequence: 100 });
+      const fitted = JSON.parse(out) as Fitted;
+      const shown = fitted.data.length;
+      const newest = fitted.data[0]!.id;
+
+      // afterSequence answers the oldest entries after the cursor, newest first:
+      // the ones to keep are at the end, or the next call would skip a gap.
+      expect(fitted.data[shown - 1]!.id).toBe(101);
+      expect(newest).toBe(100 + shown);
+      expect(fitted.truncated.resume).toEqual({ afterSequence: newest });
+      expect(fitted.truncated.note).toContain(`afterSequence: ${newest}`);
+      expect(fitted.meta).toMatchObject({ newestSequence: newest, oldestSequence: 101 });
+    });
+
+    it('gives the next offset for an offset-paged tool', async () => {
+      const answer = { ...page(150), meta: { total: 500, limit: 50, offset: 20 } };
+
+      const fitted = JSON.parse(await callWith(offsetTool, answer, { offset: 20 })) as Fitted;
+      const shown = fitted.data.length;
+
+      expect(fitted.truncated.resume).toEqual({ offset: 20 + shown });
+      expect(fitted.truncated.note).toContain(`offset: ${20 + shown}`);
+      expect(fitted.meta).toMatchObject({ total: 500 });
+    });
+
+    it('cuts an answer that is not a list by characters, without splitting a character', async () => {
+      // `{"data":"` is nine characters, so the 200th falls on the first half of the emoji.
+      const answer = { data: `${'a'.repeat(190)}${'\u{1F600}'.repeat(50)}` };
+      const { client, invoke } = fakeClient(() => [read('get_entry')]);
+      invoke.mockResolvedValueOnce(answer);
+      const { agent } = await connect({ client, maxResponseChars: 200 });
+
+      const out = textOf(
+        await agent.callTool({ name: 'nestlens_call_tool', arguments: { name: 'get_entry' } }),
+      );
+
+      expect(out).toMatch(/^\{"data":"a+\n/);
+      expect(out).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+      expect(out).toContain('Cut off: 199 of');
+      expect(out).toContain('not valid JSON');
+    });
+
+    it('serializes compactly', async () => {
+      const { client, invoke } = fakeClient(() => [read('get_stats')]);
+      invoke.mockResolvedValueOnce({ success: true, data: { a: 1, b: [2] } });
+      const { agent } = await connect({ client });
+
+      const out = textOf(
+        await agent.callTool({ name: 'nestlens_call_tool', arguments: { name: 'get_stats' } }),
+      );
+      const listed = textOf(await agent.callTool({ name: 'nestlens_list_tools', arguments: {} }));
+
+      expect(out).toBe('{"success":true,"data":{"a":1,"b":[2]}}');
+      expect(listed).not.toContain('\n');
+    });
+  });
+
   describe('when NestLens gains a tool after the server started', () => {
     it('lists it at once, with nothing changed here', async () => {
       let offered = [read('get_stats')];
