@@ -1,5 +1,9 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  type CallToolResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import type { NestLensToolDescriptor, ToolParameter } from '../api/tools';
 import {
   changesData,
@@ -153,7 +157,7 @@ const present = (tool: NestLensToolDescriptor, allowWrite: boolean): Record<stri
   };
 };
 
-const text = (value: string, isError = false) => ({
+const text = (value: string, isError = false): CallToolResult => ({
   content: [{ type: 'text' as const, text: value }],
   ...(isError ? { isError: true } : {}),
 });
@@ -240,7 +244,7 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
 
   const tools = (fresh: boolean): Promise<NestLensToolDescriptor[]> => catalog.tools(fresh);
 
-  const listTools = async (args: Record<string, unknown>) => {
+  const listTools = async (args: Record<string, unknown>): Promise<CallToolResult> => {
     const names = args.names;
     if (
       names !== undefined &&
@@ -265,7 +269,7 @@ export const createNestLensMcpServer = (options: NestLensMcpServerOptions): Serv
     );
   };
 
-  const callTool = async (args: Record<string, unknown>) => {
+  const callTool = async (args: Record<string, unknown>): Promise<CallToolResult> => {
     const { name } = args;
     if (typeof name !== 'string' || name.length === 0) {
       return text('`name` is required: a tool name from nestlens_list_tools.', true);

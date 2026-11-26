@@ -34,7 +34,23 @@ class AppModule {}
 const textOf = (result: unknown): string =>
   ((result as { content: Array<{ text: string }> }).content[0] as { text: string }).text;
 const isError = (result: unknown): boolean => (result as { isError?: boolean }).isError === true;
-const json = (result: unknown): any => JSON.parse(textOf(result));
+const json = <T>(result: unknown): T => JSON.parse(textOf(result)) as T;
+
+interface Envelope<T> {
+  success: boolean;
+  data: T;
+}
+interface Listed {
+  tools: Array<{ name: string }>;
+}
+interface Entry {
+  id: number;
+  type: string;
+}
+interface RecordingStatus {
+  isPaused: boolean;
+  pauseReason?: string;
+}
 
 describe('nestlens-mcp against a running application', () => {
   let app: INestApplication;
@@ -78,8 +94,10 @@ describe('nestlens-mcp against a running application', () => {
   it('lists what the controllers declare, found at a custom mount', async () => {
     const agent = await connect(false);
 
-    const listed = json(await agent.callTool({ name: 'nestlens_list_tools', arguments: {} }));
-    const names = listed.tools.map((tool: { name: string }) => tool.name);
+    const listed = json<Listed>(
+      await agent.callTool({ name: 'nestlens_list_tools', arguments: {} }),
+    );
+    const names = listed.tools.map((tool) => tool.name);
 
     expect(names).toEqual(
       expect.arrayContaining([
@@ -95,7 +113,9 @@ describe('nestlens-mcp against a running application', () => {
   it('answers a call built from the description', async () => {
     const agent = await connect(false);
 
-    const stats = json(await call(agent, 'get_stats'));
+    const stats = json<Envelope<{ byType: Record<string, number> }>>(
+      await call(agent, 'get_stats'),
+    );
 
     expect(stats.success).toBe(true);
     expect(stats.data.byType.request).toBeGreaterThanOrEqual(3);
@@ -104,7 +124,7 @@ describe('nestlens-mcp against a running application', () => {
   it('filters with the arguments the description names', async () => {
     const agent = await connect(false);
 
-    const found = json(
+    const found = json<Envelope<Entry[]>>(
       await call(agent, 'get_entries_with_cursor', {
         type: 'request',
         paths: ['/hello'],
@@ -113,14 +133,16 @@ describe('nestlens-mcp against a running application', () => {
     );
 
     expect(found.data.length).toBeGreaterThanOrEqual(3);
-    expect(found.data.every((entry: { type: string }) => entry.type === 'request')).toBe(true);
+    expect(found.data.every((entry) => entry.type === 'request')).toBe(true);
   });
 
   it('follows a path parameter to one entry', async () => {
     const agent = await connect(false);
-    const [first] = json(await call(agent, 'get_entries', { type: 'request', limit: 1 })).data;
+    const [first] = json<Envelope<Entry[]>>(
+      await call(agent, 'get_entries', { type: 'request', limit: 1 }),
+    ).data as [Entry];
 
-    const one = json(await call(agent, 'get_entry', { id: first.id }));
+    const one = json<Envelope<Entry>>(await call(agent, 'get_entry', { id: first.id }));
 
     expect(one.data.id).toBe(first.id);
   });
@@ -138,7 +160,7 @@ describe('nestlens-mcp against a running application', () => {
     const agent = await connect(false);
 
     const result = await call(agent, 'pause_recording', { reason: 'hub test' });
-    const status = json(await call(agent, 'get_recording_status'));
+    const status = json<Envelope<RecordingStatus>>(await call(agent, 'get_recording_status'));
 
     expect(isError(result)).toBe(true);
     expect(status.data.isPaused).toBe(false);
@@ -147,10 +169,12 @@ describe('nestlens-mcp against a running application', () => {
   it('changes it when allowed, and the change is visible through the same hub', async () => {
     const agent = await connect(true);
 
-    const paused = json(await call(agent, 'pause_recording', { reason: 'hub test' }));
-    const status = json(await call(agent, 'get_recording_status'));
+    const paused = json<Envelope<RecordingStatus>>(
+      await call(agent, 'pause_recording', { reason: 'hub test' }),
+    );
+    const status = json<Envelope<RecordingStatus>>(await call(agent, 'get_recording_status'));
     await call(agent, 'resume_recording');
-    const resumed = json(await call(agent, 'get_recording_status'));
+    const resumed = json<Envelope<RecordingStatus>>(await call(agent, 'get_recording_status'));
 
     expect(paused.data).toMatchObject({ isPaused: true, pauseReason: 'hub test' });
     expect(status.data.isPaused).toBe(true);
@@ -165,14 +189,16 @@ describe('nestlens-mcp against a running application', () => {
       ['beside another', ['ALPHA,BETA', 'GAMMA']],
     ])('is found as one tag, %s', async (_label, wanted) => {
       const agent = await connect(true);
-      const [first, second] = json(
+      const [first, second] = json<Envelope<Entry[]>>(
         await call(agent, 'get_entries', { type: 'request', limit: 2 }),
-      ).data;
+      ).data as [Entry, Entry];
       await call(agent, 'add_tags_to_entry', { id: first.id, tags: ['ALPHA,BETA'] });
       await call(agent, 'add_tags_to_entry', { id: second.id, tags: ['ALPHA'] });
 
-      const found = json(await call(agent, 'get_entries_by_tags', { tags: wanted, logic: 'OR' }));
-      const ids = found.data.map((entry: { id: number }) => entry.id);
+      const found = json<Envelope<Entry[]>>(
+        await call(agent, 'get_entries_by_tags', { tags: wanted, logic: 'OR' }),
+      );
+      const ids = found.data.map((entry) => entry.id);
 
       expect(ids).toContain(first.id);
       // `ALPHA` alone would match the second entry if the comma had split the tag.
@@ -183,8 +209,8 @@ describe('nestlens-mcp against a running application', () => {
   it('reaches the tag endpoints, whose paths sit under /tags', async () => {
     const agent = await connect(true);
 
-    const added = json(await call(agent, 'add_monitored_tag', { tag: 'HUB' }));
-    const monitored = json(await call(agent, 'get_monitored_tags'));
+    const added = json<Envelope<unknown>>(await call(agent, 'add_monitored_tag', { tag: 'HUB' }));
+    const monitored = json<Envelope<unknown>>(await call(agent, 'get_monitored_tags'));
     await call(agent, 'remove_monitored_tag', { tag: 'HUB' });
 
     expect(added.success).toBe(true);

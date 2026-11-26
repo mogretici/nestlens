@@ -39,7 +39,7 @@ import {
 import { NestLensApiExceptionFilter } from '@/api/filters';
 import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
-import { NestLensTool, buildToolManifest } from './tools';
+import { NestLensTool, NestLensToolManifest, buildToolManifest } from './tools';
 import { TagController } from './tag.controller';
 
 /**
@@ -76,7 +76,7 @@ export class NestLensApiController {
    * the manifest describes the API, and an agent that has this has no use for it.
    */
   @Get('tools')
-  async getTools(@Res() _res?: unknown) {
+  async getTools(@Res() _res?: unknown): Promise<{ data: NestLensToolManifest }> {
     return { data: buildToolManifest([NestLensApiController, TagController]) };
   }
 
