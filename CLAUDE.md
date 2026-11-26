@@ -8,6 +8,25 @@ NestLens is a Laravel Telescope-inspired debugging and monitoring tool for NestJ
 
 ## Commands
 
+### npm
+Every `package.json` with a lockfile pins **npm 11.21.3** (`packageManager`
+and `devEngines`, exact). npm 10.9 and later refuse every command — `npm ci`,
+`npm run`, `npm test`, the husky hooks — with `EBADDEVENGINES` under any other
+version; npm 10.8 (Node 20's) does not check. Install it with
+`npm install --global npm@11.21.3`, or without touching the global npm:
+```bash
+npm install --global --prefix /tmp/npm-11.21.3 npm@11.21.3
+export PATH=/tmp/npm-11.21.3/bin:$PATH
+```
+CONTRIBUTING.md has the per-platform ways. npm scripts run the npm in
+`node_modules/.bin`, which the root `overrides` hold to the same version.
+
+CI jobs set Node up through `.github/actions/setup-node`, never
+`actions/setup-node` directly: it installs the pinned npm, then restores the
+cache (setup-node's own cache step runs the bundled npm and fails on
+`devEngines`). `src/__tests__/pinned-npm.spec.ts` enforces both, and that the
+four manifests, the lockfile's `node_modules/npm` and CONTRIBUTING.md agree.
+
 ### Build
 ```bash
 npm run build              # Build library + dashboard

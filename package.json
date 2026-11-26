@@ -217,15 +217,25 @@
     "ts-jest": "^29.4.6",
     "tsc-alias": "^1.8.16",
     "typeorm": "^0.3.20",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "yaml": "^2.9.1"
   },
   "overrides": {
+    "npm": "11.21.3",
     "typeorm": {
       "glob": "^14.0.2"
     }
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "packageManager": "npm@11.21.3",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.21.3",
+      "onFail": "error"
+    }
   },
   "lint-staged": {
     "src/**/*.ts": [

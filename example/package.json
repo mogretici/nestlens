@@ -91,5 +91,13 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "packageManager": "npm@11.21.3",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.21.3",
+      "onFail": "error"
+    }
   }
 }
