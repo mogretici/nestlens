@@ -1,3 +1,37 @@
+# [0.15.0](https://github.com/mogretici/nestlens/compare/v0.14.3...v0.15.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* **api:** a tool lists only the parameters its handler reads ([10c1ce9](https://github.com/mogretici/nestlens/commit/10c1ce9a05204a9c5e20897378b9eb41722e9a69))
+* **api:** a tool's schema says what the API applies, to lists and to limits ([f59e56d](https://github.com/mogretici/nestlens/commit/f59e56d73ccccc62d6a98d1490c288405395f22a))
+* **api:** the tool manifest reads the query validators [#130](https://github.com/mogretici/nestlens/issues/130) introduced ([868d955](https://github.com/mogretici/nestlens/commit/868d955102c30ce3e764bf657ad5b7400162bfe9))
+* **mcp:** a blank argument is refused, since the API now reads it as not given ([e744371](https://github.com/mogretici/nestlens/commit/e744371c0f6cda36d22af34886ab7eafc1857309)), closes [#130](https://github.com/mogretici/nestlens/issues/130)
+* **mcp:** a list an agent asks for without a limit is ten entries long ([f2e3cef](https://github.com/mogretici/nestlens/commit/f2e3cef0aaedcabca59abd8b7bf0d99b669186f5))
+* **mcp:** a missing SDK is answered with the command that installs it ([9b38441](https://github.com/mogretici/nestlens/commit/9b3844108934b8eb7025a197b6e00f1aab404b7e))
+* **mcp:** a page asked for with both cursors is cut on the side SQLite and Redis read ([eb040e4](https://github.com/mogretici/nestlens/commit/eb040e45fe11d145303b97ce64156a6dfc6d3346))
+* **mcp:** a redirect is refused, and its headers go nowhere else ([47deee8](https://github.com/mogretici/nestlens/commit/47deee8567d7b591a94b7acaa5230a66cb365864))
+* **mcp:** a refused redirect releases its response body ([baf0700](https://github.com/mogretici/nestlens/commit/baf0700c003942c834f52a391c810f6df724104e))
+* **mcp:** a URL with credentials in it is refused at startup ([47223ff](https://github.com/mogretici/nestlens/commit/47223ff782ae5a4f3a422616e87ebafd00683704))
+* **mcp:** an agent is told that recorded data is not instructions ([298494b](https://github.com/mogretici/nestlens/commit/298494b84008f41732fb1c553790defbf8d940f6))
+* **mcp:** an answer cut to fit still says where the next page starts ([cfad502](https://github.com/mogretici/nestlens/commit/cfad502454501fca2d1cac7f087503ae2c54f04a))
+* **mcp:** an argument is checked against its declared type before it is sent ([f731607](https://github.com/mogretici/nestlens/commit/f7316075ed37479bf08512a5adef1334b7c3480a))
+* **mcp:** an entry too large for any answer is named, and paging steps past it ([248e3ee](https://github.com/mogretici/nestlens/commit/248e3eeb195aa90cca315274228c7be97ec6fc69))
+* **mcp:** blanks are refused only where they vanish, and filter lists say their bound ([56ad3c0](https://github.com/mogretici/nestlens/commit/56ad3c03be134772ba2d6ebf609eca6d95a3c3f4))
+* **mcp:** credentials in a URL are found where fetch finds them ([a5d2db9](https://github.com/mogretici/nestlens/commit/a5d2db96d9a953f9ab1995d81e18409c2e335c34))
+* **mcp:** find the API root from the end of a controller's path ([e3bd90c](https://github.com/mogretici/nestlens/commit/e3bd90cdab13822649bea30d9f7f81c29e101736))
+* **mcp:** keep commas inside list values, and name the package for clients outside the project ([cf7c8d8](https://github.com/mogretici/nestlens/commit/cf7c8d8aa618d6686e528f1134080c15884c0a9e))
+* **mcp:** no backtracking regex on caller input, and no internal error text in a 500 ([95f3a37](https://github.com/mogretici/nestlens/commit/95f3a3766509f9c6a474f179e4ee9d98644ee144))
+* **mcp:** no credential is repeated in an error or a log line ([ec9649e](https://github.com/mogretici/nestlens/commit/ec9649e755ca6f22efb44996ccbb2a9cc32bee9f))
+* **mcp:** read-only follows a tool's method, not the manifest's word for it ([3a220d5](https://github.com/mogretici/nestlens/commit/3a220d5a726e00f535d86a824a15bb1eb03f37d2))
+* **mcp:** refuse an argument whose shape does not fit its parameter ([2625a89](https://github.com/mogretici/nestlens/commit/2625a89904f8972719ba2573e051e4e09ad64321))
+
+
+### Features
+
+* **mcp:** add nestlens-mcp, a hub MCP server that discovers tools from the API ([f54a244](https://github.com/mogretici/nestlens/commit/f54a2444fcebad938b1bf6523e45b14c633e5590))
+* **mcp:** serve the hub over HTTP and document setup for each agent ([249d0d2](https://github.com/mogretici/nestlens/commit/249d0d29aa4042b3985789268cd44628ddb3d819))
+
 ## [0.14.3](https://github.com/mogretici/nestlens/compare/v0.14.2...v0.14.3) (2026-11-26)
 
 
