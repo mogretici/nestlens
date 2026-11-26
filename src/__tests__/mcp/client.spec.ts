@@ -47,6 +47,30 @@ describe('API_ROOT', () => {
   });
 });
 
+describe('NestLensClient', () => {
+  it('drops every trailing slash of the base URL', async () => {
+    const urls: string[] = [];
+    const client = new NestLensClient({
+      baseUrl: 'http://localhost:3000/nestlens///',
+      fetch: (async (url: string) => {
+        urls.push(url);
+        return json({ data: { version: 1, tools: [] } });
+      }) as unknown as typeof fetch,
+    });
+
+    await client.manifest();
+
+    expect(urls).toEqual(['http://localhost:3000/nestlens/__nestlens__/api/tools']);
+  });
+
+  it('reads a base URL in time proportional to its length, not its square', () => {
+    const started = Date.now();
+    new NestLensClient({ baseUrl: `http://x${'/'.repeat(100_000)}a` });
+
+    expect(Date.now() - started).toBeLessThan(100);
+  });
+});
+
 describe('NestLensClient.manifest', () => {
   it('asks the application for its tools, with the headers it was given', async () => {
     const { client, calls } = setup(() => json({ data: { version: 1, tools: [] } }));

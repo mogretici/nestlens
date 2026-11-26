@@ -56,10 +56,25 @@ const sameToken = (given: string, expected: string): boolean => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
-const bearer = (request: IncomingMessage): string | undefined => {
-  const header = request.headers.authorization;
-  const match = typeof header === 'string' ? /^Bearer\s+(.+)$/i.exec(header) : null;
-  return match?.[1]?.trim();
+const isSpace = (code: number): boolean => code === 0x20 || code === 0x09;
+
+/**
+ * The token of an `Authorization: Bearer <token>` header, if that is what it is.
+ *
+ * Parsed by hand: `/^Bearer\s+(.+)$/` backtracks quadratically on a long run
+ * of whitespace, and this header is the one thing an unauthenticated caller
+ * controls.
+ */
+export const bearerToken = (header: string | undefined): string | undefined => {
+  if (typeof header !== 'string') return undefined;
+  const value = header.trim();
+
+  let at = 0;
+  while (at < value.length && !isSpace(value.charCodeAt(at))) at += 1;
+  if (at === value.length || value.slice(0, at).toLowerCase() !== 'bearer') return undefined;
+
+  const token = value.slice(at).trim();
+  return token.length > 0 ? token : undefined;
 };
 
 /**
@@ -86,6 +101,24 @@ const send = (
   response.end(JSON.stringify(body));
 };
 
+/** A refusal of this server's own, whose message is meant for the caller. */
+class HttpRefusal extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const INTERNAL_ERROR = 'Internal error. The detail is in the server log.';
+
+/** Anything that is not one of this server's refusals: the caller gets a generic word for it. */
+const logFailure = (error: unknown): void => {
+  const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  process.stderr.write(`nestlens-mcp: ${detail}\n`);
+};
+
 const readBody = (request: IncomingMessage, limit: number): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -94,7 +127,7 @@ const readBody = (request: IncomingMessage, limit: number): Promise<unknown> =>
     request.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > limit) {
-        reject(Object.assign(new Error('Request body is too large'), { status: 413 }));
+        reject(new HttpRefusal(413, 'Request body is too large'));
         request.destroy();
         return;
       }
@@ -105,7 +138,7 @@ const readBody = (request: IncomingMessage, limit: number): Promise<unknown> =>
       try {
         resolve(text.length > 0 ? JSON.parse(text) : undefined);
       } catch {
-        reject(Object.assign(new Error('Request body is not valid JSON'), { status: 400 }));
+        reject(new HttpRefusal(400, 'Request body is not valid JSON'));
       }
     });
     request.on('error', reject);
@@ -150,7 +183,7 @@ export const startNestLensMcpHttp = async (
     }
 
     if (token) {
-      const given = bearer(request);
+      const given = bearerToken(request.headers.authorization);
       if (!given || !sameToken(given, token)) {
         send(
           response,
@@ -175,8 +208,12 @@ export const startNestLensMcpHttp = async (
     try {
       body = await readBody(request, maxBody);
     } catch (error) {
-      const status = (error as { status?: number }).status ?? 400;
-      send(response, status, { error: error instanceof Error ? error.message : String(error) });
+      if (error instanceof HttpRefusal) {
+        send(response, error.status, { error: error.message });
+        return;
+      }
+      logFailure(error);
+      send(response, 400, { error: 'The request body could not be read.' });
       return;
     }
 
@@ -203,8 +240,9 @@ export const startNestLensMcpHttp = async (
 
   const listener: HttpServer = createServer((request, response) => {
     handle(request, response).catch((error: unknown) => {
+      logFailure(error);
       if (!response.headersSent) {
-        send(response, 500, { error: error instanceof Error ? error.message : String(error) });
+        send(response, 500, { error: INTERNAL_ERROR });
       } else {
         response.end();
       }

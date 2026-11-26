@@ -134,6 +134,13 @@ const appendQuery = (query: URLSearchParams, name: string, value: unknown): void
   if (value.length === 1 && String(value[0]).includes(',')) query.append(name, '');
 };
 
+/** A loop rather than `/\/+$/`, which backtracks quadratically on slashes that do not end the string. */
+const withoutTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return value.slice(0, end);
+};
+
 /** What the API said was wrong, in one line, from either of the shapes it uses. */
 const messageOf = (status: number, body: unknown): string => {
   if (isRecord(body)) {
@@ -166,7 +173,7 @@ export class NestLensClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: NestLensClientOptions) {
-    this.root = `${options.baseUrl.replace(/\/+$/, '')}/${API_ROOT}`;
+    this.root = `${withoutTrailingSlashes(options.baseUrl)}/${API_ROOT}`;
     this.headers = options.headers ?? {};
     this.timeoutMs = options.timeoutMs ?? 15_000;
     this.fetchImpl = options.fetch ?? fetch;

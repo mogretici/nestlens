@@ -9,7 +9,13 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { NestLensToolDescriptor, NestLensToolManifest } from '../../api/tools';
 import type { NestLensClient } from '../../mcp/client';
-import { MCP_PATH, startNestLensMcpHttp, type RunningNestLensMcpHttp } from '../../mcp/http';
+import {
+  MCP_PATH,
+  bearerToken,
+  startNestLensMcpHttp,
+  type RunningNestLensMcpHttp,
+} from '../../mcp/http';
+import * as serverModule from '../../mcp/server';
 
 const tool = (
   name: string,
@@ -215,5 +221,63 @@ describe('the hub over HTTP', () => {
 
       expect(response.status).toBe(413);
     });
+  });
+});
+
+describe('bearerToken', () => {
+  it.each([
+    ['Bearer secret', 'secret'],
+    ['bearer secret', 'secret'],
+    ['BEARER secret', 'secret'],
+    ['Bearer    secret', 'secret'],
+    ['Bearer\tsecret', 'secret'],
+    ['Bearer \t secret  ', 'secret'],
+    ['Bearer a b', 'a b'],
+  ])('reads %j as %j', (header, token) => {
+    expect(bearerToken(header)).toBe(token);
+  });
+
+  it.each([
+    [undefined],
+    [''],
+    ['Bearer'],
+    ['Bearer   '],
+    ['Bearersecret'],
+    ['Basic c2VjcmV0'],
+    ['Token secret'],
+  ])('finds no token in %j', (header) => {
+    expect(bearerToken(header)).toBeUndefined();
+  });
+
+  it('takes time in proportion to the header, not its square', () => {
+    const started = Date.now();
+    bearerToken(`Bearer${' '.repeat(100_000)}x\n`);
+    expect(Date.now() - started).toBeLessThan(100);
+  });
+});
+
+describe('a failure inside the server', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('answers 500 with a generic message, and writes the detail to stderr', async () => {
+    const { server } = await start();
+    const stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    jest.spyOn(serverModule, 'createNestLensMcpServer').mockImplementation(() => {
+      throw new Error('ENOENT /home/app/.secrets/token');
+    });
+
+    const response = await raw(server.url, {
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.body).not.toContain('secrets');
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'Internal error. The detail is in the server log.',
+    });
+    expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+      'ENOENT /home/app/.secrets/token',
+    );
   });
 });
