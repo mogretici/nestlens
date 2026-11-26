@@ -399,6 +399,48 @@ describe('NestLensClient.invoke', () => {
       );
     });
 
+    describe('a blank, which the API reads as not given', () => {
+      const listing = descriptor({
+        parameters: [
+          { name: 'requestId', in: 'query', type: 'string', required: false },
+          { name: 'levels', in: 'query', type: 'array', items: 'string', required: false },
+          { name: 'reason', in: 'body', type: 'string', required: false },
+        ],
+      });
+
+      it.each([
+        [{ requestId: '' }, 'requestId'],
+        [{ requestId: '   ' }, 'requestId'],
+        [{ levels: ' ' }, 'levels'],
+        [{ levels: ' , ,' }, 'levels'],
+        [{ levels: ['error', ''] }, 'levels'],
+        [{ reason: '\t' }, 'reason'],
+      ])('%j is refused', async (args, name) => {
+        const { client, calls } = setup();
+
+        await expect(client.invoke(listing, args)).rejects.toThrow(
+          new NestLensArgumentError(
+            `tool was given a blank value for ${name}, which NestLens reads as not given. ` +
+              `Leave ${name} out instead.`,
+          ),
+        );
+        expect(calls).toHaveLength(0);
+      });
+
+      it('still refuses a limit that is not a number', async () => {
+        const { client, calls } = setup();
+        const paged = descriptor({
+          parameters: [
+            { name: 'limit', in: 'query', type: 'integer', required: false, minimum: 1 },
+          ],
+        });
+
+        await expect(client.invoke(paged, { limit: 'abc' })).rejects.toThrow(/whole number/);
+        await expect(client.invoke(paged, { limit: '' })).rejects.toThrow(/whole number/);
+        expect(calls).toHaveLength(0);
+      });
+    });
+
     it.each(['', '.', '..'])('refuses %j as a path segment', async (value) => {
       const { client, calls } = setup();
       const tagged = descriptor({

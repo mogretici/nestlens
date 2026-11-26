@@ -182,7 +182,7 @@ The server exposes two tools, whatever NestLens can do:
 | `nestlens_list_tools` | Lists every operation NestLens offers, with a description and the arguments each takes. Takes an optional `names` list to look at a few. |
 | `nestlens_call_tool` | Runs one of them by name: `{ "name": "get_stats" }`, or `{ "name": "get_entries_with_cursor", "arguments": { "type": "log", "levels": ["error"], "limit": 20 } }`. |
 
-Arguments are checked against what the list declares before anything is sent: a number for a number, `true` or `false` for a boolean, a member of an enum, and no `null` (leave an argument out instead — for `clear_entries`, a `type` of `null` must not mean every type). A call that does not fit is refused with a sentence saying why.
+Arguments are checked against what the list declares before anything is sent: a number for a number, `true` or `false` for a boolean, a member of an enum, no `null`, and no blank value (leave an argument out instead: the API reads a blank as not given, and for `clear_entries` a `type` of `null` must not mean every type). A call that does not fit is refused with a sentence saying why.
 
 An agent starts with `nestlens_list_tools`, then calls what it needs. Today the list includes, among others:
 

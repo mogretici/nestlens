@@ -74,6 +74,20 @@ const isPlain = (value: unknown): boolean =>
 
 const PATH_TRAVERSAL = new Set(['', '.', '..']);
 
+const isBlank = (value: unknown): boolean => typeof value === 'string' && value.trim() === '';
+
+/**
+ * The API reads a blank parameter, or a blank item of a list, as one not
+ * given. Sent, it would narrow nothing while the agent believes it narrowed
+ * something.
+ */
+const refuseBlank = (tool: string, parameter: ToolParameter): never => {
+  throw new NestLensArgumentError(
+    `${tool} was given a blank value for ${parameter.name}, which NestLens reads as not given. ` +
+      `Leave ${parameter.name} out instead.`,
+  );
+};
+
 /**
  * Refuses a single value that is not of its parameter's declared type.
  *
@@ -105,6 +119,7 @@ const checkType = (tool: string, parameter: ToolParameter, value: unknown): void
         'instead of naming one.',
     );
   }
+  if (isBlank(value)) refuseBlank(tool, parameter);
 };
 
 /**
@@ -130,7 +145,11 @@ const checkShape = (tool: string, parameter: ToolParameter, value: unknown): voi
     return;
   }
 
-  if (isPlain(value)) return;
+  if (isPlain(value)) {
+    // A list written as one value names nothing when every item in it is blank.
+    if (String(value).split(',').every(isBlank)) refuseBlank(tool, parameter);
+    return;
+  }
 
   if (!Array.isArray(value)) {
     throw new NestLensArgumentError(`${tool} takes a list for ${parameter.name}, not an object.`);
@@ -145,6 +164,7 @@ const checkShape = (tool: string, parameter: ToolParameter, value: unknown): voi
       `${tool} takes plain values in ${parameter.name}, not lists or objects.`,
     );
   }
+  if (value.some(isBlank)) refuseBlank(tool, parameter);
 };
 
 /**
