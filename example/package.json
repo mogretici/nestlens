@@ -60,6 +60,21 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.20.0"
   },
+  "overrides": {
+    "@jest/reporters": {
+      "glob": "^14.0.2"
+    },
+    "jest-config": {
+      "glob": "^14.0.2"
+    },
+    "jest-runtime": {
+      "glob": "^14.0.2"
+    },
+    "test-exclude": {
+      "glob": "^14.0.2",
+      "minimatch": "^11.0.1"
+    }
+  },
   "jest": {
     "moduleFileExtensions": [
       "js",
