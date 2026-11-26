@@ -8,6 +8,7 @@ import {
   NestLensArgumentError,
   NestLensClient,
   NestLensUnreachableError,
+  withoutCredentials,
 } from '../../mcp/client';
 
 const json = (body: unknown, status = 200): Response =>
@@ -68,6 +69,19 @@ describe('NestLensClient', () => {
     new NestLensClient({ baseUrl: `http://x${'/'.repeat(100_000)}a` });
 
     expect(Date.now() - started).toBeLessThan(100);
+  });
+});
+
+describe('withoutCredentials', () => {
+  it.each([
+    ['http://user:hunter2@localhost:3000/nestlens', 'http://localhost:3000/nestlens'],
+    ['https://token@app.example/nestlens?x=1', 'https://app.example/nestlens?x=1'],
+    ['http://a:b@c@host:1', 'http://host:1'],
+    ['http://localhost:3000/nestlens/a@b', 'http://localhost:3000/nestlens/a@b'],
+    ['http://localhost:3000', 'http://localhost:3000'],
+    ['not a url', 'not a url'],
+  ])('shows %j as %j', (url, shown) => {
+    expect(withoutCredentials(url)).toBe(shown);
   });
 });
 
@@ -471,6 +485,28 @@ describe('NestLensClient.invoke', () => {
         ]);
       }
     });
+  });
+
+  it('does not repeat the credentials in a URL when it reports where it looked', async () => {
+    // The real `fetch`: it refuses a URL with credentials, and quotes it when it does.
+    const client = new NestLensClient({ baseUrl: 'http://user:hunter2@localhost:3000/nestlens' });
+
+    const failure = await client.invoke(descriptor({})).catch((error: unknown) => error);
+
+    expect((failure as Error).message).not.toContain('hunter2');
+    expect((failure as Error).message).toContain('http://localhost:3000/nestlens/__nestlens__/api');
+  });
+
+  it('does not repeat the credentials in where a redirect pointed', async () => {
+    const { client } = setup(
+      () =>
+        new Response(null, { status: 301, headers: { Location: 'https://u:pw@other.example/x' } }),
+    );
+
+    const failure = await client.invoke(descriptor({})).catch((error: unknown) => error);
+
+    expect((failure as Error).message).toContain('https://other.example/x');
+    expect((failure as Error).message).not.toContain('u:pw');
   });
 
   it('points at the mount when the answer is not JSON', async () => {

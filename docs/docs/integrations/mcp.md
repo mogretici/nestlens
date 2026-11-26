@@ -252,7 +252,7 @@ npx nestlens-mcp --http --host 0.0.0.0 --port 8787 --url http://localhost:3000/n
 
 The endpoint is `http://<host>:8787/mcp`, and every request must carry `Authorization: Bearer <token>`.
 
-- It **will not start on a network address without a token**. On `127.0.0.1` (the default `--host`) the token is optional, and requests addressed to any other name are refused.
+- It **will not start on a network address without a token**. On `127.0.0.1` (the default `--host`) the token is optional, and requests addressed to any other name are refused — but without one, **every process on the machine, under any user, can use it**, and with it whatever `--header` gives it. Set `--token` whenever `--header` or `NESTLENS_HEADERS` carries credentials, or whenever the machine is shared.
 - It speaks plain HTTP. Put it behind a reverse proxy or load balancer that terminates TLS (nginx, Caddy, your cloud's) and give the agent the `https://` address.
 - It is stateless, so a restart, or several instances behind one address, loses nothing.
 - NestLens sees the connection coming from the machine `nestlens-mcp` runs on. When that is the same host, NestLens sees `127.0.0.1`, so `allowedIps` does not tell it apart from the application itself. **The bearer token is the lock** — treat it like a password, and do not share it between people you would want to revoke separately.
@@ -272,7 +272,7 @@ Then add the URL to your agent as shown [above](#add-it-to-your-agent).
 | `--port <number>` | `NESTLENS_MCP_PORT` | `8787` |
 | `--token <secret>` | `NESTLENS_MCP_TOKEN` | none |
 
-If your `authorization.canAccess` wants a token or a cookie, pass it as a header. Prefer the environment variable: command-line arguments are visible to every user on the machine in the process list.
+If your `authorization.canAccess` wants a token or a cookie, pass it as a header. Prefer the environment variable: command-line arguments are visible to every user on the machine in the process list. Do not put credentials in `--url` (`http://user:password@...`): `fetch` refuses such an address. A malformed `--header` is reported without its value, and a URL is never printed with credentials in it.
 
 ```bash
 NESTLENS_HEADERS='{"Authorization":"Bearer dev-token"}' npx nestlens-mcp --url http://localhost:3000/nestlens

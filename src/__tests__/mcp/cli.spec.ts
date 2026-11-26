@@ -73,6 +73,13 @@ describe('parseCliOptions', () => {
     expect(() => parseCliOptions(argv, {})).toThrow(message);
   });
 
+  it('names a malformed header without repeating it, since it may be a secret', () => {
+    const attempt = (): unknown => parseCliOptions(['--header', 'Bearer s3cr3t-token'], {});
+
+    expect(attempt).toThrow(/--header expects "Name: value"/);
+    expect(attempt).not.toThrow(/s3cr3t/);
+  });
+
   it('refuses headers that are not a JSON object', () => {
     expect(() => parseCliOptions([], { NESTLENS_HEADERS: 'Authorization: x' })).toThrow(
       /JSON object/,

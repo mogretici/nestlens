@@ -170,6 +170,25 @@ const appendQuery = (query: URLSearchParams, name: string, value: unknown): void
   if (value.length === 1 && String(value[0]).includes(',')) query.append(name, '');
 };
 
+/**
+ * A URL as it may be shown: without the `user:password@` an address can carry.
+ *
+ * Every URL this package prints, to stderr or to the agent, goes through here
+ * first. Read by position rather than by `URL`, so an address that does not
+ * parse is still shown as written, minus its credentials.
+ */
+export const withoutCredentials = (url: string): string => {
+  const scheme = url.indexOf('://');
+  if (scheme === -1) return url;
+
+  const start = scheme + 3;
+  const slash = url.indexOf('/', start);
+  const end = slash === -1 ? url.length : slash;
+  const at = url.lastIndexOf('@', end - 1);
+
+  return at < start ? url : `${url.slice(0, start)}${url.slice(at + 1)}`;
+};
+
 /** A loop rather than `/\/+$/`, which backtracks quadratically on slashes that do not end the string. */
 const withoutTrailingSlashes = (value: string): string => {
   let end = value.length;
@@ -326,9 +345,13 @@ export class NestLensClient {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const shown = withoutCredentials(this.root);
+      // `fetch` quotes the URL it refused, credentials and all.
+      const reason = (error instanceof Error ? error.message : String(error))
+        .split(this.root)
+        .join(shown);
       throw new NestLensUnreachableError(
-        `Could not reach NestLens at ${this.root} (${reason}). Is the application running, ` +
+        `Could not reach NestLens at ${shown} (${reason}). Is the application running, ` +
           'and is the URL the one the dashboard is mounted at?',
       );
     }
@@ -337,8 +360,9 @@ export class NestLensClient {
       const location = response.headers.get('location');
       throw new NestLensApiError(
         response.status,
-        `NestLens at ${this.root} redirected (${response.status}` +
-          `${location ? ` to ${location}` : ''}). nestlens-mcp does not follow redirects, so ` +
+        `NestLens at ${withoutCredentials(this.root)} redirected (${response.status}` +
+          `${location ? ` to ${withoutCredentials(location)}` : ''}). ` +
+          'nestlens-mcp does not follow redirects, so ' +
           'the headers it was given go nowhere else; point --url at the final address.',
       );
     }
