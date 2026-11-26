@@ -72,6 +72,41 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isPlain = (value: unknown): boolean =>
   typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 
+const PATH_TRAVERSAL = new Set(['', '.', '..']);
+
+/**
+ * Refuses a single value that is not of its parameter's declared type.
+ *
+ * The API reads a query string, so it would take `limit: "abc"` and fall back
+ * to its default without a word: an answer to a question the agent did not
+ * ask. Types are strict — a number for a number, `true` or `false` for a
+ * boolean — because that is the schema the agent was shown, and a refusal it
+ * can read costs one turn where a silent fallback costs a wrong conclusion.
+ */
+const checkType = (tool: string, parameter: ToolParameter, value: unknown): void => {
+  const refuse = (expected: string): never => {
+    throw new NestLensArgumentError(
+      `${tool} takes ${expected} for ${parameter.name}, not ${JSON.stringify(value)}.`,
+    );
+  };
+
+  if (parameter.type === 'integer' && !Number.isInteger(value)) refuse('a whole number');
+  if (parameter.type === 'number' && !(typeof value === 'number' && Number.isFinite(value))) {
+    refuse('a number');
+  }
+  if (parameter.type === 'boolean' && typeof value !== 'boolean') refuse('true or false');
+  // Compared as the query string will carry it: `slow: true` is the `"true"` an enum lists.
+  if (parameter.enum && !parameter.enum.includes(String(value))) {
+    refuse(`one of ${parameter.enum.join(', ')}`);
+  }
+  if (parameter.in === 'path' && PATH_TRAVERSAL.has(String(value))) {
+    throw new NestLensArgumentError(
+      `${tool} needs a real value for ${parameter.name}: "", "." and ".." change the path ` +
+        'instead of naming one.',
+    );
+  }
+};
+
 /**
  * Refuses a value whose shape is not the one its parameter declares.
  *
@@ -91,6 +126,7 @@ const checkShape = (tool: string, parameter: ToolParameter, value: unknown): voi
         `${tool} takes one value for ${parameter.name}, not a list or an object.`,
       );
     }
+    checkType(tool, parameter, value);
     return;
   }
 
@@ -225,8 +261,17 @@ export class NestLensClient {
       );
     }
 
+    // Not "left out": `clear_entries` with `type: null` would otherwise clear every type.
+    const nulls = Object.keys(args).filter((name) => args[name] === null);
+    if (nulls.length > 0) {
+      throw new NestLensArgumentError(
+        `${tool.name} does not take null for ${nulls.join(', ')}. ` +
+          `Leave ${nulls.join(', ')} out instead.`,
+      );
+    }
+
     const missing = tool.parameters.filter(
-      (parameter) => parameter.required && (args[parameter.name] ?? null) === null,
+      (parameter) => parameter.required && args[parameter.name] === undefined,
     );
     if (missing.length > 0) {
       throw new NestLensArgumentError(
@@ -234,12 +279,10 @@ export class NestLensClient {
       );
     }
 
-    const present = Object.entries(args).filter(
-      ([, value]) => value !== undefined && value !== null,
-    );
+    const present = Object.entries(args).filter(([, value]) => value !== undefined);
     for (const parameter of tool.parameters) {
       const value = args[parameter.name];
-      if (value !== undefined && value !== null) checkShape(tool.name, parameter, value);
+      if (value !== undefined) checkShape(tool.name, parameter, value);
     }
 
     let path = tool.path;

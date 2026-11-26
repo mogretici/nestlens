@@ -268,6 +268,93 @@ describe('NestLensClient.invoke', () => {
     });
   });
 
+  describe('refuses a value that is not of its declared type, before anything is sent', () => {
+    const tool = descriptor({
+      method: 'DELETE',
+      path: '/things/:id',
+      parameters: [
+        { name: 'id', in: 'path', type: 'integer', required: true },
+        { name: 'limit', in: 'query', type: 'integer', required: false },
+        { name: 'ratio', in: 'query', type: 'number', required: false },
+        { name: 'slow', in: 'query', type: 'boolean', required: false },
+        { name: 'type', in: 'query', type: 'string', required: false, enum: ['request', 'log'] },
+      ],
+    });
+
+    it.each([
+      [{ id: 1, limit: 'abc' }, 'tool takes a whole number for limit, not "abc".'],
+      [{ id: 1, limit: '10' }, 'tool takes a whole number for limit, not "10".'],
+      [{ id: 1, limit: 2.5 }, 'tool takes a whole number for limit, not 2.5.'],
+      [{ id: 1.5 }, 'tool takes a whole number for id, not 1.5.'],
+      [{ id: '7' }, 'tool takes a whole number for id, not "7".'],
+      [{ id: 1, ratio: 'half' }, 'tool takes a number for ratio, not "half".'],
+      [{ id: 1, slow: 'yes' }, 'tool takes true or false for slow, not "yes".'],
+      [{ id: 1, slow: 'true' }, 'tool takes true or false for slow, not "true".'],
+      [{ id: 1, type: 'nonsense' }, 'tool takes one of request, log for type, not "nonsense".'],
+      [{ id: 1, type: 1 }, 'tool takes one of request, log for type, not 1.'],
+    ])('%j', async (args, message) => {
+      const { client, calls } = setup();
+
+      await expect(client.invoke(tool, args)).rejects.toThrow(new NestLensArgumentError(message));
+      expect(calls).toHaveLength(0);
+    });
+
+    it('reads an enum as the query string carries it', async () => {
+      const { client, calls } = setup();
+      const queries = descriptor({
+        parameters: [
+          { name: 'slow', in: 'query', type: 'string', required: false, enum: ['true', 'false'] },
+        ],
+      });
+
+      await client.invoke(queries, { slow: true });
+
+      expect(new URL(calls[0]!.url).searchParams.get('slow')).toBe('true');
+    });
+
+    it('and sends what fits', async () => {
+      const { client, calls } = setup();
+
+      await client.invoke(tool, { id: 3, limit: 10, ratio: 0.5, slow: false, type: 'log' });
+
+      expect(calls[0]?.url).toBe(
+        'http://localhost:3000/nestlens/__nestlens__/api/things/3?limit=10&ratio=0.5&slow=false&type=log',
+      );
+    });
+
+    it.each(['', '.', '..'])('refuses %j as a path segment', async (value) => {
+      const { client, calls } = setup();
+      const tagged = descriptor({
+        method: 'DELETE',
+        path: '/tags/monitored/:tag',
+        parameters: [{ name: 'tag', in: 'path', type: 'string', required: true }],
+      });
+
+      await expect(client.invoke(tagged, { tag: value })).rejects.toThrow(
+        new NestLensArgumentError(
+          `tool needs a real value for tag: "", "." and ".." change the path instead of naming one.`,
+        ),
+      );
+      expect(calls).toHaveLength(0);
+    });
+
+    it('refuses null rather than reading it as left out, which for a delete means everything', async () => {
+      const { client, calls } = setup();
+      const clearEntries = descriptor({
+        method: 'DELETE',
+        path: '/entries',
+        parameters: [
+          { name: 'type', in: 'query', type: 'string', required: false, enum: ['request'] },
+        ],
+      });
+
+      await expect(client.invoke(clearEntries, { type: null })).rejects.toThrow(
+        new NestLensArgumentError('tool does not take null for type. Leave type out instead.'),
+      );
+      expect(calls).toHaveLength(0);
+    });
+  });
+
   it('refuses a call that leaves out what is required', async () => {
     const { client, calls } = setup();
     const tool = descriptor({
