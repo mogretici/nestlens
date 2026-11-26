@@ -85,6 +85,28 @@ describe('withoutCredentials', () => {
   });
 });
 
+describe('a base URL with credentials in it', () => {
+  it.each(['http://user:hunter2@localhost:3000/nestlens', 'https://hunter2@app.example/nestlens'])(
+    'is refused when the client is made, without repeating them: %s',
+    (baseUrl) => {
+      const make = (): unknown => new NestLensClient({ baseUrl });
+
+      expect(make).toThrow(
+        new Error(
+          'The NestLens URL contains credentials (user:password@). They cannot work: fetch ' +
+            'refuses an address that carries them, so no request could be sent. Pass them as a ' +
+            'header instead (--header "Authorization: ..." or NESTLENS_HEADERS).',
+        ),
+      );
+      expect(make).not.toThrow(/hunter2/);
+    },
+  );
+
+  it('is not confused with an @ in the path', () => {
+    expect(() => new NestLensClient({ baseUrl: 'http://localhost:3000/a@b' })).not.toThrow();
+  });
+});
+
 describe('NestLensClient.manifest', () => {
   it('asks the application for its tools, with the headers it was given', async () => {
     const { client, calls } = setup(() => json({ data: { version: 1, tools: [] } }));
@@ -485,16 +507,6 @@ describe('NestLensClient.invoke', () => {
         ]);
       }
     });
-  });
-
-  it('does not repeat the credentials in a URL when it reports where it looked', async () => {
-    // The real `fetch`: it refuses a URL with credentials, and quotes it when it does.
-    const client = new NestLensClient({ baseUrl: 'http://user:hunter2@localhost:3000/nestlens' });
-
-    const failure = await client.invoke(descriptor({})).catch((error: unknown) => error);
-
-    expect((failure as Error).message).not.toContain('hunter2');
-    expect((failure as Error).message).toContain('http://localhost:3000/nestlens/__nestlens__/api');
   });
 
   it('does not repeat the credentials in where a redirect pointed', async () => {

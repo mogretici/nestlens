@@ -173,9 +173,10 @@ const appendQuery = (query: URLSearchParams, name: string, value: unknown): void
 /**
  * A URL as it may be shown: without the `user:password@` an address can carry.
  *
- * Every URL this package prints, to stderr or to the agent, goes through here
- * first. Read by position rather than by `URL`, so an address that does not
- * parse is still shown as written, minus its credentials.
+ * The base URL is refused with credentials in it, so this is for addresses a
+ * server sends back, such as a redirect's location. Read by position rather
+ * than by `URL`, so an address that does not parse is still shown as written,
+ * minus its credentials.
  */
 export const withoutCredentials = (url: string): string => {
   const scheme = url.indexOf('://');
@@ -187,6 +188,21 @@ export const withoutCredentials = (url: string): string => {
   const at = url.lastIndexOf('@', end - 1);
 
   return at < start ? url : `${url.slice(0, start)}${url.slice(at + 1)}`;
+};
+
+/**
+ * Refuses a base URL that carries `user:password@`, without repeating it.
+ *
+ * Such an address can never work: `fetch` refuses to build a request from one,
+ * and quotes it, credentials and all, when it does.
+ */
+export const assertNoCredentials = (url: string): void => {
+  if (withoutCredentials(url) === url) return;
+  throw new Error(
+    'The NestLens URL contains credentials (user:password@). They cannot work: fetch refuses ' +
+      'an address that carries them, so no request could be sent. Pass them as a header ' +
+      'instead (--header "Authorization: ..." or NESTLENS_HEADERS).',
+  );
 };
 
 /** A loop rather than `/\/+$/`, which backtracks quadratically on slashes that do not end the string. */
@@ -228,6 +244,7 @@ export class NestLensClient {
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: NestLensClientOptions) {
+    assertNoCredentials(options.baseUrl);
     this.root = `${withoutTrailingSlashes(options.baseUrl)}/${API_ROOT}`;
     this.headers = options.headers ?? {};
     this.timeoutMs = options.timeoutMs ?? 15_000;
@@ -345,13 +362,9 @@ export class NestLensClient {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      const shown = withoutCredentials(this.root);
-      // `fetch` quotes the URL it refused, credentials and all.
-      const reason = (error instanceof Error ? error.message : String(error))
-        .split(this.root)
-        .join(shown);
+      const reason = error instanceof Error ? error.message : String(error);
       throw new NestLensUnreachableError(
-        `Could not reach NestLens at ${shown} (${reason}). Is the application running, ` +
+        `Could not reach NestLens at ${this.root} (${reason}). Is the application running, ` +
           'and is the URL the one the dashboard is mounted at?',
       );
     }
@@ -360,7 +373,7 @@ export class NestLensClient {
       const location = response.headers.get('location');
       throw new NestLensApiError(
         response.status,
-        `NestLens at ${withoutCredentials(this.root)} redirected (${response.status}` +
+        `NestLens at ${this.root} redirected (${response.status}` +
           `${location ? ` to ${withoutCredentials(location)}` : ''}). ` +
           'nestlens-mcp does not follow redirects, so ' +
           'the headers it was given go nowhere else; point --url at the final address.',

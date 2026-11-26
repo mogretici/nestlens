@@ -1,5 +1,5 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { NestLensClient, withoutCredentials } from './client';
+import { assertNoCredentials, NestLensClient } from './client';
 import { startNestLensMcpHttp } from './http';
 import { createNestLensMcpServer } from './server';
 
@@ -151,6 +151,7 @@ export const parseCliOptions = (
     }
   }
 
+  assertNoCredentials(options.url);
   return options;
 };
 
@@ -190,7 +191,6 @@ export const main = async (
   });
   const version = packageVersion();
   const mode = options.allowWrite ? 'read and write' : 'read-only';
-  const shown = withoutCredentials(options.url);
 
   if (options.http) {
     const running = await startNestLensMcpHttp({
@@ -201,7 +201,7 @@ export const main = async (
       allowWrite: options.allowWrite,
       version,
     });
-    process.stderr.write(`nestlens-mcp: ${running.url} serving ${shown} (${mode})\n`);
+    process.stderr.write(`nestlens-mcp: ${running.url} serving ${options.url} (${mode})\n`);
 
     const stop = (): void => {
       void running.close().then(() => process.exit(0));
@@ -214,5 +214,5 @@ export const main = async (
   const server = createNestLensMcpServer({ client, allowWrite: options.allowWrite, version });
 
   await server.connect(new StdioServerTransport());
-  process.stderr.write(`nestlens-mcp: serving ${shown} (${mode})\n`);
+  process.stderr.write(`nestlens-mcp: serving ${options.url} (${mode})\n`);
 };

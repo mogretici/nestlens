@@ -80,6 +80,16 @@ describe('parseCliOptions', () => {
     expect(attempt).not.toThrow(/s3cr3t/);
   });
 
+  it.each([
+    [['--url', 'http://user:hunter2@localhost:3000/nestlens'], {}],
+    [[], { NESTLENS_URL: 'http://user:hunter2@localhost:3000/nestlens' }],
+  ])('refuses a URL with credentials in it, without repeating them (%j, %j)', (argv, env) => {
+    const attempt = (): unknown => parseCliOptions(argv, env);
+
+    expect(attempt).toThrow(/contains credentials.*--header/s);
+    expect(attempt).not.toThrow(/hunter2/);
+  });
+
   it('refuses headers that are not a JSON object', () => {
     expect(() => parseCliOptions([], { NESTLENS_HEADERS: 'Authorization: x' })).toThrow(
       /JSON object/,
