@@ -45,16 +45,23 @@ const run = (command, args, options = {}) =>
   execFileSync(command, args, { encoding: 'utf8', stdio: 'pipe', ...options });
 
 /**
- * npm's registry needs a moment after a publish before the new version can be
- * installed, and CI reaches it seconds after semantic-release returns.
+ * A publish reaches installers late: the registry updated 0.14.3's metadata
+ * about two minutes after semantic-release returned, and its CDN serves that
+ * metadata with `max-age=300`, so a version can stay invisible for seven
+ * minutes or so. Two minutes of waiting failed the 0.14.3 release twelve
+ * seconds before the version appeared; ten minutes clears the CDN with room.
  */
+const REGISTRY_ATTEMPTS = 60;
+
 async function waitForRegistry(target) {
-  for (let attempt = 1; attempt <= 12; attempt += 1) {
+  for (let attempt = 1; attempt <= REGISTRY_ATTEMPTS; attempt += 1) {
     try {
       run('npm', ['view', `nestlens@${target}`, 'version']);
       return;
     } catch {
-      console.log(`  … waiting for nestlens@${target} on the registry (${attempt}/12)`);
+      console.log(
+        `  … waiting for nestlens@${target} on the registry (${attempt}/${REGISTRY_ATTEMPTS})`,
+      );
       await delay(10_000);
     }
   }
