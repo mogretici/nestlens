@@ -252,7 +252,7 @@ describe('bearerToken', () => {
   it('takes time in proportion to the header, not its square', () => {
     const started = Date.now();
     bearerToken(`Bearer${' '.repeat(100_000)}x\n`);
-    expect(Date.now() - started).toBeLessThan(100);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });
 

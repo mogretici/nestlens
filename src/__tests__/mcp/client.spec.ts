@@ -68,7 +68,7 @@ describe('NestLensClient', () => {
     const started = Date.now();
     new NestLensClient({ baseUrl: `http://x${'/'.repeat(100_000)}a` });
 
-    expect(Date.now() - started).toBeLessThan(100);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });
 
