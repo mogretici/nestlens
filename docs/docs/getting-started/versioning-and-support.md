@@ -50,6 +50,15 @@ Fastify adapters:
 | **NestJS 9** | ✅ | ✅ | ✅ |
 | **NestJS 10** | ✅ | ✅ | ✅ |
 | **NestJS 11** | ✅ | ✅ | ✅ |
+| **NestJS 12** | ✅ | ✅ | ✅ |
+
+Each row installs the companion packages an application on that NestJS would
+get — `@nestjs/graphql`, `@nestjs/apollo`, `@nestjs/mercurius`,
+`@nestjs/schedule`, `@nestjs/typeorm`, `@nestjs/axios`, `@nestjs/cache-manager`
+— and fails if any of them resolves to a release meant for another NestJS.
+
+The Node.js floor on NestJS 12 is higher than on 9 to 11, and AWS Lambda needs
+a flag: see [NestJS 12 and Node.js](./installation.md#nestjs-12-and-nodejs).
 
 `engines` asks for Node 20 or newer, and a contract test fails the build if the
 floor of that matrix and the floor in `engines` ever disagree — a version cannot

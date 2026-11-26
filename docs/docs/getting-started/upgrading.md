@@ -149,8 +149,33 @@ breaking change.
 
 NestLens is published as **CommonJS** and stays that way. It loads correctly in
 an ESM application through Node's interop (`import { NestLensModule } from
-'nestlens'` works), and NestJS itself is CommonJS, so a dual build would add a
-second copy of the decorators and their metadata for no gain.
+'nestlens'` works), and a dual build would add a second copy of the decorators
+and their metadata for no gain.
+
+## NestJS 12
+
+NestLens supports NestJS 12 alongside 9, 10 and 11, with
+`@nestjs/graphql`, `@nestjs/apollo` and `@nestjs/mercurius` 14 and
+`@nestjs/cache-manager` 12. Nothing in your NestLens configuration changes.
+
+The Node.js floor on NestJS 12 is higher than on 9 to 11, and AWS Lambda needs
+a flag: see [NestJS 12 and Node.js](./installation.md#nestjs-12-and-nodejs).
+
+NestLens itself stays CommonJS, which is what NestJS's migration guide expects
+of a library: the application keeps its module format, and so does everything it
+loads.
+
+## Dashboard deep links on NestJS 9 and 10
+
+A fix, independent of NestJS 12, with nothing to change on your side.
+
+On NestJS 9 or 10 with Express 5 somewhere else in the dependency tree —
+`@modelcontextprotocol/sdk`, which NestLens's MCP server uses, brings it — npm
+hoists Express 5 and nests the adapter's Express 4 under
+`@nestjs/platform-express`. NestLens read the hoisted one, mounted the
+dashboard's catch-all in Express 5's syntax on an Express 4 router, and every
+deep link into the dashboard (`/nestlens/requests/42`) answered 404. It now
+reads the Express the adapter actually loads.
 
 ## Verified NestJS and Node versions
 
@@ -161,6 +186,7 @@ Every release is tested against this matrix in CI:
 | **NestJS 9** | ✅ | ✅ | ✅ |
 | **NestJS 10** | ✅ | ✅ | ✅ |
 | **NestJS 11** | ✅ | ✅ | ✅ |
+| **NestJS 12** | ✅ | ✅ | ✅ |
 
 Both the Express and Fastify adapters are covered.
 
