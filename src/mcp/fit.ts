@@ -53,9 +53,12 @@ const plan = (
   const entries = forward ? data.slice(data.length - shown) : data.slice(0, shown);
   const newest = idOf(entries[0]);
   const oldest = idOf(entries[entries.length - 1]);
+  // With nothing shown, the next page starts past the entry that did not fit,
+  // which the note names so it can be opened on its own.
+  const nearest = idOf(forward ? data[data.length - 1] : data[0]);
 
   if (takes(tool, 'beforeSequence') || takes(tool, 'afterSequence')) {
-    const at = forward ? newest : oldest;
+    const at = shown === 0 ? nearest : forward ? newest : oldest;
     return {
       entries,
       ...(at === undefined
@@ -67,7 +70,7 @@ const plan = (
 
   if (takes(tool, 'offset')) {
     const offset = typeof args.offset === 'number' ? args.offset : 0;
-    return { entries, resume: { offset: offset + shown } };
+    return { entries, resume: { offset: offset + Math.max(shown, 1) } };
   }
 
   return { entries };
@@ -80,11 +83,18 @@ const noteFor = (
   first: number | undefined,
 ): string => {
   const head = `Only ${shown} of ${of} entries fit in this answer; the rest were left out.`;
+  const [name, value] = Object.entries(resume ?? {})[0] ?? [];
   if (shown === 0 && first !== undefined) {
-    return `${head} The first entry alone is too large; open it with get_entry, id ${first}.`;
+    const skip =
+      name === undefined
+        ? ''
+        : ` To step past it, call again with the same arguments and ${name}: ${value}.`;
+    return (
+      `${head} The next entry alone is larger than an answer may be; open it with ` +
+      `get_entry, id ${first}.${skip}`
+    );
   }
-  if (!resume) return `${head} Ask for fewer with \`limit\`, or narrow with filters.`;
-  const [name, value] = Object.entries(resume)[0] as [string, number];
+  if (name === undefined) return `${head} Ask for fewer with \`limit\`, or narrow with filters.`;
   return (
     `${head} To continue from the last one shown, call again with the same arguments and ` +
     `${name}: ${value}. This note, not the API's paging, says where the next page starts.`

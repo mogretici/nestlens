@@ -531,6 +531,136 @@ describe('the hub', () => {
       expect(out).toContain('not valid JSON');
     });
 
+    describe('an entry larger than the limit on its own', () => {
+      const entry = (id: number, size: number) => ({
+        id,
+        type: 'request',
+        payload: { body: `${id} `.padEnd(size, '.') },
+      });
+      const envelope = (data: Array<{ id: number }>, hasMore = true) => ({
+        success: true,
+        data,
+        error: null,
+        meta: {
+          hasMore,
+          oldestSequence: data[data.length - 1]?.id ?? null,
+          newestSequence: data[0]?.id ?? null,
+          total: 100,
+        },
+      });
+
+      it('says how to open it and how to step past it', async () => {
+        const out = await callWith(
+          cursorTool,
+          envelope([entry(30, 10_000), entry(29, 100), entry(28, 100)]),
+        );
+        const fitted = JSON.parse(out) as Fitted;
+
+        expect(fitted.data).toEqual([]);
+        expect(fitted.truncated).toMatchObject({ shown: 0, of: 3, resume: { beforeSequence: 30 } });
+        expect(fitted.truncated.note).toContain('open it with get_entry, id 30');
+        expect(fitted.truncated.note).toContain('beforeSequence: 30');
+      });
+
+      it('steps past it forward, and by offset', async () => {
+        const forward = JSON.parse(
+          await callWith(
+            cursorTool,
+            envelope([entry(30, 100), entry(29, 100), entry(28, 10_000)]),
+            { afterSequence: 27 },
+          ),
+        ) as Fitted;
+        const byOffset = JSON.parse(
+          await callWith(
+            offsetTool,
+            { success: true, data: [entry(30, 10_000), entry(29, 100)], meta: { total: 9 } },
+            { offset: 4 },
+          ),
+        ) as Fitted;
+
+        expect(forward.truncated).toMatchObject({ shown: 0, resume: { afterSequence: 28 } });
+        expect(forward.truncated.note).toContain('id 28');
+        expect(byOffset.truncated).toMatchObject({ shown: 0, resume: { offset: 5 } });
+      });
+
+      describe('met in the middle of a walk through every page', () => {
+        const LARGE = new Set([15, 8, 7]);
+        const store = Array.from({ length: 20 }, (_, i) =>
+          entry(i + 1, LARGE.has(i + 1) ? 5_000 : 150),
+        );
+
+        // What the cursor endpoint answers: newest first, `limit` of them.
+        const answer = (args: Record<string, unknown>) => {
+          const limit = args.limit as number;
+          const before = args.beforeSequence as number | undefined;
+          const after = args.afterSequence as number | undefined;
+          const matching =
+            after !== undefined && before === undefined
+              ? store
+                  .filter((e) => e.id > after)
+                  .slice(0, limit)
+                  .reverse()
+              : [...store]
+                  .reverse()
+                  .filter((e) => before === undefined || e.id < before)
+                  .slice(0, limit);
+          const rest =
+            after !== undefined && before === undefined
+              ? store.filter((e) => e.id > (matching[0]?.id ?? Infinity)).length
+              : store.filter((e) => e.id < (matching[matching.length - 1]?.id ?? -Infinity)).length;
+          return envelope(matching, rest > 0);
+        };
+
+        const walk = async (forward: boolean): Promise<{ seen: number[]; skipped: string }> => {
+          const { client, invoke } = fakeClient(() => [cursorTool]);
+          invoke.mockImplementation(async (_tool, args) => answer(args ?? {}));
+          const { agent } = await connect({ client, maxResponseChars: 1_500 });
+
+          const seen: number[] = [];
+          let skipped = '';
+          let args: Record<string, unknown> = forward
+            ? { limit: 5, afterSequence: 0 }
+            : { limit: 5 };
+
+          for (let call = 0; call < 50; call += 1) {
+            const fitted = JSON.parse(
+              textOf(
+                await agent.callTool({
+                  name: 'nestlens_call_tool',
+                  arguments: { name: cursorTool.name, arguments: args },
+                }),
+              ),
+            ) as Partial<Fitted> & { data: Array<{ id: number }>; meta: Record<string, unknown> };
+            seen.push(...fitted.data.map((e) => e.id));
+
+            if (fitted.truncated) {
+              if (fitted.truncated.shown === 0) skipped += fitted.truncated.note;
+              args = { limit: 5, ...fitted.truncated.resume };
+            } else if (fitted.meta.hasMore) {
+              args = forward
+                ? { limit: 5, afterSequence: fitted.meta.newestSequence }
+                : { limit: 5, beforeSequence: fitted.meta.oldestSequence };
+            } else {
+              return { seen, skipped };
+            }
+          }
+          throw new Error('the walk did not end');
+        };
+
+        it.each([
+          ['backward', false],
+          ['forward', true],
+        ])('%s, every other entry is shown exactly once', async (_label, forward) => {
+          const { seen, skipped } = await walk(forward);
+          const expected = store.map((e) => e.id).filter((id) => !LARGE.has(id));
+
+          expect([...seen].sort((a, b) => a - b)).toEqual(expected);
+          expect(new Set(seen).size).toBe(seen.length);
+          for (const id of LARGE) expect(skipped).toContain(`get_entry, id ${id}`);
+        });
+      });
+    });
+
     it('serializes compactly', async () => {
       const { client, invoke } = fakeClient(() => [read('get_stats')]);
       invoke.mockResolvedValueOnce({ success: true, data: { a: 1, b: [2] } });
