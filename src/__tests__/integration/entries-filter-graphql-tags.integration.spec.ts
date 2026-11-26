@@ -46,7 +46,7 @@ describe('Entries filter pipe + GraphQL tags + search (real HTTP)', () => {
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, new ExpressAdapter(), { logger: false });
-    await app.init();
+    await app.listen(0, '127.0.0.1');
 
     const collector = app.get(CollectorService);
     // Seed a GraphQL entry shaped exactly as the adapter produces it

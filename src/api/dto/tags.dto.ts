@@ -4,12 +4,14 @@ import {
   IsArray,
   IsIn,
   IsNotEmpty,
-  IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 import {
+  HasItemsOfMaxLength,
   IsCommaSeparatedStrings,
+  IsNonEmptyListLike,
+  IsOptionalParameter,
   MAX_FILTER_VALUES,
   TransformCommaSeparatedArray,
   TransformLimit,
@@ -62,15 +64,15 @@ export class MonitoredTagDto {
 export class TagEntriesQueryDto {
   @TransformCommaSeparatedArray()
   @IsCommaSeparatedStrings()
-  @ArrayNotEmpty({ message: 'tags is required and must name at least one tag' })
-  @MaxLength(MAX_TAG_LENGTH, { each: true })
+  @IsNonEmptyListLike({ message: 'tags is required and must name at least one tag' })
+  @HasItemsOfMaxLength(MAX_TAG_LENGTH)
   tags!: string[];
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(['AND', 'OR'], { message: 'logic must be AND or OR' })
   logic?: 'AND' | 'OR';
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformLimit()
   limit?: number;
 }

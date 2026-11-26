@@ -1,3 +1,15 @@
+## [0.14.3](https://github.com/mogretici/nestlens/compare/v0.14.2...v0.14.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* **api:** ?resolved=false reaches the storage as false, and a blank number as none ([c85e753](https://github.com/mogretici/nestlens/commit/c85e753ec9cf691acb47e547f89838d3c5fdbe84))
+* **api:** a blank delete scope says only that it was blank, and ?tags=&tags= names nothing anywhere ([d8dd816](https://github.com/mogretici/nestlens/commit/d8dd816845319334522d7dba1b9cdec4bb73cb93))
+* **api:** a blank parameter narrowing a delete is refused, not read as all ([9087bb7](https://github.com/mogretici/nestlens/commit/9087bb7bc37f759543cc6b84b56db651bfa64838))
+* **api:** a blank query parameter is one not given, for every parameter ([2a085aa](https://github.com/mogretici/nestlens/commit/2a085aa43356dffcecb0ab40ec45303a3666ef05))
+* **api:** a cursor that is not a number, or two at once, is refused ([4b4665b](https://github.com/mogretici/nestlens/commit/4b4665bb72e8733b0a39350be9c216e78fa4bdfc))
+* **api:** every query parameter validates as the string a host pipe hands it ([63c2f02](https://github.com/mogretici/nestlens/commit/63c2f020521d6e32fe9c0ece67cbd0dcc95e53ed))
+
 ## [0.14.2](https://github.com/mogretici/nestlens/compare/v0.14.1...v0.14.2) (2026-08-24)
 
 

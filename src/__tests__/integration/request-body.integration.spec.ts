@@ -28,7 +28,7 @@ describe('endpoints that take a request body', () => {
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, new ExpressAdapter(), { logger: false });
-    await app.init();
+    await app.listen(0, '127.0.0.1');
   });
 
   afterAll(async () => {

@@ -201,31 +201,27 @@ describeWithRedis('migrating a Redis store onto the current indexes', () => {
     });
 
     it('lists the tags that were already there', async () => {
-      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
-      await storage.initialize();
+      storage = await open();
 
       const tags = (await storage.getAllTags()).map((tag) => tag.tag).sort();
       expect(tags).toEqual(['CHECKOUT', 'LEGACY']);
     });
 
     it('counts the entries behind each of them', async () => {
-      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
-      await storage.initialize();
+      storage = await open();
 
       const counts = (await storage.getAllTags()).map((tag) => `${tag.tag}:${tag.count}`).sort();
       expect(counts).toEqual(['CHECKOUT:1', 'LEGACY:1']);
     });
 
     it('still finds the entries by tag', async () => {
-      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
-      await storage.initialize();
+      storage = await open();
 
       expect(await storage.findByTags(['LEGACY'])).toHaveLength(1);
     });
 
     it('marks the store as current afterwards', async () => {
-      storage = new RedisStorage({ host: '127.0.0.1', port: 6379, db: DB, keyPrefix: PREFIX });
-      await storage.initialize();
+      storage = await open();
 
       expect(await raw.get(key('schema'))).toBe('5');
     });

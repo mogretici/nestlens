@@ -1,4 +1,4 @@
-import { IsDate, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsString, MaxLength, ValidationArguments } from 'class-validator';
 import { ENTRY_TYPES } from './entry-types';
 import {
   MAX_OFFSET,
@@ -6,7 +6,13 @@ import {
   TransformLimit,
   TransformOffset,
   TransformSequence,
+  TransformStringToBoolean,
   TransformToInt,
+  IsBooleanLike,
+  IsDateLike,
+  IsOptionalParameter,
+  IsWholeNumberLike,
+  isWholeNumber,
 } from './transformers';
 import { EntryType } from '@/types';
 
@@ -26,57 +32,62 @@ import { EntryType } from '@/types';
  * through a DTO all along. These now do the same, so an unusable parameter is
  * a 400 that says which one, from every backend.
  */
+/**
+ * Where to page instead, said only to an offset that is a whole number past
+ * the bound; anything else is told what an offset is.
+ */
+const offsetRefusal = ({ value }: ValidationArguments): string =>
+  isWholeNumber(value)
+    ? `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further`
+    : `offset must be a whole number from 0 to ${MAX_OFFSET}`;
+
 export class PageQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsString()
   @MaxLength(200)
   requestId?: string;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformLimit()
   limit?: number;
 
-  @IsOptional()
-  @Max(MAX_OFFSET, {
-    message: `offset must be at most ${MAX_OFFSET}; use entries/cursor to page further`,
-  })
+  @IsOptionalParameter()
+  @IsWholeNumberLike({ max: MAX_OFFSET }, { message: offsetRefusal })
   @TransformOffset()
   offset?: number;
 
-  @IsOptional()
-  @IsDate({ message: 'from must be a date the runtime can read, such as an ISO 8601 string' })
+  @IsOptionalParameter()
+  @IsDateLike({ message: 'from must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   from?: Date;
 
-  @IsOptional()
-  @IsDate({ message: 'to must be a date the runtime can read, such as an ISO 8601 string' })
+  @IsOptionalParameter()
+  @IsDateLike({ message: 'to must be a date the runtime can read, such as an ISO 8601 string' })
   @TransformDate()
   to?: Date;
 
   /** Bounds on `duration`, in milliseconds. See `CursorQueryDto`. */
-  @IsOptional()
-  @IsInt({ message: 'minDuration must be a whole number of milliseconds' })
-  @Min(0)
+  @IsOptionalParameter()
+  @IsWholeNumberLike({}, { message: 'minDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   minDuration?: number;
 
-  @IsOptional()
-  @IsInt({ message: 'maxDuration must be a whole number of milliseconds' })
-  @Min(0)
+  @IsOptionalParameter()
+  @IsWholeNumberLike({}, { message: 'maxDuration must be a whole number of milliseconds' })
   @TransformToInt({ min: 0 })
   maxDuration?: number;
 }
 
 /** `GET entries`, which can be any type. */
 export class EntriesQueryDto extends PageQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 }
 
 /** `GET logs`, which narrows by level. */
 export class LogsQueryDto extends PageQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsString()
   @MaxLength(50)
   level?: string;
@@ -84,10 +95,10 @@ export class LogsQueryDto extends PageQueryDto {
 
 /** `GET queries`, which narrows to the slow ones. */
 export class QueriesQueryDto extends PageQueryDto {
-  @IsOptional()
-  @IsString()
-  @IsIn(['true', 'false'])
-  slow?: string;
+  @IsOptionalParameter()
+  @TransformStringToBoolean()
+  @IsBooleanLike()
+  slow?: boolean;
 }
 
 /**
@@ -98,12 +109,11 @@ export class QueriesQueryDto extends PageQueryDto {
  * `zcount (NaN +inf`, answered with an error. Required and numeric here.
  */
 export class CheckNewQueryDto {
-  @IsInt({ message: 'afterSequence must be a whole number' })
-  @Min(0)
+  @IsWholeNumberLike()
   @TransformSequence()
   afterSequence!: number;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 }
@@ -117,7 +127,7 @@ export class CheckNewQueryDto {
  * type index that cannot be there, and answered `null`. One API, one answer.
  */
 export class LatestSequenceQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 }
@@ -128,18 +138,18 @@ export class LatestSequenceQueryDto {
  * an offset it never applied.
  */
 export class GroupedEntriesQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @IsIn(ENTRY_TYPES)
   type?: EntryType;
 
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformLimit()
   limit?: number;
 }
 
 /** Query of `GET entries/family/:hash`: the hash is the filter, so only a page size. */
 export class FamilyQueryDto {
-  @IsOptional()
+  @IsOptionalParameter()
   @TransformLimit()
   limit?: number;
 }

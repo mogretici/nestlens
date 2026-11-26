@@ -50,10 +50,7 @@ async function createApp(
   const dashboard = app.get(DashboardController);
   (dashboard as unknown as { dashboardPath: string }).dashboardPath = realDashboardPublic;
 
-  await app.init();
-  if (adapter === 'Fastify') {
-    await (app as NestFastifyApplication).getHttpAdapter().getInstance().ready();
-  }
+  await app.listen(0, '127.0.0.1');
   return app;
 }
 
