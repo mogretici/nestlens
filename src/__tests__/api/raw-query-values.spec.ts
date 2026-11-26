@@ -280,11 +280,48 @@ describe('query DTOs, given the raw strings of a URL', () => {
           );
           (instance as Record<string, unknown>)[property] = blank;
 
-          if ((await errorsFor(instance)).length === 0) accepted.push(`${dto.name}.${property}`);
+          const errors = await errorsFor(instance);
+          const said = [`${property} was given blank; leave it out to mean every one`];
+          if (JSON.stringify(errors) !== JSON.stringify(said)) {
+            accepted.push(`${dto.name}.${property}: ${JSON.stringify(errors)}`);
+          }
         }
       }
 
       expect(accepted).toEqual([]);
+    },
+  );
+
+  it('still refuses a type that is not one with the message naming the types', async () => {
+    const instance = Object.assign(new dtos.ClearEntriesQueryDto(), { type: 'nonsense' });
+
+    expect(await errorsFor(instance)).toEqual([
+      `type must be one of: ${dtos.ENTRY_TYPES.join(', ')}`,
+    ]);
+  });
+
+  /**
+   * `?tags=&tags=` arrives as `['', '']`. NestLens' pipe drops the blank items
+   * and refuses what is left, which is nothing; the raw validator counted two
+   * items and let a host's pipe accept it.
+   */
+  it.each([[['', '']], [['  ', '']], [' , ,']])(
+    'refuses tags that name only blanks: %p',
+    async (tags) => {
+      const instance = Object.assign(new dtos.TagEntriesQueryDto(), { tags });
+
+      expect(await errorsFor(instance)).toContain(
+        'tags is required and must name at least one tag',
+      );
+    },
+  );
+
+  it.each([[['', 'x']], [['  ', 'x']], [' ,x']])(
+    'reads the tag beside a blank one: %p',
+    async (tags) => {
+      const instance = Object.assign(new dtos.TagEntriesQueryDto(), { tags });
+
+      expect(await errorsFor(instance)).toEqual([]);
     },
   );
 
@@ -538,15 +575,9 @@ describe('query DTOs, through NestLensValidationPipe', () => {
       for (const dto of MUTATING_DTOS) {
         for (const property of propertiesOf(dto)) {
           const answered = (await answer(dto, { [property]: blank })) as { refused?: string[] };
-          if (answered.refused === undefined) accepted.push(`${dto.name}.${property}`);
-          else if (
-            !answered.refused.includes(
-              `${property} was given blank; leave it out to mean every one`,
-            )
-          ) {
-            accepted.push(
-              `${dto.name}.${property}: refused without saying why: ${answered.refused.join('; ')}`,
-            );
+          const said = [`${property} was given blank; leave it out to mean every one`];
+          if (JSON.stringify(answered.refused) !== JSON.stringify(said)) {
+            accepted.push(`${dto.name}.${property}: ${JSON.stringify(answered)}`);
           }
         }
       }
@@ -558,6 +589,29 @@ describe('query DTOs, through NestLensValidationPipe', () => {
   it('still clears every type when type is left out entirely', async () => {
     expect(await answer(dtos.ClearEntriesQueryDto, {})).toEqual({ value: {} });
   });
+
+  it('still refuses a type that is not one, saying which types there are, through the pipe', async () => {
+    expect(await answer(dtos.ClearEntriesQueryDto, { type: 'nonsense' })).toEqual({
+      refused: [`type must be one of: ${dtos.ENTRY_TYPES.join(', ')}`],
+    });
+  });
+
+  it.each([[['', '']], [['  ', '']]])(
+    'refuses tags that name only blanks: %p, through the pipe',
+    async (tags) => {
+      // As `?tags=,,` always has been: a list that names nothing.
+      expect(await answer(dtos.TagEntriesQueryDto, { tags })).toEqual({
+        refused: ['tags is required and must name at least one tag'],
+      });
+    },
+  );
+
+  it.each([[['', 'x']], [['  ', 'x']], [' ,x']])(
+    'reads the tag beside a blank one as the tag alone: %p, through the pipe',
+    async (tags) => {
+      expect(await answer(dtos.TagEntriesQueryDto, { tags })).toEqual({ value: { tags: ['x'] } });
+    },
+  );
 
   it('refuses offset past the bound with where to page instead, through the pipe', async () => {
     expect(await refusal(dtos.EntriesQueryDto, { offset: String(MAX_OFFSET + 1) })).toEqual([

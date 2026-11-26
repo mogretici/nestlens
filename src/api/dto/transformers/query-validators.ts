@@ -156,6 +156,28 @@ export const blankRefusedIn = (dto: new (...args: never[]) => unknown): Readonly
   return properties;
 };
 
+/**
+ * `@IsIn()` that leaves a blank to {@link IsOptionalScope}, so a blank scope is
+ * refused once, for being blank, and not again for not being a type.
+ */
+export function IsInUnlessBlank(values: readonly unknown[], validationOptions?: ValidationOptions) {
+  return ValidateBy(
+    {
+      name: 'isIn',
+      constraints: [values],
+      validator: {
+        validate: (value: unknown): boolean => isBlank(value) || values.includes(value),
+        defaultMessage: buildMessage(
+          (eachPrefix) =>
+            `${eachPrefix}$property must be one of the following values: $constraint1`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}
+
 /** A whole number from zero, as a number or as the digits of one. */
 export const isWholeNumber = (value: unknown): boolean =>
   (typeof value === 'number' && Number.isInteger(value) && value >= 0) ||
@@ -231,13 +253,21 @@ export function IsDateLike(validationOptions?: ValidationOptions) {
   );
 }
 
-/** The items of a list as TransformCommaSeparatedArray would leave them. */
-const itemsOf = (value: unknown): unknown[] | undefined =>
-  Array.isArray(value)
-    ? value
-    : typeof value === 'string'
-      ? value.split(',').filter(Boolean)
-      : undefined;
+/**
+ * The items of a list parameter: an array (`?tags=a&tags=b`) or a
+ * comma-separated string (`?tags=a,b`), without the blank ones.
+ *
+ * TransformCommaSeparatedArray reads a list with this, and so do the
+ * validators that run where it did not, so `?tags=&tags=` names nothing in a
+ * host's pipe as it does in NestLens' own.
+ */
+export const listItems = (value: unknown): unknown[] | undefined => {
+  const named = (item: unknown): boolean => Boolean(item) && !isBlank(item);
+
+  if (Array.isArray(value)) return value.filter(named);
+  if (typeof value === 'string') return value.split(',').filter(named);
+  return undefined;
+};
 
 /**
  * A list with at least one item, or a comma-separated string naming one.
@@ -247,7 +277,7 @@ export function IsNonEmptyListLike(validationOptions?: ValidationOptions) {
     {
       name: 'isNonEmptyListLike',
       validator: {
-        validate: (value: unknown): boolean => (itemsOf(value)?.length ?? 0) > 0,
+        validate: (value: unknown): boolean => (listItems(value)?.length ?? 0) > 0,
         defaultMessage: buildMessage(
           () => '$property must name at least one value',
           validationOptions,
@@ -269,7 +299,8 @@ export function HasItemsOfMaxLength(max: number, validationOptions?: ValidationO
       constraints: [max],
       validator: {
         validate: (value: unknown): boolean =>
-          itemsOf(value)?.every((item) => typeof item === 'string' && item.length <= max) ?? false,
+          listItems(value)?.every((item) => typeof item === 'string' && item.length <= max) ??
+          false,
         defaultMessage: buildMessage(
           () => `each value in $property must be shorter than or equal to ${max} characters`,
           validationOptions,

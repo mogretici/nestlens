@@ -250,6 +250,11 @@ describe.each([
     };
   };
 
+  /** The validation messages of a refusal, as the API's error body carries them. */
+  const messagesOf = (body: unknown): unknown =>
+    (body as { error?: { details?: { validationErrors?: unknown } } }).error?.details
+      ?.validationErrors;
+
   const filtersOf = (result: { storage: unknown[] }): Record<string, unknown> => {
     const call = (result.storage as [string, unknown[][]][]).find(
       ([name]) => name === 'findWithCursor',
@@ -312,6 +317,32 @@ describe.each([
 
       expect(given).toEqual({ status: 400, storage: [] });
     });
+
+    it('says only that it was blank', async () => {
+      const [method, path] = endpointOf(dto);
+      const response = await request(app.getHttpServer())
+        [method](`${API}${path}`)
+        .query({ ...BASE.get(dto), [property]: '' });
+
+      expect(messagesOf(response.body)).toEqual([
+        `${property} was given blank; leave it out to mean every one`,
+      ]);
+    });
+  });
+
+  it('refuses tags that name only blanks', async () => {
+    const result = await reached(['get', '/tags/entries'], { tags: ['', ''] } as never);
+
+    expect(result).toEqual({ status: 400, storage: [] });
+  });
+
+  it('reads the tag beside a blank one as the tag alone', async () => {
+    const result = await reached(['get', '/tags/entries'], { tags: ['', 'x'] } as never);
+
+    expect(result.status).toBe(200);
+    expect(
+      (result.storage as [string, unknown[][]][]).find(([name]) => name === 'findByTags')?.[1],
+    ).toEqual([[['x'], 'OR', 50]]);
   });
 
   it('still clears every type when type is left out entirely', async () => {

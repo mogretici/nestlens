@@ -1,4 +1,5 @@
 import { Transform, TransformFnParams } from 'class-transformer';
+import { listItems } from './query-validators';
 
 /**
  * Pagination limits to prevent DoS
@@ -28,8 +29,7 @@ export const DEFAULT_LIMIT = 50;
 export function TransformCommaSeparatedArray() {
   return Transform(({ value }: TransformFnParams) => {
     if (value === undefined || value === null || value === '') return undefined;
-    if (Array.isArray(value)) return value.filter(Boolean);
-    return String(value).split(',').filter(Boolean);
+    return listItems(Array.isArray(value) ? value : String(value));
   });
 }
 
