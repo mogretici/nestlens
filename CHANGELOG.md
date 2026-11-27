@@ -1,3 +1,11 @@
+## [0.17.2](https://github.com/mogretici/nestlens/compare/v0.17.1...v0.17.2) (2026-11-27)
+
+
+### Bug Fixes
+
+* a feature module importing NestLensModule gets no second NestLens ([9e70675](https://github.com/mogretici/nestlens/commit/9e70675c7a8531536f68ffe314b04132a8c944e6))
+* NestLensModule imported with no forRoot anywhere still refuses to boot ([e27ff1e](https://github.com/mogretici/nestlens/commit/e27ff1e786fa37051dd8bea4ad2e8450d58ab3a8))
+
 ## [0.17.1](https://github.com/mogretici/nestlens/compare/v0.17.0...v0.17.1) (2026-11-27)
 
 
