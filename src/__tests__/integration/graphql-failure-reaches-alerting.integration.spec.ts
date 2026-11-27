@@ -92,7 +92,6 @@ describeMercurius('a failing resolver, recorded and announced', () => {
         },
       },
       graphiql: false,
-      cache: false,
     });
 
     const hooks = adapter.getPlugin() as Record<string, unknown>;

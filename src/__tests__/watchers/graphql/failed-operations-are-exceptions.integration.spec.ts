@@ -76,7 +76,6 @@ describeMercurius('a resolver that throws, on Mercurius', () => {
         },
       },
       graphiql: false,
-      cache: false,
     });
 
     const hooks = adapter.getPlugin() as Record<string, unknown>;

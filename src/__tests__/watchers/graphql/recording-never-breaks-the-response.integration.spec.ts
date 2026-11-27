@@ -72,7 +72,6 @@ describe('a watcher that fails while recording', () => {
         schema: SCHEMA,
         resolvers: RESOLVERS,
         graphiql: false,
-        cache: false,
       });
 
       const hooks = adapter.getPlugin() as Record<string, unknown>;

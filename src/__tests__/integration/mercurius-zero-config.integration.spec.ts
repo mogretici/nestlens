@@ -71,9 +71,6 @@ const RESOLVERS = {
       typeDefs: SCHEMA,
       resolvers: RESOLVERS,
       graphiql: false,
-      // Keeps Mercurius from reaching for its LRU through a dynamic import,
-      // which Jest's CommonJS VM refuses without a global flag.
-      cache: false,
     }),
   ],
 })

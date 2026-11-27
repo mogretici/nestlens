@@ -78,14 +78,10 @@ const startServer = async (
   adapter.initialize(resolveGraphQLConfig(options as never), collector);
 
   const app = Fastify();
-  // `cache: false` keeps Mercurius from reaching for its LRU through a dynamic
-  // import, which Jest's CommonJS VM refuses without a global flag. Nothing
-  // under test depends on the query cache.
   await app.register(mercurius, {
     schema: SCHEMA,
     resolvers: RESOLVERS,
     graphiql: false,
-    cache: false,
   });
 
   const hooks = adapter.getPlugin() as Record<string, (...args: unknown[]) => Promise<void>>;
