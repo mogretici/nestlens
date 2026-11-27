@@ -22,8 +22,10 @@ from the version you are on; they are cumulative, and the ones that need an
 edit are `0.17.0` (`storage.redis.maxEntries`), `0.8.0` (configuration keys,
 entry points) and `0.6.0` (the `path` option).
 
-The quickest way to find out where you stand is to install and boot: every
-removed configuration key fails loudly at startup rather than being ignored.
+The quickest way to find out where you stand is to install and compile: every
+removed configuration key is a TypeScript error. At runtime a removed key is
+ignored, so a configuration written in JavaScript has to be checked against the
+sections below.
 
 ## 0.16.x → 0.17.0
 
@@ -94,6 +96,19 @@ opt-in watcher is off.
 - **Prisma 6.14 and 7** are recorded by the query watcher once the client is
   built with query logging; a warning says so when it is not. See
   [Prisma](../integrations/prisma.md).
+- **Views** answered through a callback — `render(name, locals, cb)`, Express's
+  `app.render` — are timed until they call back and recorded with their output;
+  they used to be recorded at once, empty. Locals that point back at themselves
+  are recorded instead of `{ _error }`.
+- **Counts can drop.** Two `NestLensModule.forRoot()` imports in one application
+  record a host once, where each call used to be recorded twice; a warning at
+  startup names the duplicate import.
+
+### New warnings at startup
+
+- A host provided under a token with request or transient scope is refused,
+  with a warning naming the token: there is no single instance to record.
+- A Prisma 6.14 or 7 client built without query logging, as above.
 
 ## 0.7.x → 0.8.0
 
