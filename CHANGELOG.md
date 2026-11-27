@@ -1,3 +1,12 @@
+## [0.17.3](https://github.com/mogretici/nestlens/compare/v0.17.2...v0.17.3) (2026-11-27)
+
+
+### Bug Fixes
+
+* **dashboard:** a row clicked as a list opens stays open ([30d7d49](https://github.com/mogretici/nestlens/commit/30d7d49ad1ce43a8edb2747f4dc7344342e68251))
+* **dashboard:** darken the page's own scrollbar in the dark theme ([3faf08f](https://github.com/mogretici/nestlens/commit/3faf08f3dec89faddd2020b11cef93d01df7fe6e))
+* **dashboard:** show the copy button and a filter chip's ✕ to keyboard users ([54d03bf](https://github.com/mogretici/nestlens/commit/54d03bff9f659e312df8026bc8183a68405a84bb))
+
 ## [0.17.2](https://github.com/mogretici/nestlens/compare/v0.17.1...v0.17.2) (2026-11-27)
 
 
