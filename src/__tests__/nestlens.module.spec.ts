@@ -9,6 +9,13 @@ import { FamilyHashService } from '../core/family-hash.service';
 import { STORAGE } from '../core/storage';
 import { CacheWatcher, EventWatcher, HttpClientWatcher, NestLensLogger } from '../watchers';
 
+/** The names of the modules a dynamic module imports. */
+const importedNames = (dynamicModule: { imports?: unknown[] }): string[] =>
+  (dynamicModule.imports ?? []).map((imported) => {
+    const module = (imported as { module?: { name?: string } }).module ?? imported;
+    return String((module as { name?: string }).name);
+  });
+
 describe('NestLensModule', () => {
   describe('forRoot', () => {
     describe('Disabled Module', () => {
@@ -207,7 +214,7 @@ describe('NestLensModule', () => {
           const dynamicModule = NestLensModule.forRoot(config);
 
           // Assert
-          expect(dynamicModule.imports!.length).toBeGreaterThanOrEqual(2);
+          expect(importedNames(dynamicModule)).toContain('NestLensQueryModule');
         });
 
         it('should not register query watcher when disabled', () => {
@@ -220,8 +227,8 @@ describe('NestLensModule', () => {
           // Act
           const dynamicModule = NestLensModule.forRoot(config);
 
-          // Assert
-          expect(dynamicModule.imports!.length).toBe(1);
+          // Assert - by name: the count says nothing about which module is there.
+          expect(importedNames(dynamicModule)).not.toContain('NestLensQueryModule');
         });
       });
 

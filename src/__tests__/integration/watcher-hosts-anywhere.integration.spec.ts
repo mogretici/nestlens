@@ -235,6 +235,86 @@ describe('a watcher handed a service under a token', () => {
   });
 
   /**
+   * One default-scoped provider of a token and one request-scoped. The scope
+   * was read from whichever provider was registered last, and the instances
+   * through `get({ each: true })`, which throws when any of them is scoped:
+   *
+   *     scoped one last    "request-scoped, nothing recorded", default dropped
+   *     default one last   get() threw, default dropped, nothing said
+   *
+   * Each provider is judged on its own now.
+   */
+  describe.each([
+    ['the scoped one last', 'scoped-last'],
+    ['the default one last', 'default-last'],
+  ])('a token with a default and a request-scoped provider, %s', (_label, order) => {
+    it('records the default one and warns once, naming the scoped one', async () => {
+      const gate = { can: () => true };
+      const before = gate.can;
+
+      @Injectable({ scope: Scope.REQUEST })
+      class PerRequestGate {
+        can(): boolean {
+          return true;
+        }
+      }
+      @Module({ providers: [{ provide: NESTLENS_GATE_SERVICE, useValue: gate }] })
+      class SingletonGateModule {}
+      @Module({ providers: [{ provide: NESTLENS_GATE_SERVICE, useClass: PerRequestGate }] })
+      class PerRequestGateModule {}
+
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const app = await boot(
+        { watchers: { gate: true } },
+        {
+          imports:
+            order === 'scoped-last'
+              ? [SingletonGateModule, PerRequestGateModule]
+              : [PerRequestGateModule, SingletonGateModule],
+          providers: [],
+        },
+      );
+
+      const said = warn.mock.calls
+        .map(([message]) => String(message))
+        .filter((message) => message.includes('NESTLENS_GATE_SERVICE'));
+      warn.mockRestore();
+
+      expect(gate.can).not.toBe(before);
+      expect(said).toHaveLength(1);
+      expect(said[0]).toMatch(/request-scoped/i);
+      expect(said[0]).toContain('PerRequestGateModule');
+      await app.close();
+    });
+  });
+
+  it('warns once per watcher about a duplicate forRoot, however many hosts it holds', async () => {
+    const first = { can: () => true };
+    const second = { can: () => true };
+
+    @Module({ providers: [{ provide: NESTLENS_GATE_SERVICE, useValue: first }] })
+    class FirstGateModule {}
+    @Module({ providers: [{ provide: NESTLENS_GATE_SERVICE, useValue: second }] })
+    class SecondGateModule {}
+    @Module({ imports: [NestLensModule.forRoot({ path: '/lens-dup', watchers: { gate: true } })] })
+    class DuplicateLensModule {}
+
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const app = await boot(
+      { path: '/lens-main', watchers: { gate: true } },
+      { imports: [FirstGateModule, SecondGateModule, DuplicateLensModule], providers: [] },
+    );
+
+    const duplicates = warn.mock.calls
+      .map(([message]) => String(message))
+      .filter((message) => message.includes('more than once'));
+    warn.mockRestore();
+
+    expect(duplicates).toHaveLength(1);
+    await app.close();
+  });
+
+  /**
    * `CacheModule.register()` in two feature modules is two `CACHE_MANAGER`s,
    * and `get(token, { strict: false })` returns one of them: the other cache
    * went unrecorded, silently. Every default-scoped instance is wrapped.

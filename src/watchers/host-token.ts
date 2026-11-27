@@ -1,5 +1,5 @@
-import { Logger, Scope } from '@nestjs/common';
-import { ModuleRef, ModulesContainer } from '@nestjs/core';
+import { Logger } from '@nestjs/common';
+import { DiscoveryService, ModuleRef, ModulesContainer } from '@nestjs/core';
 
 /*
  * The application's own client or service, found wherever it was provided.
@@ -23,7 +23,8 @@ import { ModuleRef, ModulesContainer } from '@nestjs/core';
  *
  * `CacheModule.register()` in two feature modules is two `CACHE_MANAGER`s, and
  * `get(token, { strict: false })` hands back one of them, so the other went
- * unrecorded without a word. `{ each: true }` lists them all.
+ * unrecorded without a word. Every provider of the token is listed instead,
+ * through `DiscoveryService`.
  *
  * The container is asked even when the constructor was handed a host. A host
  * it could reach — `CacheModule.register({ isGlobal: true })` in AppModule —
@@ -41,37 +42,39 @@ export const resolveHosts = <T>(
   const given = injected !== undefined && injected !== null ? [injected] : [];
   if (!moduleRef) return given;
 
+  let discovery: DiscoveryService;
+  try {
+    discovery = moduleRef.get(DiscoveryService, { strict: false });
+  } catch {
+    return given;
+  }
+
   const name = typeof token === 'symbol' ? (token.description ?? String(token)) : token;
+  const found: T[] = [];
 
-  let scope: Scope | undefined;
-  try {
-    scope = moduleRef.introspect(token).scope;
-  } catch {
-    // Not provided anywhere the container can see.
-    return given;
+  // Each provider of the token on its own. `introspect` reads the scope of
+  // whichever was registered last, and `get({ each: true })` throws if any one
+  // of them is scoped — so a default-scoped host beside a request-scoped one
+  // was dropped, with a warning that said nothing was recorded, or with none.
+  for (const wrapper of discovery.getProviders()) {
+    if (wrapper.token !== token) continue;
+
+    if (wrapper.isTransient || !wrapper.isDependencyTreeStatic()) {
+      const where = wrapper.host?.name ? ` in ${wrapper.host.name}` : '';
+      logger.warn(
+        `${name}${where} is ${wrapper.isTransient ? 'transient' : 'request'}-scoped, so there is ` +
+          'no single instance to record and that provider is not recorded. Provide it as a ' +
+          'singleton — the default scope — for this watcher to see it.',
+      );
+      continue;
+    }
+
+    if (wrapper.instance !== undefined && wrapper.instance !== null) {
+      found.push(wrapper.instance as T);
+    }
   }
 
-  if (scope !== undefined && scope !== Scope.DEFAULT) {
-    logger.warn(
-      `${name} is ${scope === Scope.REQUEST ? 'request' : 'transient'}-scoped, so there is no ` +
-        'single instance to record and nothing is being recorded for it. Provide it as a ' +
-        'singleton — the default scope — for this watcher to see it.',
-    );
-    return given;
-  }
-
-  let found: T[];
-  try {
-    found = moduleRef.get<T, T>(token, { strict: false, each: true });
-  } catch {
-    return given;
-  }
-
-  return [
-    ...new Set(
-      [...given, ...found].filter((instance) => instance !== undefined && instance !== null),
-    ),
-  ];
+  return [...new Set([...given, ...found])];
 };
 
 /** Which application holds a host for each watcher, on the host itself. */
@@ -105,12 +108,7 @@ const applicationOf = (moduleRef: ModuleRef): object => {
  * that failed — Nest does not call `onModuleDestroy` when `init` rejects — and
  * the next application on the same host found it taken and recorded nothing.
  */
-const claimHost = (
-  host: unknown,
-  watcher: string,
-  application: object,
-  logger: Logger,
-): boolean => {
+const claimHost = (host: unknown, watcher: string, application: object): boolean => {
   if (!host || (typeof host !== 'object' && typeof host !== 'function')) return true;
 
   const marked = host as Watched;
@@ -119,13 +117,7 @@ const claimHost = (
   }
 
   const holders = marked[WATCHED_BY] as Map<string, object>;
-  if (holders.get(watcher) === application) {
-    logger.warn(
-      `${watcher}: NestLensModule.forRoot() is imported more than once in this application; ` +
-        'the host is recorded by the first, not wrapped twice.',
-    );
-    return false;
-  }
+  if (holders.get(watcher) === application) return false;
 
   holders.set(watcher, application);
   return true;
@@ -179,15 +171,27 @@ export const attachHosts = <T, W extends HostWatcherLifecycle>(options: {
   const claimed: unknown[] = [];
   const taken: T[] = [];
 
+  let refused = 0;
+
   for (const host of hosts) {
     const id = identify(host);
     if (seen.has(id)) continue;
     seen.add(id);
 
-    if (claimHost(id, options.watcher, application, options.logger)) {
+    if (claimHost(id, options.watcher, application)) {
       claimed.push(id);
       taken.push(host);
+    } else {
+      refused += 1;
     }
+  }
+
+  // Once, however many hosts were refused: it is one mistake, not one per host.
+  if (refused > 0) {
+    options.logger.warn(
+      `${options.watcher}: NestLensModule.forRoot() is imported more than once in this ` +
+        `application; ${refused} host(s) are recorded by the first import, not wrapped twice.`,
+    );
   }
 
   const siblings = taken.slice(1).map((host) => {

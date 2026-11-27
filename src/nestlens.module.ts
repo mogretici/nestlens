@@ -317,6 +317,9 @@ export class NestLensModule implements NestModule, OnModuleInit {
     const imports: DynamicModule['imports'] = [
       // Core module provides shared services (config, storage, collector, pruning)
       NestLensCoreModule.forRoot(mergedConfig),
+      // The host watchers list every provider of their token through it, so it
+      // is here whichever watchers are on.
+      DiscoveryModule,
     ];
 
     // Add Query Watcher module
