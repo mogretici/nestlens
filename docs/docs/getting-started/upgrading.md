@@ -30,17 +30,17 @@ sections below.
 
 ## 0.18.0 → 0.18.1
 
-Nothing to edit. One failure is reported differently.
+Nothing to edit. One failure gives different advice.
 
-### SQLite storage fails at startup when better-sqlite3's addon does not load
+### The right advice when better-sqlite3's addon does not load
 
 With `storage.driver: 'sqlite'`, an installed `better-sqlite3` whose native
 addon is missing or will not load used to be read as a problem with the
-database file: NestLens logged *Could not open the SQLite database*, advised
-moving `storage.sqlite.filename`, and fell back to in-memory storage. The file
-had nothing to do with it. It now fails at startup, as a missing
-`better-sqlite3` already did, with the reason and the two commands that build
-the addon:
+database file: NestLens logged *Could not open the SQLite database* and advised
+moving `storage.sqlite.filename`. The file had nothing to do with it. NestLens
+still falls back to in-memory storage and the application still starts — a
+debugging tool should not be the reason a deployment does not — but the error
+now names the addon and the two commands that build it:
 
 ```bash
 npm install-scripts approve better-sqlite3 --no-allow-scripts-pin
@@ -52,7 +52,8 @@ runs only when your `package.json` allows it, see
 [SQLite storage on npm 12](./installation.md#sqlite-storage-on-npm-12) — and
 stops loading after a Node upgrade without a rebuild, where
 `npm rebuild better-sqlite3` alone is enough. The in-memory and Redis drivers,
-and a database file that cannot be opened, behave as before.
+a database file that cannot be opened, and a `better-sqlite3` that is not
+installed at all behave as before.
 
 ## 0.17.x → 0.18.0
 

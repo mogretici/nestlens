@@ -154,8 +154,8 @@ describe('opening a storage that cannot be opened', () => {
     // `allowScripts` approves it, and better-sqlite3's is what fetches its
     // addon: the package is installed, the addon is not. A Node upgrade
     // without a rebuild leaves one that `dlopen` refuses. Neither is about
-    // the file, and the fallback's advice — move `storage.sqlite.filename` —
-    // would send the reader the wrong way.
+    // the file, so the file advice — move `storage.sqlite.filename` — would
+    // send the reader the wrong way; the application still starts, on memory.
     //
     // Both errors are the real ones, raised by the loaders better-sqlite3
     // uses, and thrown from the mocked constructor as the earlier test does.
@@ -204,12 +204,16 @@ describe('opening a storage that cannot be opened', () => {
     it.each([
       ['was never built', neverBuilt],
       ['will not load', refusedByDlopen],
-    ])('fails at startup and says how to build it when it %s', async (_, failure) => {
-      const attempt = createWith(failure());
+    ])('keeps the application up and says how to build it when it %s', async (_, failure) => {
+      // resetModules gives the factory its own copy of every storage class,
+      // so the fallback is recognised by name rather than by instanceof.
+      const storage = await createWith(failure());
 
-      await expect(attempt).rejects.toThrow(/npm install-scripts approve better-sqlite3/);
-      await expect(attempt).rejects.toThrow(/npm rebuild better-sqlite3/);
-      expect(errors.join('\n')).not.toContain('storage.sqlite.filename');
+      expect((storage as object).constructor.name).toBe('MemoryStorage');
+      const logged = errors.join('\n');
+      expect(logged).toContain('npm install-scripts approve better-sqlite3 --no-allow-scripts-pin');
+      expect(logged).toContain('npm rebuild better-sqlite3');
+      expect(logged).not.toContain('storage.sqlite.filename');
     });
   });
 });

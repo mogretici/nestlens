@@ -120,8 +120,9 @@ npm 12 runs a dependency's install script only when the application's own
 and better-sqlite3's install script is what downloads its native addon.
 Without that entry `npm install` still succeeds and ends with a warning that
 better-sqlite3's install script was blocked; the package is there, its addon
-is not, and `storage.driver: 'sqlite'` fails at startup saying so. Allow it,
-then build the copy that is already installed:
+is not, and with `storage.driver: 'sqlite'` NestLens logs an error saying so
+and keeps entries in memory instead. Allow it, then build the copy that is
+already installed:
 
 ```bash
 npm install-scripts approve better-sqlite3 --no-allow-scripts-pin
