@@ -14,12 +14,54 @@ Please be respectful and constructive in all interactions.
    git clone https://github.com/YOUR_USERNAME/nestlens.git
    cd nestlens
    ```
-3. Install dependencies:
+3. Use the npm the repository pins: **npm@11.21.3**. Every `package.json` with
+   a lockfile names exactly that version, in `packageManager` and in
+   `devEngines`, and CI installs it on every Node it tests. Lockfiles written by
+   any other npm do not agree with it — an npm 11 lock has failed `npm ci` on
+   npm 10, npm 10.9 has crashed resolving the dashboard, and npm 11.6.2 and
+   11.21.3 write the example's lockfile differently — so npm 10.9 and later
+   refuse to run here at all unless they are that version (`EBADDEVENGINES`).
+   npm 10.8, which Node 20 ships, predates the check and says nothing. npm 11
+   needs Node 20.17 or later.
+
+   Pick the line that matches how Node is installed:
+
+   - **nvm, fnm or Homebrew** (macOS, Linux): the global directory is yours, so
+     npm can replace itself.
+     ```bash
+     npm install --global npm@11.21.3
+     ```
+   - **A distribution package** (`apt`, `dnf`, …): the global directory belongs
+     to root. Rather than `sudo npm`, let Corepack provide npm from a directory
+     you own, ahead of `/usr/bin` on `PATH`. If `corepack` is missing — Node 25
+     and later no longer ship it, and some distributions package it separately
+     — the first line installs it; otherwise skip it.
+     ```bash
+     npm install --global --prefix ~/.local corepack
+     ~/.local/bin/corepack enable --install-directory ~/.local/bin npm
+     ```
+   - **Windows, from the nodejs.org installer**: `npm install --global npm@…`
+     lands in `%AppData%\npm`, which comes after `C:\Program Files\nodejs` on
+     `PATH`, so the npm Node shipped keeps answering. Use Corepack from an
+     administrator terminal instead; it replaces the shims next to `node.exe`.
+     ```powershell
+     corepack enable npm
+     ```
+     Or install Node through nvm-windows, whose Node directory is yours, and
+     use the first line.
+
+   With Corepack, npm follows `packageManager` in each directory and downloads
+   the pinned version the first time it runs here. Either way, check from the
+   repository root before installing anything:
+   ```bash
+   npm --version   # 11.21.3
+   ```
+4. Install dependencies:
    ```bash
    npm install
    cd dashboard && npm install && cd ..
    ```
-4. Run tests to ensure everything works:
+5. Run tests to ensure everything works:
    ```bash
    npm test
    cd dashboard && npm test

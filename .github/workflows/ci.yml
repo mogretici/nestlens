@@ -59,10 +59,10 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: ./.github/actions/setup-node
         with:
           node-version: 22
-          cache: 'npm'
+          cache: true
 
       - name: Install root dependencies
         run: npm ci
@@ -213,8 +213,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The row's Node is the runtime under test; npm is the pinned one on
+      # every row, so all three install from the lockfile the same way.
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: ./.github/actions/setup-node
         with:
           node-version: ${{ matrix.node }}
 
@@ -305,16 +307,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/setup-node
         with:
           node-version: 22
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            docs/package-lock.json
+          cache: true
 
       # The API reference is generated from `src/` by typedoc. Without the
       # library's own dependencies it cannot resolve a single import, produces

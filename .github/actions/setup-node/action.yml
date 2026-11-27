@@ -1,0 +1,99 @@
+name: Node.js with the pinned npm
+description: >-
+  Sets up Node.js, replaces the npm it ships with the one package.json's
+  `packageManager` field names, and restores the npm cache.
+
+# Every job that runs Node uses this instead of actions/setup-node directly
+# (`src/__tests__/pinned-npm.spec.ts` fails on one that does not).
+#
+# The four lockfiles were written by three npm majors — Node 22 ships npm 10,
+# contributors run 11, Dependabot defaults to 12 — and they disagree: an npm 11
+# lock failed `npm ci` on npm 10 over an optional peer, npm 10.9 crashed
+# resolving the dashboard's vitest, and two npm 11 minors write the example's
+# lockfile differently. The version lives in `packageManager`, which is what
+# Dependabot reads; `devEngines` names the same version and makes npm 10.9 and
+# later refuse any other before it touches a lockfile. Node is still the
+# matrix's own choice: only the tool that writes and reads the lockfiles is
+# fixed.
+#
+# This installs the npm on PATH. npm scripts do not use it: `npm run` puts
+# `node_modules/.bin` first, so `build` calling `npm run build` in the dashboard
+# and `test:e2e` calling `npx playwright` run the npm semantic-release depends
+# on. The root package.json overrides that one to the same version, and the
+# spec checks the lockfile installed it.
+#
+# Caching is not left to actions/setup-node. It finds the cache directory with
+# `npm config get cache`, run with the npm Node ships, and npm 10.9 enforces
+# `devEngines` on every command — so on Node 22 the setup step itself fails with
+# EBADDEVENGINES before there is a chance to install the right npm
+# (actions/setup-node#1553). The cache is restored here instead, once the
+# pinned npm is the one answering, under a key per job: jobs install different
+# trees, and the first to save a shared key would decide the others' cache.
+
+inputs:
+  node-version:
+    description: Node.js version, as actions/setup-node takes it.
+    required: true
+  registry-url:
+    description: Registry to authenticate against, as actions/setup-node takes it.
+    required: false
+    default: ''
+  cache:
+    description: "'true' to restore and save the npm cache, 'false' not to."
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Check the inputs
+      shell: bash
+      env:
+        CACHE: ${{ inputs.cache }}
+      run: |
+        case "$CACHE" in
+          true | false) ;;
+          *) echo "::error::cache must be 'true' or 'false', got '$CACHE'"; exit 1 ;;
+        esac
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+        package-manager-cache: false
+
+    # Outside the workspace, so nothing the repository declares can stand in
+    # the way of the npm that is about to replace the bundled one.
+    - name: Install the npm package.json pins
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      run: |
+        spec=$(node -p "require(process.env.GITHUB_WORKSPACE + '/package.json').packageManager ?? ''")
+        case "$spec" in
+          npm@[0-9]*) ;;
+          *) echo "::error file=package.json::packageManager must name an exact npm version, found '$spec'"; exit 1 ;;
+        esac
+        npm install --global --no-audit --no-fund "$spec"
+        installed="npm@$(npm --version)"
+        if [ "$installed" != "$spec" ]; then
+          echo "::error::Installed $installed, package.json pins $spec"
+          exit 1
+        fi
+        echo "Node $(node --version) with $installed"
+
+    - name: Locate the npm cache
+      id: npm-cache
+      if: inputs.cache == 'true'
+      shell: bash
+      run: echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the npm cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.npm-cache.outputs.dir }}
+        key: npm-${{ runner.os }}-${{ github.job }}-${{ hashFiles('package-lock.json', 'dashboard/package-lock.json', 'example/package-lock.json', 'docs/package-lock.json') }}
+        restore-keys: |
+          npm-${{ runner.os }}-${{ github.job }}-
+          npm-${{ runner.os }}-

@@ -23,8 +23,12 @@ updates:
       day: monday
     open-pull-requests-limit: 0
 
+  # The composite action every job sets Node up through pins actions of its
+  # own, and Dependabot only reads the workflows unless it is listed.
   - package-ecosystem: github-actions
-    directory: '/'
+    directories:
+      - '/'
+      - '/.github/actions/*'
     schedule:
       interval: monthly
     open-pull-requests-limit: 0

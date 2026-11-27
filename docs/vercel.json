@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "framework": "docusaurus-2",
-  "installCommand": "cd .. && npm ci --ignore-scripts && cd docs && npm ci",
+  "installCommand": "npm install --global \"$(node -p \"require('../package.json').packageManager\")\" && test \"npm@$(npm --version)\" = \"$(node -p \"require('../package.json').packageManager\")\" && cd .. && npm ci --ignore-scripts && cd docs && npm ci",
   "devCommand": "npm run start",
   "cleanUrls": true,
   "github": {

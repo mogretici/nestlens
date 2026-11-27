@@ -46,5 +46,13 @@
     "typescript": "^5.7.2",
     "vite": "^6.4.5",
     "vitest": "^4.1.12"
+  },
+  "packageManager": "npm@11.21.3",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.21.3",
+      "onFail": "error"
+    }
   }
 }

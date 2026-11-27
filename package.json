@@ -63,7 +63,7 @@
     "benchmark:sanitizer": "node scripts/benchmark-sanitizer.mjs",
     "benchmark:load": "node --expose-gc scripts/benchmark-load.mjs",
     "prepublishOnly": "npm run build",
-    "sync-versions": "node -e \"const fs=require('fs');const pkg=require('./package.json');const dash=require('./dashboard/package.json');dash.version=pkg.version;fs.writeFileSync('./dashboard/package.json',JSON.stringify(dash,null,2)+'\\n')\"",
+    "sync-versions": "node scripts/sync-versions.mjs",
     "prepare": "husky"
   },
   "keywords": [
@@ -217,15 +217,25 @@
     "ts-jest": "^29.4.6",
     "tsc-alias": "^1.8.16",
     "typeorm": "^0.3.20",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "yaml": "^2.9.1"
   },
   "overrides": {
+    "npm": "11.21.3",
     "typeorm": {
       "glob": "^14.0.2"
     }
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "packageManager": "npm@11.21.3",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.21.3",
+      "onFail": "error"
+    }
   },
   "lint-staged": {
     "src/**/*.ts": [
