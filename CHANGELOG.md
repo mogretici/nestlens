@@ -1,3 +1,10 @@
+## [0.17.1](https://github.com/mogretici/nestlens/compare/v0.17.0...v0.17.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* switched off, NestLens prints no startup summary ([5b90d3a](https://github.com/mogretici/nestlens/commit/5b90d3a5f03efd2600163de5de0f08730dbb1a74))
+
 # [0.17.0](https://github.com/mogretici/nestlens/compare/v0.16.0...v0.17.0) (2026-11-27)
 
 
