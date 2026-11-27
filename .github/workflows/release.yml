@@ -25,6 +25,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
     outputs:
       version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.version.outputs.released }}
 
     # The commit being published is tested against every backend it supports,
     # not two of the three. The suites run where `REDIS_URL` names a server and
@@ -72,6 +73,12 @@ jobs:
         env:
           REDIS_URL: redis://127.0.0.1:6379
 
+      # semantic-release writes the new version into package.json, so a
+      # version that did not change is a run that released nothing.
+      - name: Read the version before releasing
+        id: before
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Release
         id: release
         env:
@@ -83,7 +90,13 @@ jobs:
       # was released, the one already on npm, which is still worth checking.
       - name: Read the released version
         id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+        env:
+          BEFORE: ${{ steps.before.outputs.version }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$version" != "$BEFORE" ]; then released=true; else released=false; fi
+          echo "released=$released" >> "$GITHUB_OUTPUT"
 
   # Everything above tests the source tree. This installs what npm actually
   # serves into an empty project and opens it — the check that was done by hand
@@ -119,3 +132,156 @@ jobs:
 
       - name: Install ${{ needs.release.outputs.version }} from npm and boot it
         run: node scripts/smoke-published-package.mjs ${{ needs.release.outputs.version }}
+
+  # nestlens-mcp, the package MCP clients run, is released with the library at
+  # the same version and depends on exactly it. sync-versions wrote both into
+  # packages/mcp/package.json in the release commit, so this checks out the
+  # release tag; the commit the workflow ran on still holds the old version.
+  #
+  # A job of its own, not a second @semantic-release/npm: a failure here leaves
+  # the library released and its smoke test running. It publishes with npm's
+  # trusted publishing, as the library is published — the OIDC token, no
+  # secret — which npm can only be set up for once the package exists, so its
+  # first version was published by hand (CLAUDE.md, "Releasing and the MCP
+  # Registry"). A version npm already has is skipped: re-running the failed
+  # jobs of a release finishes the ones after this.
+  mcp-publish:
+    name: Publish nestlens-mcp ${{ needs.release.outputs.version }}
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout the release
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish packages/mcp
+        working-directory: packages/mcp
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          manifest=$(node -p "require('./package.json').version")
+          if [ "$manifest" != "$VERSION" ]; then
+            echo "::error file=packages/mcp/package.json::nestlens-mcp is at $manifest, the release is $VERSION"
+            exit 1
+          fi
+          if npm view "nestlens-mcp@$VERSION" version > /dev/null 2>&1; then
+            echo "nestlens-mcp@$VERSION is already on npm"
+            exit 0
+          fi
+          if ! npm view nestlens-mcp name > /dev/null 2>&1; then
+            echo "::error::nestlens-mcp is not on npm yet. Its first version is published by hand and trusted publishing set up after it: CLAUDE.md, 'Releasing and the MCP Registry'."
+            exit 1
+          fi
+          npm publish --access public
+
+  # What npm serves, started the way an MCP client starts it: npx from an empty
+  # directory, then initialize and tools/list over stdio. On the same Node
+  # versions the library is smoked on.
+  mcp-smoke:
+    name: Smoke test nestlens-mcp on Node ${{ matrix.node }}
+    needs: [release, mcp-publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.13.0, 26]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Start nestlens-mcp@${{ needs.release.outputs.version }} from npm and speak MCP to it
+        run: node scripts/smoke-mcp-package.mjs ${{ needs.release.outputs.version }}
+
+  # The official MCP Registry lists nestlens-mcp as `io.github.mogretici/nestlens`
+  # and names an exact npm version, so each release has to be told about. It
+  # checks that the npm release carries the entry's name in `mcpName`, and the
+  # OIDC token it accepts from this workflow grants `io.github.<owner>/*` with
+  # no secret to keep. It checks out the release tag for the same reason the
+  # publish job does.
+  mcp-registry:
+    name: Publish ${{ needs.release.outputs.version }} to the MCP Registry
+    needs: [release, mcp-publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Raise deliberately: the registry refuses publishers too old for it
+      # ("invalid audience"), and the signing identity below names this tag.
+      MCP_PUBLISHER_VERSION: v1.8.19
+
+    steps:
+      - name: Checkout the release
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      # npm takes up to ten minutes to serve a new version everywhere (see
+      # scripts/smoke-published-package.mjs), and the registry reads mcpName
+      # from what it serves.
+      - name: Wait for npm to serve nestlens-mcp with its mcpName
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name server.json)
+          entry=$(jq -r .version server.json)
+          if [ "$entry" != "$VERSION" ]; then
+            echo "::error file=server.json::server.json is at $entry, the release is $VERSION"
+            exit 1
+          fi
+          for attempt in $(seq 1 60); do
+            served=$(curl -fsS "https://registry.npmjs.org/nestlens-mcp/$VERSION" | jq -r '.mcpName // empty' || true)
+            if [ "$served" = "$name" ]; then exit 0; fi
+            echo "waiting for registry.npmjs.org to serve nestlens-mcp@$VERSION with mcpName $name ($attempt/60), found '${served}'"
+            sleep 10
+          done
+          echo "::error::registry.npmjs.org does not serve nestlens-mcp@$VERSION with mcpName $name"
+          exit 1
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+
+      - name: Log in to the MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish

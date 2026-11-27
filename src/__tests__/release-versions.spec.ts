@@ -16,6 +16,16 @@
  * Node 22.13 and better-sqlite3 12 — and the example installed 11.10.0, a
  * better-sqlite3 the library no longer declares.
  *
+ * `server.json`, the MCP Registry entry, records the version twice as well:
+ * the entry's and the npm package's it lists. The registry refuses a version it
+ * has already published, and the package version has to be one npm serves, so
+ * an entry left behind fails the publish that follows the release.
+ *
+ * `packages/mcp`, the `nestlens-mcp` package, is released alongside at the same
+ * version and depends on exactly that `nestlens`: a wrapper left at the old
+ * version would be refused by npm as already published, and one pinned to the
+ * old library would install a server without the release's changes.
+ *
  * Following AAA (Arrange-Act-Assert).
  */
 import { describe, it, expect } from 'vitest';
@@ -103,7 +113,14 @@ describe('the versions a release writes', () => {
     },
   );
 
-  it('commits both lockfiles with the release', () => {
+  it('gives the MCP Registry entry the library version, at both places it records one', () => {
+    const server = read('server.json') as { version: string; packages: { version: string }[] };
+
+    expect(server.version).toBe(version);
+    expect(server.packages.map((entry) => entry.version)).toEqual([version]);
+  });
+
+  it('commits both lockfiles and the registry entry with the release', () => {
     const config = read('.releaserc.json') as { plugins: unknown[] };
     const git = config.plugins.find(
       (plugin): plugin is [string, { assets: string[] }] =>
@@ -115,6 +132,8 @@ describe('the versions a release writes', () => {
         'dashboard/package.json',
         'dashboard/package-lock.json',
         'example/package-lock.json',
+        'server.json',
+        'packages/mcp/package.json',
       ]),
     );
   });
@@ -132,11 +151,14 @@ describe('sync-versions', () => {
     mkdirSync(join(root, 'dashboard'));
     mkdirSync(join(root, 'example'));
     mkdirSync(join(root, 'scripts'));
+    mkdirSync(join(root, 'packages', 'mcp'), { recursive: true });
     for (const path of [
       'scripts/sync-versions.mjs',
       'dashboard/package.json',
       'dashboard/package-lock.json',
       'example/package-lock.json',
+      'server.json',
+      'packages/mcp/package.json',
     ]) {
       cpSync(join(ROOT, path), join(root, path));
     }
@@ -149,6 +171,70 @@ describe('sync-versions', () => {
 
     return { root, cleanup: () => rmSync(root, { recursive: true, force: true }) };
   };
+
+  it('writes the new version into the registry entry, at both places, and nothing else', () => {
+    const { root, cleanup } = run();
+
+    try {
+      const before = read('server.json') as { packages: Record<string, unknown>[] };
+
+      expect(readFrom(root, 'server.json')).toEqual({
+        ...before,
+        version: '99.1.2',
+        packages: before.packages.map((entry) => ({ ...entry, version: '99.1.2' })),
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('releases nestlens-mcp at the new version, depending on exactly it, and nothing else', () => {
+    const { root, cleanup } = run();
+
+    try {
+      const before = read('packages/mcp/package.json') as {
+        dependencies: Record<string, string>;
+      };
+
+      expect(readFrom(root, 'packages/mcp/package.json')).toEqual({
+        ...before,
+        version: '99.1.2',
+        dependencies: { ...before.dependencies, nestlens: '99.1.2' },
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('writes nestlens-mcp in the format it is committed in', () => {
+    const { root, cleanup } = run();
+
+    try {
+      const written = readFileSync(join(root, 'packages/mcp/package.json'), 'utf8');
+      const original = readFileSync(join(ROOT, 'packages/mcp/package.json'), 'utf8');
+
+      expect(written).toBe(
+        original
+          .replace(/^( {2}"version": )"[^"]+"/m, '$1"99.1.2"')
+          .replace(/^( {4}"nestlens": )"[^"]+"/m, '$1"99.1.2"'),
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('writes the registry entry in the format it is committed in', () => {
+    const { root, cleanup } = run();
+
+    try {
+      const written = readFileSync(join(root, 'server.json'), 'utf8');
+      const original = readFileSync(join(ROOT, 'server.json'), 'utf8');
+
+      expect(written).toBe(original.replace(/("version": )"[^"]+"/g, '$1"99.1.2"'));
+    } finally {
+      cleanup();
+    }
+  });
 
   it('writes the new version into the dashboard and the example, and nothing else', () => {
     const { root, cleanup } = run();

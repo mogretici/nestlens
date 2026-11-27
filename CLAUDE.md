@@ -159,6 +159,73 @@ only after `npm start` runs again. Measuring a dashboard change against a
 server that was already up reports the previous build — three times in one
 session, each time looking like the fix had not worked.
 
+### Releasing, nestlens-mcp and the MCP Registry
+semantic-release (`.releaserc.json`) runs on every push to `main`: `feat` is a
+minor, `fix`/`perf` a patch, anything else releases nothing. It publishes the
+library with npm trusted publishing (OIDC, no token; provenance is automatic).
+Between the bump and the release commit it runs `npm run sync-versions`, which
+copies the new version into the dashboard, both lockfiles, `server.json` and
+`packages/mcp/package.json` — the wrapper's own version and its exact
+`nestlens` dependency. `release-versions.spec.ts` fails on any of them drifting.
+
+`packages/mcp` is **`nestlens-mcp`**, the package MCP clients run
+(`npx -y nestlens-mcp --url …`). It is a one-line `bin.js` that calls
+`runNestLensMcpCli` from `nestlens/mcp`, and it depends on the MCP SDK, which
+is only an optional peer of `nestlens`. The library has no bin of its own any
+more: when both declared `nestlens-mcp`, npm linked the library's in npx's cache
+and in projects, refused a second global install with EEXIST, and in a project
+with `nestlens` but no SDK `npx -y nestlens-mcp` ran the library's bin and
+failed. `package.spec.ts` holds the wrapper's contract. It has no lockfile and
+no build: CI type-checks the bin (`npx tsc -p packages/mcp`) and starts it from
+packed tarballs of both packages (`scripts/smoke-mcp-package.mjs --tarball …
+--library-tarball …`). Run the same locally after `npm run build`:
+```bash
+packed=$(mktemp -d); npm pack --ignore-scripts --pack-destination "$packed"
+(cd packages/mcp && npm pack --ignore-scripts --pack-destination "$packed")
+v=$(node -p "require('./package.json').version")
+node scripts/smoke-mcp-package.mjs --tarball "$packed/nestlens-mcp-$v.tgz" --library-tarball "$packed/nestlens-$v.tgz"
+```
+
+`server.json` is the wrapper's entry in the official MCP Registry,
+`io.github.mogretici/nestlens`; `mcpName` in `packages/mcp/package.json` is
+what the registry reads from the **published** npm manifest to prove the
+package is ours. Neither package ships `server.json`.
+
+After the release job, `release.yml` runs three jobs, none of which can fail
+the release or skip the library's smoke test. Each checks out the release tag,
+where the bumped manifests are:
+- `mcp-publish` publishes `packages/mcp` with trusted publishing. A version npm
+  already has is skipped, so **re-running the failed jobs** of a release
+  finishes it after a partial failure.
+- `mcp-smoke` starts what npm serves with `npx` and speaks MCP to it, on the
+  same Node versions as the library's smoke test.
+- `mcp-registry` waits for npm to serve the wrapper with its `mcpName`,
+  verifies the pinned `mcp-publisher` with cosign, logs in with GitHub OIDC and
+  publishes `server.json`.
+`release-workflow.spec.ts` holds that shape.
+
+npm only lets a package that exists be given a trusted publisher, so the
+wrapper's **first version is published by hand**, from a checkout of the
+release tag, after which trusted publishing is set up for it:
+```bash
+cd packages/mcp && npm publish --access public      # needs npm login, 2FA
+npm trust github nestlens-mcp --file release.yml --repo mogretici/nestlens --allow-publish
+```
+A new trusted-publisher configuration expires unless it publishes within two
+days, and since September 2026 one allows only `npm stage publish` unless
+`--allow-publish` (or the "npm publish" box) is given. Until it exists,
+`mcp-publish` fails with a message pointing here.
+
+When the registry job fails, publish by hand from a checkout of the release
+tag:
+```bash
+mcp-publisher validate            # schema and semantic checks, against the registry
+mcp-publisher login github        # device flow in a browser, as mogretici
+mcp-publisher publish
+```
+A version the registry already has is refused and a published one cannot be
+edited, so a change to the entry reaches the registry with the next release.
+
 ## Architecture
 
 ### Monorepo Structure
