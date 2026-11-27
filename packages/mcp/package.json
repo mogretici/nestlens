@@ -1,0 +1,40 @@
+{
+  "name": "nestlens-mcp",
+  "version": "0.18.1",
+  "mcpName": "io.github.mogretici/nestlens",
+  "description": "MCP server that lets an AI agent read what NestLens recorded in a NestJS application",
+  "bin": {
+    "nestlens-mcp": "bin.js"
+  },
+  "type": "commonjs",
+  "files": [
+    "bin.js"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "nestjs",
+    "nestlens",
+    "debugging",
+    "monitoring"
+  ],
+  "author": "mogretici",
+  "license": "MIT",
+  "homepage": "https://nestlens-docs.vercel.app/docs/integrations/mcp",
+  "bugs": {
+    "url": "https://github.com/mogretici/nestlens/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mogretici/nestlens.git",
+    "directory": "packages/mcp"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "nestlens": "0.18.1"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

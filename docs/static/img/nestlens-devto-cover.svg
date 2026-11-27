@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1000" height="420" fill="#0f172a"/>
+  <rect width="1000" height="420" fill="url(#grad)"/>
+
+  <circle cx="930" cy="40" r="170" fill="#0ea5e9" opacity="0.1"/>
+  <circle cx="40" cy="400" r="120" fill="#0ea5e9" opacity="0.1"/>
+
+  <g transform="translate(90, 120) scale(1.8)">
+    <circle cx="50" cy="50" r="45" stroke="#0ea5e9" stroke-width="6"/>
+    <circle cx="50" cy="50" r="20" fill="#0ea5e9"/>
+    <circle cx="50" cy="50" r="8" fill="#1e293b"/>
+    <line x1="50" y1="5" x2="50" y2="20" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50" y1="80" x2="50" y2="95" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="5" y1="50" x2="20" y2="50" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="80" y1="50" x2="95" y2="50" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <text x="340" y="190" font-family="system-ui, -apple-system, sans-serif" font-size="68" font-weight="bold" fill="white">NestLens</text>
+  <text x="342" y="240" font-family="system-ui, -apple-system, sans-serif" font-size="24" fill="#94a3b8">Laravel Telescope-like debugging for NestJS</text>
+  <text x="342" y="290" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#0ea5e9">19 Watchers • Real-time Dashboard • MCP Server</text>
+  <rect x="342" y="320" width="300" height="4" rx="2" fill="#0ea5e9"/>
+</svg>

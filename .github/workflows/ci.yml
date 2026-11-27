@@ -55,8 +55,12 @@ jobs:
           --health-retries 5
 
     steps:
+      # The whole history and its tags: the release-type check below reads
+      # every commit since the newest release tag.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -80,6 +84,15 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      # The commit analyzer reads any body line starting with "breaking change"
+      # as a breaking change, and below 1.0 that releases 1.0.0. Two lines of
+      # prose in the 0.19.0 branch did exactly that. This runs the analyzer
+      # semantic-release runs, over the commits it would read — on a pull
+      # request, those of main since the last tag plus the branch's — and fails
+      # on a major while package.json is below 1.0, naming commit and line.
+      - name: Check the release these commits make
+        run: node scripts/check-release-type.mjs
+
       - name: Install dashboard dependencies
         run: npm ci
         working-directory: dashboard
@@ -96,6 +109,11 @@ jobs:
       - name: Type check E2E specs
         run: npx tsc -p e2e
 
+      # The nestlens-mcp package is a bin.js that calls `nestlens/mcp`; this
+      # checks the call against the source it resolves to.
+      - name: Type check the nestlens-mcp bin
+        run: npx tsc -p packages/mcp
+
       # Five integration suites serve the real bundle and skip themselves when
       # it is not on disk. Without this step they skipped in CI and nowhere
       # else: 54 tests, covering the dashboard arriving as HTML rather than as
@@ -108,6 +126,20 @@ jobs:
         run: npm test
         env:
           REDIS_URL: redis://127.0.0.1:6379
+
+      # nestlens-mcp has no build and no suite of its own. Packing both
+      # packages and starting the wrapper from the tarballs — npm install, then
+      # MCP initialize and tools/list over stdio — is what tells a broken bin,
+      # a wrong `nestlens/mcp` export or a dependency pin apart from a working
+      # one before a release publishes it.
+      - name: Start nestlens-mcp from packed tarballs
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          packed=$(mktemp -d)
+          npm pack --ignore-scripts --pack-destination "$packed"
+          (cd packages/mcp && npm pack --ignore-scripts --pack-destination "$packed")
+          node scripts/smoke-mcp-package.mjs --tarball "$packed/nestlens-mcp-$version.tgz" --library-tarball "$packed/nestlens-$version.tgz"
 
       # The dependencies a consumer actually receives, and only those.
       #

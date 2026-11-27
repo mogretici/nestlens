@@ -14,6 +14,14 @@
  * src/__tests__/release-versions.spec.ts fails until the entry is regenerated
  * and npm re-resolves what those ranges pull in. Writing them here instead
  * would leave the lockfile naming ranges its own resolutions do not satisfy.
+ *
+ * `server.json` is the MCP Registry entry. It names a version of its own and
+ * the version of the npm package it lists; the registry refuses one it has
+ * published before, and checks the package against the npm release, so both
+ * follow the library.
+ *
+ * `packages/mcp` is the `nestlens-mcp` package that entry lists. It is released
+ * with the library at the same version and depends on exactly that `nestlens`.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -33,3 +41,17 @@ writeJson('dashboard/package-lock.json', lock);
 const example = readJson('example/package-lock.json');
 example.packages['node_modules/nestlens'].version = version;
 writeJson('example/package-lock.json', example);
+
+const server = readJson('server.json');
+writeJson('server.json', {
+  ...server,
+  version,
+  packages: server.packages.map((entry) => ({ ...entry, version })),
+});
+
+const wrapper = readJson('packages/mcp/package.json');
+writeJson('packages/mcp/package.json', {
+  ...wrapper,
+  version,
+  dependencies: { ...wrapper.dependencies, nestlens: version },
+});

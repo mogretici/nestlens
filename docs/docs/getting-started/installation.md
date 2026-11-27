@@ -89,7 +89,8 @@ the ranges are the ones npm checks when they are present — except
 - `@nestjs/mercurius` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0 || ^14.0.0 —
   with `mercurius`, for Mercurius on Fastify
 - `mercurius` ^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
-- `@modelcontextprotocol/sdk` ^1.32.0 — the `nestlens-mcp` server for AI agents
+- `@modelcontextprotocol/sdk` ^1.32.0 — `nestlens/mcp`, to run the MCP server from
+  your own code (the `nestlens-mcp` package brings its own)
 
 `@nestjs/schedule` is not a peer: the Schedule watcher finds its
 `SchedulerRegistry` when the application has imported `ScheduleModule.forRoot()`,

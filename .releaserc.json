@@ -26,7 +26,9 @@
           "CHANGELOG.md",
           "dashboard/package.json",
           "dashboard/package-lock.json",
-          "example/package-lock.json"
+          "example/package-lock.json",
+          "server.json",
+          "packages/mcp/package.json"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }

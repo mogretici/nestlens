@@ -21,12 +21,50 @@ for how long.
 from the version you are on; they are cumulative, and the ones that need an
 edit are `0.17.0` (`storage.redis.maxEntries`), `0.8.0` (configuration keys,
 entry points) and `0.6.0` (the `path` option). `0.18.0` asks for nothing in the
-code, but for Node 22.13 or later.
+code, but for Node 22.13 or later, and `0.19.0` only changes how the MCP server
+is started.
 
 The quickest way to find out where you stand is to install and compile: every
 removed configuration key is a TypeScript error. At runtime a removed key is
 ignored, so a configuration written in JavaScript has to be checked against the
 sections below.
+
+## 0.18.x → 0.19.0
+
+Nothing to edit in the application. The MCP server moves to a package of its
+own.
+
+### The MCP server is the `nestlens-mcp` package
+
+```bash
+npx -y nestlens-mcp --url http://localhost:3000/nestlens
+```
+
+`nestlens-mcp` is published with `nestlens`, at the same version, and depends on
+the MCP SDK itself. `@modelcontextprotocol/sdk` no longer has to be installed in
+your project for the command; it is still an optional peer of `nestlens` for
+[`nestlens/mcp`](../integrations/mcp.md#using-it-from-code), the server used
+from your own code. The same command now works from your project and from
+anywhere else, and an MCP client config that runs `npx nestlens-mcp` keeps
+working: npx finds the package on npm.
+
+### `nestlens` no longer has a `nestlens-mcp` bin
+
+The command belongs to the new package alone. Two declarations of the same bin
+made npm link whichever it met first — usually the library's, which fails
+without the SDK — and refused a global install of the second.
+
+Three setups notice:
+
+| You have | What happens | Change |
+| --- | --- | --- |
+| A script that runs `nestlens-mcp` from `node_modules/.bin` — an npm script `"mcp": "nestlens-mcp …"`, or the path itself | After upgrading `nestlens`, the command is not found | `npm install --save-dev nestlens-mcp`, or call `npx -y nestlens-mcp` |
+| The `npx -y -p nestlens -p @modelcontextprotocol/sdk nestlens-mcp` form the guide gave for Claude Desktop | `sh: nestlens-mcp: command not found` — neither package it names has the bin now | `npx -y nestlens-mcp`, the same arguments after it |
+| A project still on `nestlens` 0.18 or older, without the SDK | `npx nestlens-mcp` runs the old library's bin, which stops at *@modelcontextprotocol/sdk is not installed* | Name the package's release so npx fetches it: `npx -y nestlens-mcp@latest`, or upgrade `nestlens` |
+
+`nestlens-mcp` reads its tool list from your application, so a newer
+`nestlens-mcp` works against an older `nestlens` that serves one. To run the
+release that matches yours, name it: `npx -y nestlens-mcp@0.19.0`.
 
 ## 0.18.0 → 0.18.1
 

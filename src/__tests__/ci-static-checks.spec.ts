@@ -11,6 +11,16 @@
  * React 19's removal of the global `JSX` namespace while the build stayed
  * green, because only the build ran.
  *
+ * The `nestlens-mcp` package. It has no build and no tests of its own, so
+ * nothing would notice its bin calling a name `nestlens/mcp` no longer exports
+ * until a release published it: CI type-checks the bin against the source and
+ * starts it from freshly packed tarballs of both packages.
+ *
+ * The release type. scripts/check-release-type.mjs runs the commit analyzer
+ * over every commit since the newest tag and fails on a major below 1.0; it
+ * needs the history and the tags, which a default shallow checkout has neither
+ * of.
+ *
  * Following AAA (Arrange-Act-Assert).
  */
 import { describe, it, expect } from 'vitest';
@@ -48,5 +58,32 @@ describe('CI', () => {
     );
 
     expect(typecheck).toBeDefined();
+  });
+
+  it('type-checks the nestlens-mcp bin against the source of nestlens/mcp', () => {
+    expect(stepsOf('ci.yml test').some((step) => step.run === 'npx tsc -p packages/mcp')).toBe(
+      true,
+    );
+  });
+
+  it('starts nestlens-mcp from tarballs of both packages, after the build', () => {
+    const steps = stepsOf('ci.yml test');
+    const build = steps.findIndex((step) => step.run === 'npm run build');
+    const smoke = steps.findIndex((step) =>
+      /smoke-mcp-package\.mjs --tarball .* --library-tarball /.test(step.run ?? ''),
+    );
+
+    expect(build).toBeGreaterThan(-1);
+    expect(smoke).toBeGreaterThan(build);
+  });
+
+  it('refuses a major release below 1.0, with the history the range needs', () => {
+    const steps = stepsOf('ci.yml test');
+    const checkout = steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+    const install = steps.findIndex((step) => step.run === 'npm ci');
+    const check = steps.findIndex((step) => step.run === 'node scripts/check-release-type.mjs');
+
+    expect(checkout?.with?.['fetch-depth']).toBe(0);
+    expect(check).toBeGreaterThan(install);
   });
 });

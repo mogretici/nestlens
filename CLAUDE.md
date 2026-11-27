@@ -159,6 +159,16 @@ only after `npm start` runs again. Measuring a dashboard change against a
 server that was already up reports the previous build — three times in one
 session, each time looking like the fix had not worked.
 
+### Releasing
+Merging to `main` releases: semantic-release reads the commit types, publishes
+`nestlens` and, in jobs after it, `nestlens-mcp` (`packages/mcp`) and the
+official MCP Registry entry (`server.json`). **RELEASING.md is the one
+description** — commit types and versions, the files `sync-versions` writes,
+every job in `release.yml`, trusted publishing, re-running failed jobs and the
+one-time first publish of `nestlens-mcp`. Change it with the release, not here;
+`src/__tests__/docs/releasing.spec.ts` compares it with package.json, the
+workflow, `sync-versions` and `.releaserc.json`.
+
 ## Architecture
 
 ### Monorepo Structure

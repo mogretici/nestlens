@@ -13,37 +13,41 @@ It is a thin client over the REST API the dashboard already uses. Nothing is add
 ## Quick start
 
 1. Run your application with NestLens mounted (the dashboard opens at `http://localhost:3000/nestlens`).
-2. Install the MCP SDK next to `nestlens`. It is an optional peer dependency, so applications that do not use this feature never load it:
+2. Add the server to your agent. For Claude Code:
 
    ```bash
-   npm install --save-dev @modelcontextprotocol/sdk
+   claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
    ```
 
-3. Add the server to your agent. For Claude Code:
-
-   ```bash
-   claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
-   ```
-
-4. Ask it something: *"Use NestLens to show me the slowest requests."*
+3. Ask it something: *"Use NestLens to show me the slowest requests."*
 
 `--url` is the address of your application **plus the path NestLens is mounted at** (`path` in `NestLensModule.forRoot`, `/nestlens` by default).
 
-:::caution Start it from your project
-`npx nestlens-mcp` runs the `nestlens-mcp` binary of the `nestlens` package **installed in the current directory**, so it works when the agent starts it from your project (Claude Code, Cursor and VS Code do). A client that starts it from somewhere else — Claude Desktop does — finds no such binary, and `npx` then looks for a package literally named `nestlens-mcp` on npm, which is not this project. For those, name the real package:
+`nestlens-mcp` is its own npm package, released with `nestlens` at the same version. It brings the MCP SDK with it, so nothing is added to your project, and `npx` runs it the same way from your project or from anywhere else. It reads the tool list from your application, so it works against any `nestlens` that serves one (see [troubleshooting](#troubleshooting)); to run the release that matches your application's, name it: `npx -y nestlens-mcp@0.19.0`.
+
+## From the MCP Registry
+
+`nestlens-mcp` is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as **`io.github.mogretici/nestlens`**, so a client that installs servers from the registry can add it without a hand-written config. It asks for three things:
+
+| It asks for | Default | What it is |
+| --- | --- | --- |
+| `--url` | `http://localhost:3000/nestlens` | Where NestLens is mounted, as in the [quick start](#quick-start). |
+| `NESTLENS_HEADERS` | none | Headers as JSON, only if NestLens wants credentials. Kept as a secret. |
+| `NESTLENS_MCP_ALLOW_WRITE` | `false` | `true` turns on the [tools that change data](#read-only-by-default). |
+
+and runs the release the registry lists: `npx nestlens-mcp@<version> --url <address>`.
+
+The entry itself is public:
 
 ```bash
-npx -y -p nestlens -p @modelcontextprotocol/sdk nestlens-mcp --url http://localhost:3000/nestlens
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.mogretici/nestlens"
 ```
-
-`-p` is `--package`; the second one is the SDK, which `nestlens` only lists as an optional peer.
-:::
 
 ## Two ways to connect
 
 | | Local (stdio) | Remote (a URL) |
 | --- | --- | --- |
-| The agent runs | `npx nestlens-mcp` itself | nothing — it connects to a URL |
+| The agent runs | `npx -y nestlens-mcp` itself | nothing — it connects to a URL |
 | Use it for | NestLens on your machine, or a server you can reach with an SSH tunnel | NestLens on a development or production server |
 | You configure | a command | a URL and a token |
 
@@ -56,13 +60,13 @@ Both give the agent the same tools. The sections below show each.
 **Local** — for you only:
 
 ```bash
-claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
+claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
 ```
 
 **Shared with the team** — written to `.mcp.json` in the project root, so everyone who clones the repository gets it:
 
 ```bash
-claude mcp add --scope project nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
+claude mcp add --scope project nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
 ```
 
 or write the file yourself:
@@ -72,7 +76,7 @@ or write the file yourself:
   "mcpServers": {
     "nestlens": {
       "command": "npx",
-      "args": ["nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
+      "args": ["-y", "nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
     }
   }
 }
@@ -102,7 +106,7 @@ Add it to `.cursor/mcp.json` in the project, or to `~/.cursor/mcp.json` for ever
   "mcpServers": {
     "nestlens": {
       "command": "npx",
-      "args": ["nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
+      "args": ["-y", "nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
     }
   }
 }
@@ -134,7 +138,7 @@ For a remote server, give it the URL and the header instead of a command:
     "nestlens-local": {
       "type": "stdio",
       "command": "npx",
-      "args": ["nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
+      "args": ["-y", "nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
     },
     "nestlens-remote": {
       "type": "http",
@@ -154,10 +158,7 @@ Claude Desktop starts the command from its own directory, not your project, so i
   "mcpServers": {
     "nestlens": {
       "command": "npx",
-      "args": [
-        "-y", "-p", "nestlens", "-p", "@modelcontextprotocol/sdk",
-        "nestlens-mcp", "--url", "http://localhost:3000/nestlens"
-      ]
+      "args": ["-y", "nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
     }
   }
 }
@@ -168,7 +169,7 @@ Claude Desktop starts the command from its own directory, not your project, so i
 Every client asks for the same three things. Give it:
 
 - **Command:** `npx`
-- **Arguments:** `-y -p nestlens -p @modelcontextprotocol/sdk nestlens-mcp --url http://localhost:3000/nestlens` (as separate arguments — and `nestlens-mcp --url ...` alone if the client starts it from your project)
+- **Arguments:** `-y nestlens-mcp --url http://localhost:3000/nestlens` (as separate arguments)
 - **Environment** (only if NestLens wants credentials): `NESTLENS_HEADERS={"Authorization":"Bearer ..."}`
 
 or, for a client that takes a URL, the address of a [remote server](#a-nestlens-on-a-server) and its bearer token.
@@ -223,7 +224,7 @@ Tools that change something — `clear_entries`, `run_pruning`, `pause_recording
 Turn them on when you want an agent to act:
 
 ```bash
-claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens --allow-write
+claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens --allow-write
 ```
 
 ## A NestLens on a server
@@ -239,18 +240,18 @@ ssh -N -L 3000:localhost:3000 you@dev.example.com
 ```
 
 ```bash
-claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
+claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
 ```
 
 ### Option 2 — a URL
 
-Run `nestlens-mcp` in HTTP mode from the application's directory (where `nestlens` is installed) on a machine that can reach NestLens, and give the agent the URL.
+Run `nestlens-mcp` in HTTP mode on a machine that can reach NestLens, and give the agent the URL.
 
 ```bash
 export NESTLENS_MCP_TOKEN="$(openssl rand -hex 32)"
 echo "$NESTLENS_MCP_TOKEN"        # keep this: it is what the agent has to send
 
-npx nestlens-mcp --http --host 0.0.0.0 --port 8787 --url http://localhost:3000/nestlens
+npx -y nestlens-mcp --http --host 0.0.0.0 --port 8787 --url http://localhost:3000/nestlens
 # nestlens-mcp: http://0.0.0.0:8787/mcp serving http://localhost:3000/nestlens (read-only)
 ```
 
@@ -279,7 +280,7 @@ Then add the URL to your agent as shown [above](#add-it-to-your-agent).
 If your `authorization.canAccess` wants a token or a cookie, pass it as a header. Prefer the environment variable: command-line arguments are visible to every user on the machine in the process list. A `--url` (or `NESTLENS_URL`) with credentials in it (`http://user:password@...`) is refused at startup, without repeating them: `fetch` refuses such an address, so it could never work — pass them as a header instead. So is one without `http://` or `https://` (`localhost:3000/nestlens`). A malformed `--header` is reported without its value either.
 
 ```bash
-NESTLENS_HEADERS='{"Authorization":"Bearer dev-token"}' npx nestlens-mcp --url http://localhost:3000/nestlens
+NESTLENS_HEADERS='{"Authorization":"Bearer dev-token"}' npx -y nestlens-mcp --url http://localhost:3000/nestlens
 ```
 
 In an MCP client's JSON config the same goes under `env`:
@@ -289,7 +290,7 @@ In an MCP client's JSON config the same goes under `env`:
   "mcpServers": {
     "nestlens": {
       "command": "npx",
-      "args": ["nestlens-mcp", "--url", "https://dev.example.com/nestlens"],
+      "args": ["-y", "nestlens-mcp", "--url", "https://dev.example.com/nestlens"],
       "env": { "NESTLENS_HEADERS": "{\"Authorization\":\"Bearer dev-token\"}" }
     }
   }
@@ -297,6 +298,8 @@ In an MCP client's JSON config the same goes under `env`:
 ```
 
 ## Using it from code
+
+`nestlens/mcp`, an entry point of the `nestlens` package, is the same server. It needs the MCP SDK, an optional peer of `nestlens`, installed beside it: `npm install --save-dev @modelcontextprotocol/sdk`.
 
 ```typescript
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -310,7 +313,7 @@ const server = createNestLensMcpServer({
 await server.connect(new StdioServerTransport());
 ```
 
-For HTTP, `startNestLensMcpHttp({ client, port, token })` from the same module returns `{ url, close }`.
+For HTTP, `startNestLensMcpHttp({ client, port, token })` from the same module returns `{ url, close }`, and `runNestLensMcpCli(argv)` is the whole `nestlens-mcp` command.
 
 ## Security
 
@@ -340,8 +343,9 @@ The tool is named after the method (`get_recent_entries`). Its parameters — th
 
 | Symptom | Cause |
 | --- | --- |
-| The client shows `nestlens` as failed or does not list its tools | Run the same command in a terminal (`npx nestlens-mcp --url ...`). It prints why to stderr. A missing `@modelcontextprotocol/sdk` is the usual cause, and it says so with the command that installs it; so is a client started before the config was saved — restart it. |
-| `404` / `Not Found` for the package `nestlens-mcp` from `npx` | The client started it outside your project, so `npx` looked on npm for a package with that name. Use the `-p nestlens -p @modelcontextprotocol/sdk` form [above](#quick-start). |
+| The client shows `nestlens` as failed or does not list its tools | Run the same command in a terminal (`npx -y nestlens-mcp --url ...`). It prints why to stderr. A client started before the config was saved is a common cause — restart it. |
+| `sh: nestlens-mcp: command not found` | The config uses the `npx -y -p nestlens -p @modelcontextprotocol/sdk nestlens-mcp` form of 0.18 and earlier. Since 0.19.0 the command is the `nestlens-mcp` package: `npx -y nestlens-mcp`, see [upgrading](../getting-started/upgrading.md#018x--0190). |
+| `@modelcontextprotocol/sdk is not installed` | A `nestlens` older than 0.19.0 in your project still has its own `nestlens-mcp` command, and `npx nestlens-mcp` runs it. Name the package's release instead — `npx -y nestlens-mcp@latest` — or upgrade `nestlens`. |
 | `Could not reach NestLens` | The application is not running, or `--url` is wrong. |
 | `answered with something that is not JSON ... dashboard mount` | `--url` points at the application, not at the dashboard mount. Add the path, for example `/nestlens`. |
 | `redirected (301 to ...)` | `--url` is not the final address — often `http://` where the application redirects to `https://`, or a missing trailing path. Use the address it redirects to. Redirects are not followed, so the headers you pass are never sent anywhere else. |

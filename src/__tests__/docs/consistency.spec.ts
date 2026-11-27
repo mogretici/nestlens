@@ -40,6 +40,20 @@ describe('Documentation consistency with code', () => {
       expect(intro).not.toMatch(/18 watchers/);
     });
 
+    /**
+     * The social card is the preview every shared link shows, and it said
+     * "18 Watchers" long after the intro was corrected: it is an image, so no
+     * text search over the docs reached it. The PNGs are rendered from these
+     * SVGs, so the SVGs are what to keep true.
+     */
+    it.each(['nestlens-social-card.svg', 'nestlens-devto-cover.svg'])(
+      '%s states the correct watcher count',
+      (file) => {
+        const svg = readFileSync(join(REPO_ROOT, 'docs', 'static', 'img', file), 'utf8');
+        expect(svg).toContain(`${watcherCount} Watchers`);
+      },
+    );
+
     it('basic-config.md lists every watcher key from the code', () => {
       const basicConfig = readDoc('configuration/basic-config.md');
       const missing = watcherKeys.filter((key) => !basicConfig.includes(`${key}:`));

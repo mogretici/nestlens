@@ -1,0 +1,17 @@
+{
+  // Type-checks bin.js against the source of the `nestlens/mcp` it calls:
+  // `npx tsc -p packages/mcp` in CI. Not published (`files` is the bin).
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": {
+      "nestlens/mcp": ["../../src/mcp/index.ts"]
+    }
+  },
+  "include": ["bin.js"],
+  "exclude": []
+}

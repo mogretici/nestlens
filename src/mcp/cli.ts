@@ -42,7 +42,7 @@ Serve it at a URL, so an agent can be given a link instead of a command:
   -h, --help           This text.
 
 Add it to an MCP client, for example Claude Code:
-  claude mcp add nestlens -- npx nestlens-mcp --url http://localhost:3000/nestlens
+  claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
 
 Or, for a NestLens on a server, run this next to it with --http and give the client the URL:
   claude mcp add --transport http nestlens https://mcp.example.com/mcp --header "Authorization: Bearer <token>"
@@ -216,3 +216,19 @@ export const main = async (
   await server.connect(new StdioServerTransport());
   process.stderr.write(`nestlens-mcp: serving ${options.url} (${mode})\n`);
 };
+
+/**
+ * The `nestlens-mcp` command: {@link main}, with a failure to start reported
+ * as one line and exit code 1 rather than an unhandled rejection. The
+ * `nestlens-mcp` package's bin is a call to this.
+ */
+export const runNestLensMcpCli = (
+  argv: readonly string[] = process.argv.slice(2),
+  env: Record<string, string | undefined> = process.env,
+): Promise<void> =>
+  main(argv, env).catch((error: unknown) => {
+    process.stderr.write(
+      `nestlens-mcp: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exit(1);
+  });

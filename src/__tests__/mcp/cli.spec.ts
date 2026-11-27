@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { parseCliOptions } from '../../mcp/cli';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { parseCliOptions, USAGE } from '../../mcp/cli';
+import { runNestLensMcpCli } from '../../mcp';
 
 describe('parseCliOptions', () => {
   it('defaults to a local application, read-only', () => {
@@ -103,5 +104,57 @@ describe('parseCliOptions', () => {
       /JSON object/,
     );
     expect(() => parseCliOptions([], { NESTLENS_HEADERS: '[1]' })).toThrow(/JSON object/);
+  });
+});
+
+/**
+ * What the `nestlens-mcp` package's bin calls. It lives here, behind the
+ * `nestlens/mcp` entry point, so the package that ships the command is one
+ * line and the CLI is tested where it is written.
+ */
+describe('runNestLensMcpCli', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.exitCode = undefined;
+  });
+
+  it('is what nestlens/mcp exports for a bin to call', async () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    await runNestLensMcpCli(['--help'], {});
+
+    expect(written.join('')).toBe(USAGE);
+  });
+
+  it('answers a mistake on the command line with exit code 2 and one line', async () => {
+    const errors: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      errors.push(String(chunk));
+      return true;
+    });
+
+    await runNestLensMcpCli(['--bogus'], {});
+
+    expect(process.exitCode).toBe(2);
+    expect(errors).toEqual(['nestlens-mcp: Unknown option --bogus. Try --help.\n']);
+  });
+
+  it('exits 1 with the reason when the server cannot start, without a stack trace', async () => {
+    const errors: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      errors.push(String(chunk));
+      return true;
+    });
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+
+    await runNestLensMcpCli(['--http', '--host', '0.0.0.0', '--port', '0'], {});
+
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(errors.join('')).toMatch(/^nestlens-mcp: .*token/);
+    expect(errors.join('')).not.toMatch(/\n\s+at /);
   });
 });

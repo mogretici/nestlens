@@ -9,3 +9,4 @@ export {
   NestLensUnreachableError,
 } from './client';
 export type { NestLensClientOptions } from './client';
+export { runNestLensMcpCli } from './cli';
