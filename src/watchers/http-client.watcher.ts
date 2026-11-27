@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { createTermMatcher } from '../core/data-masker.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
@@ -99,6 +99,8 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: HttpClientWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: HttpClientWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private readonly maxBodySize: number;
   /** Every interceptor installed, so `onModuleDestroy` can eject them. */
   private readonly installed: InstalledInterceptor[] = [];
@@ -132,9 +134,12 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
       logger: this.logger,
       watcher: 'HttpClientWatcher',
       sibling: (host) => new HttpClientWatcher(this.collector, this.nestlensConfig, host as never),
+      // Installed on `axiosRef` when there is one, so that is what is claimed.
+      identify: (host) => (host as { axiosRef?: unknown } | undefined)?.axiosRef ?? host,
     });
     this.axiosInstance = attached.host as typeof this.axiosInstance;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if axios instance was provided
     if (!this.axiosInstance) {
@@ -217,7 +222,8 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.axiosInstance, 'HttpClientWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     for (const { instance, kind, id } of this.installed) {
       instance.interceptors[kind].eject?.(id);

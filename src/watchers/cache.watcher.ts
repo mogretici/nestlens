@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -44,6 +44,8 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: CacheWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: CacheWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private methodsBeforeWrapping?: Record<string, unknown>;
   private originalMethods?: CacheLike;
 
@@ -76,6 +78,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.cacheManager = attached.host as typeof this.cacheManager;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if cache manager was provided
     if (!this.cacheManager) {
@@ -101,7 +104,8 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.cacheManager, 'CacheWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     if (!this.cacheManager || !this.methodsBeforeWrapping) {
       return;

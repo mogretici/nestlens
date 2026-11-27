@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -53,6 +53,8 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: MailWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: MailWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
   /** Mailers handed to `setupMailer`, which also have to be given back. */
   private readonly manuallyWrapped: WrappedMethods[] = [];
@@ -86,6 +88,7 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.mailerService = attached.host as typeof this.mailerService;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if mailer service was provided
     if (!this.mailerService) {
@@ -111,7 +114,8 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.mailerService, 'MailWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     this.wrapped?.restore();
     this.wrapped = undefined;

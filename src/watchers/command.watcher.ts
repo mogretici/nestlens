@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -35,6 +35,8 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: CommandWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: CommandWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private originalExecute?: (command: unknown) => Promise<unknown>;
   /**
    * The property exactly as it was found, for putting back.
@@ -74,6 +76,7 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.commandBus = attached.host as typeof this.commandBus;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if command bus was provided
     if (!this.commandBus) {
@@ -147,7 +150,8 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.commandBus, 'CommandWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     if (this.commandBus && this.executeBeforeWrapping !== undefined) {
       (this.commandBus as Record<string, unknown>).execute = this.executeBeforeWrapping;

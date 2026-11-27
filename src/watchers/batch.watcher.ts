@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -30,6 +30,8 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: BatchWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: BatchWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -61,6 +63,7 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.batchProcessor = attached.host as typeof this.batchProcessor;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if batch processor was provided
     if (!this.batchProcessor) {
@@ -132,7 +135,8 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.batchProcessor, 'BatchWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     this.wrapped?.restore();
     this.wrapped = undefined;

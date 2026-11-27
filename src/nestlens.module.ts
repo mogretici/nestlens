@@ -371,13 +371,8 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // NOTE: GraphQL Watcher is provided by NestLensCoreModule (global)
     // so it's accessible via moduleRef.get(GraphQLWatcher) from any module
 
-    // Build exports list - only export what's actually provided.
-    //
-    // Only when it is. Nest refuses to boot a module that exports a provider it
-    // does not hold, so exporting this unconditionally turned
-    // `watchers: { log: false }` into `UnknownExportException` at startup — the
-    // application did not come up at all, which is a strange price for turning
-    // off one watcher.
+    // Everything exported here is provided above whatever the configuration
+    // says, so exporting it can never turn into `UnknownExportException`.
     const exports: Provider[] = [NestLensLogger, ...OPT_IN_WATCHERS];
     // GraphQLWatcher is already exported from NestLensCoreModule (global)
 

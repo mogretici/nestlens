@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -30,6 +30,8 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: DumpWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: DumpWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -61,6 +63,7 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.dumpService = attached.host as typeof this.dumpService;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if dump service was provided
     if (!this.dumpService) {
@@ -91,7 +94,8 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.dumpService, 'DumpWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     this.wrapped?.restore();
     this.wrapped = undefined;

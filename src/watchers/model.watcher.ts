@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -116,6 +116,8 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: ModelWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: ModelWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
   /**
    * When each operation in flight began, oldest first, per entity and action.
@@ -205,6 +207,7 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.entitySubscriber = attached.host as typeof this.entitySubscriber;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if entity subscriber was provided
     if (!this.entitySubscriber) {
@@ -272,7 +275,8 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.entitySubscriber, 'ModelWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     this.wrapped?.restore();
     this.wrapped = undefined;

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
-import { attachHosts, releaseHost } from './host-token';
+import { attachHosts } from './host-token';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -53,6 +53,8 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly config: EventWatcherConfig;
   /** A watcher for each further host provided under the same token. */
   private siblings: EventWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -84,6 +86,7 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     });
     this.eventEmitter = attached.host as typeof this.eventEmitter;
     this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if event emitter was provided
     if (!this.eventEmitter) {
@@ -109,7 +112,8 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     for (const sibling of this.siblings) sibling.onModuleDestroy();
     this.siblings = [];
-    releaseHost(this.eventEmitter, 'EventWatcher');
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
     this.wrapped?.restore();
     this.wrapped = undefined;

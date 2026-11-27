@@ -34,6 +34,7 @@ import {
   NESTLENS_NOTIFICATION_SERVICE,
   NESTLENS_REDIS_CLIENT,
   NESTLENS_VIEW_ENGINE,
+  GateWatcher,
 } from '../../index';
 
 type Host = Record<string, unknown>;
@@ -290,6 +291,135 @@ describe('a watcher handed a service under a token', () => {
     collect.mockRestore();
 
     expect(gateEntries).toHaveLength(1);
+    await app.close();
+  });
+
+  /**
+   * A host the watcher could take in its constructor stopped the lookup there:
+   * `CacheModule.register({ isGlobal: true })` in AppModule plus
+   * `CacheModule.register()` in a feature module recorded the global cache and
+   * not the feature's. The container is always asked, and what the constructor
+   * received is one of the answers.
+   */
+  it.each(CASES.map((c) => [c.watcher, c] as const))(
+    '%s records a global provider and a feature provider both',
+    async (_name, c) => {
+      const shared = c.host();
+      const local = c.host();
+      const before = [{ ...shared }, { ...local }];
+
+      @Global()
+      @Module({ providers: [{ provide: c.token, useValue: shared }], exports: [c.token] })
+      class GlobalProviderModule {}
+      @Module({ providers: [{ provide: c.token, useValue: local }] })
+      class FeatureProviderModule {}
+
+      const app = await boot(
+        { watchers: { [c.watcher]: true } },
+        { imports: [GlobalProviderModule, FeatureProviderModule], providers: [] },
+      );
+
+      expect([c.wrapped(shared, before[0]), c.wrapped(local, before[1])]).toEqual([true, true]);
+      await app.close();
+    },
+  );
+
+  /**
+   * The mark that keeps a host from being wrapped twice outlived a boot that
+   * failed: Nest never calls onModuleDestroy for an application whose init
+   * rejected, so the next application on the same host found it taken and
+   * recorded nothing — while the dead one's collector went on receiving.
+   */
+  it('records into a later application after an earlier one failed to boot', async () => {
+    const gate = { can: () => true };
+
+    @Injectable()
+    class FailsAfterTheWatchers {
+      onModuleInit(): void {
+        throw new Error('boom');
+      }
+    }
+    @Module({ providers: [FailsAfterTheWatchers] })
+    class FailingModule {}
+
+    const failed = await Test.createTestingModule({
+      imports: [NestLensModule.forRoot({ watchers: { gate: true } }), FailingModule],
+      providers: [{ provide: NESTLENS_GATE_SERVICE, useValue: gate }],
+    }).compile();
+    await expect(failed.init()).rejects.toThrow('boom');
+
+    const app = await boot(
+      { watchers: { gate: true } },
+      ARRANGEMENTS['the root module']({ provide: NESTLENS_GATE_SERVICE, useValue: gate }),
+    );
+    const collector = app.get(CollectorService);
+    const collect = jest.spyOn(CollectorService.prototype, 'collect');
+
+    gate.can();
+    const ours = collect.mock.calls.filter(
+      ([type], index) =>
+        type === 'gate' && (collect.mock.instances[index] as unknown) === collector,
+    );
+    collect.mockRestore();
+
+    expect(ours).toHaveLength(1);
+    await app.close();
+  });
+
+  it("keeps another module's hold on a host when a watcher that was off closes", async () => {
+    const gate = { can: () => true };
+
+    // Global, so the watcher that is off is handed the host in its constructor
+    // too — which is what made its onModuleDestroy give the host back.
+    @Global()
+    @Module({
+      providers: [{ provide: NESTLENS_GATE_SERVICE, useValue: gate }],
+      exports: [NESTLENS_GATE_SERVICE],
+    })
+    class SharedGateModule {}
+    @Module({ imports: [NestLensModule.forRoot({ path: '/lens-off', watchers: { gate: false } })] })
+    class OffLensModule {}
+
+    const app = await boot(
+      { path: '/lens-on', watchers: { gate: true } },
+      { imports: [SharedGateModule, OffLensModule], providers: [] },
+    );
+    const watchers = app.get(GateWatcher, { strict: false, each: true });
+    const off = watchers.find(
+      (w) => !(w as unknown as { config: { enabled: boolean } }).config.enabled,
+    );
+    expect(off).toBeDefined();
+
+    off?.onModuleDestroy();
+
+    expect(Object.getOwnPropertySymbols(gate)).toContain(Symbol.for('nestlens:watched-by'));
+    await app.close();
+  });
+
+  /**
+   * `HttpService` wraps the axios instance it exposes as `axiosRef`, and the
+   * watcher installs on that instance — but claimed the token's value. The same
+   * instance provided bare and as `{ axiosRef }` got two interceptors, and
+   * every request was recorded twice.
+   */
+  it('installs once on an axios instance reached two ways', async () => {
+    const instance = axios.create();
+
+    @Module({ providers: [{ provide: NESTLENS_HTTP_CLIENT, useValue: instance }] })
+    class BareModule {}
+    @Module({ providers: [{ provide: NESTLENS_HTTP_CLIENT, useValue: { axiosRef: instance } }] })
+    class WrappedModule {}
+
+    const app = await boot(
+      { watchers: { httpClient: true } },
+      { imports: [BareModule, WrappedModule], providers: [] },
+    );
+
+    expect(
+      (instance.interceptors.request as unknown as { handlers: unknown[] }).handlers.filter(
+        Boolean,
+      ),
+    ).toHaveLength(1);
     await app.close();
   });
 
