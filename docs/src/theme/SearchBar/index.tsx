@@ -57,7 +57,7 @@ const SEARCH_PAGES: SearchResult[] = [
   { title: 'API Reference', url: '/docs/api', summary: 'Full API documentation' },
 ];
 
-export default function SearchBar(): JSX.Element {
+export default function SearchBar(): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
