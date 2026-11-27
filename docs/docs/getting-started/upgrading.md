@@ -30,8 +30,8 @@ sections below.
 
 ## 0.17.x → 0.18.0
 
-Nothing to edit. Two things change: the Node.js floor, and the `better-sqlite3`
-NestLens installs.
+Nothing to edit. Three things change: the Node.js floor, the `better-sqlite3`
+NestLens installs, and — already in 0.17.3 — the browsers the dashboard supports.
 
 ### Node 20 is no longer supported
 
@@ -69,6 +69,16 @@ The peer range narrows to match, from `^11.0.0 || ^12.0.0 || ^13.0.0` to
 and 13 were never what NestLens ran on by default, and nothing tested them. An
 application on 11 or 13 keeps its own and gets a second copy nested under
 `nestlens`; nothing to change.
+
+### The dashboard needs a current browser
+
+Since 0.17.3 the dashboard's stylesheet is built with Tailwind CSS 4, which
+relies on cascade layers, `@property` and `color-mix()`. The dashboard needs
+Chrome or Edge 111+, Firefox 128+ or Safari 16.4+; it was previously documented
+for Chrome 90, Firefox 88 and Safari 14. An older browser still loads it but
+does not style it correctly. Nothing changes in your application or its
+configuration, and on a supported browser the dashboard looks as it did. See
+[Browser Support](../dashboard/overview.md#browser-support).
 
 ## 0.16.x → 0.17.0
 
