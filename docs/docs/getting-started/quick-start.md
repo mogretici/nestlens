@@ -87,7 +87,7 @@ role-based access.
 
 With zero configuration, NestLens tracks:
 - All HTTP requests and responses
-- Database queries (TypeORM/Prisma auto-detected)
+- Database queries (TypeORM and Prisma auto-detected; Prisma 6.14+ needs query logging on the client)
 - Unhandled exceptions
 - Application logs (once you wire `NestLensLogger` via `app.useLogger()` — see Step 2)
 

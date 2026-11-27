@@ -17,13 +17,83 @@ for how long.
 
 ## Coming from any `0.x` to `1.0`
 
-If you are on the latest `0.9.x`, there is nothing to do — `1.0` is the same
-code with a promise attached. If you are coming from further back, take the
-sections below in order; they are cumulative, and the ones that need an edit are
-`0.8.0` (configuration keys, entry points) and `0.6.0` (the `path` option).
+`1.0` will be the latest `0.x` with a promise attached. Take the sections below
+from the version you are on; they are cumulative, and the ones that need an
+edit are `0.17.0` (`storage.redis.maxEntries`), `0.8.0` (configuration keys,
+entry points) and `0.6.0` (the `path` option).
 
 The quickest way to find out where you stand is to install and boot: every
 removed configuration key fails loudly at startup rather than being ignored.
+
+## 0.16.x → 0.17.0
+
+One edit, and only if you wrote `storage.redis.maxEntries`; and on NestJS 9, an
+upgrade to 9.4.3 if you are below it. The rest is behaviour: several watchers
+that recorded nothing in a documented setup start recording.
+
+### NestJS 9 means 9.4.3 or later
+
+The peer range was `^9.0.0`, and nothing tested below 9.4.3 — the release CI
+installs for the NestJS 9 row. Measured on 9.0.0, the library does not
+type-check (`TS1239` on its own `@Inject` parameters), and with type-checking
+off 17 tests still fail. The
+range is now `^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0` for `@nestjs/common` and
+`@nestjs/core`. An application on `^9.x` gets 9.4.3 from a fresh install; one
+whose lockfile holds 9.0 to 9.3 updates with `npm update @nestjs/common
+@nestjs/core`.
+
+### `storage.redis.maxEntries` is gone
+
+It compiled and did nothing: the factory wrote `storage.maxEntries` over it.
+Now it is a compile error. Move the value to the setting that was in effect all
+along:
+
+```typescript
+// before — ignored
+storage: { driver: 'redis', redis: { url, maxEntries: 50_000 } }
+// after
+storage: { driver: 'redis', maxEntries: 50_000, redis: { url } }
+```
+
+A `RedisStorage` constructed by hand still takes `maxEntries`, through
+`RedisStorageOptions`.
+
+### Watchers find their host in any module
+
+A token such as `NESTLENS_GATE_SERVICE` or `NESTLENS_REDIS_CLIENT` — and
+`CACHE_MANAGER` — provided in `AppModule` or a feature module never reached its
+watcher, which recorded nothing. It is found now, wherever it is provided, and
+every provider of it is recorded. If you had such a provider, entries of that
+type start appearing. See
+[Handing a watcher your service](../watchers/overview.md#handing-a-watcher-your-service).
+
+### `NestLensModule` is global and exports its watchers
+
+Every opt-in watcher and `NestLensLogger` are provided and exported whether or
+not they are switched on, so a service can take one in its constructor, and
+`app.get(NestLensLogger)` works with `enabled: false` or `watchers.log: false`.
+Off, a watcher's manual methods do nothing and it installs nothing.
+A key written without a value — `watchers: { gate: undefined }`, or
+`path: process.env.NESTLENS_PATH` with the variable unset — now means not
+configured, anywhere in the configuration: the default stands, which for an
+opt-in watcher is off.
+
+### Entries that read differently
+
+- **Event `duration`** is the time the listeners took — `emit` until its
+  synchronous listeners return, `emitAsync` until every listener settles. It
+  used to run to the next `setImmediate`, including whatever the emitting code
+  did afterwards; expect smaller numbers.
+- **Log `metadata`** is recorded: the plain object passed after the message.
+  It is masked like every payload; keep secrets out of log calls as before.
+- **Gate checks** are read by argument type: a second argument that is not a
+  string is the subject, not the action. `allows('update-post', post, user)`
+  records action `allows`, subject `Post` and the user's id.
+- **Cache `clear()`** is recorded, as `clear` on key `*` — the call that empties
+  cache-manager 6 and 7.
+- **Prisma 6.14 and 7** are recorded by the query watcher once the client is
+  built with query logging; a warning says so when it is not. See
+  [Prisma](../integrations/prisma.md).
 
 ## 0.7.x → 0.8.0
 
@@ -112,8 +182,11 @@ your application less per load. See
 character decides, a space sorts before a `T`, and so every entry recorded on
 the cutoff's date or earlier read as older than the cutoff whatever its time.
 Automatic pruning therefore emptied the day's entries, and the same comparison
-made date-range filtering in the dashboard wrong. Both now compare through
-SQLite's `datetime()`. No action needed; entries already deleted are gone.
+made date-range filtering in the dashboard wrong. That release compared both
+sides through SQLite's `datetime()`; a later one writes `created_at` in the same
+ISO format as the parameter and converts the rows already in the file when the
+storage opens, so the comparison is plain text order and the index answers it.
+No action needed; entries already deleted are gone.
 
 **Monitored tags are normalised.** Entry tags have always been stored upper-cased
 so that `slow` and `SLOW` are one tag; monitored tags were stored exactly as

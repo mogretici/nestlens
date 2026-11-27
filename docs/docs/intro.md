@@ -30,10 +30,10 @@ NestLens captures and visualizes everything happening in your NestJS application
 | **19 Watchers** | Complete visibility into every aspect of your app |
 | **Beautiful Dashboard** | Modern React UI with dark mode support |
 | **Family Tracking** | Group related entries by request or operation |
-| **Automatic ORM Detection** | Built-in support for TypeORM and Prisma |
+| **Automatic ORM Detection** | TypeORM and Prisma found on their own; Prisma 6.14+ needs query logging on the client |
 | **Express & Fastify** | Works with both NestJS HTTP adapters, no extra setup |
 | **TypeScript Native** | Full type safety throughout |
-| **Production Ready** | 1,400+ tests ensuring quality |
+| **Production Ready** | Tested on NestJS 9–12 and Node 20–24, on Express and Fastify; every release is installed from npm and booted before it counts |
 
 ## Quick Preview
 

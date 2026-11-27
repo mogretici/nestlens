@@ -44,8 +44,12 @@ published alongside the version support matrix.
 
 | Version | Supported |
 |---|---|
-| latest `0.8.x` | ✅ |
-| everything older | ❌ upgrade |
+| the latest `0.x` minor, at its latest patch | ✅ |
+| every earlier minor | ❌ upgrade |
+
+The latest release is the one on [npm](https://www.npmjs.com/package/nestlens)
+and in the [changelog](https://github.com/mogretici/nestlens/blob/main/CHANGELOG.md);
+this page names no number, so it cannot fall behind one.
 
 ## What counts as a vulnerability
 

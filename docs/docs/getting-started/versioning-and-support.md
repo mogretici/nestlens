@@ -67,6 +67,10 @@ be claimed without being run.
 
 ### How long a version stays supported
 
+- **NestLens** — before `1.0`, fixes land on the latest minor only, security
+  fixes included; upgrading within `0.x` is the supported path. The
+  [security policy](https://github.com/mogretici/nestlens/security/policy) says
+  the same.
 - **Node** — a Node release leaves the matrix when it reaches end-of-life, in
   the first NestLens minor after that date. Node 18 left this way.
 - **NestJS** — a NestJS major leaves the matrix when NestLens can no longer
