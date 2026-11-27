@@ -15,14 +15,16 @@ import { MethodOutcome, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * The cache-manager surface this watcher touches. Every method is optional
- * because the store decides which ones exist, and cache-manager v5 dropped
- * `reset()`.
+ * because the version decides which ones exist: up to cache-manager 5 a cache
+ * is emptied with `reset()`, and from 6 — what @nestjs/cache-manager 3 and 12
+ * inject — with `clear()`, the only one of the two it still has.
  */
 interface CacheLike {
   get?: (key: string) => Promise<unknown>;
   set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
   del?: (key: string) => Promise<void>;
   reset?: () => Promise<void>;
+  clear?: () => Promise<unknown>;
 }
 
 // Try to import CACHE_MANAGER, but make it optional
@@ -39,12 +41,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CacheWatcher.name);
   private readonly config: CacheWatcherConfig;
   private methodsBeforeWrapping?: Record<string, unknown>;
-  private originalMethods?: {
-    get?: (key: string) => Promise<unknown>;
-    set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
-    del?: (key: string) => Promise<void>;
-    reset?: () => Promise<void>;
-  };
+  private originalMethods?: CacheLike;
 
   constructor(
     private readonly collector: CollectorService,
@@ -110,6 +107,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       set: manager.set,
       del: manager.del,
       reset: manager.reset,
+      clear: manager.clear,
     };
 
     // Store original methods
@@ -118,6 +116,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       set: this.cacheManager.set?.bind(this.cacheManager),
       del: this.cacheManager.del?.bind(this.cacheManager),
       reset: this.cacheManager.reset?.bind(this.cacheManager),
+      clear: this.cacheManager.clear?.bind(this.cacheManager),
     };
 
     // Wrapped so a caller gets back exactly what it did before.
@@ -162,6 +161,11 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       this.collectEntry('clear', '*', undefined, durationMs);
     });
     if (reset) manager.reset = reset;
+
+    const clear = wrap(this.originalMethods.clear, ({ durationMs }) => {
+      this.collectEntry('clear', '*', undefined, durationMs);
+    });
+    if (clear) manager.clear = clear;
 
     this.logger.log('Cache interceptors installed');
   }
