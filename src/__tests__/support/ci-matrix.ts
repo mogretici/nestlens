@@ -1,11 +1,12 @@
 /**
- * The Node and NestJS versions CI runs, read from the workflows themselves.
+ * What CI runs — the Node and NestJS versions, and the steps of each job —
+ * read from the workflows themselves.
  *
  * Parsed rather than matched: a regular expression over the text found the
  * first `node: [...]` in the file, which said nothing about which job it
  * belonged to and never saw a version added through `include`.
  */
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { parse } from 'yaml';
 
@@ -13,10 +14,12 @@ const WORKFLOWS = resolve(__dirname, '..', '..', '..', '.github', 'workflows');
 
 type MatrixValue = string | number;
 
-interface Step {
+export interface Step {
+  readonly name?: string;
   readonly uses?: string;
   readonly run?: string;
   readonly with?: Record<string, unknown>;
+  readonly 'working-directory'?: string;
 }
 
 interface Job {
@@ -28,11 +31,19 @@ interface Job {
   readonly steps?: readonly Step[];
 }
 
+interface Workflow {
+  readonly on?:
+    | string
+    | readonly string[]
+    | { readonly pull_request?: { readonly paths?: readonly string[] } | null };
+  readonly jobs?: Record<string, Job>;
+}
+
+const workflowOf = (file: string): Workflow =>
+  (parse(readFileSync(join(WORKFLOWS, file), 'utf8')) as Workflow | null) ?? {};
+
 const jobOf = (file: string, name: string): Job => {
-  const document = parse(readFileSync(join(WORKFLOWS, file), 'utf8')) as {
-    jobs?: Record<string, Job>;
-  } | null;
-  const job = document?.jobs?.[name];
+  const job = workflowOf(file).jobs?.[name];
 
   if (job === undefined) throw new Error(`${file} declares no job named ${name}`);
 
@@ -78,3 +89,35 @@ export const smoke = (): { readonly nodes: string[]; readonly steps: readonly St
 
   return { nodes: listOf(job, 'node'), steps: job.steps ?? [] };
 };
+
+const isList = (value: unknown): value is readonly string[] => Array.isArray(value);
+
+/** `on:` written as a name, a list of names, or a map of events to their filters. */
+const pullRequestOf = (
+  on: Workflow['on'],
+): { readonly runs: boolean; readonly paths?: readonly string[] } => {
+  if (on === undefined) return { runs: false };
+  if (typeof on === 'string') return { runs: on === 'pull_request' };
+  if (isList(on)) return { runs: on.includes('pull_request') };
+
+  return { runs: 'pull_request' in on, paths: on.pull_request?.paths };
+};
+
+/** Every job in every workflow, with the paths its workflow runs on for a pull request. */
+export const allJobs = (): ReadonlyArray<{
+  readonly name: string;
+  readonly steps: readonly Step[];
+  readonly pullRequest: { readonly runs: boolean; readonly paths?: readonly string[] };
+}> =>
+  readdirSync(WORKFLOWS)
+    .filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'))
+    .flatMap((file) => {
+      const workflow = workflowOf(file);
+      const pullRequest = pullRequestOf(workflow.on);
+
+      return Object.entries(workflow.jobs ?? {}).map(([name, job]) => ({
+        name: `${file} ${name}`,
+        steps: job.steps ?? [],
+        pullRequest,
+      }));
+    });
