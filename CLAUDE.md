@@ -152,9 +152,10 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
   there is no `tailwind.config.js` or PostCSS config. `src/tailwind3-defaults.css`
   keeps Tailwind 3's palette, font and line heights, so the move to 4 left the
   dashboard looking as it did; removing it is a visible redesign, not a cleanup.
-- Tailwind 4 drops a variant it cannot place without a warning: `@apply dark:…`
-  on a pseudo-element such as `::-webkit-scrollbar-thumb` produces no rule.
-  Write those selectors in plain CSS (`stylesheet.spec.ts` checks).
+- A variant on a pseudo-element is lost without a warning: `@apply dark:…` on
+  `::-webkit-scrollbar-thumb` compiles to `::-webkit-scrollbar-thumb:is(.dark *)`,
+  which no browser accepts, and the minifier drops it. Write those selectors in
+  plain CSS (`stylesheet.spec.ts` checks every stylesheet under `src/`).
 - `npm run typecheck` covers the app and `vite.config.ts`; a bare `tsc` reads
   only the first.
 
