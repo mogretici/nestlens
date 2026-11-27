@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -31,6 +33,8 @@ export const NESTLENS_COMMAND_BUS = Symbol('NESTLENS_COMMAND_BUS');
 export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CommandWatcher.name);
   private readonly config: CommandWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: CommandWatcher[] = [];
   private originalExecute?: (command: unknown) => Promise<unknown>;
   /**
    * The property exactly as it was found, for putting back.
@@ -47,7 +51,9 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_COMMAND_BUS)
-    private readonly commandBus?: CommandBusLike,
+    private commandBus?: CommandBusLike,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.command;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -57,6 +63,17 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.commandBus,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_COMMAND_BUS,
+      logger: this.logger,
+      watcher: 'CommandWatcher',
+      sibling: (host) => new CommandWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.commandBus = attached.host as typeof this.commandBus;
+    this.siblings = attached.siblings;
 
     // Check if command bus was provided
     if (!this.commandBus) {
@@ -128,6 +145,10 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.commandBus, 'CommandWatcher');
+
     if (this.commandBus && this.executeBeforeWrapping !== undefined) {
       (this.commandBus as Record<string, unknown>).execute = this.executeBeforeWrapping;
       this.executeBeforeWrapping = undefined;

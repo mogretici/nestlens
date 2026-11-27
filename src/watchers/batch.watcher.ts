@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -26,6 +28,8 @@ export const NESTLENS_BATCH_PROCESSOR = Symbol('NESTLENS_BATCH_PROCESSOR');
 export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BatchWatcher.name);
   private readonly config: BatchWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: BatchWatcher[] = [];
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -34,7 +38,9 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_BATCH_PROCESSOR)
-    private readonly batchProcessor?: unknown,
+    private batchProcessor?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.batch;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -44,6 +50,17 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.batchProcessor,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_BATCH_PROCESSOR,
+      logger: this.logger,
+      watcher: 'BatchWatcher',
+      sibling: (host) => new BatchWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.batchProcessor = attached.host as typeof this.batchProcessor;
+    this.siblings = attached.siblings;
 
     // Check if batch processor was provided
     if (!this.batchProcessor) {
@@ -113,6 +130,10 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.batchProcessor, 'BatchWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -142,6 +163,9 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
       memory?: number;
     },
   ): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     const status: 'completed' | 'partial' | 'failed' =
       failedItems === 0 ? 'completed' : processedItems > 0 ? 'partial' : 'failed';
 

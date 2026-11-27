@@ -6,7 +6,9 @@ import {
   Optional,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -38,6 +40,8 @@ export const NESTLENS_VIEW_ENGINE = Symbol('NESTLENS_VIEW_ENGINE');
 export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ViewWatcher.name);
   private readonly config: ViewWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: ViewWatcher[] = [];
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -46,7 +50,9 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_VIEW_ENGINE)
-    private readonly viewEngine?: ViewEngineLike,
+    private viewEngine?: ViewEngineLike,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.view;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -56,6 +62,17 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.viewEngine,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_VIEW_ENGINE,
+      logger: this.logger,
+      watcher: 'ViewWatcher',
+      sibling: (host) => new ViewWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.viewEngine = attached.host as typeof this.viewEngine;
+    this.siblings = attached.siblings;
 
     // Check if view engine was provided
     if (!this.viewEngine) {
@@ -93,6 +110,10 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
    * measured at three lifecycles, one render recorded three entries.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.viewEngine, 'ViewWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }

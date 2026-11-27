@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -49,6 +51,8 @@ export const NESTLENS_MAILER_SERVICE = Symbol('NESTLENS_MAILER_SERVICE');
 export class MailWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MailWatcher.name);
   private readonly config: MailWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: MailWatcher[] = [];
   private wrapped?: WrappedMethods;
   /** Mailers handed to `setupMailer`, which also have to be given back. */
   private readonly manuallyWrapped: WrappedMethods[] = [];
@@ -59,7 +63,9 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_MAILER_SERVICE)
-    private readonly mailerService?: unknown,
+    private mailerService?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.mail;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -69,6 +75,17 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.mailerService,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_MAILER_SERVICE,
+      logger: this.logger,
+      watcher: 'MailWatcher',
+      sibling: (host) => new MailWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.mailerService = attached.host as typeof this.mailerService;
+    this.siblings = attached.siblings;
 
     // Check if mailer service was provided
     if (!this.mailerService) {
@@ -92,6 +109,10 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.mailerService, 'MailWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
 
@@ -119,6 +140,9 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
    * Can be called manually if you want to track a specific mailer instance.
    */
   setupMailer(mailerService: unknown): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     if (!isMailer(mailerService)) {
       this.logger.warn('Invalid mailer service provided');
       return;

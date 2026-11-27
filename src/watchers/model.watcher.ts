@@ -6,7 +6,9 @@ import {
   Optional,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -112,6 +114,8 @@ const MAX_ENTITY_SIZE = 64 * 1024;
 export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: ModelWatcher[] = [];
   private wrapped?: WrappedMethods;
   /**
    * When each operation in flight began, oldest first, per entity and action.
@@ -143,7 +147,9 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_MODEL_SUBSCRIBER)
-    private readonly entitySubscriber?: unknown,
+    private entitySubscriber?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -188,6 +194,17 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.entitySubscriber,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_MODEL_SUBSCRIBER,
+      logger: this.logger,
+      watcher: 'ModelWatcher',
+      sibling: (host) => new ModelWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.entitySubscriber = attached.host as typeof this.entitySubscriber;
+    this.siblings = attached.siblings;
 
     // Check if entity subscriber was provided
     if (!this.entitySubscriber) {
@@ -253,6 +270,10 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * top of the last.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.entitySubscriber, 'ModelWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -278,6 +299,9 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * ```
    */
   setupPrismaClient<T>(prismaClient: T): T {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return prismaClient;
+
     if (hasMiddleware(prismaClient)) {
       prismaClient.$use(async (params: PrismaMiddlewareParams, next: PrismaNext) =>
         this.recordPrismaOperation(params.model, params.action ?? '', params.args, () =>

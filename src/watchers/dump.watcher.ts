@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -26,6 +28,8 @@ export const NESTLENS_DUMP_SERVICE = Symbol('NESTLENS_DUMP_SERVICE');
 export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DumpWatcher.name);
   private readonly config: DumpWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: DumpWatcher[] = [];
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -34,7 +38,9 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_DUMP_SERVICE)
-    private readonly dumpService?: unknown,
+    private dumpService?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.dump;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -44,6 +50,17 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.dumpService,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_DUMP_SERVICE,
+      logger: this.logger,
+      watcher: 'DumpWatcher',
+      sibling: (host) => new DumpWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.dumpService = attached.host as typeof this.dumpService;
+    this.siblings = attached.siblings;
 
     // Check if dump service was provided
     if (!this.dumpService) {
@@ -72,6 +89,10 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.dumpService, 'DumpWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -143,6 +164,9 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
       error?: string;
     },
   ): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     this.collectEntry(
       operation,
       format,

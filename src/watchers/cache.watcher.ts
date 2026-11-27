@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -40,6 +42,8 @@ try {
 export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CacheWatcher.name);
   private readonly config: CacheWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: CacheWatcher[] = [];
   private methodsBeforeWrapping?: Record<string, unknown>;
   private originalMethods?: CacheLike;
 
@@ -49,7 +53,9 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(CACHE_MANAGER)
-    private readonly cacheManager?: CacheLike,
+    private cacheManager?: CacheLike,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.cache;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -59,6 +65,17 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.cacheManager,
+      moduleRef: this.moduleRef,
+      token: CACHE_MANAGER,
+      logger: this.logger,
+      watcher: 'CacheWatcher',
+      sibling: (host) => new CacheWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.cacheManager = attached.host as typeof this.cacheManager;
+    this.siblings = attached.siblings;
 
     // Check if cache manager was provided
     if (!this.cacheManager) {
@@ -82,6 +99,10 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.cacheManager, 'CacheWatcher');
+
     if (!this.cacheManager || !this.methodsBeforeWrapping) {
       return;
     }

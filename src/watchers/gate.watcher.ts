@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { GateWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { GateEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -55,6 +57,8 @@ const readGateArguments = (method: string, args: unknown[]): GateArguments => {
 export class GateWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GateWatcher.name);
   private readonly config: GateWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: GateWatcher[] = [];
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -63,7 +67,9 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_GATE_SERVICE)
-    private readonly gateService?: unknown,
+    private gateService?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.gate;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -73,6 +79,17 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.gateService,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_GATE_SERVICE,
+      logger: this.logger,
+      watcher: 'GateWatcher',
+      sibling: (host) => new GateWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.gateService = attached.host as typeof this.gateService;
+    this.siblings = attached.siblings;
 
     // Check if gate service was provided
     if (!this.gateService) {
@@ -125,6 +142,10 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
    * the last.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.gateService, 'GateWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -141,6 +162,9 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     user?: unknown,
     reason?: string,
   ): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     this.collectEntry(gate, action, subject, allowed, user, reason, 0);
   }
 

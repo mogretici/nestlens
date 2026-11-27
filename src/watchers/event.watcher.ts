@@ -6,7 +6,9 @@ import {
   Optional,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -49,6 +51,8 @@ export const NESTLENS_EVENT_EMITTER = Symbol('NESTLENS_EVENT_EMITTER');
 export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventWatcher.name);
   private readonly config: EventWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: EventWatcher[] = [];
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -57,7 +61,9 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_EVENT_EMITTER)
-    private readonly eventEmitter?: unknown,
+    private eventEmitter?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.event;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -67,6 +73,17 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.eventEmitter,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_EVENT_EMITTER,
+      logger: this.logger,
+      watcher: 'EventWatcher',
+      sibling: (host) => new EventWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.eventEmitter = attached.host as typeof this.eventEmitter;
+    this.siblings = attached.siblings;
 
     // Check if event emitter was provided
     if (!this.eventEmitter) {
@@ -90,6 +107,10 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
    * last and records one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.eventEmitter, 'EventWatcher');
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }

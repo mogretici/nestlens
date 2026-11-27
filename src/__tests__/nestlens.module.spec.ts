@@ -7,6 +7,7 @@ import { PruningService } from '../core/pruning.service';
 import { TagService } from '../core/tag.service';
 import { FamilyHashService } from '../core/family-hash.service';
 import { STORAGE } from '../core/storage';
+import { CacheWatcher, EventWatcher, HttpClientWatcher, NestLensLogger } from '../watchers';
 
 describe('NestLensModule', () => {
   describe('forRoot', () => {
@@ -19,12 +20,24 @@ describe('NestLensModule', () => {
         const dynamicModule = NestLensModule.forRoot(config);
 
         // Assert
+        // The configuration, and the opt-in watchers as inert instances so a
+        // service that takes one still boots. Nothing else: no storage, no
+        // controllers, no imports.
         expect(dynamicModule.module).toBe(NestLensModule);
-        expect(dynamicModule.providers).toHaveLength(1);
         expect(dynamicModule.providers).toContainEqual({
           provide: NESTLENS_CONFIG,
           useValue: expect.objectContaining({ enabled: false }),
         });
+        const others = (dynamicModule.providers ?? []).filter(
+          (provider) => (provider as { provide?: unknown }).provide !== NESTLENS_CONFIG,
+        );
+        expect(
+          others.every((provider) =>
+            /Watcher$|^NestLensLogger$/.test(
+              String((provider as { provide: { name?: string } }).provide.name),
+            ),
+          ),
+        ).toBe(true);
         expect(dynamicModule.controllers).toBeUndefined();
         expect(dynamicModule.imports).toBeUndefined();
       });
@@ -94,8 +107,7 @@ describe('NestLensModule', () => {
         const dynamicModule = NestLensModule.forRoot(config);
 
         // Assert
-        expect(dynamicModule.exports).toBeDefined();
-        expect(dynamicModule.exports).toHaveLength(1);
+        expect(dynamicModule.exports).toContain(NestLensLogger);
       });
     });
 
@@ -257,8 +269,10 @@ describe('NestLensModule', () => {
           };
           const dynamicModuleWithHttp = NestLensModule.forRoot(configWithHttp);
 
-          // Assert
-          expect(dynamicModuleWithHttp.providers!.length).toBeGreaterThan(providerCount);
+          // Assert - provided either way, so a service taking it boots; off
+          // is decided by the watcher's own configuration.
+          expect(dynamicModuleWithHttp.providers!.length).toBe(providerCount);
+          expect(dynamicModule.providers).toContain(HttpClientWatcher);
         });
 
         it('should register http client watcher when enabled', () => {
@@ -290,7 +304,8 @@ describe('NestLensModule', () => {
           const cacheModule = NestLensModule.forRoot(cacheConfig);
 
           // Assert
-          expect(cacheModule.providers!.length).toBeGreaterThan(baseModule.providers!.length);
+          expect(cacheModule.providers).toContain(CacheWatcher);
+          expect(baseModule.providers).toContain(CacheWatcher);
         });
       });
 
@@ -308,7 +323,8 @@ describe('NestLensModule', () => {
           const eventModule = NestLensModule.forRoot(eventConfig);
 
           // Assert
-          expect(eventModule.providers!.length).toBeGreaterThan(baseModule.providers!.length);
+          expect(eventModule.providers).toContain(EventWatcher);
+          expect(baseModule.providers).toContain(EventWatcher);
         });
       });
 
@@ -554,15 +570,17 @@ describe('NestLensModule', () => {
           // Act
           const dynamicModule = NestLensModule.forRoot(config);
 
-          // Assert - what matters is that no watcher was registered, not how
-          // many providers the module happens to carry: counting them fails on
-          // every piece of infrastructure added, and says nothing about
-          // watchers either way.
+          // Assert - the request and exception watchers are not registered.
+          // The opt-in ones and NestLensLogger are provided either way, for
+          // their manual APIs and app.get, and stay inert because their own
+          // configuration says off.
           const providerNames = (dynamicModule.providers ?? []).map((provider) =>
             typeof provider === 'function' ? provider.name : String(provider),
           );
 
-          expect(providerNames.filter((name) => name.endsWith('Watcher'))).toEqual([]);
+          expect(
+            providerNames.filter((name) => ['RequestWatcher', 'ExceptionWatcher'].includes(name)),
+          ).toEqual([]);
         });
       });
     });

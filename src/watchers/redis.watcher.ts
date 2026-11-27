@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts, releaseHost } from './host-token';
 import { wrapMethodPreservingShape } from './wrap-method';
 import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { RedisEntry } from '../types';
@@ -41,6 +43,8 @@ const SENSITIVE_KEY_PATTERNS = [
 export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisWatcher.name);
   private readonly config: RedisWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: RedisWatcher[] = [];
   private originalMethods?: Map<string, RedisCommand>;
 
   constructor(
@@ -49,7 +53,9 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_REDIS_CLIENT)
-    private readonly redisClient?: unknown,
+    private redisClient?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.redis;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -59,6 +65,17 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.redisClient,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_REDIS_CLIENT,
+      logger: this.logger,
+      watcher: 'RedisWatcher',
+      sibling: (host) => new RedisWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.redisClient = attached.host as typeof this.redisClient;
+    this.siblings = attached.siblings;
 
     // Check if Redis client was provided
     if (!this.redisClient) {
@@ -144,6 +161,10 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    releaseHost(this.redisClient, 'RedisWatcher');
+
     const client = this.redisClient as Record<string, unknown> | undefined;
     if (!client || !this.originalMethods) {
       return;
