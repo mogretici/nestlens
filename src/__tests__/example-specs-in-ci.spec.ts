@@ -12,6 +12,12 @@
  * test the change when the library was built before the example was
  * installed. The order is part of what this checks.
  *
+ * Its lint is checked in the same job. It had never run anywhere either, and
+ * when it first did it found 738 problems: `any` standing in for entry
+ * payload types, publishes nobody awaited, and a formatting pass nobody had
+ * made. Type-aware rules need the example's dependencies installed, which
+ * this job already does.
+ *
  * Following AAA (Arrange-Act-Assert).
  */
 import { describe, it, expect } from 'vitest';
@@ -23,6 +29,7 @@ const inExample = (step: Step, run: RegExp): boolean =>
 const isRootBuild = (step: Step): boolean =>
   step['working-directory'] === undefined && /^npm run build\b/.test(step.run ?? '');
 
+const LINT = /^npm run lint$/;
 const UNIT = /^npm test$/;
 const E2E = /^npm run test:e2e$/;
 const INSTALL = /^npm (ci|install)\b/;
@@ -39,17 +46,19 @@ describe("the example's specs in CI", () => {
   });
 
   it.each(runningExampleSpecs().map(({ name }) => name))(
-    '%s builds the library, then installs the example, then runs them',
+    '%s builds the library, then installs the example, then lints it and runs them',
     (name) => {
       const { steps } = runningExampleSpecs().find((job) => job.name === name)!;
 
       const build = steps.findIndex(isRootBuild);
       const install = steps.findIndex((step) => inExample(step, INSTALL));
+      const lint = steps.findIndex((step) => inExample(step, LINT));
       const unit = steps.findIndex((step) => inExample(step, UNIT));
       const e2e = steps.findIndex((step) => inExample(step, E2E));
 
       expect(build).toBeGreaterThan(-1);
       expect(install).toBeGreaterThan(build);
+      expect(lint, 'the example is linted in the same job').toBeGreaterThan(install);
       expect(unit).toBeGreaterThan(install);
       expect(e2e).toBeGreaterThan(install);
     },

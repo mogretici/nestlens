@@ -96,14 +96,16 @@ cd example && ./test-requests.sh  # Generate test data for every entry type; nee
                                    # running, curl and python3. Args: [base URL] [mount path]
 cd example && npm test     # Example's own Vitest specs (`unit` project, src/**/*.spec.ts)
 cd example && npm run test:e2e     # Boots AppModule in-process (`e2e` project, test/)
+cd example && npm run lint # Type-aware ESLint, fails on any warning; `lint:fix` rewrites
 ```
 
 The example has its own `vitest.config.mts`, built like the library's: SWC
 through `unplugin-swc`, and `resolve.extensions` with `.js` before `.mjs`
 (`example/src/one-graphql.spec.ts` fails without it). CI runs both projects
 in the E2E workflow's built-package job, after the build and the example
-install; `src/__tests__/example-specs-in-ci.spec.ts` fails if they stop running
-or move ahead of either.
+install, and lints the example there too (its type-aware rules need the
+installed `nestlens`); `src/__tests__/example-specs-in-ci.spec.ts` fails if
+any of the three stops running or moves ahead of either.
 
 The example installs NestLens from `file:..` as a **copy**, not a symlink
 (`example/.npmrc` sets `install-links=true`). A symlink makes Node load
@@ -348,8 +350,9 @@ it is no longer required for Apollo or Mercurius.
   library, and on one branch of forty-five commits thirty changed none of the
   listed paths — including the Redis rewrite and the watcher wrapping fix,
   which are exactly the changes that produce a blank dashboard. The
-  built-package job also runs the example's own Vitest specs (`npm test` and
-  `npm run test:e2e` in `example/`), which take seconds and need exactly the
+  built-package job also lints the example and runs its own Vitest specs
+  (`npm run lint`, `npm test` and `npm run test:e2e` in `example/`), which
+  take seconds and need exactly the
   build and install it already does. All three browsers run nightly at 03:00 UTC. Actions tab →
   **E2E** → *Run workflow* still runs it on demand, with `all` as a browser
   option.
