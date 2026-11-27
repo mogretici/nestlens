@@ -9,6 +9,7 @@
  * `storage.maxEntries`, for every driver; a `RedisStorage` built by hand takes
  * one through its own options.
  */
+import { describe, it, expect } from 'vitest';
 import { NestLensConfig } from '../../../nestlens.config';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 

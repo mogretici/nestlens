@@ -15,6 +15,7 @@
  *
  * A monitoring tool must never be the reason a deployment cannot roll.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { StorageInterface } from '../../core/storage/storage.interface';
 import { NestLensConfig } from '../../nestlens.config';
@@ -127,7 +128,7 @@ describe('collector shutdown', () => {
 
   it('stops the periodic flush timer', async () => {
     const collector = makeCollector('ok');
-    const cleared = jest.spyOn(global, 'clearInterval');
+    const cleared = vi.spyOn(global, 'clearInterval');
 
     await collector.shutdown();
 

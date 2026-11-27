@@ -14,6 +14,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect } from 'vitest';
 import { Module } from '@nestjs/common';
 import { LazyModuleLoader, NestFactory } from '@nestjs/core';
 import request from 'supertest';

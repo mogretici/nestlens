@@ -12,6 +12,7 @@
  * a literal could. It is derived now, and this is the guard for the next type
  * somebody adds.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -58,7 +59,7 @@ const entry = (type: EntryType): Entry =>
   }) as unknown as Entry;
 
 describe('stats count every type there is', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   const drivers: [string, () => StorageInterface | undefined][] = [
     ['memory', () => new MemoryStorage({ maxEntries: 1000 })],

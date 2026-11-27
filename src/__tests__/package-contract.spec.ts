@@ -15,6 +15,7 @@
  * Packages that are genuinely optional must be loaded lazily inside a function
  * with `require`, so importing NestLens never pulls them in.
  */
+import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { builtinModules } from 'module';
 import { join, relative, resolve } from 'path';

@@ -6,6 +6,7 @@
  * controller over real HTTP. This is the regression guard for issue #8
  * ("Not working with Fastify adapter": `response.status(...).json is not a function`).
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   Controller,
   Get,

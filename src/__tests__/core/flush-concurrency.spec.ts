@@ -13,6 +13,7 @@
  * already on their way to the storage were outside it — three times the cap,
  * and growing with how far behind the storage was.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { StorageInterface } from '../../core/storage/storage.interface';
@@ -56,7 +57,7 @@ const bufferOf = (collector: CollectorService) => collector.getBufferSize();
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('a storage slower than the traffic', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   it('is never handed more than one batch at a time', async () => {
     const slow = slowStorage(200);

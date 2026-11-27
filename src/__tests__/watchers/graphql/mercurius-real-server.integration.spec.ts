@@ -18,6 +18,7 @@
  * These run a real Fastify server with real Mercurius and read what NestLens
  * recorded.
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import mercurius from 'mercurius';
 import { CollectorService } from '../../../core/collector.service';
@@ -77,14 +78,10 @@ const startServer = async (
   adapter.initialize(resolveGraphQLConfig(options as never), collector);
 
   const app = Fastify();
-  // `cache: false` keeps Mercurius from reaching for its LRU through a dynamic
-  // import, which Jest's CommonJS VM refuses without a global flag. Nothing
-  // under test depends on the query cache.
   await app.register(mercurius, {
     schema: SCHEMA,
     resolvers: RESOLVERS,
     graphiql: false,
-    cache: false,
   });
 
   const hooks = adapter.getPlugin() as Record<string, (...args: unknown[]) => Promise<void>>;
@@ -117,7 +114,7 @@ const ask = (
     .then((response) => ({ statusCode: response.statusCode, body: response.body }));
 
 describeMercurius('Mercurius, running', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: FastifyInstance | undefined;
 

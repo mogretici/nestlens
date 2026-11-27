@@ -8,6 +8,7 @@
  * buried, storage filled with noise, every refresh produced more of it, and the
  * SSE stream died with ERR_HTTP_HEADERS_SENT as the open request was recorded.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Controller, Get, INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -74,7 +75,7 @@ const bootAndRecord = async (
 };
 
 describe('NestLens does not record its own traffic', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   it('ignores its own routes on the default path', async () => {
     const paths = await bootAndRecord(undefined, '/nestlens');

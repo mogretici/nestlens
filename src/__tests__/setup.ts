@@ -1,28 +1,11 @@
-/**
- * Jest Test Setup
- *
- * This file runs before all tests to set up the testing environment.
- */
-
 import 'reflect-metadata';
+import { afterEach, vi } from 'vitest';
 import { installLoopbackListenGuard } from './support/loopback-listen';
 
 installLoopbackListenGuard();
 
-// Increase timeout for async operations
-jest.setTimeout(10000);
-
-// Mock console.error to keep test output clean (optional)
-// Uncomment if you want to suppress expected error logs during tests
-// const originalError = console.error;
-// beforeAll(() => {
-//   console.error = jest.fn();
-// });
-// afterAll(() => {
-//   console.error = originalError;
-// });
-
-// Clean up after each test
+// After each test rather than `clearMocks: true`, which clears before each one
+// and would erase the calls a `beforeAll` made before the first test reads them.
 afterEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });

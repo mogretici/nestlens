@@ -6,6 +6,7 @@
  * notice, because nothing fails. This is the test that notices: add a route to
  * a NestLens controller without `@NestLensTool` and it fails, naming the route.
  */
+import { describe, it, expect } from 'vitest';
 import { readdirSync } from 'fs';
 import { join } from 'path';
 import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
@@ -26,10 +27,15 @@ const NOT_TOOLS = new Set(['NestLensApiController.getTools']);
 
 type ControllerClass = new (...args: never[]) => object;
 
-const controllers = (): ControllerClass[] =>
-  readdirSync(API_DIR)
-    .filter((file) => file.endsWith('.controller.ts'))
-    .flatMap((file) => Object.values(require(join(API_DIR, file)) as Record<string, unknown>))
+const controllers = async (): Promise<ControllerClass[]> =>
+  (
+    await Promise.all(
+      readdirSync(API_DIR)
+        .filter((file) => file.endsWith('.controller.ts'))
+        .map((file) => import(join(API_DIR, file)) as Promise<Record<string, unknown>>),
+    )
+  )
+    .flatMap((exports) => Object.values(exports))
     .filter((value): value is ControllerClass => typeof value === 'function')
     .filter((value) => {
       const path = Reflect.getMetadata(PATH_METADATA, value) as string | undefined;
@@ -43,14 +49,14 @@ const routes = (controller: ControllerClass): string[] =>
   });
 
 describe('tool coverage', () => {
-  it('finds the controllers whose routes it checks', () => {
-    expect(controllers().map((c) => c.name)).toEqual(
+  it('finds the controllers whose routes it checks', async () => {
+    expect((await controllers()).map((c) => c.name)).toEqual(
       expect.arrayContaining(['NestLensApiController', 'TagController']),
     );
   });
 
-  it('has a tool for every route of every API controller', () => {
-    const undecorated = controllers().flatMap((controller) =>
+  it('has a tool for every route of every API controller', async () => {
+    const undecorated = (await controllers()).flatMap((controller) =>
       routes(controller)
         .filter((name) => !NOT_TOOLS.has(`${controller.name}.${name}`))
         .filter(
@@ -70,7 +76,7 @@ describe('tool coverage', () => {
     const api = Object.create(NestLensApiController.prototype) as NestLensApiController;
     const served = new Set((await api.getTools()).data.tools.map((tool) => tool.name));
 
-    const missing = controllers().flatMap((controller) =>
+    const missing = (await controllers()).flatMap((controller) =>
       routes(controller)
         .filter((name) => !NOT_TOOLS.has(`${controller.name}.${name}`))
         .map((name) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase())

@@ -4,6 +4,7 @@
  * watcher and the only thing standing between a production payload and storage,
  * so both properties are pinned here: what it masks, and what it costs.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { DataMaskerService } from '../../../core/data-masker.service';
 import { isSanitized } from '../../../core/sanitized-payload';
 import { GRAPHQL_DEFAULTS } from '../../../watchers/graphql/types';
@@ -203,7 +204,7 @@ describe('GraphQL variable sanitizer', () => {
       // parallel workers, which is a test that reports on the machine instead
       // of on the code. Every term lookup goes through `Set.prototype.has`, and
       // a memo hit performs none, so counting them says the same thing exactly.
-      const termLookups = jest.spyOn(Set.prototype, 'has');
+      const termLookups = vi.spyOn(Set.prototype, 'has');
 
       try {
         // Fifty distinct names, five thousand occurrences — the shape a schema

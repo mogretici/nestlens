@@ -22,6 +22,7 @@
  * These run against the two backends that need no server. The Redis behaviour
  * is pinned by the same expectations in the parity sweep.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';

@@ -6,6 +6,7 @@
  * the hub lists what the controllers declare, and a call it builds from that
  * description is one the API accepts.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Controller, Get, INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';

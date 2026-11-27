@@ -14,6 +14,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';

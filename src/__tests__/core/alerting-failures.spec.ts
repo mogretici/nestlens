@@ -7,6 +7,7 @@
  * lines of configuration, and the ordering it depends on is stated nowhere but
  * in the collector's source.
  */
+import { describe, it, expect } from 'vitest';
 import { Subject } from 'rxjs';
 import { AlertingService } from '../../core/alerting.service';
 import { CollectorService } from '../../core/collector.service';

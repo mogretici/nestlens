@@ -5,6 +5,7 @@
  * silently no-op'd here because it relied on `getDataSources()` and a fake
  * `Driver.afterQuery` hook, neither of which exist in TypeORM 0.3.x.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Module } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';

@@ -4,6 +4,8 @@
  * Tests for the model watcher that monitors ORM operations.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -12,27 +14,27 @@ import { DataMaskerService } from '../../core/data-masker.service';
 
 describe('ModelWatcher', () => {
   let watcher: ModelWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createEntitySubscriber = (
     overrides: Partial<{
-      afterLoad: jest.Mock;
-      beforeInsert: jest.Mock;
-      afterInsert: jest.Mock;
-      beforeUpdate: jest.Mock;
-      afterUpdate: jest.Mock;
-      beforeRemove: jest.Mock;
-      afterRemove: jest.Mock;
+      afterLoad: Mock;
+      beforeInsert: Mock;
+      afterInsert: Mock;
+      beforeUpdate: Mock;
+      afterUpdate: Mock;
+      beforeRemove: Mock;
+      afterRemove: Mock;
     }> = {},
   ) => ({
-    afterLoad: jest.fn(),
-    beforeInsert: jest.fn(),
-    afterInsert: jest.fn(),
-    beforeUpdate: jest.fn(),
-    afterUpdate: jest.fn(),
-    beforeRemove: jest.fn(),
-    afterRemove: jest.fn(),
+    afterLoad: vi.fn(),
+    beforeInsert: vi.fn(),
+    afterInsert: vi.fn(),
+    beforeUpdate: vi.fn(),
+    afterUpdate: vi.fn(),
+    beforeRemove: vi.fn(),
+    afterRemove: vi.fn(),
     ...overrides,
   });
 
@@ -58,12 +60,12 @@ describe('ModelWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -368,7 +370,7 @@ describe('ModelWatcher', () => {
       // Arrange
       watcher = await createWatcher(mockConfig, undefined);
       const prismaClient = {
-        $use: jest.fn(),
+        $use: vi.fn(),
       };
 
       // Act
@@ -392,13 +394,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      const next = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
       const params = { model: 'User', action: 'findMany', args: { where: { active: true } } };
 
       // Act
@@ -421,13 +423,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({ id: 1, name: 'New' });
+      const next = vi.fn().mockResolvedValue({ id: 1, name: 'New' });
       const params = { model: 'Post', action: 'create', args: {} };
 
       // Act
@@ -449,13 +451,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({ id: 1 });
+      const next = vi.fn().mockResolvedValue({ id: 1 });
       const params = { model: 'Comment', action: 'update', args: { where: { id: 1 } } };
 
       // Act
@@ -476,13 +478,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({ id: 1 });
+      const next = vi.fn().mockResolvedValue({ id: 1 });
       const params = { model: 'Session', action: 'delete', args: { where: { id: 1 } } };
 
       // Act
@@ -503,13 +505,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({ id: 1 });
+      const next = vi.fn().mockResolvedValue({ id: 1 });
       const params = { model: 'Profile', action: 'upsert', args: {} };
 
       // Act
@@ -530,13 +532,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue([]);
+      const next = vi.fn().mockResolvedValue([]);
       const params = { model: 'Log', action: 'findMany', args: {} };
 
       // Act
@@ -551,14 +553,14 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
       const expectedResult = { id: 1, name: 'Test' };
-      const next = jest.fn().mockResolvedValue(expectedResult);
+      const next = vi.fn().mockResolvedValue(expectedResult);
       const params = { model: 'User', action: 'findUnique', args: {} };
 
       // Act
@@ -573,13 +575,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockRejectedValue(new Error('Prisma error'));
+      const next = vi.fn().mockRejectedValue(new Error('Prisma error'));
       const params = { model: 'User', action: 'create', args: {} };
 
       // Act & Assert
@@ -611,7 +613,7 @@ describe('ModelWatcher', () => {
       new DataMaskerService({}).maskBody(payload) as Record<string, unknown>;
 
     const recordedData = (): unknown =>
-      throughCollector((mockCollector.collect as jest.Mock).mock.calls[0][1]).data;
+      throughCollector((mockCollector.collect as Mock).mock.calls[0][1]).data;
 
     it('should mask password field', async () => {
       mockConfig.watchers = { model: { enabled: true, captureData: true } };
@@ -688,13 +690,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue([
+      const next = vi.fn().mockResolvedValue([
         { id: 1, email: 'a@example.com', password: 'pass1' },
         { id: 2, email: 'b@example.com', password: 'pass2' },
       ]);
@@ -735,13 +737,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({ id: 1 });
+      const next = vi.fn().mockResolvedValue({ id: 1 });
       const params = { model: 'User', action: 'findUnique', args: { where: { id: 1 } } };
 
       // Act
@@ -761,13 +763,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue([]);
+      const next = vi.fn().mockResolvedValue([]);
       const largeWhere = {
         ids: Array(1000)
           .fill(0)
@@ -795,13 +797,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue([]);
+      const next = vi.fn().mockResolvedValue([]);
       const circularWhere: any = {};
       circularWhere.self = circularWhere;
       const params = { model: 'User', action: 'findMany', args: { where: circularWhere } };
@@ -826,13 +828,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue(null);
+      const next = vi.fn().mockResolvedValue(null);
       const params = { model: 'User', action: 'findUnique', args: {} };
 
       // Act
@@ -852,13 +854,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({});
+      const next = vi.fn().mockResolvedValue({});
       const params = { action: 'findUnique', args: {} };
 
       // Act
@@ -878,13 +880,13 @@ describe('ModelWatcher', () => {
       watcher = await createWatcher(mockConfig, undefined);
       let middleware: Function;
       const prismaClient = {
-        $use: jest.fn((fn) => {
+        $use: vi.fn((fn) => {
           middleware = fn;
         }),
       };
       watcher.setupPrismaClient(prismaClient);
 
-      const next = jest.fn().mockResolvedValue({});
+      const next = vi.fn().mockResolvedValue({});
       const params = { model: 'User', action: 'unknownAction', args: {} };
 
       // Act
@@ -902,12 +904,12 @@ describe('ModelWatcher', () => {
     it('should not call original callback if missing for afterInsert', async () => {
       // Arrange - use partial subscriber to test missing methods
       const subscriber = {
-        afterLoad: jest.fn(),
-        beforeInsert: jest.fn(),
-        beforeUpdate: jest.fn(),
-        afterUpdate: jest.fn(),
-        beforeRemove: jest.fn(),
-        afterRemove: jest.fn(),
+        afterLoad: vi.fn(),
+        beforeInsert: vi.fn(),
+        beforeUpdate: vi.fn(),
+        afterUpdate: vi.fn(),
+        beforeRemove: vi.fn(),
+        afterRemove: vi.fn(),
       } as any;
       watcher = await createWatcher(mockConfig, subscriber);
 

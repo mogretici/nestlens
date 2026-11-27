@@ -18,6 +18,7 @@
  * where the transforms do run, what was refused before is still refused, with
  * the message the caller reads today.
  */
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException, Type } from '@nestjs/common';
 import { getMetadataStorage, validate, ValidationTypes } from 'class-validator';

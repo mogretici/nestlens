@@ -10,6 +10,7 @@
  * So this runs overlapping requests that each record from inside an `await`,
  * and checks that no entry ended up attributed to the other one.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Controller, Get, INestApplication, Injectable, Module, Query } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -69,7 +70,7 @@ class WorkController {
 class AppModule {}
 
 describe('correlation under concurrency', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let url: string;

@@ -8,6 +8,7 @@
  * reason for it, which presents as "the watcher is enabled and records
  * nothing".
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../../../core/collector.service';
@@ -32,7 +33,7 @@ const build = (config: Partial<NestLensConfig> = {}): GraphQLWatcher =>
 const captureLogs = (): { lines: string[]; restore: () => void } => {
   const lines: string[] = [];
   const spies = (['log', 'warn', 'error', 'debug'] as const).map((level) =>
-    jest.spyOn(Logger.prototype, level).mockImplementation((...args: unknown[]) => {
+    vi.spyOn(Logger.prototype, level).mockImplementation((...args: unknown[]) => {
       lines.push(String(args[0]));
     }),
   );

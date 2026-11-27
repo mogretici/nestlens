@@ -4,6 +4,8 @@
  * Tests for the mail watcher that monitors email sending.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,15 +13,15 @@ import { MailWatcher, NESTLENS_MAILER_SERVICE } from '../../watchers/mail.watche
 
 describe('MailWatcher', () => {
   let watcher: MailWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createMailerService = (
     overrides: Partial<{
-      sendMail: jest.Mock;
+      sendMail: Mock;
     }> = {},
   ) => ({
-    sendMail: jest.fn().mockResolvedValue({ messageId: 'test-123' }),
+    sendMail: vi.fn().mockResolvedValue({ messageId: 'test-123' }),
     ...overrides,
   });
 
@@ -45,12 +47,12 @@ describe('MailWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -182,7 +184,7 @@ describe('MailWatcher', () => {
     it('should collect duration for mail send', async () => {
       // Arrange
       const mailer = createMailerService({
-        sendMail: jest
+        sendMail: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
@@ -207,7 +209,7 @@ describe('MailWatcher', () => {
       // Arrange
       const expectedResult = { messageId: 'abc-123', accepted: ['test@example.com'] };
       const mailer = createMailerService({
-        sendMail: jest.fn().mockResolvedValue(expectedResult),
+        sendMail: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, mailer);
       watcher.onModuleInit();
@@ -228,7 +230,7 @@ describe('MailWatcher', () => {
     it('should collect failed mail send', async () => {
       // Arrange
       const mailer = createMailerService({
-        sendMail: jest.fn().mockRejectedValue(new Error('SMTP connection failed')),
+        sendMail: vi.fn().mockRejectedValue(new Error('SMTP connection failed')),
       });
       watcher = await createWatcher(mockConfig, mailer);
       watcher.onModuleInit();
@@ -253,7 +255,7 @@ describe('MailWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const mailer = createMailerService({
-        sendMail: jest.fn().mockRejectedValue(new Error('Network error')),
+        sendMail: vi.fn().mockRejectedValue(new Error('Network error')),
       });
       watcher = await createWatcher(mockConfig, mailer);
       watcher.onModuleInit();
@@ -267,7 +269,7 @@ describe('MailWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const mailer = createMailerService({
-        sendMail: jest.fn().mockRejectedValue('String error'),
+        sendMail: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, mailer);
       watcher.onModuleInit();
@@ -514,7 +516,7 @@ describe('MailWatcher', () => {
       // Arrange
       watcher = await createWatcher(mockConfig, undefined);
       const customMailer = createMailerService({
-        sendMail: jest.fn().mockRejectedValue(new Error('Custom error')),
+        sendMail: vi.fn().mockRejectedValue(new Error('Custom error')),
       });
 
       // Act

@@ -16,6 +16,7 @@
  * So each filter here is given an entry it should keep, an entry it should
  * drop, and one question asked of every backend.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -363,7 +364,7 @@ const CASES: Record<string, Case> = {
 };
 
 describe('every filter agrees across backends', () => {
-  jest.setTimeout(120_000);
+  vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

@@ -1,3 +1,4 @@
+import { expect } from 'vitest';
 import { SqliteStorage } from '../../core/storage/sqlite.storage';
 import { Entry, EntryType, CursorPaginationParams } from '../../types';
 

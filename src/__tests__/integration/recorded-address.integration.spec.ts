@@ -8,6 +8,7 @@
  * whitelist went on checking the socket. The IP column, the `ips` filter and
  * an incident investigation all read the field the caller wrote.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -54,7 +55,7 @@ const recordedAddress = async (app: INestApplication, url: string): Promise<stri
 };
 
 describe('the address a request is recorded against', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   it('is the socket address when no proxy is trusted', async () => {
     const { app, url } = await build(false);

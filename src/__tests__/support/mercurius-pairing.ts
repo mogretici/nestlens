@@ -12,6 +12,7 @@
  * A suite that cannot run says so and skips. What it covers is covered wherever
  * the two do line up, which is every ordinary checkout and the unit-test job.
  */
+import { describe } from 'vitest';
 const majorOf = (name: string): number | undefined => {
   try {
     const { version } = require(`${name}/package.json`) as { version: string };
@@ -32,4 +33,5 @@ export const mercuriusRunsHere =
   (mercuriusMajor >= 15 ? fastifyMajor >= 5 : fastifyMajor < 5);
 
 /** `describe` where the pair works, and a skip with the reason where it does not. */
-export const describeMercurius = mercuriusRunsHere ? describe : describe.skip;
+export const describeMercurius: ReturnType<typeof describe.skipIf> =
+  describe.skipIf(!mercuriusRunsHere);

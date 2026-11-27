@@ -13,6 +13,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -139,7 +140,7 @@ describe('opening a database written by a newer NestLens', () => {
     // Arrange
     const file = join(workspace, 'future.db');
     writeLegacyDatabase(file, { userVersion: CURRENT_SCHEMA + 5 });
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     // Act
     const storage = new SqliteStorage(file);

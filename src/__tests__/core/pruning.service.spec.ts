@@ -4,6 +4,8 @@
  * Tests for automatic entry pruning service.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PruningService } from '../../core/pruning.service';
@@ -12,15 +14,15 @@ import { STORAGE, StorageInterface } from '../../core/storage/storage.interface'
 
 describe('PruningService', () => {
   let service: PruningService;
-  let mockStorage: jest.Mocked<StorageInterface>;
+  let mockStorage: Mocked<StorageInterface>;
   let mockConfig: NestLensConfig;
 
   beforeEach(async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     mockStorage = {
-      prune: jest.fn().mockResolvedValue(0),
-    } as unknown as jest.Mocked<StorageInterface>;
+      prune: vi.fn().mockResolvedValue(0),
+    } as unknown as Mocked<StorageInterface>;
 
     mockConfig = {
       enabled: true,
@@ -44,7 +46,7 @@ describe('PruningService', () => {
 
   afterEach(async () => {
     await service.onModuleDestroy();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   // ============================================================================
@@ -115,7 +117,7 @@ describe('PruningService', () => {
      */
     it('refuses a zero interval and says why', async () => {
       // Arrange
-      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       mockConfig.pruning = { enabled: true, interval: 0 };
       const module = await Test.createTestingModule({
         providers: [
@@ -132,7 +134,7 @@ describe('PruningService', () => {
       // Assert - the default interval stands, and the mistake is reported
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('pruning.interval'));
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('enabled: false'));
-      jest.advanceTimersByTime(60 * 60 * 1000);
+      vi.advanceTimersByTime(60 * 60 * 1000);
       expect(mockStorage.prune).toHaveBeenCalledTimes(2);
 
       // Cleanup
@@ -142,7 +144,7 @@ describe('PruningService', () => {
 
     it('refuses a zero maxAge rather than deleting everything', async () => {
       // Arrange
-      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       mockConfig.pruning = { enabled: true, maxAge: 0 };
       const module = await Test.createTestingModule({
         providers: [
@@ -179,7 +181,7 @@ describe('PruningService', () => {
       mockStorage.prune.mockClear();
 
       // Act - advance time by 1 minute (the interval)
-      jest.advanceTimersByTime(60 * 1000);
+      vi.advanceTimersByTime(60 * 1000);
 
       // Assert
       expect(mockStorage.prune).toHaveBeenCalledTimes(1);
@@ -191,7 +193,7 @@ describe('PruningService', () => {
       mockStorage.prune.mockClear();
 
       // Act - advance time by 3 minutes
-      jest.advanceTimersByTime(3 * 60 * 1000);
+      vi.advanceTimersByTime(3 * 60 * 1000);
 
       // Assert - should have been called 3 times
       expect(mockStorage.prune).toHaveBeenCalledTimes(3);
@@ -200,7 +202,7 @@ describe('PruningService', () => {
     it('should call prune with correct date', () => {
       // Arrange
       const now = Date.now();
-      jest.setSystemTime(now);
+      vi.setSystemTime(now);
       service.onModuleInit();
 
       // Assert - prune should be called with the date 24 hours ago
@@ -217,7 +219,7 @@ describe('PruningService', () => {
     it('should log when entries are deleted', async () => {
       // Arrange
       mockStorage.prune.mockResolvedValue(10);
-      const logSpy = jest.spyOn((service as any).logger, 'log');
+      const logSpy = vi.spyOn((service as any).logger, 'log');
 
       // Act - onModuleInit triggers immediate prune
       service.onModuleInit();
@@ -232,7 +234,7 @@ describe('PruningService', () => {
     it('should not log pruned count when no entries deleted', async () => {
       // Arrange
       mockStorage.prune.mockResolvedValue(0);
-      const logSpy = jest.spyOn((service as any).logger, 'log');
+      const logSpy = vi.spyOn((service as any).logger, 'log');
 
       // Act
       service.onModuleInit();
@@ -247,7 +249,7 @@ describe('PruningService', () => {
     it('should handle prune errors gracefully', async () => {
       // Arrange
       mockStorage.prune.mockRejectedValue(new Error('Database error'));
-      const errorSpy = jest.spyOn((service as any).logger, 'error');
+      const errorSpy = vi.spyOn((service as any).logger, 'error');
 
       // Act
       service.onModuleInit();
@@ -271,7 +273,7 @@ describe('PruningService', () => {
 
       // Act
       await service.stop();
-      jest.advanceTimersByTime(60 * 1000);
+      vi.advanceTimersByTime(60 * 1000);
 
       // Assert - should not have been called after stop
       expect(mockStorage.prune).not.toHaveBeenCalled();
@@ -293,7 +295,7 @@ describe('PruningService', () => {
 
       // Act
       await service.onModuleDestroy();
-      jest.advanceTimersByTime(60 * 1000);
+      vi.advanceTimersByTime(60 * 1000);
 
       // Assert
       expect(mockStorage.prune).not.toHaveBeenCalled();
@@ -317,7 +319,7 @@ describe('PruningService', () => {
       }).compile();
       const customService = module.get<PruningService>(PruningService);
       const now = Date.now();
-      jest.setSystemTime(now);
+      vi.setSystemTime(now);
 
       // Act
       customService.onModuleInit();

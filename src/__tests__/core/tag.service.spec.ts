@@ -1,3 +1,5 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TagService } from '../../core/tag.service';
 import { STORAGE, StorageInterface } from '../../core/storage/storage.interface';
@@ -5,19 +7,19 @@ import { Entry, MonitoredTag, TagWithCount } from '../../types';
 
 describe('TagService', () => {
   let service: TagService;
-  let mockStorage: jest.Mocked<StorageInterface>;
+  let mockStorage: Mocked<StorageInterface>;
 
   beforeEach(async () => {
     // Arrange
     mockStorage = {
-      addTags: jest.fn(),
-      removeTags: jest.fn(),
-      getEntryTags: jest.fn(),
-      getAllTags: jest.fn(),
-      findByTags: jest.fn(),
-      addMonitoredTag: jest.fn(),
-      removeMonitoredTag: jest.fn(),
-      getMonitoredTags: jest.fn(),
+      addTags: vi.fn(),
+      removeTags: vi.fn(),
+      getEntryTags: vi.fn(),
+      getAllTags: vi.fn(),
+      findByTags: vi.fn(),
+      addMonitoredTag: vi.fn(),
+      removeMonitoredTag: vi.fn(),
+      getMonitoredTags: vi.fn(),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -28,7 +30,7 @@ describe('TagService', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('autoTag', () => {

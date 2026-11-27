@@ -9,6 +9,7 @@
  *
  *     three lifecycles, one tick  ->  6 entries, where 2 are the truth
  */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { ScheduleWatcher } from '../../watchers/schedule.watcher';

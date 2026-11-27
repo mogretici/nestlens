@@ -12,6 +12,7 @@
  * API that takes its key in the query was stored readable. A sweep for
  * twenty-one credential-shaped names found forty-two leaks, all of them here.
  */
+import { describe, it, expect } from 'vitest';
 import { DataMaskerService } from '../../core/data-masker.service';
 
 const REDACTED = '***REDACTED***';

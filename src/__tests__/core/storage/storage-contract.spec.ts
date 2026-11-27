@@ -15,6 +15,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect, beforeEach } from 'vitest';
 import RedisMock from 'ioredis-mock';
 import { MemoryStorage } from '../../../core/storage/memory.storage';
 import { RedisStorage } from '../../../core/storage/redis.storage';

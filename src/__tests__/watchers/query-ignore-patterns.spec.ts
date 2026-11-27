@@ -12,6 +12,7 @@
  * The flag is one character, and nothing about the outcome says it was the
  * cause — the list simply half-works.
  */
+import { describe, it, expect } from 'vitest';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { QueryWatcher, QueryData } from '../../watchers/query/query.watcher';

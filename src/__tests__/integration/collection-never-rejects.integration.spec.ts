@@ -17,6 +17,7 @@
  * `collect` had the same shape one step earlier — the request watcher does not
  * await it either, and masking walks a payload the application supplied.
  */
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -47,7 +48,7 @@ class FailingController {
 }
 
 describe('collection during a storage outage', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let url: string;

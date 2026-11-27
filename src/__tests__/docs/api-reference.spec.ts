@@ -17,6 +17,7 @@
  * None of it was wrong when it was written. That is the point: a second copy of
  * a type is a copy that stops being true, and nothing was reading it.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -217,7 +218,7 @@ describe('the API reference', () => {
       expect(headers.filter((header) => !page.includes(`\`${header}\``))).toEqual([]);
     });
 
-    it('names only tokens that exist and are exported', () => {
+    it('names only tokens that exist and are exported', async () => {
       const exported = read('src', 'index.ts') + read('src', 'nestlens.config.ts');
       const named = [...page.matchAll(/^ {2}(NESTLENS_\w+|STORAGE|REQUEST_ID_HEADER),/gm)].map(
         (m) => m[1],
@@ -225,7 +226,7 @@ describe('the API reference', () => {
 
       expect(named.length).toBeGreaterThan(10);
 
-      const runtime = require('../../index') as Record<string, unknown>;
+      const runtime = (await import('../../index')) as Record<string, unknown>;
       expect(named.filter((token) => !(token in runtime))).toEqual([]);
       expect(exported.length).toBeGreaterThan(0);
     });

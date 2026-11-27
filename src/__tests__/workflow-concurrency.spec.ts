@@ -14,6 +14,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 

@@ -15,6 +15,7 @@
  * The same shape reaches an application: shutting down while Redis is
  * unreachable would hang on exit.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 
 /** A port nothing is listening on, so the client can never become ready. */
@@ -24,7 +25,7 @@ const clientOf = (storage: RedisStorage): unknown =>
   (storage as unknown as { client: unknown }).client;
 
 describe('closing a Redis storage that never connected', () => {
-  jest.setTimeout(20_000);
+  vi.setConfig({ testTimeout: 20_000, hookTimeout: 20_000 });
 
   it('leaves no client behind when close arrives first', async () => {
     const storage = new RedisStorage({ url: UNREACHABLE, commandTimeout: 200 });

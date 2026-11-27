@@ -122,8 +122,9 @@ jobs:
   # range that had quietly stopped being true would have shipped unnoticed.
   #
   # NestJS 12 is ESM only. NestLens stays CommonJS and loads it through
-  # require(esm) — Node 20.19 and 22.12 onwards, which every row here runs —
-  # while Jest loads it through `jest/esm-to-commonjs.js`.
+  # require(esm) — Node 20.19 and 22.12 onwards, which every row here runs.
+  # The suite runs on Vitest, which hands `node_modules` to Node's own loader,
+  # so the tests load NestJS the way an application does.
   compatibility:
     name: NestJS ${{ matrix.nestjs }} on Node ${{ matrix.node }}
     runs-on: ubuntu-latest

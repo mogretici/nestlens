@@ -4,6 +4,8 @@
  * Tests for the exception filter that catches and collects exceptions.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { ArgumentsHost, HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpAdapterHost } from '@nestjs/core';
@@ -16,8 +18,8 @@ import { ExceptionWatcher } from '../../watchers/exception.watcher';
 
 describe('ExceptionWatcher', () => {
   let watcher: ExceptionWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
-  let mockResponse: jest.Mocked<Response>;
+  let mockCollector: Mocked<CollectorService>;
+  let mockResponse: Mocked<Response>;
   let mockConfig: NestLensConfig;
 
   const createMockRequest = (overrides: Partial<NestLensRequest> = {}): NestLensRequest =>
@@ -31,14 +33,14 @@ describe('ExceptionWatcher', () => {
       ...overrides,
     }) as NestLensRequest;
 
-  const createMockResponse = (): jest.Mocked<Response> => {
+  const createMockResponse = (): Mocked<Response> => {
     const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis(),
-      end: jest.fn().mockReturnThis(),
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn().mockReturnThis(),
+      end: vi.fn().mockReturnThis(),
       headersSent: false,
     };
-    return res as unknown as jest.Mocked<Response>;
+    return res as unknown as Mocked<Response>;
   };
 
   const createMockHost = (
@@ -88,9 +90,9 @@ describe('ExceptionWatcher', () => {
 
   beforeEach(() => {
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockResponse = createMockResponse();
 
@@ -478,8 +480,8 @@ describe('ExceptionWatcher', () => {
 
       watcher.catch(new Error('too late'), host);
 
-      expect((sent as unknown as { json: jest.Mock }).json).not.toHaveBeenCalled();
-      expect((sent as unknown as { end: jest.Mock }).end).toHaveBeenCalled();
+      expect((sent as unknown as { json: Mock }).json).not.toHaveBeenCalled();
+      expect((sent as unknown as { end: Mock }).end).toHaveBeenCalled();
     });
   });
 

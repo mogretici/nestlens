@@ -19,6 +19,7 @@
  * The collector stamps the entry where the thing happens; a storage uses that
  * and only invents one for a caller who supplied none.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -36,7 +37,7 @@ const REDIS_URL = process.env.REDIS_URL;
 const HELD_FOR_MS = 1_200;
 
 describe('an entry carries the time it happened', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

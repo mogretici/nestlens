@@ -16,6 +16,7 @@
  * answer. Its unit tests are written against a mock, which is why its tag
  * counts could drift for as long as they did: the mock agreed with the code.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -79,7 +80,7 @@ const shape = (value: unknown): unknown => {
 };
 
 describe('storage backends agree', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

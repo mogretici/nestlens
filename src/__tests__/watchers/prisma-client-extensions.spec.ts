@@ -12,6 +12,7 @@
  * needs a generated schema to instantiate, and what is under test is which API
  * the watcher reaches for and what it does with the answer.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
@@ -193,7 +194,7 @@ describe('Prisma 6.13 and earlier, where middleware is what there is', () => {
 describe('something that is neither', () => {
   it('says what it looked for instead of blaming the client', () => {
     const warnings: string[] = [];
-    const spy = jest
+    const spy = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation((message: unknown) => void warnings.push(String(message)));
 

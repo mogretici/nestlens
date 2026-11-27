@@ -13,6 +13,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect } from 'vitest';
 import { CacheWatcher } from '../../watchers/cache.watcher';
 import { CommandWatcher } from '../../watchers/command.watcher';
 import { NestLensConfig } from '../../nestlens.config';

@@ -9,6 +9,7 @@
  * It did not. `watchers: { request: { maxBodySize: 0 } }` produced an empty
  * dashboard, with no error, no warning and nothing in the log.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -59,7 +60,7 @@ const recordedEntries = async (config: NestLensConfig): Promise<number> => {
 };
 
 describe('a configured request watcher', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   it('records when switched on', async () => {
     expect(await recordedEntries({ watchers: { request: true } })).toBeGreaterThan(0);

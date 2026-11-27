@@ -11,6 +11,7 @@
  *   2. what is saved can be read back
  *   3. one entry that cannot be written does not stop the ones behind it
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -76,7 +77,7 @@ const payloadFor = (seed: number): Record<string, unknown> => {
 const SEEDS = Array.from({ length: 60 }, (_, i) => i + 1);
 
 describe('every backend, given whatever an application produced', () => {
-  jest.setTimeout(120_000);
+  vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

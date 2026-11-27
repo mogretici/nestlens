@@ -14,6 +14,7 @@
  * is maintained by hand and a new option does not have to touch it. This reads
  * both files and compares, so the next one fails here.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 

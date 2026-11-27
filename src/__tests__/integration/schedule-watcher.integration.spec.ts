@@ -6,6 +6,7 @@
  * DiscoveryService at bootstrap. Regression guard for issue #7
  * ("ScheduleWatcher cannot detect SchedulerRegistry").
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Cron, ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';
@@ -59,7 +60,7 @@ describe('ScheduleWatcher integration (@nestjs/schedule)', () => {
 
     try {
       const collector = app.get(CollectorService);
-      const collectSpy = jest.spyOn(collector, 'collect');
+      const collectSpy = vi.spyOn(collector, 'collect');
 
       const registry = app.get(SchedulerRegistry);
       const job = registry.getCronJobs().get(CRON_NAME);
@@ -97,7 +98,7 @@ describe('ScheduleWatcher integration (@nestjs/schedule)', () => {
 
     try {
       const collector = app.get(CollectorService);
-      const collectSpy = jest.spyOn(collector, 'collect');
+      const collectSpy = vi.spyOn(collector, 'collect');
       const registry = app.get(SchedulerRegistry);
       const watcher = app.get(ScheduleWatcher) as unknown as { wrappedJobs: Set<string> };
 

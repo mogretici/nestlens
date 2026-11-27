@@ -14,6 +14,7 @@
  * response. Found by firing malformed bodies at every endpoint; it was the one
  * 5xx among them.
  */
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import { EntryTagsDto, PauseRecordingDto } from '../../api/dto';

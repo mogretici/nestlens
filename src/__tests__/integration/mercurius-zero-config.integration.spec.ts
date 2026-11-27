@@ -9,6 +9,7 @@
  * This boots a real Nest application on Fastify with real Mercurius and asks
  * it a question.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -70,16 +71,13 @@ const RESOLVERS = {
       typeDefs: SCHEMA,
       resolvers: RESOLVERS,
       graphiql: false,
-      // Keeps Mercurius from reaching for its LRU through a dynamic import,
-      // which Jest's CommonJS VM refuses without a global flag.
-      cache: false,
     }),
   ],
 })
 class MercuriusApp {}
 
 describeMercurius('Mercurius with nothing wired by hand', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let app: NestFastifyApplication;
   let storage: StorageInterface;

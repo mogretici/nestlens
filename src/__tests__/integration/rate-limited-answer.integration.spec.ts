@@ -14,6 +14,7 @@
  * A client reading the documented field found nothing and had to guess — which
  * is what `Retry-After` exists to prevent.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NestLensConfig } from '../../nestlens.config';
@@ -25,7 +26,7 @@ interface Envelope {
 }
 
 describe('the answer to a caller over the limit', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let refused: Response;

@@ -11,6 +11,7 @@
  * application registers it, and read back what NestLens recorded — including
  * the automatic persisted query handshake, which is the case no fake had.
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createHash } from 'crypto';
 import { ApolloServer } from '@apollo/server';
 import { CollectorService } from '../../../core/collector.service';
@@ -66,7 +67,7 @@ const ask = (server: ApolloServer, body: Record<string, unknown>) =>
   server.executeOperation(body as never);
 
 describe('Apollo, running', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let running: Running;
 

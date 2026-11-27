@@ -12,6 +12,7 @@
  * runs under — `/home/deploy/secret-project/...` — which is the thing `partial`
  * exists to remove.
  */
+import { describe, it, expect } from 'vitest';
 import { DataMaskerService } from '../../core/data-masker.service';
 
 const STACK = [

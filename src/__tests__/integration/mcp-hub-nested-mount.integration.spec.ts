@@ -8,6 +8,7 @@
  * `/__nestlens__/api/stats`, which the client then appended to its own root
  * and asked for a URL that does not exist. Listing worked; every call failed.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';

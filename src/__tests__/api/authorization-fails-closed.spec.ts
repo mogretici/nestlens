@@ -28,6 +28,8 @@
  * that did nothing. An unrecognised answer means no now, and a role
  * requirement with no user to check is a refusal rather than a skip.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
 import { NestLensGuard } from '../../api/api.guard';
 import { AuthorizationConfig, NestLensConfig } from '../../nestlens.config';
@@ -68,12 +70,12 @@ const allows = async (authorization: AuthorizationConfig): Promise<boolean> =>
   (await decide(authorization)).allowed;
 
 describe('authorization fails closed', () => {
-  let warn: jest.SpyInstance;
-  let error: jest.SpyInstance;
+  let warn: MockInstance;
+  let error: MockInstance;
 
   beforeEach(() => {
-    warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-    error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {

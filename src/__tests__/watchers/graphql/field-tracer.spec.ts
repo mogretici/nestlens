@@ -10,6 +10,7 @@
  * What it does do matters: it is the only thing standing between a query with
  * ten thousand resolvers and ten thousand traces in one entry.
  */
+import { describe, it, expect } from 'vitest';
 import { createFieldTracer } from '../../../watchers/graphql/utils/field-tracer';
 
 const start = process.hrtime.bigint();

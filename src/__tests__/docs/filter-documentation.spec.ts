@@ -11,6 +11,7 @@
  * 60 filter types" against fifty — which is the kind of number that is right on
  * the day it is written and never again.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { CursorQueryDto } from '../../api/dto/cursor-query.dto';

@@ -12,6 +12,7 @@
  * looks finished. The question this asks is the one nobody was asking: is
  * anything using it?
  */
+import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative, resolve } from 'path';
 

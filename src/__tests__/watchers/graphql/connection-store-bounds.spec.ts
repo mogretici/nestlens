@@ -7,6 +7,7 @@
  * thing standing between a long-running process and a map that grows with every
  * client that ever connected.
  */
+import { describe, it, expect } from 'vitest';
 import { createConnectionStore } from '../../../watchers/graphql/subscription/connection.store';
 
 describe('the connection store', () => {

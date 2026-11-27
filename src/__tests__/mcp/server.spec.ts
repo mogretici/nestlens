@@ -6,6 +6,7 @@
  * callable at once, which is the reason the server is a hub and not a list of
  * endpoints written out by hand.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { NestLensToolDescriptor, NestLensToolManifest } from '../../api/tools';
@@ -34,13 +35,13 @@ const clear = read('clear_things', {
 });
 
 const fakeClient = (tools: () => NestLensToolDescriptor[]) => {
-  const invoke = jest.fn(
+  const invoke = vi.fn(
     async (tool: NestLensToolDescriptor, args?: Record<string, unknown>): Promise<unknown> => ({
       success: true,
       data: { ran: tool.name, args },
     }),
   );
-  const manifest = jest.fn(async (): Promise<NestLensToolManifest> => ({
+  const manifest = vi.fn(async (): Promise<NestLensToolManifest> => ({
     version: 1,
     tools: tools(),
   }));

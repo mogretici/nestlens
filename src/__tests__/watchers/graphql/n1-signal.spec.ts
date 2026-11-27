@@ -23,6 +23,7 @@
  * After the change the same query reports `OrderItem.product x16` and nothing
  * else.
  */
+import { describe, it, expect } from 'vitest';
 import { createApolloAdapter } from '../../../watchers/graphql/adapters/apollo.adapter';
 import { CollectorService } from '../../../core/collector.service';
 import { resolveGraphQLConfig } from '../../../watchers/graphql/types';

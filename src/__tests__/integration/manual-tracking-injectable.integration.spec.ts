@@ -15,6 +15,8 @@
  * watcher on, off, and NestLens off, and check that "off" records nothing and
  * installs nothing.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { Injectable, Module, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import axios from 'axios';
@@ -84,7 +86,7 @@ const boot = async (config: NestLensConfig, watcher: Type<unknown>) => {
 };
 
 describe('a watcher taken by constructor in a feature module', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   describe.each([
     ['switched on', (key: string): NestLensConfig => ({ watchers: { [key]: true } })],
@@ -105,8 +107,8 @@ describe('a watcher taken by constructor in a feature module', () => {
   ])('hands NestLensLogger to app.get with %s, and it still prints', async (_label, config) => {
     const { app } = await boot(config, GateWatcher);
     const logger = app.get(NestLensLogger);
-    const collect = jest.spyOn(CollectorService.prototype, 'collect');
-    const print = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const collect = vi.spyOn(CollectorService.prototype, 'collect');
+    const print = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     logger.log('still printed', 'Probe');
 
@@ -135,10 +137,10 @@ describe('a watcher taken by constructor in a feature module', () => {
     ],
     ['with NestLens off', { enabled: false } as NestLensConfig],
   ])('%s, the manual API does nothing', (_label, config) => {
-    let collect: jest.SpyInstance;
+    let collect: MockInstance;
 
     beforeEach(() => {
-      collect = jest.spyOn(CollectorService.prototype, 'collect');
+      collect = vi.spyOn(CollectorService.prototype, 'collect');
     });
 
     afterEach(() => collect.mockRestore());
@@ -162,7 +164,7 @@ describe('a watcher taken by constructor in a feature module', () => {
       expect(queue.eventNames()).toEqual([]);
 
       const model = await boot(config, ModelWatcher);
-      const prisma = { $use: jest.fn(), $extends: jest.fn() };
+      const prisma = { $use: vi.fn(), $extends: vi.fn() };
       expect((model.consumer.watcher as ModelWatcher).setupPrismaClient(prisma)).toBe(prisma);
       expect(prisma.$use).not.toHaveBeenCalled();
       expect(prisma.$extends).not.toHaveBeenCalled();

@@ -9,6 +9,7 @@
  *
  * Measured before: 200 identical requests, 200 webhook calls, 201 keys kept.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { AlertingService } from '../../core/alerting.service';
 import { CollectorService } from '../../core/collector.service';

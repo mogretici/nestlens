@@ -11,6 +11,7 @@
  *   3. what it returns is bounded
  *   4. no value under a sensitive name survives it
  */
+import { describe, it, expect } from 'vitest';
 import {
   sanitizeResponse,
   sanitizeVariables,

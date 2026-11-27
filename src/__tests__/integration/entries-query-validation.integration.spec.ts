@@ -17,6 +17,7 @@
  * DTO all along. These do now, so an unusable parameter is a 400 that names
  * it, whatever the storage underneath.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../../nestlens.module';
@@ -24,7 +25,7 @@ import { NestLensModule } from '../../nestlens.module';
 const API = '/nestlens/__nestlens__/api';
 
 describe('validating an offset-paged query', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let url: string;

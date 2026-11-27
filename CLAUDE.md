@@ -42,9 +42,10 @@ cd dashboard && npm run dev  # Run dashboard dev server (Vite)
 
 ### Testing
 ```bash
-npm test                   # Run Jest unit tests
-npm test -- --watch        # Watch mode
+npm test                   # Run the library's unit tests (Vitest)
+npm run test:watch         # Watch mode
 npm test -- path/to/file   # Run single test file
+npm test -- --coverage     # With coverage (V8), written to coverage/
 
 # E2E tests (Playwright)
 npm run test:e2e           # Run all e2e tests
@@ -214,8 +215,46 @@ it is no longer required for Apollo or Mercurius.
 
 ## Testing Notes
 
-- Unit tests use Jest with ts-jest preset
-- Test setup in `src/__tests__/setup.ts`
+- Unit tests run on Vitest (`vitest.config.mts`); specs import `describe`,
+  `it`, `expect` and `vi` from `vitest` — there are no globals, and
+  `tsconfig.json` sets `"types": ["node"]` so an installed `@types/*` package
+  that declares test globals is not pulled in automatically and cannot make a
+  missing import compile
+- Test setup in `src/__tests__/setup.ts`: reflect-metadata, the loopback listen
+  guard, and `vi.clearAllMocks()` after each test (not `clearMocks: true`, which
+  clears *before* each test and erases calls a `beforeAll` made)
+- Specs are compiled by SWC (`unplugin-swc`, the compiler NestJS documents for
+  Vitest), which reads `experimentalDecorators`, `emitDecoratorMetadata`,
+  `target` and `useDefineForClassFields` from `tsconfig.json`. The last one is
+  set explicitly to `false`: it is already `tsc`'s default for ES2021, but SWC
+  defaults to define semantics, and the suite would then test class fields the
+  package does not ship
+- `vi.mock` reaches `import` and `import()`, not `require()`. NestLens loads its
+  optional peers (graphql, `@nestjs/cache-manager`, bullmq, the platform
+  packages) with a runtime `require()`, so mocking one of those does nothing to
+  NestLens — test those paths against the real package or through code that
+  imports
+- A `vi.mock` factory that throws has its error wrapped by Vitest, without the
+  original `code`. To simulate a missing module, return a module whose
+  constructor or function throws the `MODULE_NOT_FOUND` error instead
+  (`storage-open-failure.spec.ts`, `storage.factory.spec.ts`)
+- `mockImplementation()` with no argument calls the original in Vitest; write
+  `mockImplementation(() => undefined)` to silence a spy. A `vi.fn` called with
+  `new` constructs with the mock as `new.target`, so a class given to
+  `mockImplementation` loses its prototype methods — use instance fields
+- `resolve.extensions` lists `.js` before `.mjs`, as Node resolves an
+  extensionless `main`. Vite's default order loaded graphql twice — `index.mjs`
+  for an import, `index.js` for NestLens' `require('graphql')`.
+  `one-copy-per-package.spec.ts` fails if that comes back
+- `pool: 'forks'` with Vitest's default per-file isolation. Suites mutate
+  `process.env`, load better-sqlite3's native addon and patch
+  `net.Server.prototype`; `isolate: false` measured about 2.5× faster and failed
+  5 to 22 tests per run, different ones each time, through state shared
+  between files
+- There is no `isolateModules`. A second copy of a package — what a host
+  application with its own `node_modules` has — is a real one: copy the package
+  into a temporary `node_modules` and load it with `createRequire`
+  (`host-validation-pipe.integration.spec.ts`)
 - E2E tests require both example app (port 3000) and dashboard dev server (port 5173)
 - Playwright config auto-starts both servers in non-CI mode
 - Before the first E2E run: `npm run build`, then

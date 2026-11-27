@@ -35,6 +35,7 @@
  * application's, outside a `try`. An entry that could not be built threw out
  * of the subscriber, and the hook the application wrote never ran at all.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { BatchWatcher, NESTLENS_BATCH_PROCESSOR } from '../../watchers/batch.watcher';
@@ -451,8 +452,8 @@ describe('a wrapped view engine', () => {
 
 describe('a wrapped TypeORM subscriber', () => {
   const subscriber = () => ({
-    afterLoad: jest.fn(),
-    afterInsert: jest.fn(),
+    afterLoad: vi.fn(),
+    afterInsert: vi.fn(),
   });
 
   const watch = (target: object) => {

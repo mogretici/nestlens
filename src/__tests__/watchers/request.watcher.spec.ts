@@ -4,6 +4,8 @@
  * Tests for HTTP request/response monitoring interceptor.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpAdapterHost } from '@nestjs/core';
@@ -27,7 +29,7 @@ const httpAdapterHostProvider = {
 
 describe('RequestWatcher', () => {
   let watcher: RequestWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
 
   const createMockContext = (overrides: any = {}): ExecutionContext => {
     const mockRequest = {
@@ -46,8 +48,8 @@ describe('RequestWatcher', () => {
 
     const mockResponse = {
       statusCode: 200,
-      setHeader: jest.fn(),
-      getHeaders: jest.fn().mockReturnValue({}),
+      setHeader: vi.fn(),
+      getHeaders: vi.fn().mockReturnValue({}),
       ...overrides.response,
     };
 
@@ -69,10 +71,10 @@ describe('RequestWatcher', () => {
 
   beforeEach(async () => {
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-      shutdown: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+      shutdown: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -172,12 +174,12 @@ describe('RequestWatcher', () => {
   describe('request ID', () => {
     it('should set request ID header on response', async () => {
       // Arrange
-      const mockSetHeader = jest.fn();
+      const mockSetHeader = vi.fn();
       const context = createMockContext({
         response: {
           setHeader: mockSetHeader,
           statusCode: 200,
-          getHeaders: jest.fn().mockReturnValue({}),
+          getHeaders: vi.fn().mockReturnValue({}),
         },
       });
       const handler = createMockHandler();
@@ -603,8 +605,8 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         response: {
           statusCode: 200,
-          setHeader: jest.fn(),
-          getHeaders: jest.fn().mockReturnValue({}),
+          setHeader: vi.fn(),
+          getHeaders: vi.fn().mockReturnValue({}),
         },
       });
 
@@ -626,8 +628,8 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         response: {
           statusCode: 201,
-          setHeader: jest.fn(),
-          getHeaders: jest.fn().mockReturnValue({}),
+          setHeader: vi.fn(),
+          getHeaders: vi.fn().mockReturnValue({}),
         },
       });
 
@@ -1222,8 +1224,8 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         response: {
           statusCode: 200,
-          setHeader: jest.fn(),
-          getHeaders: jest.fn().mockReturnValue({ 'content-type': 'application/json' }),
+          setHeader: vi.fn(),
+          getHeaders: vi.fn().mockReturnValue({ 'content-type': 'application/json' }),
         },
       });
 
@@ -1258,8 +1260,8 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         response: {
           statusCode: 200,
-          setHeader: jest.fn(),
-          getHeaders: jest.fn().mockReturnValue({
+          setHeader: vi.fn(),
+          getHeaders: vi.fn().mockReturnValue({
             'content-type': 'application/json',
             'content-length': 1234,
             'set-cookie': ['cookie1=value1', 'cookie2=value2'],
@@ -1307,8 +1309,8 @@ describe('RequestWatcher', () => {
       const context = createMockContext({
         response: {
           statusCode: 200,
-          setHeader: jest.fn(),
-          getHeaders: jest.fn().mockImplementation(() => {
+          setHeader: vi.fn(),
+          getHeaders: vi.fn().mockImplementation(() => {
             throw new Error('Header error');
           }),
         },
@@ -1329,7 +1331,7 @@ describe('RequestWatcher', () => {
   describe('custom tags', () => {
     it('should call tags function when configured', async () => {
       // Arrange
-      const tagsFn = jest.fn().mockResolvedValue(['important', 'api-v2']);
+      const tagsFn = vi.fn().mockResolvedValue(['important', 'api-v2']);
       const module = await Test.createTestingModule({
         providers: [
           RequestWatcher,
@@ -1359,7 +1361,7 @@ describe('RequestWatcher', () => {
 
     it('should not throw when tags function returns empty array', async () => {
       // Arrange
-      const tagsFn = jest.fn().mockResolvedValue([]);
+      const tagsFn = vi.fn().mockResolvedValue([]);
       const module = await Test.createTestingModule({
         providers: [
           RequestWatcher,
@@ -1389,7 +1391,7 @@ describe('RequestWatcher', () => {
 
     it('should not throw when tags function throws error', async () => {
       // Arrange
-      const tagsFn = jest.fn().mockRejectedValue(new Error('Tags error'));
+      const tagsFn = vi.fn().mockRejectedValue(new Error('Tags error'));
       const module = await Test.createTestingModule({
         providers: [
           RequestWatcher,

@@ -14,6 +14,7 @@
  * `trustProxy: true` and only when it is a plain absolute path. These tests
  * cover both halves over real HTTP.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';

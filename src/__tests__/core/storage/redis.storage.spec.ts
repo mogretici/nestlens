@@ -1,7 +1,7 @@
 /**
  * Redis storage, against sorted sets and hashes that behave like Redis.
  *
- * These tests used to hand the storage a client made of `jest.fn()`s, which
+ * These tests used to hand the storage a client made of `vi.fn()`s, which
  * answered whatever the test told it to and recorded the calls. That is enough
  * to check that a command was issued, and blind to what the command means: for
  * a long time the code asked `zrevrangebyscore` for members scored below an
@@ -18,6 +18,7 @@
  * back what the storage returns. The parity suite covers the same ground
  * against a real server where one is reachable.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 import { Entry, EntryType } from '../../../types';
 
@@ -686,7 +687,7 @@ describe('RedisStorage cursor pagination', () => {
   it('starts even when Redis cannot answer', async () => {
     const storage = new RedisStorage({ keyPrefix: 'unreachable:' });
     const unreachable = {
-      get: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:6379')),
+      get: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:6379')),
     };
     (storage as unknown as Testable).client = unreachable;
     (storage as unknown as { loadRedisClient: () => Promise<unknown> }).loadRedisClient =

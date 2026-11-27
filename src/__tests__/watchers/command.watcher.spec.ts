@@ -4,6 +4,8 @@
  * Tests for the command watcher that monitors CQRS command execution.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,15 +13,15 @@ import { CommandWatcher, NESTLENS_COMMAND_BUS } from '../../watchers/command.wat
 
 describe('CommandWatcher', () => {
   let watcher: CommandWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createCommandBus = (
     overrides: Partial<{
-      execute: jest.Mock;
+      execute: Mock;
     }> = {},
   ) => ({
-    execute: jest.fn().mockResolvedValue({ success: true }),
+    execute: vi.fn().mockResolvedValue({ success: true }),
     ...overrides,
   });
 
@@ -45,12 +47,12 @@ describe('CommandWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -187,7 +189,7 @@ describe('CommandWatcher', () => {
     it('should collect completed event', async () => {
       // Arrange
       const bus = createCommandBus({
-        execute: jest
+        execute: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 10))),
       });
@@ -235,7 +237,7 @@ describe('CommandWatcher', () => {
       // Arrange
       const expectedResult = { userId: 123, created: true };
       const bus = createCommandBus({
-        execute: jest.fn().mockResolvedValue(expectedResult),
+        execute: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -257,7 +259,7 @@ describe('CommandWatcher', () => {
       // Arrange
       const expectedResult = { userId: 456 };
       const bus = createCommandBus({
-        execute: jest.fn().mockResolvedValue(expectedResult),
+        execute: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -272,7 +274,7 @@ describe('CommandWatcher', () => {
     it('should calculate command duration', async () => {
       // Arrange
       const bus = createCommandBus({
-        execute: jest
+        execute: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
@@ -302,7 +304,7 @@ describe('CommandWatcher', () => {
     it('should collect failed event', async () => {
       // Arrange
       const bus = createCommandBus({
-        execute: jest.fn().mockRejectedValue(new Error('Command failed')),
+        execute: vi.fn().mockRejectedValue(new Error('Command failed')),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -323,7 +325,7 @@ describe('CommandWatcher', () => {
     it('should include duration for failed commands', async () => {
       // Arrange
       const bus = createCommandBus({
-        execute: jest
+        execute: vi
           .fn()
           .mockImplementation(
             () => new Promise((_, reject) => setTimeout(() => reject(new Error('Error')), 10)),
@@ -351,7 +353,7 @@ describe('CommandWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const bus = createCommandBus({
-        execute: jest.fn().mockRejectedValue(new Error('Critical error')),
+        execute: vi.fn().mockRejectedValue(new Error('Critical error')),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -363,7 +365,7 @@ describe('CommandWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const bus = createCommandBus({
-        execute: jest.fn().mockRejectedValue('String error'),
+        execute: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -608,7 +610,7 @@ describe('CommandWatcher', () => {
       // Arrange
       mockConfig.watchers = { command: { enabled: true, captureResult: false } };
       const bus = createCommandBus({
-        execute: jest.fn().mockResolvedValue({ sensitive: 'data' }),
+        execute: vi.fn().mockResolvedValue({ sensitive: 'data' }),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -744,7 +746,7 @@ describe('CommandWatcher', () => {
       // actually see is the entry, so that is what this checks.
       let resolveExecute: (value?: unknown) => void;
       const bus = createCommandBus({
-        execute: jest.fn().mockImplementation(
+        execute: vi.fn().mockImplementation(
           () =>
             new Promise((resolve) => {
               resolveExecute = resolve;
@@ -772,7 +774,7 @@ describe('CommandWatcher', () => {
 
     it('reports one that failed, and lets the failure through', async () => {
       const bus = createCommandBus({
-        execute: jest.fn().mockRejectedValue(new Error('Failed')),
+        execute: vi.fn().mockRejectedValue(new Error('Failed')),
       });
       watcher = await createWatcher(mockConfig, bus);
       watcher.onModuleInit();
@@ -787,7 +789,7 @@ describe('CommandWatcher', () => {
 
     it('measures how long it took', async () => {
       const bus = createCommandBus({
-        execute: jest
+        execute: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 12))),
       });
@@ -796,7 +798,7 @@ describe('CommandWatcher', () => {
 
       await bus.execute({});
 
-      const completed = (mockCollector.collect as jest.Mock).mock.calls.find(
+      const completed = (mockCollector.collect as Mock).mock.calls.find(
         ([, payload]) => (payload as { status?: string }).status === 'completed',
       );
       expect((completed?.[1] as { duration: number }).duration).toBeGreaterThanOrEqual(10);

@@ -7,6 +7,7 @@
  * not: `POST tags/entry/:id` with five thousand tags was accepted, and every
  * one of them became a row.
  */
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import { EntryTagsDto, MAX_FILTER_VALUES } from '../../api/dto';

@@ -17,6 +17,7 @@
  * CI builds first now. This exists so the arrangement is visible — a skip that
  * nobody can see is a test that does not exist.
  */
+import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 
@@ -34,19 +35,23 @@ interface Job {
   readonly steps: string;
 }
 
-/** The jobs in ci.yml that run the library tests, each with its own text. */
-const testingJobs = (): Job[] => {
-  const workflow = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
-  const jobs = workflow.slice(workflow.indexOf('\njobs:\n'));
-  const starts = [...jobs.matchAll(/^ {2}([\w-]+):$/gm)];
+/** The workflows whose jobs run the library tests. */
+const WORKFLOWS = ['ci.yml', 'release.yml'] as const;
 
-  return starts
-    .map((match, index) => ({
-      name: match[1] as string,
-      steps: jobs.slice(match.index, starts[index + 1]?.index ?? jobs.length),
-    }))
-    .filter(({ steps }) => steps.includes('run: npm test'));
-};
+/** The jobs that run the library tests, named `<workflow> <job>`, each with its own text. */
+const testingJobs = (): Job[] =>
+  WORKFLOWS.flatMap((file) => {
+    const workflow = readFileSync(join(ROOT, '.github', 'workflows', file), 'utf8');
+    const jobs = workflow.slice(workflow.indexOf('\njobs:\n'));
+    const starts = [...jobs.matchAll(/^ {2}([\w-]+):$/gm)];
+
+    return starts
+      .map((match, index) => ({
+        name: `${file} ${match[1] as string}`,
+        steps: jobs.slice(match.index, starts[index + 1]?.index ?? jobs.length),
+      }))
+      .filter(({ steps }) => steps.includes('run: npm test'));
+  });
 
 describe('coverage that depends on the build', () => {
   it('there are suites that gate on it', () => {
@@ -69,7 +74,8 @@ describe('coverage that depends on the build', () => {
    * Every job, not the first one. The check above finds the unit-test job and
    * stops; the compatibility matrix ran `npm test` with nothing built, so on
    * every NestJS row these suites skipped — including the Express 4 deep-link
-   * test that exists for exactly the NestJS 9 and 10 rows.
+   * test that exists for exactly the NestJS 9 and 10 rows. The release job had
+   * the same order, so the last run before publishing skipped them too.
    */
   it.each(testingJobs().map(({ name }) => name))('the %s job builds before it tests', (name) => {
     const { steps } = testingJobs().find((job) => job.name === name) as Job;
@@ -84,7 +90,7 @@ describe('coverage that depends on the build', () => {
 
   it('finds every job that runs the tests', () => {
     expect(testingJobs().map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['test', 'compatibility']),
+      expect.arrayContaining(['ci.yml test', 'ci.yml compatibility', 'release.yml release']),
     );
   });
 

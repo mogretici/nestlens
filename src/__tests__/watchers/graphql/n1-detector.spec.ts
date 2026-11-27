@@ -8,6 +8,7 @@
  * not exported from the package. The map was built on every recorded call and
  * read by nothing.
  */
+import { describe, it, expect } from 'vitest';
 import { N1Detector } from '../../../watchers/graphql/utils/n1-detector';
 
 const call = (detector: N1Detector, parentType: string, fieldName: string, times: number): void => {

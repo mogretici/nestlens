@@ -14,6 +14,7 @@
  *   2. what it returns carries only what the DTO declares
  *   3. a number it returns is a number, within the documented bounds
  */
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import {

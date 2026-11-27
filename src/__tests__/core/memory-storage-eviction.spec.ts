@@ -16,6 +16,7 @@
  * by counting work rather than by timing it, since a clock measures the machine
  * as much as the code.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { MemoryStorage } from '../../core/storage/memory.storage';
 import { Entry } from '../../types';
 
@@ -120,8 +121,8 @@ describe('memory storage eviction', () => {
      * uncapped storage catches the growth.
      */
     it('does not sort, and does not open an iterator, per save', async () => {
-      const sort = jest.spyOn(Array.prototype, 'sort');
-      const keys = jest.spyOn(Map.prototype, 'keys');
+      const sort = vi.spyOn(Array.prototype, 'sort');
+      const keys = vi.spyOn(Map.prototype, 'keys');
 
       try {
         const storage = new MemoryStorage({ maxEntries: 100 });

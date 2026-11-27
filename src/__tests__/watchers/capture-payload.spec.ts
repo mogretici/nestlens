@@ -14,6 +14,7 @@
  * depth and bounds how much it walks — ever saw it. So on the page where the
  * event mattered, the entry said nothing.
  */
+import { describe, it, expect } from 'vitest';
 import { capturePayload } from '../../watchers/capture-payload';
 
 const circular = (): Record<string, unknown> => {

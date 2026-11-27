@@ -4,6 +4,7 @@
  * Tests for authorization, IP whitelisting, environment checks,
  * and role-based access control.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpAdapterHost } from '@nestjs/core';
@@ -778,7 +779,7 @@ describe('NestLensGuard IP whitelist and forwarding headers', () => {
 
   it('says what is likely missing when a proxy header was ignored', async () => {
     // Arrange
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const guard = await buildGuard({
       enabled: true,
       authorization: { allowedEnvironments: ['test'], allowedIps: ['10.0.0.5'] },

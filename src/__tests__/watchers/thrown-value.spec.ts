@@ -15,6 +15,7 @@
  * Measured before this existed — `throw null` from a controller killed the
  * process, and the request never got a response.
  */
+import { describe, it, expect } from 'vitest';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { describeThrown } from '../../watchers/thrown-value';
 

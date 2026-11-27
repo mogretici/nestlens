@@ -13,6 +13,8 @@
  * The first is a self-inflicted outage on the application's own database; the
  * second silently stops every alert.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { AlertingService } from '../../core/alerting.service';
 import { CollectorService } from '../../core/collector.service';
@@ -54,12 +56,12 @@ const storage = (): StorageInterface => ({ prune: async () => 0 }) as unknown as
 describe('a pruning interval longer than a timer can hold', () => {
   let timers: ReturnType<typeof recordDelays>;
   let warnings: string[];
-  let warnSpy: jest.SpyInstance;
+  let warnSpy: MockInstance;
 
   beforeEach(() => {
     timers = recordDelays();
     warnings = [];
-    warnSpy = jest
+    warnSpy = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation((message: unknown) => void warnings.push(String(message)));
   });

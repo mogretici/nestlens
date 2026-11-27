@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
 import { plainToInstance } from 'class-transformer';
@@ -39,11 +40,11 @@ describe('API Filter Parsing', () => {
         { provide: NESTLENS_CONFIG, useValue: { enabled: true, pruning: { interval: 60 } } },
         {
           provide: PruningService,
-          useValue: { stop: jest.fn(), getStatus: jest.fn().mockReturnValue({ lastRun: null }) },
+          useValue: { stop: vi.fn(), getStatus: vi.fn().mockReturnValue({ lastRun: null }) },
         },
         {
           provide: CollectorService,
-          useValue: { getRecordingStatus: jest.fn().mockReturnValue({ isPaused: false }) },
+          useValue: { getRecordingStatus: vi.fn().mockReturnValue({ isPaused: false }) },
         },
       ],
     }).compile();

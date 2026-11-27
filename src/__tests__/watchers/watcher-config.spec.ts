@@ -14,6 +14,7 @@
  * The invariant these pin: only `false` and `{ enabled: false }` turn a watcher
  * off. Everything else leaves it running.
  */
+import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { LogWatcherConfig, QueryWatcherConfig, RequestWatcherConfig } from '../../nestlens.config';

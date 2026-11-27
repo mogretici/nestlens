@@ -7,6 +7,7 @@
  * silently fall out of sync again — if someone adds a watcher or changes a default,
  * this test fails until the docs are updated.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { DEFAULT_CONFIG } from '../../nestlens.config';

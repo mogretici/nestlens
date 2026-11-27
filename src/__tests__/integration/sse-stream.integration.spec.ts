@@ -6,6 +6,7 @@
  * asserts it is pushed to the client in real time. This is the cross-adapter
  * proof that `@Sse()` works on Fastify, not only Express.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   Body,
   Controller,

@@ -6,6 +6,7 @@
  * cover the envelope shape, the status code it picks on the framework's behalf,
  * and the fact that nothing is emitted downstream.
  */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { CallHandler, ExecutionContext, HttpCode, HttpStatus } from '@nestjs/common';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 import { HttpAdapterHost } from '@nestjs/core';

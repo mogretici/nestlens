@@ -12,6 +12,7 @@
  * across the return shapes a method can have — including the ones nobody has
  * written a watcher against yet.
  */
+import { describe, it, expect } from 'vitest';
 import { wrapMethodPreservingShape } from '../../watchers/wrap-method';
 
 /** A thenable that is not a native promise: Bluebird, Prisma, another realm. */

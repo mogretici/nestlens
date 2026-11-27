@@ -16,6 +16,7 @@
  * This walks every `collect` call in the docs and checks its keys against the
  * payload the entry type declares.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 

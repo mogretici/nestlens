@@ -11,6 +11,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect } from 'vitest';
 import { DataMaskerService } from '../../core/data-masker.service';
 
 describe('DataMaskerService', () => {

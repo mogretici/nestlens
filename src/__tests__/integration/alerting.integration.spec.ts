@@ -5,6 +5,8 @@
  * asserts the configured webhook receives the exception in real time through
  * the full collector → entry stream → alerting pipeline.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import {
   Controller,
   Get,
@@ -28,10 +30,10 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 
 describe('Exception alerting (integration)', () => {
   let app: INestApplication;
-  let fetchMock: jest.Mock;
+  let fetchMock: Mock;
 
   beforeEach(async () => {
-    fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
 
     (global as any).fetch = fetchMock;
 
@@ -56,7 +58,7 @@ describe('Exception alerting (integration)', () => {
 
   afterEach(async () => {
     await app.close();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('delivers a webhook when an exception is thrown', async () => {

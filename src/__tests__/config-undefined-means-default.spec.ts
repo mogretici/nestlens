@@ -11,6 +11,7 @@
  *
  * The last is how it is usually written.
  */
+import { describe, it, expect } from 'vitest';
 import { NestLensModule } from '../nestlens.module';
 import { DEFAULT_CONFIG, NestLensConfig } from '../nestlens.config';
 

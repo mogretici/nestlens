@@ -4,6 +4,8 @@
  * Tests for the schedule watcher that monitors cron jobs and scheduled tasks.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
@@ -12,14 +14,14 @@ import { ScheduleWatcher } from '../../watchers/schedule.watcher';
 
 describe('ScheduleWatcher', () => {
   let watcher: ScheduleWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createMockCronJob = (name: string, pattern = '* * * * *') => ({
     name,
     cronTime: { source: pattern },
-    nextDate: jest.fn().mockReturnValue(new Date('2024-01-01T00:00:00Z')),
-    fireOnTick: jest.fn().mockResolvedValue(undefined),
+    nextDate: vi.fn().mockReturnValue(new Date('2024-01-01T00:00:00Z')),
+    fireOnTick: vi.fn().mockResolvedValue(undefined),
   });
 
   const createSchedulerRegistry = (
@@ -27,9 +29,9 @@ describe('ScheduleWatcher', () => {
     intervals: string[] = [],
     timeouts: string[] = [],
   ) => ({
-    getCronJobs: jest.fn().mockReturnValue(cronJobs),
-    getIntervals: jest.fn().mockReturnValue(intervals),
-    getTimeouts: jest.fn().mockReturnValue(timeouts),
+    getCronJobs: vi.fn().mockReturnValue(cronJobs),
+    getIntervals: vi.fn().mockReturnValue(intervals),
+    getTimeouts: vi.fn().mockReturnValue(timeouts),
   });
 
   const createWatcher = async (
@@ -39,7 +41,7 @@ describe('ScheduleWatcher', () => {
     // Mock DiscoveryService.getProviders() to surface the SchedulerRegistry instance,
     // mirroring how @nestjs/schedule exposes it through the global container.
     const mockDiscovery = {
-      getProviders: jest
+      getProviders: vi
         .fn()
         .mockReturnValue(schedulerRegistry !== undefined ? [{ instance: schedulerRegistry }] : []),
     };
@@ -57,12 +59,12 @@ describe('ScheduleWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -143,11 +145,11 @@ describe('ScheduleWatcher', () => {
     it('should handle errors during setup gracefully', async () => {
       // Arrange
       const registry = {
-        getCronJobs: jest.fn().mockImplementation(() => {
+        getCronJobs: vi.fn().mockImplementation(() => {
           throw new Error('Registry error');
         }),
-        getIntervals: jest.fn().mockReturnValue([]),
-        getTimeouts: jest.fn().mockReturnValue([]),
+        getIntervals: vi.fn().mockReturnValue([]),
+        getTimeouts: vi.fn().mockReturnValue([]),
       };
       watcher = await createWatcher(mockConfig, registry);
 
@@ -210,7 +212,7 @@ describe('ScheduleWatcher', () => {
     it('should collect job failed event', async () => {
       // Arrange
       const mockJob = createMockCronJob('failingJob');
-      mockJob.fireOnTick = jest.fn().mockRejectedValue(new Error('Job failed'));
+      mockJob.fireOnTick = vi.fn().mockRejectedValue(new Error('Job failed'));
       const cronJobs = new Map();
       cronJobs.set('failingJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
@@ -234,7 +236,7 @@ describe('ScheduleWatcher', () => {
       // Arrange
       const nextRunDate = new Date('2024-06-01T12:00:00Z');
       const mockJob = createMockCronJob('scheduledJob');
-      mockJob.nextDate = jest.fn().mockReturnValue(nextRunDate);
+      mockJob.nextDate = vi.fn().mockReturnValue(nextRunDate);
       const cronJobs = new Map();
       cronJobs.set('scheduledJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
@@ -262,7 +264,7 @@ describe('ScheduleWatcher', () => {
       // Arrange
       const iso = '2024-06-01T12:00:00.000Z';
       const mockJob = createMockCronJob('luxonJob');
-      mockJob.nextDate = jest.fn().mockReturnValue({ toISO: () => iso });
+      mockJob.nextDate = vi.fn().mockReturnValue({ toISO: () => iso });
       const cronJobs = new Map();
       cronJobs.set('luxonJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
@@ -282,7 +284,7 @@ describe('ScheduleWatcher', () => {
     it('should omit next run time when the job cannot report one', async () => {
       // Arrange
       const mockJob = createMockCronJob('unknownShapeJob');
-      mockJob.nextDate = jest.fn().mockReturnValue({ somethingElse: true });
+      mockJob.nextDate = vi.fn().mockReturnValue({ somethingElse: true });
       const cronJobs = new Map();
       cronJobs.set('unknownShapeJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
@@ -302,7 +304,7 @@ describe('ScheduleWatcher', () => {
     it('should re-throw job errors', async () => {
       // Arrange
       const mockJob = createMockCronJob('errorJob');
-      mockJob.fireOnTick = jest.fn().mockRejectedValue(new Error('Critical error'));
+      mockJob.fireOnTick = vi.fn().mockRejectedValue(new Error('Critical error'));
       const cronJobs = new Map();
       cronJobs.set('errorJob', mockJob);
       const registry = createSchedulerRegistry(cronJobs);
@@ -343,7 +345,7 @@ describe('ScheduleWatcher', () => {
     it('should track job duration correctly', async () => {
       // Arrange
       const mockJob = createMockCronJob('timedJob');
-      mockJob.fireOnTick = jest
+      mockJob.fireOnTick = vi
         .fn()
         .mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 50)));
       const cronJobs = new Map();
@@ -371,9 +373,9 @@ describe('ScheduleWatcher', () => {
     it('should extract cron pattern from cronTime.source', async () => {
       // Arrange
       const mockJob = {
-        fireOnTick: jest.fn().mockResolvedValue(undefined),
+        fireOnTick: vi.fn().mockResolvedValue(undefined),
         cronTime: { source: '*/5 * * * *' },
-        nextDate: jest.fn().mockReturnValue(null),
+        nextDate: vi.fn().mockReturnValue(null),
       };
       const cronJobs = new Map();
       cronJobs.set('patternJob', mockJob);
@@ -396,8 +398,8 @@ describe('ScheduleWatcher', () => {
     it('should handle missing cronTime', async () => {
       // Arrange
       const mockJob = {
-        fireOnTick: jest.fn().mockResolvedValue(undefined),
-        nextDate: jest.fn().mockReturnValue(null),
+        fireOnTick: vi.fn().mockResolvedValue(undefined),
+        nextDate: vi.fn().mockReturnValue(null),
       };
       const cronJobs = new Map();
       cronJobs.set('noCronTimeJob', mockJob);

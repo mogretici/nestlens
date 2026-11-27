@@ -14,6 +14,7 @@
  * looking for, in the wrong place. The parser skips comments and strings now
  * and only counts a keyword outside a selection set.
  */
+import { describe, it, expect } from 'vitest';
 import {
   declaredOperations,
   selectsIntrospection,

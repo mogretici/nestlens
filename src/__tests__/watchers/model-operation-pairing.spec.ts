@@ -14,6 +14,7 @@
  * And an operation whose completion never fires, which is what a rolled-back
  * transaction is, left its start behind for good.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { ModelWatcher } from '../../watchers/model.watcher';
 import { NestLensConfig } from '../../nestlens.config';

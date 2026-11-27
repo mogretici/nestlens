@@ -16,6 +16,7 @@
  * then the event's own — so the measurement is the real one, and the clock is
  * moved by hand so it is exact.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
@@ -69,16 +70,16 @@ const watching = (emitter: EmitterLikeEventEmitter2) => {
 };
 
 const advance = (ms: number): void => {
-  jest.setSystemTime(Date.now() + ms);
+  vi.setSystemTime(Date.now() + ms);
 };
 
 describe('an event duration', () => {
   beforeEach(() => {
-    jest.useFakeTimers({ now: 1_000_000 });
+    vi.useFakeTimers({ now: 1_000_000 });
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('is the time the listeners took, not what the caller did afterwards', () => {
@@ -88,7 +89,7 @@ describe('an event duration', () => {
 
     emitter.emit('order.created', { id: 1 });
     advance(120);
-    jest.runAllTimers();
+    vi.runAllTimers();
 
     expect(durations).toEqual([50]);
     watcher.onModuleDestroy();
@@ -101,7 +102,7 @@ describe('an event duration', () => {
 
     emitter.emit('order.created');
     advance(120);
-    jest.runAllTimers();
+    vi.runAllTimers();
 
     expect(durations).toEqual([0]);
     watcher.onModuleDestroy();
@@ -121,7 +122,7 @@ describe('an event duration', () => {
 
     const settled = emitter.emitAsync('order.created');
     advance(5);
-    jest.runAllTimers();
+    vi.runAllTimers();
     advance(75);
     finish();
     await settled;

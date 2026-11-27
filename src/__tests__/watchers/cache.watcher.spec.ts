@@ -4,6 +4,8 @@
  * Tests for the cache watcher that monitors cache operations.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,23 +13,23 @@ import { CacheWatcher } from '../../watchers/cache.watcher';
 
 describe('CacheWatcher', () => {
   let watcher: CacheWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const CACHE_MANAGER = 'CACHE_MANAGER';
 
   const createCacheManager = (
     overrides: Partial<{
-      get: jest.Mock;
-      set: jest.Mock;
-      del: jest.Mock;
-      reset: jest.Mock;
+      get: Mock;
+      set: Mock;
+      del: Mock;
+      reset: Mock;
     }> = {},
   ) => ({
-    get: jest.fn().mockResolvedValue(undefined),
-    set: jest.fn().mockResolvedValue(undefined),
-    del: jest.fn().mockResolvedValue(undefined),
-    reset: jest.fn().mockResolvedValue(undefined),
+    get: vi.fn().mockResolvedValue(undefined),
+    set: vi.fn().mockResolvedValue(undefined),
+    del: vi.fn().mockResolvedValue(undefined),
+    reset: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   });
 
@@ -53,12 +55,12 @@ describe('CacheWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -162,7 +164,7 @@ describe('CacheWatcher', () => {
       // Arrange
       const cachedValue = { id: 1, name: 'Test' };
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(cachedValue),
+        get: vi.fn().mockResolvedValue(cachedValue),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -186,7 +188,7 @@ describe('CacheWatcher', () => {
     it('should collect cache miss', async () => {
       // Arrange
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(undefined),
+        get: vi.fn().mockResolvedValue(undefined),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -209,7 +211,7 @@ describe('CacheWatcher', () => {
     it('should collect duration for get operation', async () => {
       // Arrange
       const cacheManager = createCacheManager({
-        get: jest
+        get: vi
           .fn()
           .mockImplementation(
             () => new Promise((resolve) => setTimeout(() => resolve('value'), 10)),
@@ -236,7 +238,7 @@ describe('CacheWatcher', () => {
     it('should treat null as cache miss', async () => {
       // Arrange
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(null),
+        get: vi.fn().mockResolvedValue(null),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -415,7 +417,7 @@ describe('CacheWatcher', () => {
       // Arrange
       const smallValue = { id: 1, name: 'Test' };
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(smallValue),
+        get: vi.fn().mockResolvedValue(smallValue),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -436,7 +438,7 @@ describe('CacheWatcher', () => {
       // Arrange
       const largeValue = { data: 'x'.repeat(2000) };
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(largeValue),
+        get: vi.fn().mockResolvedValue(largeValue),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -461,7 +463,7 @@ describe('CacheWatcher', () => {
       const circularValue: any = {};
       circularValue.self = circularValue;
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(circularValue),
+        get: vi.fn().mockResolvedValue(circularValue),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -477,7 +479,7 @@ describe('CacheWatcher', () => {
     it('should return undefined for null values', async () => {
       // Arrange
       const cacheManager = createCacheManager({
-        get: jest.fn().mockResolvedValue(null),
+        get: vi.fn().mockResolvedValue(null),
       });
       watcher = await createWatcher(mockConfig, cacheManager);
       watcher.onModuleInit();
@@ -503,7 +505,7 @@ describe('CacheWatcher', () => {
     it('should handle cache manager without get method', async () => {
       // Arrange
       const partialCache = {
-        set: jest.fn().mockResolvedValue(undefined),
+        set: vi.fn().mockResolvedValue(undefined),
       };
       watcher = await createWatcher(mockConfig, partialCache as any);
 
@@ -514,7 +516,7 @@ describe('CacheWatcher', () => {
     it('should handle cache manager without set method', async () => {
       // Arrange
       const partialCache = {
-        get: jest.fn().mockResolvedValue('value'),
+        get: vi.fn().mockResolvedValue('value'),
       };
       watcher = await createWatcher(mockConfig, partialCache as any);
 

@@ -11,6 +11,7 @@
  * application added through `security.dataMasking.sensitiveParams`. Both had
  * been masked by that second pass for as long as the option had existed.
  */
+import { describe, it, expect } from 'vitest';
 import { resolveSensitiveParams } from '../../../core/data-masker.service';
 import { MaskingTerms } from '../../../core/masking-terms';
 import { GraphQLWatcherConfig } from '../../../nestlens.config';

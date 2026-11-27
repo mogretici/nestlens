@@ -10,6 +10,7 @@
  * reached a list update and failed there instead, telling the reader about a
  * property of null.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { NestLensApiController } from '../../api/api.controller';
 import { StorageInterface } from '../../core/storage/storage.interface';
 import { CollectorService, PruningService } from '../../core';
@@ -18,9 +19,9 @@ import { Entry } from '../../types';
 
 const controllerOver = (entry: Entry | null): NestLensApiController => {
   const storage = {
-    resolveEntry: jest.fn(async () => undefined),
-    unresolveEntry: jest.fn(async () => undefined),
-    findById: jest.fn(async () => entry),
+    resolveEntry: vi.fn(async () => undefined),
+    unresolveEntry: vi.fn(async () => undefined),
+    findById: vi.fn(async () => entry),
   } as unknown as StorageInterface;
 
   return new NestLensApiController(

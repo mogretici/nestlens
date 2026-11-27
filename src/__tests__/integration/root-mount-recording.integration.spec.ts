@@ -12,6 +12,7 @@
  * either: with `server` the dashboard has a listener to itself, and a path under
  * it buys nothing.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';

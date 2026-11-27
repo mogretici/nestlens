@@ -17,6 +17,8 @@
  * It falls back to memory now, and says so at error level: falling back quietly
  * would leave a reader wondering why nothing survives a restart.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -35,12 +37,12 @@ const entry = (): Entry =>
 describe('opening a storage that cannot be opened', () => {
   let workspace: string;
   let errors: string[];
-  let errorSpy: jest.SpyInstance;
+  let errorSpy: MockInstance;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), 'nestlens-open-'));
     errors = [];
-    errorSpy = jest
+    errorSpy = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation((message: unknown) => void errors.push(String(message)));
   });
@@ -121,12 +123,20 @@ describe('opening a storage that cannot be opened', () => {
   it('still explains a missing native module rather than falling back', async () => {
     // A missing dependency is a different problem: the answer is to install it
     // or to choose another driver, and quietly using a third would hide that.
-    jest.resetModules();
-    jest.doMock('../../../core/storage/sqlite.storage', () => {
-      throw Object.assign(new Error("Cannot find module 'better-sqlite3'"), {
-        code: 'MODULE_NOT_FOUND',
-      });
-    });
+    //
+    // The error is raised by the mocked constructor, not by the factory:
+    // Vitest wraps a factory's error in its own, without the `code`. Both the
+    // import and the construction sit inside the one `try` this exercises.
+    vi.resetModules();
+    vi.doMock('../../../core/storage/sqlite.storage', () => ({
+      SqliteStorage: class {
+        constructor() {
+          throw Object.assign(new Error("Cannot find module 'better-sqlite3'"), {
+            code: 'MODULE_NOT_FOUND',
+          });
+        }
+      },
+    }));
 
     const { createStorage: freshCreate } = await import('../../../core/storage/storage.factory');
 
@@ -134,7 +144,7 @@ describe('opening a storage that cannot be opened', () => {
       freshCreate({ driver: 'sqlite', sqlite: { filename: join(workspace, 'y.db') } }),
     ).rejects.toThrow(/better-sqlite3/);
 
-    jest.dontMock('../../../core/storage/sqlite.storage');
-    jest.resetModules();
+    vi.doUnmock('../../../core/storage/sqlite.storage');
+    vi.resetModules();
   });
 });

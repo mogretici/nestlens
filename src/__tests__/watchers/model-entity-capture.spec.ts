@@ -15,6 +15,7 @@
  * with a cycle, a depth and a walk bound behind them, so the watcher only has
  * to decide how much of the entity to keep.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { DataMaskerService } from '../../core/data-masker.service';
 import { ModelWatcher } from '../../watchers/model.watcher';

@@ -1,3 +1,5 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PruningService } from '../core/pruning.service';
 import { STORAGE, StorageInterface } from '../core/storage/storage.interface';
@@ -5,40 +7,40 @@ import { NESTLENS_CONFIG, NestLensConfig } from '../nestlens.config';
 
 describe('PruningService', () => {
   let service: PruningService;
-  let mockStorage: jest.Mocked<StorageInterface>;
+  let mockStorage: Mocked<StorageInterface>;
   let mockConfig: NestLensConfig;
 
   beforeEach(async () => {
     mockStorage = {
-      initialize: jest.fn(),
-      save: jest.fn(),
-      saveBatch: jest.fn(),
-      find: jest.fn(),
-      findWithCursor: jest.fn(),
-      findById: jest.fn(),
-      count: jest.fn(),
-      getLatestSequence: jest.fn(),
-      hasEntriesAfter: jest.fn(),
-      getStats: jest.fn(),
-      getStorageStats: jest.fn(),
-      prune: jest.fn(),
-      pruneByType: jest.fn(),
-      clear: jest.fn(),
-      close: jest.fn(),
-      addTags: jest.fn(),
-      removeTags: jest.fn(),
-      getEntryTags: jest.fn(),
-      getAllTags: jest.fn(),
-      findByTags: jest.fn(),
-      addMonitoredTag: jest.fn(),
-      removeMonitoredTag: jest.fn(),
-      getMonitoredTags: jest.fn(),
-      resolveEntry: jest.fn(),
-      unresolveEntry: jest.fn(),
-      updateFamilyHash: jest.fn(),
-      findByFamilyHash: jest.fn(),
-      getGroupedByFamilyHash: jest.fn(),
-    } as jest.Mocked<StorageInterface>;
+      initialize: vi.fn(),
+      save: vi.fn(),
+      saveBatch: vi.fn(),
+      find: vi.fn(),
+      findWithCursor: vi.fn(),
+      findById: vi.fn(),
+      count: vi.fn(),
+      getLatestSequence: vi.fn(),
+      hasEntriesAfter: vi.fn(),
+      getStats: vi.fn(),
+      getStorageStats: vi.fn(),
+      prune: vi.fn(),
+      pruneByType: vi.fn(),
+      clear: vi.fn(),
+      close: vi.fn(),
+      addTags: vi.fn(),
+      removeTags: vi.fn(),
+      getEntryTags: vi.fn(),
+      getAllTags: vi.fn(),
+      findByTags: vi.fn(),
+      addMonitoredTag: vi.fn(),
+      removeMonitoredTag: vi.fn(),
+      getMonitoredTags: vi.fn(),
+      resolveEntry: vi.fn(),
+      unresolveEntry: vi.fn(),
+      updateFamilyHash: vi.fn(),
+      findByFamilyHash: vi.fn(),
+      getGroupedByFamilyHash: vi.fn(),
+    } as Mocked<StorageInterface>;
 
     mockConfig = {
       enabled: true,
@@ -169,7 +171,7 @@ describe('PruningService', () => {
 
   describe('onModuleDestroy', () => {
     it('should call stop on module destroy', async () => {
-      const stopSpy = jest.spyOn(service, 'stop');
+      const stopSpy = vi.spyOn(service, 'stop');
 
       await service.onModuleDestroy();
 

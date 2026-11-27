@@ -12,6 +12,7 @@
  * REST-only request index did not exist, and the Requests page pages and
  * counts against the latter.
  */
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import Redis from 'ioredis';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 import { Entry } from '../../../types';
@@ -23,7 +24,7 @@ const DB = 13;
 const describeWithRedis = REDIS_URL ? describe : describe.skip;
 
 describeWithRedis('migrating a Redis store onto the current indexes', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let raw: Redis;
   let storage: RedisStorage | undefined;

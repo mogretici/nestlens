@@ -12,6 +12,7 @@
  * adds another chance for the two to disagree. So every watcher is switched off
  * on its own here, rather than the one that happened to be broken.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../../nestlens.module';
 import { DEFAULT_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -29,7 +30,7 @@ const boots = async (config: NestLensConfig): Promise<void> => {
 };
 
 describe('watcher combinations', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   it('has a watcher list to work from', () => {
     expect(WATCHERS.length).toBeGreaterThanOrEqual(18);

@@ -17,6 +17,7 @@
  * not, and neither does an eviction policy — under `allkeys-lru` NestLens
  * entries and the application's cache evict each other.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 import { withDatabase } from '../../../core/storage/redis-url';
@@ -54,7 +55,7 @@ describe('the database a URL-configured store writes to', () => {
 
     it('says so when the two disagree', () => {
       const warnings: string[] = [];
-      const spy = jest
+      const spy = vi
         .spyOn(Logger.prototype, 'warn')
         .mockImplementation((message: unknown) => void warnings.push(String(message)));
 
@@ -67,7 +68,7 @@ describe('the database a URL-configured store writes to', () => {
 
     it('stays quiet when they agree', () => {
       const warnings: string[] = [];
-      const spy = jest
+      const spy = vi
         .spyOn(Logger.prototype, 'warn')
         .mockImplementation((message: unknown) => void warnings.push(String(message)));
 
@@ -80,7 +81,7 @@ describe('the database a URL-configured store writes to', () => {
 
   /** Against a real server, because the point is where the keys land. */
   (REDIS_URL ? describe : describe.skip)('against a running Redis', () => {
-    jest.setTimeout(30_000);
+    vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
     it('writes to the configured database and not to the URL’s', async () => {
       const url = new URL(REDIS_URL as string);

@@ -4,6 +4,8 @@
  * Tests for the view watcher that monitors template rendering.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,15 +13,15 @@ import { ViewWatcher, NESTLENS_VIEW_ENGINE } from '../../watchers/view.watcher';
 
 describe('ViewWatcher', () => {
   let watcher: ViewWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createViewEngine = (
     overrides: Partial<{
-      render: jest.Mock;
+      render: Mock;
     }> = {},
   ) => ({
-    render: jest.fn().mockResolvedValue('<html>Rendered</html>'),
+    render: vi.fn().mockResolvedValue('<html>Rendered</html>'),
     ...overrides,
   });
 
@@ -45,12 +47,12 @@ describe('ViewWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -183,7 +185,7 @@ describe('ViewWatcher', () => {
     it('should calculate render duration', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest
+        render: vi
           .fn()
           .mockImplementation(
             () => new Promise((resolve) => setTimeout(() => resolve('<html>'), 50)),
@@ -210,7 +212,7 @@ describe('ViewWatcher', () => {
       // Arrange
       const expectedResult = '<html><body>Content</body></html>';
       const engine = createViewEngine({
-        render: jest.fn().mockResolvedValue(expectedResult),
+        render: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -226,7 +228,7 @@ describe('ViewWatcher', () => {
       // Arrange
       const output = '<html>'.repeat(100);
       const engine = createViewEngine({
-        render: jest.fn().mockResolvedValue(output),
+        render: vi.fn().mockResolvedValue(output),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -247,7 +249,7 @@ describe('ViewWatcher', () => {
       // Arrange
       const output = Buffer.from('PDF content');
       const engine = createViewEngine({
-        render: jest.fn().mockResolvedValue(output),
+        render: vi.fn().mockResolvedValue(output),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -291,7 +293,7 @@ describe('ViewWatcher', () => {
     it('should collect error status', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest.fn().mockRejectedValue(new Error('Template not found')),
+        render: vi.fn().mockRejectedValue(new Error('Template not found')),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -311,7 +313,7 @@ describe('ViewWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest.fn().mockRejectedValue(new Error('Syntax error')),
+        render: vi.fn().mockRejectedValue(new Error('Syntax error')),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -323,7 +325,7 @@ describe('ViewWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest.fn().mockRejectedValue('String error'),
+        render: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -709,7 +711,7 @@ describe('ViewWatcher', () => {
     it('should handle undefined result', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest.fn().mockResolvedValue(undefined),
+        render: vi.fn().mockResolvedValue(undefined),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();
@@ -729,7 +731,7 @@ describe('ViewWatcher', () => {
     it('should handle object result', async () => {
       // Arrange
       const engine = createViewEngine({
-        render: jest.fn().mockResolvedValue({ html: '<div></div>', meta: {} }),
+        render: vi.fn().mockResolvedValue({ html: '<div></div>', meta: {} }),
       });
       watcher = await createWatcher(mockConfig, engine);
       watcher.onModuleInit();

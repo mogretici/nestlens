@@ -18,6 +18,7 @@
  * want to read, and a payload object that answers questions with what the
  * client put in it.
  */
+import { describe, it, expect } from 'vitest';
 import { DataMaskerService } from '../../core/data-masker.service';
 import { assignKey } from '../../core/safe-assign';
 import { sanitizeVariables } from '../../watchers/graphql/utils/variable-sanitizer';

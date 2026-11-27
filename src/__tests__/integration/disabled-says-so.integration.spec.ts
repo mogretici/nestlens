@@ -8,16 +8,17 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Logger, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../../nestlens.module';
 
 const logged = async (enabled: boolean): Promise<string[]> => {
   const lines: string[] = [];
-  const log = jest.spyOn(Logger.prototype, 'log').mockImplementation((message: unknown) => {
+  const log = vi.spyOn(Logger.prototype, 'log').mockImplementation((message: unknown) => {
     lines.push(String(message));
   });
-  const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation((message: unknown) => {
+  const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation((message: unknown) => {
     lines.push(String(message));
   });
 

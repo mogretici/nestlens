@@ -10,6 +10,7 @@
  * documented defaults, 2,240 entries recorded, every one a health check,
  * `exceptions: 0`, and a webhook that never fired. Nothing warned at any layer.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { CollectorService } from '../../../core/collector.service';
 import { NestLensConfig } from '../../../nestlens.config';
@@ -17,7 +18,7 @@ import { GraphQLWatcher } from '../../../watchers/graphql/graphql.watcher';
 
 const startWith = (config: NestLensConfig): string[] => {
   const warnings: string[] = [];
-  const spy = jest
+  const spy = vi
     .spyOn(Logger.prototype, 'warn')
     .mockImplementation((message: unknown) => void warnings.push(String(message)));
 

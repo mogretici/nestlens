@@ -7,6 +7,7 @@
  * interfering with each other. This is the cross-feature evidence for running
  * the schedule watcher alongside the query (ORM) watcher in the same process.
  */
+import { describe, it, expect } from 'vitest';
 import { Injectable, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Cron, ScheduleModule, SchedulerRegistry } from '@nestjs/schedule';

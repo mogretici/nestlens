@@ -4,6 +4,8 @@
  * Tests for the HTTP client watcher that monitors outgoing HTTP requests.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,7 +13,7 @@ import { HttpClientWatcher, NESTLENS_HTTP_CLIENT } from '../../watchers/http-cli
 
 describe('HttpClientWatcher', () => {
   let watcher: HttpClientWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
   let requestInterceptor: { onFulfilled: Function; onRejected: Function };
   let responseInterceptor: { onFulfilled: Function; onRejected: Function };
@@ -19,13 +21,13 @@ describe('HttpClientWatcher', () => {
   const createAxiosInstance = () => {
     const interceptors = {
       request: {
-        use: jest.fn((onFulfilled, onRejected) => {
+        use: vi.fn((onFulfilled, onRejected) => {
           requestInterceptor = { onFulfilled, onRejected };
           return 0;
         }),
       },
       response: {
-        use: jest.fn((onFulfilled, onRejected) => {
+        use: vi.fn((onFulfilled, onRejected) => {
           responseInterceptor = { onFulfilled, onRejected };
           return 0;
         }),
@@ -56,12 +58,12 @@ describe('HttpClientWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
