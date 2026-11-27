@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Query Watcher
 
-The Query Watcher monitors database queries executed by your application, supporting both TypeORM and Prisma ORMs. It tracks query performance, identifies slow queries, and provides insights into database operations.
+The Query Watcher monitors database queries executed by your application, supporting TypeORM and Prisma. It tracks query performance, identifies slow queries, and provides insights into database operations.
 
 ## What Gets Captured
 
@@ -52,9 +52,9 @@ interface QueryEntry {
     parameters?: unknown[];     // Query parameters
     duration: number;           // Execution time (ms)
     slow: boolean;              // True if duration > slowThreshold
-    source?: string;            // 'typeorm' | 'prisma' | 'mongoose' | 'raw' (optional)
-    connection?: string;        // Connection/database name
-    stack?: string;             // Stack trace (for debugging)
+    source?: string;            // 'typeorm' or 'prisma'
+    connection?: string;        // TypeORM DataSource name; Prisma has none
+    stack?: string;             // Never set by the watcher; for a custom integration
   };
 }
 ```
@@ -110,19 +110,18 @@ export class UserService {
 
 ### Prisma Integration
 
-For Prisma, register your Prisma client globally:
+At bootstrap the watcher attaches to every provider that is a Prisma client,
+and to `globalThis.prisma` if there is one. On Prisma 6.14 and later, 7 included, the
+client has to be built with query logging, and is then recorded as SQL; on
+Prisma 6.13 and earlier there is nothing to set up, and operations are recorded
+by name.
 
 ```typescript
-// prisma.service.ts
-import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
-
+// prisma.service.ts — the constructor is what Prisma 6.14+ and 7 need
 @Injectable()
 export class PrismaService extends PrismaClient {
   constructor() {
-    super();
-    // Make Prisma client globally available for NestLens
-    (global as any).prisma = this;
+    super({ log: [{ emit: 'event', level: 'query' }] });
   }
 }
 
@@ -132,16 +131,20 @@ export class UserService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    // Tracked as: "User.findMany"
+    // Prisma ≤ 6.13: "User.findMany"; 6.14+ and 7: the SELECT it ran
     return this.prisma.user.findMany();
   }
 
   async create(data: CreateUserDto) {
-    // Tracked as: "User.create"
+    // Prisma ≤ 6.13: "User.create"; 6.14+ and 7: the INSERT it ran
     return this.prisma.user.create({ data });
   }
 }
 ```
+
+A Prisma 6.14+ or 7 client built without query logging records nothing, and
+NestLens says so once at startup with the option to add. See
+[Prisma Integration](../integrations/prisma.md).
 
 ### Identifying Slow Queries
 
@@ -195,11 +198,13 @@ In the NestLens dashboard, query entries appear in the Queries tab showing:
 
 ### Filters Available
 
-- Filter by slow queries only
-- Filter by ORM source (TypeORM/Prisma)
-- Filter by connection name
-- Filter by minimum duration
-- Search by query text
+- **Slow Queries** (`slow`) - Over the watcher's `slowThreshold`
+- **Sources** (`sources`) - `typeorm` or `prisma`
+- **Query Types** (`queryTypes`) - What the statement starts with
+- **Duration** (`slower`) - Over 100ms to over 5s
+- **Search** (`search`) - The query text and its parameters
+
+Every filter and what it matches: [Filtering](../dashboard/filtering.md#query-filters).
 
 ## Performance Optimization
 
@@ -273,12 +278,13 @@ TypeOrmModule.forRoot({
 
 ## Prisma Query Format
 
-Prisma queries are captured as operation names rather than raw SQL:
+On Prisma 6.14 and later a query is recorded as the SQL Prisma ran, with its
+parameters. On Prisma 6.13 and earlier it is recorded as an operation name:
 
 ```typescript
-// Raw SQL
+// Raw SQL has no model
 await prisma.$queryRaw`SELECT * FROM users WHERE email = ${email}`
-// Captured as: Raw SQL query
+// Captured as: "unknown.queryRaw"
 
 // Prisma operations
 await prisma.user.findMany({ where: { active: true } })

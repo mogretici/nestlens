@@ -23,20 +23,31 @@ NestLensModule.forRoot({
   watchers: {
     redis: {
       enabled: true,
-      ignoreCommands: ['ping', 'info'],
+      ignoreCommands: ['ttl', 'exists'],
       maxResultSize: 1024, // 1KB
     },
   },
 })
 ```
 
+## Tracked Commands
+
+The watcher wraps these 25 methods on the client, and records nothing else:
+
+`get` `set` `del` `exists` `expire` `ttl` `incr` `decr` `lpush` `rpush` `lpop`
+`rpop` `lrange` `hget` `hset` `hdel` `hgetall` `sadd` `srem` `smembers` `zadd`
+`zrem` `zrange` `mget` `mset`
+
+`ping`, `info`, `publish`, `subscribe`, `eval`, `multi` and pipelines go
+untracked, so `ignoreCommands` only needs names from this list.
+
 ## Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable/disable Redis tracking |
-| `ignoreCommands` | string[] | `[]` | Commands to ignore |
-| `maxResultSize` | number | `1024` | Max result size to capture (bytes). `0` records the size only, never the content |
+| `ignoreCommands` | string[] | `[]` | Tracked commands not to record, by their lower-case name |
+| `maxResultSize` | number | `1024` | Bytes of the arguments, and separately of the result, to capture; larger is recorded as its size. `0` records the size only, never the content |
 
 ## Payload Structure
 
@@ -83,6 +94,7 @@ export class AppModule {}
 ### Provide Redis Client to NestLens
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_REDIS_CLIENT } from 'nestlens';
 
 @Module({
@@ -189,20 +201,6 @@ async checkRateLimit(userId: string): Promise<boolean> {
   }
 
   return count <= 100; // Max 100 requests per minute
-}
-```
-
-### Pub/Sub
-
-```typescript
-async publishEvent(channel: string, message: string) {
-  await this.redis.publish(channel, message);
-}
-
-async subscribe(channel: string, handler: (message: string) => void) {
-  const subscriber = this.redis.duplicate();
-  await subscriber.connect();
-  await subscriber.subscribe(channel, handler);
 }
 ```
 

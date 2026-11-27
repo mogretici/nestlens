@@ -196,13 +196,15 @@ In the NestLens dashboard, request entries appear in the Requests tab showing:
 
 ### Filters Available
 
-- Filter by HTTP method
-- Filter by status code
-- Filter by path pattern
-- Filter by user
-- Filter by tags
-- Filter by response time
-- Search by URL
+- **Methods** (`methods`) - GET, POST, …
+- **Status Codes** (`statuses`) - `ERR` for a request that ended with none
+- **Paths** (`paths`) - Contains, or a `*` pattern
+- **Controllers** (`controllers`) - `UsersController.findAll`
+- **Tags** (`tags`) - Any of the tags
+- **Duration** (`slower`) - Over 100ms to over 5s
+- **Search** (`search`) - The URL, headers, bodies and the rest of the payload
+
+Every filter and what it matches: [Filtering](../dashboard/filtering.md#request-filters).
 
 ## Sensitive Data Handling
 

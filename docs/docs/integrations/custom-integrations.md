@@ -160,13 +160,14 @@ export class QueueRegistration implements OnModuleInit {
 }
 ```
 
-For BullMQ, use `await this.jobWatcher.setupBullMQQueue(queue, name)` instead. See [Bull / BullMQ Integration](./bull-bullmq.md).
+For BullMQ, use `await jobWatcher.setupBullMQQueue(queue, name)` instead. See [Bull / BullMQ Integration](./bull-bullmq.md).
 
 ### NESTLENS_REDIS_CLIENT
 
 Register Redis client for command tracking:
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_REDIS_CLIENT } from 'nestlens';
 import Redis from 'ioredis';
 
@@ -189,6 +190,7 @@ export class RedisModule {}
 Register TypeORM entity subscriber for model tracking:
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_MODEL_SUBSCRIBER } from 'nestlens';
 import { EntitySubscriberInterface } from 'typeorm';
 

@@ -239,8 +239,8 @@ export interface DumpWatcherConfig {
 
 export interface RedisWatcherConfig {
   enabled?: boolean;
-  ignoreCommands?: string[]; // commands to ignore (e.g., ['ping', 'info'])
-  maxResultSize?: number; // bytes, default: 1KB; 0 captures none
+  ignoreCommands?: string[]; // tracked commands not to record (e.g., ['ttl', 'exists'])
+  maxResultSize?: number; // bytes of args and of result, each; default: 1KB; 0 captures none
 }
 
 export interface ModelWatcherConfig {

@@ -64,6 +64,7 @@ interface BatchEntry {
 ### Provide Batch Processor
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_BATCH_PROCESSOR } from 'nestlens';
 
 @Module({
@@ -111,6 +112,7 @@ export class BatchService {
 Use the `trackBatch` method for custom implementations:
 
 ```typescript
+import { Injectable } from '@nestjs/common';
 import { BatchWatcher } from 'nestlens';
 
 @Injectable()

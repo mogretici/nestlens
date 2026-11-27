@@ -59,36 +59,61 @@ interface ViewEntry {
 
 ## Usage Example
 
-### Setup View Engine
+### What Is Recorded
+
+The watcher wraps the `render` method of the object provided under
+`NESTLENS_VIEW_ENGINE`, and records each call to it — one that returns the
+output, a promise of it, or answers through a callback as `render(name, locals,
+callback)` does. A render that answers through a callback is timed until it
+calls back.
+
+### Record `@Render()` and `res.render()` (Express)
+
+On Express, every `@Render()` and `res.render()` goes through the Express
+application's own `render`. Hand that to the watcher:
 
 ```typescript
-// Install: npm install hbs
-import { NestFactory } from '@nestjs/core';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
-
-async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
-  app.setBaseViewsDir(join(__dirname, '..', 'views'));
-  app.setViewEngine('hbs');
-
-  await app.listen(3000);
-}
-```
-
-### Provide View Engine to NestLens
-
-```typescript
+import { Module } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 import { NESTLENS_VIEW_ENGINE } from 'nestlens';
 
 @Module({
   providers: [
     {
       provide: NESTLENS_VIEW_ENGINE,
-      useFactory: (app: NestExpressApplication) => app.engine,
-      inject: [/* app instance */],
+      useFactory: (host: HttpAdapterHost) => host.httpAdapter.getInstance(),
+      inject: [HttpAdapterHost],
     },
+  ],
+})
+export class AppModule {}
+```
+
+Measured on NestJS 12.6 with an engine that took 25 ms: a `@Render('page')`
+handler was recorded as template `page`, `rendered`, 26 ms, with the output's
+size. Fastify renders through `@fastify/view`, which has no such method.
+
+### Or Provide a View Service of Your Own
+
+```typescript
+import { Injectable, Module } from '@nestjs/common';
+import * as Handlebars from 'handlebars';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { NESTLENS_VIEW_ENGINE } from 'nestlens';
+
+@Injectable()
+export class ViewService {
+  render(template: string, locals: Record<string, unknown>): string {
+    const source = readFileSync(join(__dirname, '..', 'views', `${template}.hbs`), 'utf8');
+    return Handlebars.compile(source)(locals);
+  }
+}
+
+@Module({
+  providers: [
+    ViewService,
+    { provide: NESTLENS_VIEW_ENGINE, useExisting: ViewService },
   ],
 })
 export class AppModule {}
@@ -99,100 +124,37 @@ export class AppModule {}
 ```typescript
 @Controller()
 export class AppController {
+  constructor(private readonly views: ViewService) {}
+
   @Get()
-  @Render('index')
-  getIndex() {
-    // Automatically tracked
-    return {
-      title: 'Welcome',
-      message: 'Hello World',
-    };
-  }
-
-  @Get('user/:id')
-  @Render('user-profile')
-  async getUserProfile(@Param('id') id: string) {
-    const user = await this.userService.findOne(id);
-    return {
-      user,
-      timestamp: new Date(),
-    };
+  @Header('Content-Type', 'text/html')
+  getIndex(): string {
+    // Recorded: template 'index', format 'html', the output's size
+    return this.views.render('index', { title: 'Welcome' });
   }
 }
 ```
 
-### Manual Rendering
-
-```typescript
-@Controller()
-export class ReportController {
-  @Get('report')
-  async generateReport(@Res() res: Response) {
-    const data = await this.reportService.getData();
-
-    // Tracked when rendered
-    res.render('report', {
-      data,
-      generatedAt: new Date(),
-    });
-  }
-}
-```
-
-## Dashboard View
-
-In the NestLens dashboard, view entries show:
-
-- Template rendering timeline
-- Most rendered templates
-- Slow templates
-- Rendering performance trends
-- Output size distribution
-- Cache hit rates
-- Error rates
-
-## Performance Analysis
-
-### Identify Slow Templates
-
-```typescript
-// Dashboard shows which templates are slow to render
-@Get('complex')
-@Render('complex-report')
-async complexReport() {
-  // If this takes >500ms, it appears in "Slow Views"
-  const data = await this.generateComplexData();
-  return { data };
-}
-```
-
-### Monitor Output Sizes
-
-```typescript
-// Dashboard tracks output size
-@Get('large-list')
-@Render('user-list')
-async userList() {
-  const users = await this.userService.findAll();
-  // Dashboard shows if rendered output is very large
-  return { users };
-}
-```
+A render that throws — or whose promise rejects, or whose callback is handed an
+error — is recorded with
+`status: 'error'` and the error's message, and the error still reaches the
+caller.
 
 ## Template Formats
 
-The watcher auto-detects format from template name:
+The format is read from the template name, or from `format` in the object form:
 
 ```typescript
-@Render('report.pdf')     // format: 'pdf'
-@Render('data.xml')       // format: 'xml'
-@Render('api.json')       // format: 'json'
-@Render('page.html')      // format: 'html' (default)
+views.render('report.pdf', data)    // format: 'pdf'
+views.render('data.xml', data)      // format: 'xml'
+views.render('api.json', data)      // format: 'json'
+views.render('page', data)          // format: 'html' (default)
 ```
 
 ## Template Data Capture
 
-When `captureData: true`, template locals are captured (limited to 4KB):
+With `captureData: true` the locals are recorded too, up to 4KB; larger ones are
+recorded as their size:
 
 ```typescript
 NestLensModule.forRoot({
@@ -202,50 +164,10 @@ NestLensModule.forRoot({
     },
   },
 })
-
-@Get()
-@Render('index')
-getIndex() {
-  return {
-    user: { id: 123, name: 'John' }, // Captured in dashboard
-    settings: { theme: 'dark' },
-  };
-}
 ```
 
-## Cache Tracking
-
-Track template caching effectiveness:
-
-```typescript
-// Some view engines cache compiled templates
-// Dashboard shows cache hit rates
-@Get('cached')
-@Render('frequently-used-template')
-getData() {
-  // Subsequent renders show cacheHit: true
-  return { data: 'value' };
-}
-```
-
-## Error Handling
-
-```typescript
-@Get('user/:id')
-@Render('user-profile')
-async getUserProfile(@Param('id') id: string) {
-  try {
-    const user = await this.userService.findOne(id);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-    return { user };
-  } catch (error) {
-    // Rendering error tracked automatically
-    throw error;
-  }
-}
-```
+`cacheHit` is recorded when the object form passes one —
+`render({ template, locals, cacheHit })`; the watcher cannot tell on its own.
 
 ## Related Watchers
 
