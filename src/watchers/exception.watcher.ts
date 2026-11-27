@@ -64,7 +64,9 @@ export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFi
   catch(exception: unknown, host: ArgumentsHost): void {
     const contextType = host.getType<string>();
 
-    // Only handle HTTP context - GraphQL has its own error handling
+    // HTTP only: the answer goes out through the HTTP adapter, which an RPC or
+    // WebSocket context does not have, so those are rethrown unrecorded.
+    // GraphQL errors are recorded by the GraphQL watcher.
     if (contextType !== 'http') {
       throw exception;
     }
@@ -114,7 +116,7 @@ export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFi
       message: thrown.message,
       stack: thrown.stack,
       code: this.getExceptionCode(exception),
-      context: this.getExceptionContext(host),
+      context: 'HTTP',
       request: {
         method: request?.method,
         url: request?.originalUrl || request?.url,
@@ -177,19 +179,5 @@ export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFi
 
     const errorWithCode = error as { code: unknown };
     return typeof errorWithCode.code === 'string' || typeof errorWithCode.code === 'number';
-  }
-
-  private getExceptionContext(host: ArgumentsHost): string {
-    const type = host.getType();
-
-    if (type === 'http') {
-      return 'HTTP';
-    } else if (type === 'rpc') {
-      return 'RPC';
-    } else if (type === 'ws') {
-      return 'WebSocket';
-    }
-
-    return type;
   }
 }
