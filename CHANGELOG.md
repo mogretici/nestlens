@@ -1,3 +1,14 @@
+## [0.18.1](https://github.com/mogretici/nestlens/compare/v0.18.0...v0.18.1) (2026-11-27)
+
+
+### Bug Fixes
+
+* **example:** pick the simulated gate decision with crypto.randomInt ([aebb37d](https://github.com/mogretici/nestlens/commit/aebb37dd6a364aeb07b9533a382b4b74b323ff16))
+* **example:** type what the lint flagged instead of reading it as any ([ec97f4e](https://github.com/mogretici/nestlens/commit/ec97f4e55fd0b931602be9bc57565ef76fd719c4))
+* **release:** keep the example lockfile's copy of the library in step ([f6bfd68](https://github.com/mogretici/nestlens/commit/f6bfd684f73557e52415e3e11e04e27f310ba7f1))
+* **storage:** keep starting on memory when better-sqlite3's addon does not load ([af3be3f](https://github.com/mogretici/nestlens/commit/af3be3f1d8f6edb0da64e24b38f1b7fee4dbf29d))
+* **storage:** say how to build better-sqlite3's addon when it does not load ([ff43944](https://github.com/mogretici/nestlens/commit/ff439442b19b964fe736ec7acc782465f490e3a5))
+
 # [0.18.0](https://github.com/mogretici/nestlens/compare/v0.17.3...v0.18.0) (2026-11-27)
 
 
