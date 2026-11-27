@@ -38,8 +38,14 @@ installs without a binary while the install succeeds. Entries are names,
 never `pkg@1.2.3`, which npm matches to that one version.
 `src/__tests__/install-scripts.spec.ts` fails on any package a lockfile marks
 as having an install script that no entry covers, and on entries nothing
-needs. npm 12 itself is not the pin: it does not support Node 22.13, the
-`engines` floor.
+needs.
+
+The pin stays on npm 11 until the `engines` floor reaches 22.22.2: npm 12's
+own `engines` is `^22.22.2 || ^24.15.0 || >=26.0.0`, and it warns that it does
+not support Node 22.13, the floor CI runs. Nothing else holds it back —
+measured on 27 November 2026, npm 12.2.3 with these `allowScripts` installed
+all four packages on Node 22.23.5 and 26.13.1 and ran the root build and
+suite, the dashboard, the example and the docs build green.
 
 ### Build
 ```bash
