@@ -4,6 +4,6 @@ import { SimulationsController } from './simulations.controller';
 // No NestLensModule import: `forRoot` in AppModule is global, so the
 // CollectorService the controller takes is already in scope.
 @Module({
-    controllers: [SimulationsController],
+  controllers: [SimulationsController],
 })
-export class SimulationsModule { }
+export class SimulationsModule {}

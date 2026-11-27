@@ -34,7 +34,7 @@ test.describe('Dashboard', () => {
     await dashboard.goto();
   });
 
-  test('loads and displays the main layout', async ({ page }) => {
+  test('loads and displays the main layout', async () => {
     // Verify sidebar navigation is present
     await expect(dashboard.sidebar).toBeVisible();
 
@@ -45,7 +45,7 @@ test.describe('Dashboard', () => {
     await expect(dashboard.logo).toBeVisible();
   });
 
-  test('shows navigation items for all entry types', async ({ page }) => {
+  test('shows navigation items for all entry types', async () => {
     // Check for key navigation items
     const navTexts = ['Requests', 'Queries', 'Logs', 'Exceptions', 'Jobs'];
 
@@ -66,11 +66,11 @@ test.describe('Dashboard', () => {
     }).toPass({ timeout: 20_000 });
   });
 
-  test('displays theme toggle button', async ({ page }) => {
+  test('displays theme toggle button', async () => {
     await expect(dashboard.themeToggle).toBeVisible();
   });
 
-  test('displays clear data button', async ({ page }) => {
+  test('displays clear data button', async () => {
     await expect(dashboard.clearButton).toBeVisible();
   });
 });

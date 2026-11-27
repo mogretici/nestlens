@@ -114,7 +114,9 @@ test.describe('Scrollbars', () => {
    * not implement `::-webkit-scrollbar` and follows `color-scheme` instead.
    */
   const pageTrack = (page: Page) =>
-    page.evaluate(() => getComputedStyle(document.documentElement, '::-webkit-scrollbar-track').backgroundColor);
+    page.evaluate(
+      () => getComputedStyle(document.documentElement, '::-webkit-scrollbar-track').backgroundColor,
+    );
 
   /**
    * The thumb's colour, read from the stylesheet rather than from

@@ -51,7 +51,10 @@ test.describe('serving the built dashboard', () => {
     await page.goto(MOUNT);
 
     await expect(page.locator('base')).toHaveAttribute('href', `${MOUNT}/`);
-    expect(await page.evaluate(() => window.__NESTLENS_BASE__)).toBe(MOUNT);
+    const base = await page.evaluate(
+      () => (window as Window & { __NESTLENS_BASE__?: string }).__NESTLENS_BASE__,
+    );
+    expect(base).toBe(MOUNT);
   });
 
   /**

@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { createRequire } from 'module';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { Logger } from '@nestjs/common';
@@ -146,5 +147,73 @@ describe('opening a storage that cannot be opened', () => {
 
     vi.doUnmock('../../../core/storage/sqlite.storage');
     vi.resetModules();
+  });
+
+  describe('a native addon that does not load', () => {
+    // npm 12 runs a dependency's install script only when the application's
+    // `allowScripts` approves it, and better-sqlite3's is what fetches its
+    // addon: the package is installed, the addon is not. A Node upgrade
+    // without a rebuild leaves one that `dlopen` refuses. Neither is about
+    // the file, so the file advice — move `storage.sqlite.filename` — would
+    // send the reader the wrong way; the application still starts, on memory.
+    //
+    // Both errors are the real ones, raised by the loaders better-sqlite3
+    // uses, and thrown from the mocked constructor as the earlier test does.
+    const neverBuilt = (): Error => {
+      const bindings = createRequire(__filename)('bindings') as (options: object) => unknown;
+      try {
+        bindings({ bindings: 'better_sqlite3.node', module_root: workspace });
+      } catch (error) {
+        return error as Error;
+      }
+      throw new Error('bindings found an addon in an empty directory');
+    };
+
+    const refusedByDlopen = (): Error => {
+      const addon = join(workspace, 'better_sqlite3.node');
+      writeFileSync(addon, 'not a shared library');
+      try {
+        process.dlopen({ exports: {} }, addon);
+      } catch (error) {
+        return error as Error;
+      }
+      throw new Error('a text file loaded as an addon');
+    };
+
+    const createWith = async (failure: Error): Promise<unknown> => {
+      vi.resetModules();
+      vi.doMock('../../../core/storage/sqlite.storage', () => ({
+        SqliteStorage: class {
+          constructor() {
+            throw failure;
+          }
+        },
+      }));
+      const { createStorage: freshCreate } = await import('../../../core/storage/storage.factory');
+      try {
+        return await freshCreate({
+          driver: 'sqlite',
+          sqlite: { filename: join(workspace, 'z.db') },
+        });
+      } finally {
+        vi.doUnmock('../../../core/storage/sqlite.storage');
+        vi.resetModules();
+      }
+    };
+
+    it.each([
+      ['was never built', neverBuilt],
+      ['will not load', refusedByDlopen],
+    ])('keeps the application up and says how to build it when it %s', async (_, failure) => {
+      // resetModules gives the factory its own copy of every storage class,
+      // so the fallback is recognised by name rather than by instanceof.
+      const storage = await createWith(failure());
+
+      expect((storage as object).constructor.name).toBe('MemoryStorage');
+      const logged = errors.join('\n');
+      expect(logged).toContain('npm install-scripts approve better-sqlite3 --no-allow-scripts-pin');
+      expect(logged).toContain('npm rebuild better-sqlite3');
+      expect(logged).not.toContain('storage.sqlite.filename');
+    });
   });
 });

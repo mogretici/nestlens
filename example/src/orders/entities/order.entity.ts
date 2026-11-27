@@ -3,15 +3,15 @@ import { OrderItem } from './order-item.entity';
 
 @ObjectType()
 export class Order {
-    @Field(() => ID)
-    id!: string;
+  @Field(() => ID)
+  id!: string;
 
-    @Field(() => Float)
-    total!: number;
+  @Field(() => Float)
+  total!: number;
 
-    @Field()
-    status!: string;
+  @Field()
+  status!: string;
 
-    @Field(() => [OrderItem])
-    items!: OrderItem[];
+  @Field(() => [OrderItem])
+  items!: OrderItem[];
 }

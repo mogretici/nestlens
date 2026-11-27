@@ -100,8 +100,10 @@ are handed the application's own client or service through a token
 whichever the application uses.
 
 > `better-sqlite3` is also an `optionalDependency` (`^12.11.1`), so npm
-> installs it with NestLens and there is nothing to add. npm installs that copy
-> whatever the application has: an application on another major — 11 or 13 —
+> installs it with NestLens and there is nothing to add to your dependencies
+> (on npm 12, allow its install script: see
+> [below](#sqlite-storage-on-npm-12)). npm installs that copy whatever the
+> application has: an application on another major — 11 or 13 —
 > keeps its own and gets a second one nested under `nestlens` (measured with
 > npm 11.21.3). If the native install fails, npm skips the package without an
 > error; NestLens still runs on the default in-memory storage, and
@@ -109,6 +111,34 @@ whichever the application uses.
 >
 > pnpm and Yarn do not document what they do with a package that is both an
 > optional dependency and a peer, and NestLens is not tested with them.
+
+### SQLite storage on npm 12
+
+npm 12 runs a dependency's install script only when the application's own
+`package.json` allows it in `allowScripts`
+([npm install-scripts](https://docs.npmjs.com/cli/v12/commands/npm-install-scripts)),
+and better-sqlite3's install script is what downloads its native addon.
+Without that entry `npm install` still succeeds and ends with a warning that
+better-sqlite3's install script was blocked; the package is there, its addon
+is not, and with `storage.driver: 'sqlite'` NestLens logs an error saying so
+and keeps entries in memory instead. Allow it, then build the copy that is
+already installed:
+
+```bash
+npm install-scripts approve better-sqlite3 --no-allow-scripts-pin
+npm rebuild better-sqlite3
+```
+
+`--no-allow-scripts-pin` writes `"better-sqlite3": true`. Without it npm
+writes `"better-sqlite3@12.11.1": true`, which covers that version only, so the
+next upgrade is blocked again. An `npm install` after approving does not go
+back for the script it skipped; `npm rebuild` does, and so does an `npm ci`
+from scratch.
+
+NestLens cannot allow it for you: npm reads `allowScripts` from the
+application's `package.json` alone, never from a dependency's. With the default
+in-memory storage, or Redis, there is nothing to do. npm 11 still runs the
+script and only warns that it is not covered.
 
 ## HTTP Adapter Compatibility
 

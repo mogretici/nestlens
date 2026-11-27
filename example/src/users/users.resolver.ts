@@ -6,28 +6,28 @@ import { DatabaseService } from '../database/database.service'; // Assuming Data
 
 @Resolver(() => User)
 export class UsersResolver {
-    constructor(
-        private readonly usersService: UsersService,
-        private readonly db: DatabaseService,
-    ) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly db: DatabaseService,
+  ) {}
 
-    @Query(() => [User], { name: 'users' })
-    findAll() {
-        return this.usersService.findAll();
-    }
+  @Query(() => [User], { name: 'users' })
+  findAll() {
+    return this.usersService.findAll();
+  }
 
-    @Query(() => User, { name: 'user' })
-    findOne(@Args('id') id: string) {
-        return this.usersService.findOne(id);
-    }
+  @Query(() => User, { name: 'user' })
+  findOne(@Args('id') id: string) {
+    return this.usersService.findOne(id);
+  }
 
-    @Mutation(() => User)
-    createUser(@Args('createUserInput') createUserInput: CreateUserInput) {
-        return this.usersService.create(createUserInput);
-    }
+  @Mutation(() => User)
+  createUser(@Args('createUserInput') createUserInput: CreateUserInput) {
+    return this.usersService.create(createUserInput);
+  }
 
-    @Subscription(() => User)
-    userCreated() {
-        return this.db.pubSub.asyncIterableIterator('userCreated');
-    }
+  @Subscription(() => User)
+  userCreated() {
+    return this.db.pubSub.asyncIterableIterator('userCreated');
+  }
 }

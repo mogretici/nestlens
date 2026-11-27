@@ -50,10 +50,10 @@
     "build:lib": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build:dashboard": "cd dashboard && npm run build && mkdir -p ../dist/dashboard/public && cp -r dist/* ../dist/dashboard/public/",
     "dev": "tsc --watch",
-    "lint": "eslint \"src/**/*.ts\"",
-    "lint:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
+    "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
+    "lint:fix": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
+    "format:check": "prettier --check \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test",
@@ -194,7 +194,7 @@
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
-    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/coverage-v8": "^5.1.2",
     "axios": "^1.19.0",
     "better-sqlite3": "^12.11.1",
     "cache-manager": "^7.2.9",
@@ -219,7 +219,8 @@
     "typeorm": "^0.3.20",
     "typescript": "^5.7.2",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^4.1.12",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2",
     "yaml": "^2.9.1"
   },
   "overrides": {
@@ -240,9 +241,19 @@
     }
   },
   "lint-staged": {
-    "src/**/*.ts": [
-      "eslint --fix",
+    "{src,e2e}/**/*.ts": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "playwright.config.ts": [
+      "eslint --fix --max-warnings=0",
       "prettier --write"
     ]
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "@apollo/protobufjs": false,
+    "@swc/core": false,
+    "fsevents": false
   }
 }

@@ -27,6 +27,26 @@ cache (setup-node's own cache step runs the bundled npm and fails on
 `devEngines`). `src/__tests__/pinned-npm.spec.ts` enforces both, and that the
 four manifests, the lockfile's `node_modules/npm` and CONTRIBUTING.md agree.
 
+Dependency install scripts are reviewed in each manifest's `allowScripts`:
+`true` for better-sqlite3 (its script fetches the native addon) and esbuild
+(it checks the binary matches), `false` for the rest, which work without
+theirs — @swc/core's only installs `@swc/wasm` outside the lockfile when the
+native binary fails to load — and for the example's `file:..` NestLens, whose
+`prepare` would install the repository's git hooks again. npm 11 runs an
+unreviewed script and warns; npm 12 skips it, and better-sqlite3 then
+installs without a binary while the install succeeds. Entries are names,
+never `pkg@1.2.3`, which npm matches to that one version.
+`src/__tests__/install-scripts.spec.ts` fails on any package a lockfile marks
+as having an install script that no entry covers, and on entries nothing
+needs.
+
+The pin stays on npm 11 until the `engines` floor reaches 22.22.2: npm 12's
+own `engines` is `^22.22.2 || ^24.15.0 || >=26.0.0`, and it warns that it does
+not support Node 22.13, the floor CI runs. Nothing else holds it back —
+measured on 27 November 2026, npm 12.2.3 with these `allowScripts` installed
+all four packages on Node 22.23.5 and 26.13.1 and ran the root build and
+suite, the dashboard, the example and the docs build green.
+
 ### Build
 ```bash
 npm run build              # Build library + dashboard
@@ -74,8 +94,18 @@ node --cpu-prof scripts/benchmark-load-server.mjs 4201 '{}'
 
 ### Linting
 ```bash
-npm run lint               # ESLint on src/**/*.ts
+npm run lint               # ESLint on src/, e2e/ and playwright.config.ts; fails on any warning
+npx tsc -p e2e             # Type-check the Playwright specs (CI runs it)
 ```
+
+The Playwright specs have their own `e2e/tsconfig.json` — DOM types for the
+callbacks `page.evaluate` sends to the browser, none of the library's decorator
+or path settings — and ESLint parses them with it. Playwright strips types
+without checking them, so without `tsc -p e2e` a type error there reaches no one.
+
+Every rule here is a warning, so `--max-warnings=0` is what makes one fail CI
+(and the pre-commit hook): without it, `npm run lint` exited 0 on warnings and
+one sat in `src/` unfixed. The dashboard's `lint` does the same.
 
 ### Example App
 ```bash
@@ -86,12 +116,16 @@ cd example && ./test-requests.sh  # Generate test data for every entry type; nee
                                    # running, curl and python3. Args: [base URL] [mount path]
 cd example && npm test     # Example's own Vitest specs (`unit` project, src/**/*.spec.ts)
 cd example && npm run test:e2e     # Boots AppModule in-process (`e2e` project, test/)
+cd example && npm run lint # Type-aware ESLint, fails on any warning; `lint:fix` rewrites
 ```
 
 The example has its own `vitest.config.mts`, built like the library's: SWC
 through `unplugin-swc`, and `resolve.extensions` with `.js` before `.mjs`
-(`example/src/one-graphql.spec.ts` fails without it). CI does not run these
-specs; the Playwright suite is what drives the example there.
+(`example/src/one-graphql.spec.ts` fails without it). CI runs both projects
+in the E2E workflow's built-package job, after the build and the example
+install, and lints the example there too (its type-aware rules need the
+installed `nestlens`); `src/__tests__/example-specs-in-ci.spec.ts` fails if
+any of the three stops running or moves ahead of either.
 
 The example installs NestLens from `file:..` as a **copy**, not a symlink
 (`example/.npmrc` sets `install-links=true`). A symlink makes Node load
@@ -105,6 +139,19 @@ already satisfied and leaves the old copy in place, so the example keeps
 running whatever version was installed first — it was found sitting three
 releases behind, which silently made every E2E run test stale code. Delete
 `example/node_modules/nestlens` first.
+
+**The lockfile goes stale the same way.** `example/package-lock.json` copies
+the library's manifest into `node_modules/nestlens` — version, dependency
+ranges, engines, bin — and `npm install --package-lock-only` reports "up to
+date" without rewriting it. `sync-versions` writes the version at release;
+anything else that changes in the root `package.json` (a dependency, `engines`)
+needs the entry regenerated in the same commit:
+```bash
+cd example && npm install nestlens@file:.. --package-lock-only --ignore-scripts
+```
+Naming the dependency is what makes npm re-read the manifest and re-resolve
+what it pulls in. `src/__tests__/release-versions.spec.ts` compares the entry
+field by field with `package.json` and fails until it is done.
 
 **A running example has to be restarted.** `DashboardController` reads the
 built dashboard once, at bootstrap, so a rebuilt bundle reaches a live server
@@ -235,14 +282,17 @@ it is no longer required for Apollo or Mercurius.
 
 ## Testing Notes
 
-- Unit tests run on Vitest (`vitest.config.mts`); specs import `describe`,
+- Unit tests run on Vitest 5 (`vitest.config.mts`); specs import `describe`,
   `it`, `expect` and `vi` from `vitest` — there are no globals, and
   `tsconfig.json` sets `"types": ["node"]` so an installed `@types/*` package
   that declares test globals is not pulled in automatically and cannot make a
   missing import compile
-- Test setup in `src/__tests__/setup.ts`: reflect-metadata, the loopback listen
-  guard, and `vi.clearAllMocks()` after each test (not `clearMocks: true`, which
-  clears *before* each test and erases calls a `beforeAll` made)
+- Test setup in `src/__tests__/setup.ts`: reflect-metadata and the loopback
+  listen guard
+- Vitest clears every mock's calls before each test, ahead of its `beforeEach`
+  hooks (`clearMocks`, on by default since Vitest 5). A call made in `beforeAll`
+  or at module scope is gone by the time a test reads it: assert on it inside
+  the hook, or make it in `beforeEach` (`mock-history.spec.ts`)
 - Specs are compiled by SWC (`unplugin-swc`, the compiler NestJS documents for
   Vitest), which reads `experimentalDecorators`, `emitDecoratorMetadata`,
   `target` and `useDefineForClassFields` from `tsconfig.json`. The last one is
@@ -258,10 +308,9 @@ it is no longer required for Apollo or Mercurius.
   original `code`. To simulate a missing module, return a module whose
   constructor or function throws the `MODULE_NOT_FOUND` error instead
   (`storage-open-failure.spec.ts`, `storage.factory.spec.ts`)
-- `mockImplementation()` with no argument calls the original in Vitest; write
-  `mockImplementation(() => undefined)` to silence a spy. A `vi.fn` called with
-  `new` constructs with the mock as `new.target`, so a class given to
-  `mockImplementation` loses its prototype methods — use instance fields
+- `mockImplementation()` with no argument makes a `vi.spyOn` spy call the
+  original; write `mockImplementation(() => undefined)` to silence it. On a
+  `vi.fn(impl)` it drops `impl` and returns `undefined`
 - `resolve.extensions` lists `.js` before `.mjs`, as Node resolves an
   extensionless `main`. Vite's default order loaded graphql twice — `index.mjs`
   for an import, `index.js` for NestLens' `require('graphql')`.
@@ -309,20 +358,28 @@ it is no longer required for Apollo or Mercurius.
   release (`.github/workflows/release.yml`); nothing else in the repository
   tests what npm actually serves, which is how 0.8.0 shipped a dashboard that
   was blank in a browser with every suite green.
-- Lint, type check, **build**, library tests and dashboard tests run on every
-  push and pull request (`.github/workflows/ci.yml`) — about two minutes. The
+- Lint, type check (library and Playwright specs), **build**, library tests
+  and dashboard tests run on every push and pull request (`.github/workflows/ci.yml`) — about two minutes. The
   build step is not optional: five integration suites serve the real bundle and
   skip themselves when `dist/dashboard/public/index.html` is missing, and
   without it 54 tests skipped in CI and nowhere else — the ones covering the
   dashboard arriving as HTML rather than as a JSON string, which is the failure
   that shipped in 0.8.0
+- The unit-test job first runs `npm ls --all --package-lock-only` in each of
+  the four lockfile directories, which fails on a tree npm calls invalid even
+  though `npm ci` installs it; the docs job runs `npm run typecheck` before the
+  build, which does not type-check. `ci-static-checks.spec.ts` keeps both
 - E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
   any pull request touching `src/`, `dashboard/`, `e2e/`, `example/` or
   `package.json`, and on pushes to main. The filter used to name `src/api/`
   alone; what the suite drives is the example application, which runs the whole
   library, and on one branch of forty-five commits thirty changed none of the
   listed paths — including the Redis rewrite and the watcher wrapping fix,
-  which are exactly the changes that produce a blank dashboard. All three browsers run nightly at 03:00 UTC. Actions tab →
+  which are exactly the changes that produce a blank dashboard. The
+  built-package job also lints the example and runs its own Vitest specs
+  (`npm run lint`, `npm test` and `npm run test:e2e` in `example/`), which
+  take seconds and need exactly the
+  build and install it already does. All three browsers run nightly at 03:00 UTC. Actions tab →
   **E2E** → *Run workflow* still runs it on demand, with `all` as a browser
   option.
 - It used to be manual only, on the grounds that it is slow on a two-core

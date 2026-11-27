@@ -72,9 +72,7 @@ test.describe('Range filters', () => {
 
     for (const text of shown) {
       // Anything over a second is written as `1.57s`.
-      const ms = text.endsWith('ms')
-        ? Number.parseFloat(text)
-        : Number.parseFloat(text) * 1000;
+      const ms = text.endsWith('ms') ? Number.parseFloat(text) : Number.parseFloat(text) * 1000;
 
       expect(ms).toBeGreaterThanOrEqual(100);
     }

@@ -126,7 +126,7 @@ const claimHost = (host: unknown, watcher: string, application: object): boolean
 /** Gives the host back, if this application is the one holding it. */
 const releaseHost = (host: unknown, watcher: string, application: object): void => {
   const holders = (host as Watched | undefined)?.[WATCHED_BY];
-  if (!holders || holders.get(watcher) !== application) return;
+  if (holders?.get(watcher) !== application) return;
 
   holders.delete(watcher);
   if (holders.size === 0) delete (host as Watched)[WATCHED_BY];

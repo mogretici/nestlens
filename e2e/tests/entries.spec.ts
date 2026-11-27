@@ -194,8 +194,6 @@ test.describe('Pagination', () => {
     await entries.waitForLoad();
 
     if (await entries.pagination.isVisible()) {
-      const initialRowCount = await entries.getRowCount();
-
       await entries.goToNextPage();
       await entries.waitForLoad();
 

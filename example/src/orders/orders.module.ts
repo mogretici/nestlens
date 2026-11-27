@@ -6,4 +6,4 @@ import { DatabaseModule } from '../database/database.module';
   imports: [DatabaseModule],
   providers: [OrdersResolver, OrderItemsResolver],
 })
-export class OrdersModule { }
+export class OrdersModule {}
