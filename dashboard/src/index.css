@@ -104,22 +104,9 @@ code {
   @apply text-purple-600 dark:text-purple-400;
 }
 
-/* New entry highlight animation - NestLens primary blue */
+/* Rows that arrived since the last look, until the 10-second highlight ends */
 .highlight-new {
   @apply bg-primary-100 dark:bg-primary-900/30 !important;
-  animation: highlight-fade 10s ease-out forwards;
-}
-
-@keyframes highlight-fade {
-  0% {
-    @apply bg-primary-200 dark:bg-primary-800/40;
-  }
-  70% {
-    @apply bg-primary-100 dark:bg-primary-900/30;
-  }
-  100% {
-    background-color: transparent;
-  }
 }
 
 /* Mail HTML Preview - always light background like a paper */
