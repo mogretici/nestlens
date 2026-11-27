@@ -6,7 +6,9 @@ import {
   Optional,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -27,7 +29,7 @@ interface EntityEventLike {
 type LoadHook = (entity: unknown, event: EntityEventLike) => void;
 type EntityHook = (event: EntityEventLike) => void;
 
-/** The Prisma middleware surface, which Prisma 5 and earlier have. */
+/** The Prisma middleware surface, which Prisma 6.13 and earlier have. */
 interface PrismaMiddlewareParams {
   model?: string;
   action?: string;
@@ -45,7 +47,7 @@ interface PrismaWithMiddleware {
 /**
  * What a client extension is handed for one operation.
  *
- * Prisma removed `$use` in its 6.0 — the package does not carry it at all —
+ * Prisma removed `$use` in 6.14.0 — the runtime does not carry it from there —
  * and client extensions are the supported replacement. The shape is the same
  * information under different names: `operation` for `action`, and `query` for
  * `next`.
@@ -112,6 +114,10 @@ const MAX_ENTITY_SIZE = 64 * 1024;
 export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: ModelWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
   /**
    * When each operation in flight began, oldest first, per entity and action.
@@ -143,7 +149,9 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_MODEL_SUBSCRIBER)
-    private readonly entitySubscriber?: unknown,
+    private entitySubscriber?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.model;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -188,6 +196,18 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.entitySubscriber,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_MODEL_SUBSCRIBER,
+      logger: this.logger,
+      watcher: 'ModelWatcher',
+      sibling: (host) => new ModelWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.entitySubscriber = attached.host as typeof this.entitySubscriber;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if entity subscriber was provided
     if (!this.entitySubscriber) {
@@ -253,6 +273,11 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * top of the last.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -261,9 +286,9 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * Records what a Prisma client runs, and hands back the client to use.
    *
    * Two integrations, because Prisma has had two. `$use` is the middleware API
-   * of Prisma 5 and earlier; Prisma removed it in 6.0 — the package does not
-   * carry it at all — and client extensions took its place. This watcher knew
-   * only the first, so on Prisma 6 and 7 the documented setup recorded nothing
+   * of Prisma 6.13 and earlier; Prisma removed it in 6.14.0 — the runtime does
+   * not carry it from there — and client extensions took its place. This watcher
+   * knew only the first, so on Prisma 6.14 and 7 the documented setup recorded nothing
    * and said `Invalid Prisma client provided`, blaming a client that was
    * perfectly valid.
    *
@@ -278,6 +303,9 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * ```
    */
   setupPrismaClient<T>(prismaClient: T): T {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return prismaClient;
+
     if (hasMiddleware(prismaClient)) {
       prismaClient.$use(async (params: PrismaMiddlewareParams, next: PrismaNext) =>
         this.recordPrismaOperation(params.model, params.action ?? '', params.args, () =>
@@ -311,8 +339,8 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     // Neither, which is not a Prisma client at all — the message says what was
     // looked for rather than pronouncing on what was passed.
     this.logger.warn(
-      'ModelWatcher: the object passed to setupPrismaClient() has neither `$use` (Prisma 5 and ' +
-        'earlier) nor `$extends` (Prisma 6 and later), so nothing is being recorded for it.',
+      'ModelWatcher: the object passed to setupPrismaClient() has neither `$use` (Prisma 6.13 ' +
+        'and earlier) nor `$extends` (Prisma 4.16 and later), so nothing is being recorded for it.',
     );
 
     return prismaClient;

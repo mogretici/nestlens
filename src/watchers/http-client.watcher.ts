@@ -6,7 +6,9 @@ import {
   Logger,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { createTermMatcher } from '../core/data-masker.service';
 import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { HttpClientEntry } from '../types';
@@ -95,6 +97,10 @@ export const NESTLENS_HTTP_CLIENT = Symbol('NESTLENS_HTTP_CLIENT');
 export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HttpClientWatcher.name);
   private readonly config: HttpClientWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: HttpClientWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private readonly maxBodySize: number;
   /** Every interceptor installed, so `onModuleDestroy` can eject them. */
   private readonly installed: InstalledInterceptor[] = [];
@@ -107,7 +113,9 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_HTTP_CLIENT)
-    private readonly axiosInstance?: unknown,
+    private axiosInstance?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.httpClient;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -118,6 +126,20 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.axiosInstance,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_HTTP_CLIENT,
+      logger: this.logger,
+      watcher: 'HttpClientWatcher',
+      sibling: (host) => new HttpClientWatcher(this.collector, this.nestlensConfig, host as never),
+      // Installed on `axiosRef` when there is one, so that is what is claimed.
+      identify: (host) => (host as { axiosRef?: unknown } | undefined)?.axiosRef ?? host,
+    });
+    this.axiosInstance = attached.host as typeof this.axiosInstance;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if axios instance was provided
     if (!this.axiosInstance) {
@@ -136,6 +158,9 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
    * Can be called manually if you want to track a specific axios instance.
    */
   setupInterceptors(axiosInstance: unknown): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     // @nestjs/axios wraps the real instance behind `axiosRef`.
     const candidate =
       (axiosInstance as { axiosRef?: unknown } | undefined)?.axiosRef ?? axiosInstance;
@@ -195,6 +220,11 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
    * one instance.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
+
     for (const { instance, kind, id } of this.installed) {
       instance.interceptors[kind].eject?.(id);
     }

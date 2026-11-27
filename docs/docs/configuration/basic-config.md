@@ -9,19 +9,27 @@ The main configuration interface for NestLens is `NestLensConfig`, which provide
 ```typescript
 interface NestLensConfig {
   enabled?: boolean;
-  path?: string;
+  path?: string; // default: '/nestlens'
+  preset?: NestLensPreset; // 'failures-only'; absent by default
   trustProxy?: boolean; // honour X-Forwarded-Prefix, off by default
+  sampling?: SamplingConfig; // record a fraction; absent records everything
   server?: DashboardServerConfig; // a listener of its own; absent by default
   authorization?: AuthorizationConfig;
   storage?: StorageConfig;
   pruning?: PruningConfig;
   rateLimit?: RateLimitConfig | false; // disabled by default
   security?: SecurityConfig; // data masking + input validation
-  watchers?: WatchersConfig;
+  alerting?: AlertingConfig; // webhooks; absent sends none
   filter?: (entry: Entry) => boolean | Promise<boolean>;
   filterBatch?: (entries: Entry[]) => Entry[] | Promise<Entry[]>;
+  watchers?: { … }; // one key per watcher, see below
 }
 ```
+
+The full reference, with every nested type, is generated from the source:
+[`NestLensConfig`](../api-reference/interfaces/NestLensConfig.md). `preset` and
+`sampling` are explained in [Performance](../advanced/performance.md), and
+`alerting` in [Alerting](./alerting.md).
 
 ## Core Options
 

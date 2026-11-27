@@ -45,7 +45,7 @@ interface CacheEntry {
     key: string;              // Cache key
     hit?: boolean;            // true if cache hit, false if miss (get only)
     value?: unknown;          // Cached value (truncated to 1KB)
-    ttl?: number;             // Time-to-live in seconds (set only)
+    ttl?: number;             // As passed to set(): ms on cache-manager 5+, s on 4
     duration: number;         // Operation duration (ms)
   };
 }
@@ -63,8 +63,7 @@ import { CacheModule } from '@nestjs/cache-manager';
   imports: [
     // Install: npm install @nestjs/cache-manager cache-manager
     CacheModule.register({
-      ttl: 60, // seconds
-      max: 100, // maximum number of items
+      ttl: 60_000, // milliseconds since cache-manager 5
     }),
   ],
 })
@@ -111,8 +110,10 @@ export class UserService {
   }
 
   async clearAll() {
-    // Clear all cache (tracked as 'clear' operation)
-    await this.cacheManager.reset();
+    // Clear all cache (tracked as 'clear', key '*'). `clear()` on
+    // cache-manager 6 and later — what @nestjs/cache-manager 3 and 12 inject —
+    // and `reset()` on 5 and earlier; both are recorded.
+    await this.cacheManager.clear();
   }
 }
 ```
@@ -127,7 +128,7 @@ import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
 export class UserController {
   @Get()
   @CacheKey('all-users')
-  @CacheTTL(60) // 60 seconds
+  @CacheTTL(60_000) // 60 seconds: milliseconds since cache-manager 5
   async findAll() {
     // Response is automatically cached
     // All cache operations are tracked
@@ -178,11 +179,11 @@ In the NestLens dashboard, cache entries appear in the Cache tab showing:
 
 ### Filters Available
 
-- Filter by operation type
-- Filter by cache hit/miss
-- Filter by key pattern
-- Search by key name
-- Filter by duration
+- **Operations** (`cacheOperations`) - get, set, del, clear
+- **Search** (`search`) - The key and the captured value
+- **Duration** (`slower`) - Over 100ms to over 5s
+
+Every filter and what it matches: [Filtering](../dashboard/filtering.md#cache-filters).
 
 ## Cache Performance Analysis
 
@@ -277,29 +278,22 @@ async invalidateUser(userId: string) {
 
 ## Cache Backends
 
-### Memory Store (Default)
+The watcher wraps the object registered under `CACHE_MANAGER`, not the store
+behind it, so every backend is recorded the same way. How a store is configured
+depends on the version: `@nestjs/cache-manager` 3 and later take Keyv stores,
 
 ```typescript
+import { createKeyv } from '@keyv/redis';
+
 CacheModule.register({
-  ttl: 60,
-  max: 100,
+  ttl: 60_000,
+  stores: [createKeyv('redis://localhost:6379')],
 })
 ```
 
-### Redis Store
-
-```typescript
-import { redisStore } from 'cache-manager-redis-yet';
-
-CacheModule.register({
-  store: redisStore,
-  host: 'localhost',
-  port: 6379,
-  ttl: 60,
-})
-```
-
-All backends are automatically tracked by the Cache Watcher.
+and 2 and earlier a cache-manager store such as `cache-manager-redis-yet`. See
+the [NestJS caching guide](https://docs.nestjs.com/techniques/caching) for the
+one you are on.
 
 ## Value Truncation
 
@@ -337,17 +331,17 @@ await this.cacheManager.set('featuredElectronics', products);
 export class CacheService {
   // Static data: Long TTL
   async getStaticContent() {
-    return this.cacheManager.set('static:content', data, 3600); // 1 hour
+    return this.cacheManager.set('static:content', data, 3_600_000); // 1 hour
   }
 
   // User data: Medium TTL
   async getUserData(id: string) {
-    return this.cacheManager.set(`user:${id}`, data, 300); // 5 minutes
+    return this.cacheManager.set(`user:${id}`, data, 300_000); // 5 minutes
   }
 
   // Real-time data: Short TTL
   async getRealTimeData() {
-    return this.cacheManager.set('realtime:data', data, 10); // 10 seconds
+    return this.cacheManager.set('realtime:data', data, 10_000); // 10 seconds
   }
 }
 ```

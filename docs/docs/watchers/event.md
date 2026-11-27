@@ -11,7 +11,7 @@ The Event Watcher monitors event emissions in your NestJS application using the 
 - Event name
 - Event payload/data
 - List of listener functions
-- Processing duration (milliseconds)
+- Duration: how long the listeners took (see [Duration](#duration))
 
 ## Configuration
 
@@ -50,12 +50,37 @@ interface EventEntry {
     name: string;               // Event name
     payload: unknown;           // Event data (truncated to 64KB)
     listeners: string[];        // Listener function names
-    duration: number;           // Processing time (ms)
+    duration: number;           // Time the listeners took (ms)
   };
 }
 ```
 
+## Duration
+
+The watcher wraps the emitter's `emit` and `emitAsync`, so `duration` is the
+time the call took: every synchronous listener under `emit`, and every
+listener's promise until it settles under `emitAsync`. Under `emit`, work a
+listener does after `emit()` has returned — after its first `await`, or in a
+listener registered with `{ async: true }` — is not counted, because the emitter
+does not wait for it.
+
 ## Usage Example
+
+### Provide the Emitter to NestLens
+
+The watcher records the emitter handed to it under `NESTLENS_EVENT_EMITTER`, in
+any module — see [Handing a watcher your service](./overview.md#handing-a-watcher-your-service):
+
+```typescript
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
+import { NESTLENS_EVENT_EMITTER } from 'nestlens';
+
+@Module({
+  imports: [EventEmitterModule.forRoot()],
+  providers: [{ provide: NESTLENS_EVENT_EMITTER, useExisting: EventEmitter2 }],
+})
+export class AppModule {}
+```
 
 ### Setup EventEmitter
 
@@ -73,7 +98,7 @@ export class AppModule {}
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 
 @Injectable()
 export class OrderService {
@@ -82,7 +107,7 @@ export class OrderService {
   async createOrder(data: CreateOrderDto) {
     const order = await this.orderRepository.save(data);
 
-    // Emit event (automatically tracked)
+    // Emit event (tracked once the emitter is provided, above)
     this.eventEmitter.emit('order.created', {
       orderId: order.id,
       userId: order.userId,

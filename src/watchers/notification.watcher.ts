@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { wrapMethodPreservingShape } from './wrap-method';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
@@ -28,6 +30,10 @@ export const NESTLENS_NOTIFICATION_SERVICE = Symbol('NESTLENS_NOTIFICATION_SERVI
 export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationWatcher.name);
   private readonly config: NotificationWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: NotificationWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private originalMethods?: Map<string, NotificationMethod>;
 
   constructor(
@@ -36,7 +42,9 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_NOTIFICATION_SERVICE)
-    private readonly notificationService?: unknown,
+    private notificationService?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.notification;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -46,6 +54,19 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.notificationService,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_NOTIFICATION_SERVICE,
+      logger: this.logger,
+      watcher: 'NotificationWatcher',
+      sibling: (host) =>
+        new NotificationWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.notificationService = attached.host as typeof this.notificationService;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if notification service was provided
     if (!this.notificationService) {
@@ -109,6 +130,11 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
+
     const service = this.notificationService as Record<string, unknown> | undefined;
     if (!service || !this.originalMethods) {
       return;

@@ -181,6 +181,59 @@ class NestLensScheduleModule {
   }
 }
 
+/**
+ * A configuration with its `undefined` values left out, at every depth.
+ *
+ * `undefined` is "not configured", so it has to leave the default in place.
+ * Spread as it was, `watchers: { gate: undefined }` replaced the default
+ * `false` with `undefined` — which a watcher reads as on — and
+ * `path: process.env.NESTLENS_PATH` with the variable unset replaced the mount
+ * point. Only plain objects are walked: an array is a value, and an object of a
+ * class is the application's, to be handed on as it is.
+ */
+const withoutUndefined = <T>(value: T): T => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, withoutUndefined(entry)]),
+  ) as T;
+};
+
+/** The watchers an application can switch on, each with a manual API of some kind. */
+const OPT_IN_WATCHERS = [
+  HttpClientWatcher,
+  CacheWatcher,
+  EventWatcher,
+  JobWatcher,
+  MailWatcher,
+  RedisWatcher,
+  ModelWatcher,
+  NotificationWatcher,
+  ViewWatcher,
+  CommandWatcher,
+  GateWatcher,
+  BatchWatcher,
+  DumpWatcher,
+];
+
+/** What the watchers are given when NestLens is off: nothing is ever collected. */
+const INERT_COLLECTOR = {
+  collect: async (): Promise<void> => undefined,
+  collectImmediate: async (): Promise<null> => null,
+} as unknown as CollectorService;
+
+const ALL_WATCHERS_OFF: NestLensConfig = {
+  enabled: false,
+  watchers: Object.fromEntries(
+    Object.keys(DEFAULT_CONFIG.watchers ?? {}).map((key) => [key, false]),
+  ) as NestLensConfig['watchers'],
+};
+
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
   constructor(
@@ -222,12 +275,20 @@ export class NestLensModule implements NestModule, OnModuleInit {
       this.logger.warn('NestLens is disabled');
       return {
         module: NestLensModule,
+        global: true,
         providers: [
           {
             provide: NESTLENS_CONFIG,
             useValue: mergedConfig,
           },
+          // Still injectable, and inert: a service written against a watcher's
+          // manual API boots, and its calls do nothing.
+          ...[...OPT_IN_WATCHERS, NestLensLogger].map((provided) => ({
+            provide: provided,
+            useFactory: () => new provided(INERT_COLLECTOR, ALL_WATCHERS_OFF),
+          })),
         ],
+        exports: [...OPT_IN_WATCHERS, NestLensLogger],
       };
     }
 
@@ -256,6 +317,9 @@ export class NestLensModule implements NestModule, OnModuleInit {
     const imports: DynamicModule['imports'] = [
       // Core module provides shared services (config, storage, collector, pruning)
       NestLensCoreModule.forRoot(mergedConfig),
+      // The host watchers list every provider of their token through it, so it
+      // is here whichever watchers are on.
+      DiscoveryModule,
     ];
 
     // Add Query Watcher module
@@ -282,30 +346,12 @@ export class NestLensModule implements NestModule, OnModuleInit {
     }
 
     // Add Log Watcher
-    const logWatcherEnabled = mergedConfig.watchers?.log !== false;
-    if (logWatcherEnabled) {
-      providers.push(NestLensLogger);
-    }
-
-    // Add HTTP Client Watcher
-    if (mergedConfig.watchers?.httpClient) {
-      providers.push(HttpClientWatcher);
-    }
-
-    // Add Cache Watcher
-    if (mergedConfig.watchers?.cache) {
-      providers.push(CacheWatcher);
-    }
-
-    // Add Event Watcher
-    if (mergedConfig.watchers?.event) {
-      providers.push(EventWatcher);
-    }
-
-    // Add Job Watcher
-    if (mergedConfig.watchers?.job) {
-      providers.push(JobWatcher);
-    }
+    // Provided whether or not the log watcher is on. The documentation pairs
+    // `enabled: process.env.NODE_ENV !== 'production'` with
+    // `app.useLogger(app.get(NestLensLogger))`, so a logger that existed only
+    // when it recorded took production down at boot. Off, it prints exactly
+    // as the ConsoleLogger it extends and records nothing.
+    providers.push(NestLensLogger);
 
     // Add Schedule Watcher
     if (mergedConfig.watchers?.schedule) {
@@ -317,66 +363,27 @@ export class NestLensModule implements NestModule, OnModuleInit {
       providers.push(AlertingService);
     }
 
-    // Add Mail Watcher
-    if (mergedConfig.watchers?.mail) {
-      providers.push(MailWatcher);
-    }
-
-    // Add Redis Watcher
-    if (mergedConfig.watchers?.redis) {
-      providers.push(RedisWatcher);
-    }
-
-    // Add Model Watcher
-    if (mergedConfig.watchers?.model) {
-      providers.push(ModelWatcher);
-    }
-
-    // Add Notification Watcher
-    if (mergedConfig.watchers?.notification) {
-      providers.push(NotificationWatcher);
-    }
-
-    // Add View Watcher
-    if (mergedConfig.watchers?.view) {
-      providers.push(ViewWatcher);
-    }
-
-    // Add Command Watcher
-    if (mergedConfig.watchers?.command) {
-      providers.push(CommandWatcher);
-    }
-
-    // Add Gate Watcher
-    if (mergedConfig.watchers?.gate) {
-      providers.push(GateWatcher);
-    }
-
-    // Add Batch Watcher
-    if (mergedConfig.watchers?.batch) {
-      providers.push(BatchWatcher);
-    }
-
-    // Add Dump Watcher
-    if (mergedConfig.watchers?.dump) {
-      providers.push(DumpWatcher);
-    }
+    // Every opt-in watcher is provided whether or not it is switched on, and
+    // exported. Their manual APIs — `trackCheck`, `setupQueue`,
+    // `setupPrismaClient` and the rest — are things an application's service
+    // takes in its constructor; providing a watcher only when it was on meant
+    // that service stopped booting the day someone wrote `gate: false`. A
+    // watcher that is off installs nothing and records nothing.
+    providers.push(...OPT_IN_WATCHERS);
 
     // NOTE: GraphQL Watcher is provided by NestLensCoreModule (global)
     // so it's accessible via moduleRef.get(GraphQLWatcher) from any module
 
-    // Build exports list - only export what's actually provided.
-    //
-    // Only when it is. Nest refuses to boot a module that exports a provider it
-    // does not hold, so exporting this unconditionally turned
-    // `watchers: { log: false }` into `UnknownExportException` at startup — the
-    // application did not come up at all, which is a strange price for turning
-    // off one watcher.
-    const exports: Provider[] = logWatcherEnabled ? [NestLensLogger] : [];
+    // Everything exported here is provided above whatever the configuration
+    // says, so exporting it can never turn into `UnknownExportException`.
+    const exports: Provider[] = [NestLensLogger, ...OPT_IN_WATCHERS];
     // GraphQLWatcher is already exported from NestLensCoreModule (global)
 
     return {
       module: NestLensModule,
+      // Global so a feature module's service can take a watcher without
+      // importing NestLensModule a second time.
+      global: true,
       imports,
       controllers,
       providers,
@@ -442,7 +449,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
   private static mergeConfig(input: NestLensConfig): NestLensConfig {
     // A preset is settings, not behaviour: it is folded in first so everything
     // written here overrides it, exactly as a default would.
-    const config = applyPreset(input);
+    const config = applyPreset(withoutUndefined(input));
 
     return {
       ...DEFAULT_CONFIG,

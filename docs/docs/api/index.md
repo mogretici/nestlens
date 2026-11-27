@@ -113,19 +113,31 @@ Full signature: [`CollectorService`](../api-reference/classes/CollectorService.m
 
 ### NestLensLogger
 
-Custom logger that integrates with NestLens:
+The application's logger, recording every line it prints. It is built by
+NestLens's module — its constructor takes the collector and the configuration —
+so it is fetched from the application rather than constructed:
+
+```typescript title="main.ts"
+import { NestLensLogger } from 'nestlens';
+
+const app = await NestFactory.create(AppModule, { bufferLogs: true });
+app.useLogger(app.get(NestLensLogger));
+```
+
+Services then log through Nest's own `Logger`, which hands every call to it:
 
 ```typescript
-import { NestLensLogger } from 'nestlens';
+import { Injectable, Logger } from '@nestjs/common';
 
 @Injectable()
 export class MyService {
-  private readonly logger = new NestLensLogger(MyService.name);
+  private readonly logger = new Logger(MyService.name);
 
   doSomething() {
     this.logger.verbose('Detailed info');
     this.logger.debug('Debug info');
     this.logger.log('General info');
+    this.logger.log('Order placed', { orderId: 7 }); // recorded as metadata
     this.logger.warn('Warning message');
     this.logger.error('Error occurred', error.stack);
   }

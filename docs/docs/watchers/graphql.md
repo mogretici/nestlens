@@ -331,13 +331,13 @@ In the NestLens dashboard, GraphQL entries appear in the GraphQL tab showing:
 
 ### Filters Available
 
-- Filter by operation type
-- Filter by operation name
-- Filter by error status
-- Filter by N+1 warnings
-- Filter by query hash
-- Filter by IP address
-- Search by query content
+- **Operation Types** (`operationTypes`) - query, mutation, subscription
+- **Operation Names** (`operationNames`) - Contains, against the name
+- **Errors** (`hasErrors`) - Operations that returned errors
+- **N+1** (`hasN1`) - Operations with a suspected N+1
+- **Search** (`search`) - The query, variables and everything else recorded
+
+Every filter and what it matches: [Filtering](../dashboard/filtering.md#graphql-filters).
 
 ## Sensitive Data Handling
 

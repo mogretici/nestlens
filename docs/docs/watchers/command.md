@@ -9,7 +9,8 @@ The Command Watcher tracks CQRS command execution in NestJS applications, monito
 ## What Gets Captured
 
 - Command name (class name)
-- Handler name
+- Handler name, when the command object carries one in a string `handler`
+  property — the bus does not say which handler ran
 - Execution status (executing, completed, failed)
 - Processing duration
 - Command payload
@@ -48,7 +49,7 @@ interface CommandEntry {
   type: 'command';
   payload: {
     name: string;               // Command class name
-    handler?: string;           // Handler name
+    handler?: string;           // The command's own `handler` string, if it has one
     status: 'executing' | 'completed' | 'failed';
     duration?: number;          // Execution time (ms)
     payload?: unknown;          // Command data
@@ -76,6 +77,7 @@ export class AppModule {}
 ### Provide CommandBus to NestLens
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { NESTLENS_COMMAND_BUS } from 'nestlens';
 

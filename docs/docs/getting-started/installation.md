@@ -52,8 +52,8 @@ npm install nestlens
 
 NestLens requires these peer dependencies (likely already in your NestJS project):
 
-- `@nestjs/common` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0
-- `@nestjs/core` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0
+- `@nestjs/common` ^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0
+- `@nestjs/core` ^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0
 - `reflect-metadata` ^0.1.13 || ^0.2.0
 - `rxjs` ^7.0.0
 
@@ -68,15 +68,31 @@ These ship with NestLens — you don't need to install them:
 ## Optional Dependencies
 
 Install these only when you use the matching feature. They are declared as
-optional peer dependencies, so npm will not complain if they are missing:
+optional peer dependencies, so npm will not complain if they are missing, and
+the ranges are the ones npm checks when they are present:
 
-| Package | Needed for |
-|---------|-----------|
-| `better-sqlite3` ^11.0.0 | SQLite storage driver |
-| `ioredis` ^5.0.0 | Redis storage driver and Redis watcher |
-| `@nestjs/graphql` + `@nestjs/apollo` + `@apollo/server` | GraphQL watcher (Apollo) |
-| `@nestjs/graphql` + `@nestjs/mercurius` + `mercurius` | GraphQL watcher (Mercurius/Fastify) |
-| `@nestjs/schedule` | Schedule watcher (cron/interval/timeout tracking) |
+- `better-sqlite3` ^11.0.0 || ^12.0.0 || ^13.0.0 — SQLite storage driver
+- `ioredis` ^5.0.0 — Redis storage driver
+- `bullmq` ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 — Job watcher on BullMQ queues
+- `@nestjs/cache-manager` ^1.0.0 || ^2.0.0 || ^3.0.0 || ^12.0.0 — Cache watcher
+- `graphql` ^15.0.0 || ^16.0.0 || ^17.0.0 — GraphQL watcher, with one of the two
+  servers below
+- `@nestjs/graphql` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0 || ^14.0.0
+- `@nestjs/apollo` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0 || ^14.0.0 —
+  with `@apollo/server`, for Apollo
+- `@apollo/server` ^4.0.0 || ^5.0.0
+- `@nestjs/mercurius` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0 || ^13.0.0 || ^14.0.0 —
+  with `mercurius`, for Mercurius on Fastify
+- `mercurius` ^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
+- `@modelcontextprotocol/sdk` ^1.32.0 — the `nestlens-mcp` server for AI agents
+
+`@nestjs/schedule` is not a peer: the Schedule watcher finds its
+`SchedulerRegistry` when the application has imported `ScheduleModule.forRoot()`,
+and records nothing otherwise. The other watchers that need a library — mail,
+notifications, views, commands, events, gates, Redis, HTTP clients and models —
+are handed the application's own client or service through a token
+(`NESTLENS_REDIS_CLIENT`, `NESTLENS_EVENT_EMITTER`, …), so the version is
+whichever the application uses.
 
 > `better-sqlite3` is also listed as an `optionalDependency`, so npm tries to
 > install it automatically; if the native build fails, NestLens still works on

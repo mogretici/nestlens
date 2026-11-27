@@ -160,6 +160,7 @@ export class NestLensSubscriber implements EntitySubscriberInterface {
 Register the subscriber:
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_MODEL_SUBSCRIBER } from 'nestlens';
 
 @Module({

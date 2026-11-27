@@ -201,13 +201,11 @@ async handleDataImport() {
 
 ## Limitations
 
-Currently, the Schedule Watcher has the following limitations:
-
-- **Cron jobs**: Fully tracked with execution times and status
-- **Intervals**: Registered but individual executions are not tracked
-- **Timeouts**: Registered but execution is not tracked
-
-For full tracking of interval and timeout-based tasks, consider using the [Job Watcher](./job) with a queue-based approach instead.
+`@Cron()`, `@Interval()` and `@Timeout()` methods are all recorded, each run as
+a `started` entry and then a `completed` or `failed` one. An interval or a
+timeout added at runtime with `SchedulerRegistry.addInterval()` or
+`addTimeout()` is not: the registry holds only the timer handle, and there is no
+callback on it to wrap.
 
 ## Related Watchers
 

@@ -4,6 +4,17 @@ import { CollectorService } from '../core/collector.service';
 import { LogWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { LogEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { capturePayload } from './capture-payload';
+
+/** The same bound an event payload has. */
+const METADATA_MAX_BYTES = 64 * 1024;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
 
 const LOG_LEVEL_PRIORITY: Record<string, number> = {
   verbose: 0,
@@ -34,28 +45,28 @@ export class NestLensLogger extends ConsoleLogger {
   verbose(message: string, ...optionalParams: unknown[]): void;
   verbose(message: string, ...optionalParams: unknown[]): void {
     super.verbose(message, ...optionalParams);
-    this.collectLog('verbose', message, this.extractContext(optionalParams));
+    this.collectLog('verbose', message, optionalParams, this.extractContext(optionalParams));
   }
 
   debug(message: string, context?: string): void;
   debug(message: string, ...optionalParams: unknown[]): void;
   debug(message: string, ...optionalParams: unknown[]): void {
     super.debug(message, ...optionalParams);
-    this.collectLog('debug', message, this.extractContext(optionalParams));
+    this.collectLog('debug', message, optionalParams, this.extractContext(optionalParams));
   }
 
   log(message: string, context?: string): void;
   log(message: string, ...optionalParams: unknown[]): void;
   log(message: string, ...optionalParams: unknown[]): void {
     super.log(message, ...optionalParams);
-    this.collectLog('log', message, this.extractContext(optionalParams));
+    this.collectLog('log', message, optionalParams, this.extractContext(optionalParams));
   }
 
   warn(message: string, context?: string): void;
   warn(message: string, ...optionalParams: unknown[]): void;
   warn(message: string, ...optionalParams: unknown[]): void {
     super.warn(message, ...optionalParams);
-    this.collectLog('warn', message, this.extractContext(optionalParams));
+    this.collectLog('warn', message, optionalParams, this.extractContext(optionalParams));
   }
 
   error(message: string, stackOrContext?: string): void;
@@ -65,12 +76,13 @@ export class NestLensLogger extends ConsoleLogger {
     super.error(message, ...optionalParams);
 
     const { context, stack } = this.extractErrorParams(optionalParams);
-    this.collectLog('error', message, context, stack);
+    this.collectLog('error', message, optionalParams, context, stack);
   }
 
   private collectLog(
     level: LogEntry['payload']['level'],
     message: string,
+    optionalParams: unknown[],
     context?: string,
     stack?: string,
   ): void {
@@ -90,9 +102,25 @@ export class NestLensLogger extends ConsoleLogger {
       message: this.toMessageString(message),
       context,
       stack,
+      metadata: this.extractMetadata(optionalParams),
     };
 
     this.collector.collect('log', payload);
+  }
+
+  /**
+   * The object passed after the message, as in
+   * `logger.log('Order placed', { orderId: 7 }, 'OrderService')`.
+   *
+   * The console logger prints it, and this one used to drop it. One plain
+   * object is recorded; several, or values that are not plain objects, are
+   * printed as before and not recorded, so `metadata` always has one shape.
+   */
+  private extractMetadata(optionalParams: unknown[]): Record<string, unknown> | undefined {
+    const objects = optionalParams.filter(isPlainObject);
+    if (objects.length !== 1) return undefined;
+
+    return capturePayload(objects[0], METADATA_MAX_BYTES) as Record<string, unknown>;
   }
 
   private extractContext(optionalParams: unknown[]): string | undefined {

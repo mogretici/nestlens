@@ -74,6 +74,134 @@ describe('the API reference', () => {
     });
   });
 
+  /**
+   * The configuration pages keep a summary of the interface they describe,
+   * because a reader starting there wants the whole shape on one screen. They
+   * had fallen behind the way the hand-written reference did — `NestLensConfig`
+   * without `preset`, `sampling` and `alerting`, with `watchers` typed as a
+   * `WatchersConfig` that has never existed, and `StorageConfig` without
+   * `maxEntries` — so each summary is now read against its interface.
+   */
+  describe.each([
+    ['NestLensConfig', 'configuration/basic-config.md'],
+    ['StorageConfig', 'configuration/storage.md'],
+    ['SqliteStorageConfig', 'configuration/storage.md'],
+    ['RedisStorageConfig', 'configuration/storage.md'],
+    ['AuthorizationConfig', 'configuration/authorization.md'],
+    ['AuthUser', 'configuration/authorization.md'],
+    ['AuthUser', 'security/access-control.md'],
+    ['RateLimitConfig', 'configuration/rate-limiting.md'],
+    ['PruningConfig', 'configuration/pruning.md'],
+  ])('the %s summary in %s', (name, file) => {
+    /** Top-level members of a TypeScript object body, with their types. */
+    const membersOf = (body: string): Map<string, string> => {
+      const members = new Map<string, string>();
+
+      for (const [, member, type] of body.matchAll(/^ {2}(\w+)\??: ([^;\n]+);?/gm)) {
+        members.set(member, type.replace(/\s*\/\/.*$/, '').trim());
+      }
+
+      return members;
+    };
+
+    const bodyOf = (text: string, opening: string): string => {
+      const start = text.indexOf(opening);
+      return start < 0 ? '' : text.slice(start, text.indexOf('\n}', start));
+    };
+
+    const source = membersOf(
+      bodyOf(read('src', 'nestlens.config.ts'), `export interface ${name} {`),
+    );
+    const summary = membersOf(bodyOf(read('docs', 'docs', file), `interface ${name} {`));
+
+    it('finds the members it is comparing', () => {
+      // A pattern that matched nothing on either side would pass the rest.
+      expect(source.size).toBeGreaterThan(0);
+      expect(summary.size).toBeGreaterThan(0);
+    });
+
+    it('lists every member the interface has, and no other', () => {
+      expect([...summary.keys()].sort()).toEqual([...source.keys()].sort());
+    });
+
+    it('gives each member the type the interface gives it', () => {
+      const differing = [...source]
+        .filter(([member, type]) => {
+          const written = summary.get(member);
+          if (written === undefined) return false;
+          // An inline object type is summarised as `{ … }`.
+          return type.startsWith('{') ? !written.startsWith('{') : written !== type;
+        })
+        .map(([member, type]) => `${member}: ${summary.get(member)} (interface: ${type})`);
+
+      expect(differing).toEqual([]);
+    });
+  });
+
+  /**
+   * The storage guide prints the interface a backend implements, which is the
+   * one copy a reader types against. It said `clear(): Promise<void>` after
+   * `clear` had become `clear(type?: EntryType): Promise<number>`, so a backend
+   * written from it did not compile — and its own Postgres example returned
+   * nothing where the dashboard reads a count.
+   */
+  describe('the StorageInterface printed in advanced/extending-storage.md', () => {
+    /** Each method's signature, comments gone and whitespace collapsed. */
+    const methodsIn = (text: string): Map<string, string> => {
+      const start = text.indexOf('interface StorageInterface {');
+      if (start < 0) return new Map();
+
+      const body = text
+        .slice(text.indexOf('{', start) + 1)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+      const methods = new Map<string, string>();
+      let depth = 0;
+      let member = '';
+
+      for (const char of body) {
+        if (depth === 0 && char === '}') break;
+        if ('({[<'.includes(char)) depth += 1;
+        if (')}]>'.includes(char)) depth -= 1;
+
+        if (depth === 0 && char === ';') {
+          const signature = member
+            .replace(/\s+/g, ' ')
+            .replace(/,\s*\)/g, ')')
+            .replace(/\(\s+/g, '(')
+            .trim();
+          const name = signature.match(/^(\w+)\(/)?.[1];
+          if (name) methods.set(name, signature);
+          member = '';
+        } else {
+          member += char;
+        }
+      }
+
+      return methods;
+    };
+
+    const source = methodsIn(read('src', 'core', 'storage', 'storage.interface.ts'));
+    const printed = methodsIn(read('docs', 'docs', 'advanced', 'extending-storage.md'));
+
+    it('finds the methods it is comparing', () => {
+      expect(source.size).toBeGreaterThan(20);
+      expect(printed.size).toBeGreaterThan(20);
+    });
+
+    it('prints every method with the signature the interface has', () => {
+      const differing = [...source]
+        .filter(([name, signature]) => printed.get(name) !== signature)
+        .map(
+          ([name, signature]) =>
+            `${printed.get(name) ?? `${name}: missing`}  (interface: ${signature})`,
+        );
+
+      expect(differing).toEqual([]);
+      expect([...printed.keys()].filter((name) => !source.has(name))).toEqual([]);
+    });
+  });
+
   describe('the facts it does state', () => {
     const page = read('docs', 'docs', 'api', 'index.md');
 

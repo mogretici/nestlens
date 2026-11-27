@@ -43,7 +43,8 @@ the wording of log messages.
 ## Supported NestJS and Node versions
 
 Every release is tested against this matrix in CI, on both the Express and
-Fastify adapters:
+Fastify adapters. The NestJS 9 row is 9.4.3 or later, which is what the peer
+range admits — `^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0`:
 
 | | Node 20 | Node 22 | Node 24 |
 | --- | --- | --- | --- |
@@ -66,6 +67,10 @@ be claimed without being run.
 
 ### How long a version stays supported
 
+- **NestLens** — before `1.0`, fixes land on the latest minor only, security
+  fixes included; upgrading within `0.x` is the supported path. The
+  [security policy](https://github.com/mogretici/nestlens/security/policy) says
+  the same.
 - **Node** — a Node release leaves the matrix when it reaches end-of-life, in
   the first NestLens minor after that date. Node 18 left this way.
 - **NestJS** — a NestJS major leaves the matrix when NestLens can no longer

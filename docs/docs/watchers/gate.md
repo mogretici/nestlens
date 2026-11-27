@@ -37,7 +37,7 @@ NestLensModule.forRoot({
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable/disable gate tracking |
 | `captureContext` | boolean | `true` | Capture authorization context |
-| `ignoreAbilities` | string[] | `[]` | Abilities to ignore |
+| `ignoreAbilities` | string[] | `[]` | Skip a check whose gate or action equals one of these, or whose `gate:action` does |
 
 ## Payload Structure
 
@@ -62,6 +62,7 @@ interface GateEntry {
 ### Provide Gate Service
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_GATE_SERVICE } from 'nestlens';
 
 @Module({
@@ -76,28 +77,56 @@ import { NESTLENS_GATE_SERVICE } from 'nestlens';
 export class AppModule {}
 ```
 
+### How a Call Is Read
+
+The watcher wraps five methods on the service — `check`, `allows`, `denies`,
+`authorize` and `can` — and reads each call as `(gate, action?, subject?, user?)`.
+Only a string names the gate or the action: a second argument that is not a
+string starts the subject, and whatever is not named falls back to the method's
+name. `denies` returning `true` is recorded as a refusal.
+
+| Call | `gate` | `action` | `subject` | `userId` |
+|------|--------|----------|-----------|----------|
+| `can('PostPolicy', 'update', post, user)` | `PostPolicy` | `update` | `Post` | `user.id` |
+| `allows('update-post', post, user)` | `update-post` | `allows` | `Post` | `user.id` |
+| `denies('delete-post', post)` | `delete-post` | `denies` | `Post` | — |
+| `check('viewDashboard')` | `viewDashboard` | `check` | — | — |
+
+`subject` is a string as given, or an object's `name`, `type` or class name;
+`userId` is the user's `id`, `userId`, `sub` or `_id`. A service whose
+arguments come in another order is recorded in that order, so use
+[manual tracking](#manual-tracking) for it. Methods with other names are not
+wrapped at all.
+
 ### Authorization Service
 
 ```typescript
 @Injectable()
 export class AuthorizationService {
-  async can(
-    gate: string,
-    action: string,
-    subject?: any,
-    user?: any,
-  ): Promise<boolean> {
-    // Authorization logic
-    // Automatically tracked by NestLens
+  // Recorded as gate, action, subject and user.
+  async can(gate: string, action: string, subject?: any, user?: User): Promise<boolean> {
     return this.checkPermission(gate, action, subject, user);
   }
 
-  async allows(gate: string, user: User): Promise<boolean> {
-    return await this.can(gate, 'access', null, user);
+  // Recorded as gate, 'allows', subject and user.
+  async allows(gate: string, subject?: any, user?: User): Promise<boolean> {
+    return this.checkPermission(gate, 'access', subject, user);
   }
 
-  async denies(gate: string, user: User): Promise<boolean> {
-    return !(await this.allows(gate, user));
+  // Recorded as gate, 'denies', subject and user; `true` is a refusal.
+  async denies(gate: string, subject?: any, user?: User): Promise<boolean> {
+    return !(await this.checkPermission(gate, 'access', subject, user));
+  }
+
+  // Not one of the five names, so calling it from the others records nothing
+  // twice — `this.can(...)` from inside `allows` would.
+  private async checkPermission(
+    gate: string,
+    action: string,
+    subject: unknown,
+    user?: User,
+  ): Promise<boolean> {
+    // Authorization logic
   }
 }
 ```
@@ -150,38 +179,17 @@ export class PostController {
 
 ### Resource-Based Authorization
 
+A method of its own name — `canUpdatePost(user, post)` — is not one of the
+five, so it is not recorded. Route it through one that is:
+
 ```typescript
 @Injectable()
 export class PostAuthorizationService {
-  async canUpdatePost(user: User, post: Post): Promise<boolean> {
-    // Tracked with subject: 'Post', action: 'update'
-    if (user.id === post.authorId) return true;
-    if (user.role === 'admin') return true;
-    return false;
-  }
+  constructor(private readonly auth: AuthorizationService) {}
 
-  async canDeletePost(user: User, post: Post): Promise<boolean> {
-    return user.id === post.authorId || user.role === 'admin';
-  }
-}
-
-@Controller('posts')
-export class PostController {
-  @Put(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdatePostDto,
-    @User() user: User,
-  ) {
-    const post = await this.postService.findOne(id);
-
-    // Authorization check tracked
-    const canUpdate = await this.authService.canUpdatePost(user, post);
-    if (!canUpdate) {
-      throw new ForbiddenException('Cannot update this post');
-    }
-
-    return this.postService.update(id, dto);
+  // Recorded as gate 'PostPolicy', action 'update', subject 'Post'.
+  canUpdatePost(user: User, post: Post): Promise<boolean> {
+    return this.auth.can('PostPolicy', 'update', post, user);
   }
 }
 ```
@@ -202,6 +210,7 @@ In the NestLens dashboard, gate entries show:
 For custom authorization logic:
 
 ```typescript
+import { Injectable } from '@nestjs/common';
 import { GateWatcher } from 'nestlens';
 
 @Injectable()
@@ -231,20 +240,15 @@ export class CustomAuthService {
 ```typescript
 @Injectable()
 export class RBACService {
-  async can(action: string, subject: string, user: User): Promise<boolean> {
+  can(subject: string, action: string, resource: unknown, user: User): boolean {
     const permission = `${subject}:${action}`;
-    const allowed = user.roles.some(role =>
-      role.permissions.includes(permission),
-    );
-
-    // Tracked automatically
-    return allowed;
+    return user.roles.some((role) => role.permissions.includes(permission));
   }
 }
 
 // Usage
-const canEdit = await this.rbac.can('edit', 'users', user);
-// Tracked as: gate: 'users', action: 'edit', allowed: true/false
+const canEdit = this.rbac.can('users', 'edit', null, user);
+// Recorded as: gate 'users', action 'edit', userId user.id, allowed true/false
 ```
 
 ## Ignoring Abilities

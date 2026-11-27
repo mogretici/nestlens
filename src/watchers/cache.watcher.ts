@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -15,14 +17,16 @@ import { MethodOutcome, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * The cache-manager surface this watcher touches. Every method is optional
- * because the store decides which ones exist, and cache-manager v5 dropped
- * `reset()`.
+ * because the version decides which ones exist: up to cache-manager 5 a cache
+ * is emptied with `reset()`, and from 6 — what @nestjs/cache-manager 3 and 12
+ * inject — with `clear()`, the only one of the two it still has.
  */
 interface CacheLike {
   get?: (key: string) => Promise<unknown>;
   set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
   del?: (key: string) => Promise<void>;
   reset?: () => Promise<void>;
+  clear?: () => Promise<unknown>;
 }
 
 // Try to import CACHE_MANAGER, but make it optional
@@ -38,13 +42,12 @@ try {
 export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CacheWatcher.name);
   private readonly config: CacheWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: CacheWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private methodsBeforeWrapping?: Record<string, unknown>;
-  private originalMethods?: {
-    get?: (key: string) => Promise<unknown>;
-    set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
-    del?: (key: string) => Promise<void>;
-    reset?: () => Promise<void>;
-  };
+  private originalMethods?: CacheLike;
 
   constructor(
     private readonly collector: CollectorService,
@@ -52,7 +55,9 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(CACHE_MANAGER)
-    private readonly cacheManager?: CacheLike,
+    private cacheManager?: CacheLike,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.cache;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -62,6 +67,18 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.cacheManager,
+      moduleRef: this.moduleRef,
+      token: CACHE_MANAGER,
+      logger: this.logger,
+      watcher: 'CacheWatcher',
+      sibling: (host) => new CacheWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.cacheManager = attached.host as typeof this.cacheManager;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if cache manager was provided
     if (!this.cacheManager) {
@@ -85,6 +102,11 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
    * each round wraps the last: one call, one entry per layer.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
+
     if (!this.cacheManager || !this.methodsBeforeWrapping) {
       return;
     }
@@ -110,6 +132,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       set: manager.set,
       del: manager.del,
       reset: manager.reset,
+      clear: manager.clear,
     };
 
     // Store original methods
@@ -118,6 +141,7 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       set: this.cacheManager.set?.bind(this.cacheManager),
       del: this.cacheManager.del?.bind(this.cacheManager),
       reset: this.cacheManager.reset?.bind(this.cacheManager),
+      clear: this.cacheManager.clear?.bind(this.cacheManager),
     };
 
     // Wrapped so a caller gets back exactly what it did before.
@@ -162,6 +186,11 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
       this.collectEntry('clear', '*', undefined, durationMs);
     });
     if (reset) manager.reset = reset;
+
+    const clear = wrap(this.originalMethods.clear, ({ durationMs }) => {
+      this.collectEntry('clear', '*', undefined, durationMs);
+    });
+    if (clear) manager.clear = clear;
 
     this.logger.log('Cache interceptors installed');
   }

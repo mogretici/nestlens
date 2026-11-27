@@ -12,6 +12,8 @@ The Log Watcher collects application logs emitted through NestJS's built-in logg
 - Log message
 - Context (logger name/category)
 - Stack trace (for errors)
+- Metadata: the one plain object passed after the message, as in
+  `logger.log('Order placed', { orderId: 7 }, 'OrderService')`, up to 64KB
 - Request correlation ID
 
 ## Configuration
@@ -44,7 +46,7 @@ interface LogEntry {
     message: string;            // Log message
     context?: string;           // Logger context/name
     stack?: string;             // Stack trace (for errors)
-    metadata?: Record<string, unknown>; // Additional metadata
+    metadata?: Record<string, unknown>; // The plain object passed after the message
   };
 }
 ```
@@ -168,11 +170,12 @@ In the NestLens dashboard, log entries appear in the Logs tab showing:
 
 ### Filters Available
 
-- Filter by log level
-- Filter by context/logger name
-- Filter by time range
-- Search by message content
-- Show only logs with stack traces
+- **Levels** (`levels`) - debug, log, warn, error, verbose
+- **Contexts** (`contexts`) - Logger context names
+- **Search** (`search`) - The message, context and stack
+- **Time window** (`window`) - The last 5 minutes to 24 hours
+
+Every filter and what it matches: [Filtering](../dashboard/filtering.md#log-filters).
 
 ## Log Contexts
 

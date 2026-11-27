@@ -25,18 +25,13 @@ into:
 - Background jobs and scheduled tasks
 - Cache operations
 - Event dispatching
-- And 18 total entry types
+- And 19 entry types in all
 
 ### Entry Type Groups
 
-The dashboard organizes entries into six logical navigation groups for easy access:
-
-1. **Web** - HTTP requests, exceptions, and client requests
-2. **Database** - Queries and model operations
-3. **Background** - Jobs, schedules, batches, and commands
-4. **Communication** - Mail, notifications, and events
-5. **Infrastructure** - Cache, Redis, and gates
-6. **System** - Logs, views, and dumps
+The sidebar groups the entry types under **Overview**, **Core**, **Background**,
+**Data**, **Communication** and **System** — which type sits where is in
+[Navigation](./navigation.md#navigation-groups).
 
 ### Performance Insights
 
@@ -45,7 +40,7 @@ Track application performance with built-in metrics:
 - Request response times
 - Query execution duration
 - Slow query detection (configurable threshold)
-- Memory usage per request
+- Heap growth per request, when `watchers.request.captureMemory` is on (off by default)
 - Job processing times
 - Database operation metrics
 
