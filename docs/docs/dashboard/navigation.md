@@ -20,7 +20,7 @@ The sidebar is grouped exactly as follows.
 - **Queries** - SQL and ORM queries with execution time
 - **GraphQL** - GraphQL operations, fields, and N+1 detection
 - **Exceptions** - Application errors and unhandled exceptions
-- **Logs** - Application log messages (debug, info, warn, error)
+- **Logs** - Application log messages (verbose, debug, log, warn, error)
 
 ### Background
 

@@ -273,10 +273,10 @@ NestLensModule.forRoot({
 
 ```bash
 # Test from allowed IP
-curl http://localhost:3000/nestlens/api/entries
+curl http://localhost:3000/nestlens/__nestlens__/api/entries
 
 # Test from different IP (will fail if not whitelisted)
-curl --interface 192.168.1.200 http://your-server/nestlens/api/entries
+curl --interface 192.168.1.200 http://your-server/nestlens/__nestlens__/api/entries
 ```
 
 ### 3. Test Behind Proxy

@@ -14,10 +14,11 @@ NestLens supports multiple storage backends to persist monitoring data. Choose t
 
 ```typescript
 interface StorageConfig {
-  driver?: 'memory' | 'sqlite' | 'redis';
-  memory?: MemoryStorageConfig;
+  maxEntries?: number; // every driver; default 10000, 0 for no ceiling
+  driver?: StorageDriver; // 'memory' (default) | 'sqlite' | 'redis'
   sqlite?: SqliteStorageConfig;
   redis?: RedisStorageConfig;
+  memory?: MemoryStorageConfig;
 }
 ```
 

@@ -397,6 +397,84 @@ describe('NestLensLogger', () => {
   });
 
   // ============================================================================
+  // Metadata
+  // ============================================================================
+
+  /**
+   * `LogEntry.metadata` was typed, documented and given a tab in the
+   * dashboard, and nothing ever wrote it: the object in
+   * `logger.log('Order placed', { orderId: 7 }, 'OrderService')` was printed by
+   * the console logger and dropped by this one.
+   */
+  describe('Metadata', () => {
+    beforeEach(async () => {
+      logger = await createLogger(mockConfig);
+    });
+
+    it('records the object passed after the message', async () => {
+      logger.log('Order placed', { orderId: 7 }, 'OrderService');
+
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'log',
+        expect.objectContaining({
+          message: 'Order placed',
+          context: 'OrderService',
+          metadata: { orderId: 7 },
+        }),
+      );
+    });
+
+    it('records it on an error, beside the stack and the context', async () => {
+      logger.error('Payment failed', { orderId: 7 }, 'PaymentService');
+
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'log',
+        expect.objectContaining({
+          level: 'error',
+          context: 'PaymentService',
+          metadata: { orderId: 7 },
+        }),
+      );
+    });
+
+    it('records it at every level', async () => {
+      mockConfig.watchers = { log: { enabled: true, minLevel: 'verbose' } };
+      logger = await createLogger(mockConfig);
+
+      logger.verbose('v', { n: 1 });
+      logger.debug('d', { n: 2 });
+      logger.warn('w', { n: 3 });
+
+      const recorded = mockCollector.collect.mock.calls.map(
+        ([, payload]) => (payload as { metadata?: unknown }).metadata,
+      );
+      expect(recorded).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+    });
+
+    it('records nothing when no plain object was passed', async () => {
+      logger.log('Plain', 'Ctx');
+      logger.log('Several', { a: 1 }, { b: 2 }, 'Ctx');
+      logger.log('An array', [1, 2] as unknown as string);
+      logger.error('Failed', new Error('boom') as unknown as string);
+
+      for (const [, payload] of mockCollector.collect.mock.calls) {
+        expect((payload as { metadata?: unknown }).metadata).toBeUndefined();
+      }
+      expect(mockCollector.collect).toHaveBeenCalledTimes(4);
+    });
+
+    it('records a large object by its size, not whole', async () => {
+      logger.log('Big', { blob: 'x'.repeat(100_000) });
+
+      const [, payload] = mockCollector.collect.mock.calls[0];
+      expect((payload as { metadata?: unknown }).metadata).toEqual({
+        _truncated: true,
+        _size: expect.any(Number),
+      });
+    });
+  });
+
+  // ============================================================================
   // Error Parameters
   // ============================================================================
 

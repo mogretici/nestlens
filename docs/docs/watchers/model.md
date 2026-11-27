@@ -62,6 +62,7 @@ interface ModelEntry {
 ### TypeORM Setup
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_MODEL_SUBSCRIBER } from 'nestlens';
 import { EntitySubscriberInterface, EventSubscriber } from 'typeorm';
 
@@ -83,7 +84,7 @@ export class AppModule {}
 
 ### Prisma Setup
 
-`setupPrismaClient()` returns the client to use, and on Prisma 6 and later that
+`setupPrismaClient()` returns the client to use, and on Prisma 6.14 and later that
 is a **different object** from the one passed in — see the note below. Keep the
 one it hands back:
 
@@ -94,26 +95,25 @@ import { ModelWatcher } from 'nestlens';
 
 @Injectable()
 export class PrismaService implements OnModuleInit {
-  client: PrismaClient;
+  client = new PrismaClient();
 
-  constructor(private modelWatcher: ModelWatcher) {
-    this.client = new PrismaClient();
-  }
+  constructor(private readonly modelWatcher: ModelWatcher) {}
 
   async onModuleInit() {
     await this.client.$connect();
-    // Recorded from here on; queries through the old client are not.
+    // Recorded from here on; queries through the old client are not. With
+    // watchers.model off this hands the same client back and installs nothing.
     this.client = this.modelWatcher.setupPrismaClient(this.client);
   }
 }
 ```
 
 :::info Which Prisma API is used
-Prisma 5 and earlier have `$use`, the middleware API, which is installed into
+Prisma 6.13 and earlier have `$use`, the middleware API, which is installed into
 the client itself — there the returned client is the same object, and a service
 that extends `PrismaClient` works as before.
 
-Prisma removed `$use` in 6.0, and NestLens uses a
+Prisma removed `$use` in 6.14.0, and NestLens uses a
 [client extension](https://www.prisma.io/docs/orm/prisma-client/client-extensions)
 instead. Extensions do not modify the client: `$extends` returns a new one, and
 only queries made through *that* are recorded. This is why the example above

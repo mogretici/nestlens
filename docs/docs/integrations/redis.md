@@ -40,6 +40,7 @@ export class AppModule {}
 Inject your Redis client with the `NESTLENS_REDIS_CLIENT` token:
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_REDIS_CLIENT } from 'nestlens';
 import Redis from 'ioredis';
 
@@ -65,7 +66,7 @@ If you already have a Redis service:
 
 ```typescript
 // redis.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Module } from '@nestjs/common';
 import Redis from 'ioredis';
 
 @Injectable()
@@ -247,8 +248,8 @@ Keys containing these patterns are automatically masked:
 ```typescript
 interface RedisWatcherConfig {
   enabled?: boolean;
-  ignoreCommands?: string[];     // Commands to ignore
-  maxResultSize?: number;        // Max result size in bytes (default: 1KB); 0 captures none
+  ignoreCommands?: string[];     // Tracked commands not to record
+  maxResultSize?: number;        // Bytes of args and of result, each (default: 1KB); 0 captures none
 }
 ```
 
@@ -259,7 +260,7 @@ NestLensModule.forRoot({
   watchers: {
     redis: {
       enabled: true,
-      ignoreCommands: ['ping', 'info', 'select'],
+      ignoreCommands: ['ttl', 'exists'],
       maxResultSize: 2048, // 2KB
     },
   },
@@ -268,22 +269,23 @@ NestLensModule.forRoot({
 
 ### Ignore Commands
 
-Exclude noisy or irrelevant commands:
+Exclude noisy commands. Only the [tracked commands](#tracked-commands) are
+ever recorded, so health checks such as `ping` and `info`, `select` and
+`config` need no entry here:
 
 ```typescript
 redis: {
   ignoreCommands: [
-    'ping',      // Health checks
-    'info',      // Server info
-    'select',    // Database selection
-    'config',    // Configuration commands
+    'ttl',       // Polled by a rate limiter
+    'exists',    // Polled by a lock
   ],
 }
 ```
 
 ### Result Size Limiting
 
-Control captured result size:
+Control how much of the arguments and of the result is captured — the bound
+applies to each separately:
 
 ```typescript
 redis: {
@@ -291,7 +293,7 @@ redis: {
 }
 ```
 
-Results exceeding this size are truncated:
+Arguments or a result exceeding this size are recorded as their size:
 ```typescript
 {
   result: {
@@ -307,9 +309,9 @@ Results exceeding this size are truncated:
 
 Filter commands in the dashboard:
 
-1. **Command Type** - Filter by specific command (GET, SET, etc.)
+1. **Command Type** - Filter by specific command (`get`, `set`, …, as recorded)
 2. **Status** - success or error
-3. **Key Pattern** - Search by key pattern
+3. **Key** - there is no key filter; the search box matches the payload, key included
 4. **Time Range** - View commands from specific periods
 
 ### Performance Monitoring
@@ -481,13 +483,14 @@ Make debugging easier:
 'sabc'
 ```
 
-### 2. Ignore Health Check Commands
+### 2. Ignore Polling Commands
 
-Reduce noise:
+Health checks are never recorded — `ping` and `info` are not tracked — but a
+command polled in a loop is:
 
 ```typescript
 redis: {
-  ignoreCommands: ['ping', 'info'],
+  ignoreCommands: ['ttl', 'exists'],
 }
 ```
 
@@ -530,13 +533,8 @@ Identify Redis bottlenecks:
    watchers: { redis: true }
    ```
 
-2. **Check Client Injection**:
-   ```typescript
-   {
-     provide: NESTLENS_REDIS_CLIENT,
-     useExisting: RedisService,
-   }
-   ```
+2. **Check Client Injection**: the client is provided under `NESTLENS_REDIS_CLIENT`,
+   as a singleton — see [Handing a watcher your service](../watchers/overview.md#handing-a-watcher-your-service).
 
 3. **Verify Client Type**:
    - Must be ioredis or compatible

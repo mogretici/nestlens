@@ -152,4 +152,51 @@ describe('the cache watcher, against cache-manager', () => {
     expect(collected).toHaveLength(2);
     watcher.onModuleDestroy();
   });
+
+  // cache-manager 6 replaced `reset()` with `clear()`, and 6 and 7 are what
+  // @nestjs/cache-manager 3 and 12 inject. Wrapping `reset` alone recorded
+  // nothing on either, because there is no `reset` to wrap.
+  it('records a clear(), the only way to empty cache-manager 6 and 7', async () => {
+    const { createCache } = (await import('cache-manager')) as unknown as {
+      createCache: () => Record<string, unknown> & {
+        set: (k: string, v: unknown) => Promise<unknown>;
+        get: (k: string) => Promise<unknown>;
+        clear: () => Promise<boolean>;
+      };
+    };
+    const cache = createCache();
+    const before = cache.clear;
+    const collected: Array<{ operation: string; key: string }> = [];
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CacheWatcher,
+        {
+          provide: CollectorService,
+          useValue: {
+            collect: (_type: string, payload: { operation: string; key: string }) =>
+              void collected.push(payload),
+            collectImmediate: jest.fn(),
+          },
+        },
+        { provide: NESTLENS_CONFIG, useValue: { watchers: { cache: { enabled: true } } } },
+        { provide: 'CACHE_MANAGER', useValue: cache },
+      ],
+    }).compile();
+
+    const watcher = module.get(CacheWatcher);
+    watcher.onModuleInit();
+
+    expect(cache.reset).toBeUndefined();
+    await cache.set('k', 'v');
+    await expect(cache.clear()).resolves.toBe(true);
+    await expect(cache.get('k')).resolves.toBeUndefined();
+
+    expect(collected.map((entry) => entry.operation)).toEqual(['set', 'clear', 'get']);
+    expect(collected[1].key).toBe('*');
+
+    watcher.onModuleDestroy();
+    expect(cache.clear).toBe(before);
+    expect(cache.reset).toBeUndefined();
+  });
 });

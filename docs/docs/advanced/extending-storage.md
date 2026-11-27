@@ -42,7 +42,7 @@ export interface StorageInterface {
   // Data management
   prune(before: Date): Promise<number>;
   pruneByType(type: EntryType, before: Date): Promise<number>;
-  clear(): Promise<void>;
+  clear(type?: EntryType): Promise<number>;
   close(): Promise<void>;
 
   // Tags
@@ -120,6 +120,12 @@ export class PostgresStorage implements StorageInterface {
       );
 
       CREATE INDEX IF NOT EXISTS idx_tag ON entry_tags(tag);
+
+      CREATE TABLE IF NOT EXISTS monitored_tags (
+        id SERIAL PRIMARY KEY,
+        tag VARCHAR(100) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
   }
 
@@ -254,17 +260,30 @@ export class PostgresStorage implements StorageInterface {
     return parseInt(result.rows[0].count);
   }
 
+  // Old entries go; an entry carrying a monitored tag stays however old it is,
+  // which is what monitoring a tag promises.
   async prune(before: Date): Promise<number> {
     const result = await this.pool.query(
-      'DELETE FROM entries WHERE created_at < $1',
+      `DELETE FROM entries
+        WHERE created_at < $1
+          AND id NOT IN (
+            SELECT t.entry_id FROM entry_tags t
+              JOIN monitored_tags m ON m.tag = t.tag
+          )`,
       [before]
     );
 
     return result.rowCount || 0;
   }
 
-  async clear(): Promise<void> {
-    await this.pool.query('TRUNCATE TABLE entries CASCADE');
+  // Every entry, or every entry of one type, monitored tags included. The
+  // count is what the dashboard tells the reader who pressed the button.
+  async clear(type?: EntryType): Promise<number> {
+    const result = type
+      ? await this.pool.query('DELETE FROM entries WHERE type = $1', [type])
+      : await this.pool.query('DELETE FROM entries');
+
+    return result.rowCount || 0;
   }
 
   async close(): Promise<void> {
@@ -377,9 +396,12 @@ export class MongoDBStorage implements StorageInterface {
     }));
   }
 
+  // Entries carrying a monitored tag are kept, as in every built-in driver.
   async prune(before: Date): Promise<number> {
+    const monitored = await this.db.collection('monitored_tags').distinct('tag');
     const result = await this.entries.deleteMany({
       createdAt: { $lt: before },
+      tags: { $nin: monitored },
     });
 
     return result.deletedCount;

@@ -163,6 +163,52 @@ interface PerformanceConfig {
 }
 ```
 
+## Handing a Watcher Your Service
+
+Several watchers record a client or service the application owns, handed to
+them under a token: `NESTLENS_GATE_SERVICE`, `NESTLENS_REDIS_CLIENT`,
+`NESTLENS_EVENT_EMITTER`, `NESTLENS_MAILER_SERVICE` and the rest. Provide the
+token in any module — `AppModule`, the feature module the service lives in, or
+a global one; the watcher looks it up across the application when it starts,
+after every provider has been created, async factories included:
+
+```typescript
+import { NESTLENS_GATE_SERVICE } from 'nestlens';
+
+@Module({
+  providers: [
+    AuthorizationService,
+    { provide: NESTLENS_GATE_SERVICE, useExisting: AuthorizationService },
+  ],
+})
+export class AuthModule {}
+```
+
+The provider has to be a singleton — the default scope. A request- or
+transient-scoped one has no single instance to record; the watcher says so in a
+warning and records nothing for it.
+
+- **Several providers of one token** — `CacheModule.register()` in two feature
+  modules is two `CACHE_MANAGER`s — are all recorded.
+- **When it starts.** The host is wrapped in the watcher's `onModuleInit`. Calls
+  made before that — from a constructor, or from an `onModuleInit` Nest runs
+  first — are not recorded. Nest orders those hooks by module distance, and the
+  order has differed between majors, so do not rely on one running before the
+  other; a host that replaces its own methods in its `onModuleInit` can drop the
+  wrapping.
+- **Lazy-loaded modules** (`LazyModuleLoader`) do not exist yet at that point,
+  so a token provided only in one is not found.
+- **Two `NestLensModule.forRoot()` imports** record a host once.
+
+## Using a Watcher's Manual API
+
+Watchers with a manual API — `GateWatcher.trackCheck`,
+`JobWatcher.setupQueue`, `ModelWatcher.setupPrismaClient` and the others — can
+be taken in any service's constructor, in any module, without importing
+`NestLensModule` again. The watcher is provided whether it is switched on or not,
+so the service boots either way; switched off, or with NestLens off, its methods
+do nothing and it installs nothing.
+
 ## Request Correlation
 
 Watchers automatically correlate entries with HTTP requests when possible. Each request is assigned a unique ID that propagates through related operations:

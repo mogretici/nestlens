@@ -68,6 +68,7 @@ the watcher wraps its `export`, `import`, `backup`, `restore`, `migrate` and
 `dump` methods, recording each call with its duration and outcome:
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_DUMP_SERVICE } from 'nestlens';
 
 @Module({
@@ -92,6 +93,7 @@ Where the work is not on one service — or the interesting numbers are only
 known inside the method — record it yourself:
 
 ```typescript
+import { Injectable } from '@nestjs/common';
 import { DumpWatcher } from 'nestlens';
 
 @Injectable()

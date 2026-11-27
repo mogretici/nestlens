@@ -6,11 +6,15 @@ import {
   Optional,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
+import { capturePayload } from './capture-payload';
+import { serializePayload } from '../core/storage/serialize-payload';
 
 /**
  * The view engine surface this watcher touches — a single `render` method.
@@ -36,6 +40,10 @@ export const NESTLENS_VIEW_ENGINE = Symbol('NESTLENS_VIEW_ENGINE');
 export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ViewWatcher.name);
   private readonly config: ViewWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: ViewWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -44,7 +52,9 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_VIEW_ENGINE)
-    private readonly viewEngine?: ViewEngineLike,
+    private viewEngine?: ViewEngineLike,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.view;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -54,6 +64,18 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.viewEngine,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_VIEW_ENGINE,
+      logger: this.logger,
+      watcher: 'ViewWatcher',
+      sibling: (host) => new ViewWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.viewEngine = attached.host as typeof this.viewEngine;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if view engine was provided
     if (!this.viewEngine) {
@@ -91,6 +113,11 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
    * measured at three lifecycles, one render recorded three entries.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -109,20 +136,68 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
    * where what comes back is written straight into a response.
    */
   private wrapRenderMethod(originalRender: RenderMethod): RenderMethod {
-    return wrapMethodPreservingShape(originalRender, ({ args, result, error, durationMs }) => {
-      const renderParams = this.extractRenderParams(args);
+    const returning = wrapMethodPreservingShape(
+      originalRender,
+      ({ args, result, error, durationMs }) => this.recordRender(args, result, error, durationMs),
+    );
 
-      this.collectEntry(
-        renderParams.template,
-        renderParams.format,
-        renderParams.locals,
-        durationMs,
-        error ? 'error' : 'rendered',
-        result,
-        renderParams.cacheHit,
-        error ? (error instanceof Error ? error.message : String(error)) : undefined,
-      );
-    });
+    // `render(name, locals, cb)` — Express's `app.render`, most engines'
+    // `renderFile` — returns nothing and answers through the callback, so the
+    // render ends when the callback is called, not when the method returns.
+    return ((...args: unknown[]): unknown => {
+      const callback = args[args.length - 1];
+      if (typeof callback !== 'function') return returning(...args);
+
+      const started = Date.now();
+      const renderArgs = args.slice(0, -1);
+      let recorded = false;
+      const done = (error: unknown, output?: unknown, ...rest: unknown[]): unknown => {
+        if (!recorded) {
+          recorded = true;
+          this.recordRenderSafely(renderArgs, output, error || undefined, Date.now() - started);
+        }
+        return (callback as (...a: unknown[]) => unknown)(error, output, ...rest);
+      };
+
+      try {
+        return originalRender(...renderArgs, done);
+      } catch (error) {
+        if (!recorded) {
+          recorded = true;
+          this.recordRenderSafely(renderArgs, undefined, error, Date.now() - started);
+        }
+        throw error;
+      }
+    }) as RenderMethod;
+  }
+
+  private recordRender(args: unknown[], result: unknown, error: unknown, durationMs: number): void {
+    const renderParams = this.extractRenderParams(args);
+
+    this.collectEntry(
+      renderParams.template,
+      renderParams.format,
+      renderParams.locals,
+      durationMs,
+      error ? 'error' : 'rendered',
+      result,
+      renderParams.cacheHit,
+      error ? (error instanceof Error ? error.message : String(error)) : undefined,
+    );
+  }
+
+  /** Recording must not reach the render it describes, nor replace its error. */
+  private recordRenderSafely(
+    args: unknown[],
+    result: unknown,
+    error: unknown,
+    durationMs: number,
+  ): void {
+    try {
+      this.recordRender(args, result, error, durationMs);
+    } catch (recordError) {
+      this.logger.debug(`Failed to record a render: ${recordError}`);
+    }
   }
 
   /**
@@ -224,12 +299,7 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
   private calculateDataSize(data?: Record<string, unknown>): number | undefined {
     if (!data) return undefined;
 
-    try {
-      const json = JSON.stringify(data);
-      return json.length;
-    } catch {
-      return undefined;
-    }
+    return serializePayload(data).length;
   }
 
   /**
@@ -261,15 +331,9 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
       return undefined;
     }
 
-    try {
-      const json = JSON.stringify(locals);
-      const maxSize = 4096; // 4KB
-      if (json.length > maxSize) {
-        return { _truncated: true, _size: json.length };
-      }
-      return locals;
-    } catch {
-      return { _error: 'Unable to serialize locals' };
-    }
+    // `capturePayload`, not `JSON.stringify`: an entity graph is what a
+    // template is usually handed, and a cycle in it threw, so the locals were
+    // recorded as `{ _error }`. Masking resolves the cycle on the way to storage.
+    return capturePayload(locals, 4096) as Record<string, unknown> | undefined;
   }
 }

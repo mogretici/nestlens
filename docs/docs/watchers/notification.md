@@ -60,6 +60,7 @@ interface NotificationEntry {
 ### Provide Notification Service
 
 ```typescript
+import { Module } from '@nestjs/common';
 import { NESTLENS_NOTIFICATION_SERVICE } from 'nestlens';
 
 @Module({

@@ -641,7 +641,9 @@ describe('ViewWatcher', () => {
       );
     });
 
-    it('should handle non-serializable locals', async () => {
+    // Recorded as `{ _error }` once; a cycle is what an entity graph has, and
+    // masking resolves it on the way to storage. See view-render-shapes.spec.ts.
+    it('keeps locals that point back at themselves', async () => {
       // Arrange
       mockConfig.watchers = { view: { enabled: true, captureData: true } };
       const engine = createViewEngine();
@@ -654,12 +656,11 @@ describe('ViewWatcher', () => {
       await engine.render('home.ejs', circularLocals);
 
       // Assert
-      expect(mockCollector.collect).toHaveBeenCalledWith(
-        'view',
-        expect.objectContaining({
-          locals: { _error: 'Unable to serialize locals' },
-        }),
-      );
+      const [, payload] = mockCollector.collect.mock.calls[0] as unknown as [
+        string,
+        { locals: { self: unknown } },
+      ];
+      expect(payload.locals.self).toBe(payload.locals);
     });
   });
 

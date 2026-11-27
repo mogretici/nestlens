@@ -162,25 +162,10 @@ No additional configuration needed. See [TypeORM Integration](/docs/integrations
 
 ### How do I configure Prisma integration?
 
-Prisma requires manual setup:
-
-```typescript
-// 1. Enable query watcher
-NestLensModule.forRoot({
-  watchers: {
-    query: true,
-  },
-})
-
-// 2. Make Prisma client globally available
-@Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  async onModuleInit() {
-    await this.$connect();
-    (global as any).prisma = this;
-  }
-}
-```
+The query watcher (on by default) attaches to every provider that is a Prisma
+client. On Prisma 6.13 and earlier that is all; on 6.14 and later the client also
+has to be built with query logging — `log: [{ emit: 'event', level: 'query' }]`
+— and NestLens warns at startup, naming that option, when one is not.
 
 See [Prisma Integration](/docs/integrations/prisma.md).
 
@@ -549,23 +534,12 @@ See [Performance Optimization](/docs/advanced/performance.md).
 
 ### Prisma queries not tracked
 
-1. **Enable query watcher**:
-   ```typescript
-   watchers: { query: true }
-   ```
+1. **Check the console** for `Prisma query watcher attached to N client(s)` at
+   bootstrap. Without it, no provider was a Prisma client — make the client a
+   provider, or set `globalThis.prisma`.
 
-2. **Make Prisma client global**:
-   ```typescript
-   (global as any).prisma = this.prisma;
-   ```
-
-3. **Or use manual setup**:
-   ```typescript
-   const modelWatcher = this.moduleRef.get(ModelWatcher);
-   modelWatcher.setupPrismaClient(this.prisma);
-   ```
-
-4. **Check console logs** for `Prisma query watcher attached (global instance)` (logged when NestLens detects the global `prisma` client)
+2. **On Prisma 6.14 and later, look for the warning** that a client was built without
+   query logging, and construct it with `log: [{ emit: 'event', level: 'query' }]`.
 
 See [Prisma Integration](/docs/integrations/prisma.md).
 
@@ -590,13 +564,14 @@ See [Bull Integration](/docs/integrations/bull-bullmq.md).
    watchers: { redis: true }
    ```
 
-2. **Provide Redis client**:
+2. **Provide the Redis client**, in any module:
    ```typescript
    {
      provide: NESTLENS_REDIS_CLIENT,
      useExisting: RedisService,
    }
    ```
+   It has to be a singleton: a request-scoped client is refused, with a warning.
 
 See [Redis Integration](/docs/integrations/redis.md).
 

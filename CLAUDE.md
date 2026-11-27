@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-NestLens is a Laravel Telescope-inspired debugging and monitoring tool for NestJS. It provides real-time tracking of requests, queries, exceptions, jobs, and 17+ other watchers through a web dashboard.
+NestLens is a Laravel Telescope-inspired debugging and monitoring tool for NestJS. It provides real-time tracking of requests, queries, exceptions, jobs and more — 19 watchers in all, one per entry type in `ENTRY_TYPES` — through a web dashboard.
 
 ## Commands
 
@@ -81,7 +81,8 @@ npm run lint               # ESLint on src/**/*.ts
 npm run build              # Required first — the example installs dist/, not src/
 cd example && rm -rf node_modules/nestlens && npm install   # After every rebuild
 cd example && npm start    # Run example NestJS app with NestLens
-cd example && npm run seed # Generate test data via test-requests.sh
+cd example && ./test-requests.sh  # Generate test data for every entry type; needs the app
+                                   # running, curl and python3. Args: [base URL] [mount path]
 ```
 
 The example installs NestLens from `file:..` as a **copy**, not a symlink
@@ -149,8 +150,23 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
 ### Module Registration
 `NestLensModule.forRoot(config)` in `nestlens.module.ts`:
 1. Creates `NestLensCoreModule` (global, provides storage/collector)
-2. Conditionally registers watchers based on config
+2. Registers the request, exception and query watchers when enabled,
+   and every opt-in watcher (`OPT_IN_WATCHERS`) always — exported from a global
+   module so a service can take one by constructor for its manual API. A watcher
+   that is off installs nothing and its manual methods are no-ops; with
+   `enabled: false` they are inert instances. `undefined` anywhere in the
+   config means not configured (`withoutUndefined` in `mergeConfig`), so the
+   default stands
 3. Request/Exception watchers use `APP_INTERCEPTOR`/`APP_FILTER` globals
+4. A watcher handed a host under a token (`NESTLENS_GATE_SERVICE`, …, and
+   `CACHE_MANAGER`) takes the injected value or, failing that, resolves every
+   provider of it across the container in `onModuleInit` (`attachHosts` in
+   `src/watchers/host-token.ts`, `get(token, { strict: false, each: true })`),
+   so the token can be provided in any module. A further
+   host gets a sibling watcher; a host is marked so a second
+   `NestLensModule.forRoot()` does not wrap it again. Request- or
+   transient-scoped hosts are refused with a warning
+5. `NestLensLogger` is always provided and exported (inert with `enabled: false`)
 
 ## Key Patterns
 
@@ -161,11 +177,13 @@ Watcher → CollectorService.collect(entry) → DataMasker → Storage
 
 ### Storage Query Flow
 ```
-API Controller → NestLensValidationPipe (DTO) → Storage.getEntries(filter) → Response
+API Controller → NestLensValidationPipe (DTO) → Storage.findWithCursor(params) → Response
 ```
 Query parameters are validated and transformed by the DTOs in `src/api/dto/`.
-The limits — 100 values per filter, 500 characters of search, 1000 entries per
-page — live with the validators the filters already run through.
+100 values per filter and 500 characters of search are validators, so going over
+is a `400`; 1000 entries per page is a transformer, `TransformLimit`, so a larger
+`limit` is clamped to it and an unreadable one becomes the default of 50. Both
+live in `src/api/dto/transformers/`.
 
 ### Configuration
 All config is in `nestlens.config.ts`. Main config interface: `NestLensConfig`.
@@ -175,10 +193,10 @@ Watchers can be enabled with boolean or detailed config object.
 GraphQL monitoring is zero-config. When `watchers.graphql` is enabled, `NestLensModule`
 detects the GraphQL server and auto-registers the watcher:
 - **Apollo** (`@nestjs/apollo` / `@apollo/server`): `NestLensApolloPlugin` is added as a
-  provider (`nestlens.module.ts:97-99`) and auto-discovered by Apollo's
+  provider in `NestLensCoreModule.forRoot` and auto-discovered by Apollo's
   `PluginsExplorerService` via a dynamic `@Plugin()` decorator.
 - **Mercurius** (`mercurius` / `@nestjs/mercurius`): `MercuriusAutoRegistrar` hooks in
-  during `onApplicationBootstrap` (`nestlens.module.ts:101-103`).
+  during `onApplicationBootstrap`, registered in the same place.
 
 ```typescript
 // Just enable the watcher — no manual plugin wiring needed:

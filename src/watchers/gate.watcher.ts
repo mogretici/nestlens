@@ -6,7 +6,9 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { GateWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { GateEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
@@ -17,6 +19,35 @@ import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
  */
 export const NESTLENS_GATE_SERVICE = Symbol('NESTLENS_GATE_SERVICE');
 
+interface GateArguments {
+  gate: string;
+  action: string;
+  subject?: unknown;
+  user?: unknown;
+}
+
+/**
+ * Reads a wrapped call as `(gate, action?, subject?, user?)`.
+ *
+ * Only a string names the gate or the action. `allows('update-post', post)` —
+ * the shape Laravel made common — names no action, and read by position the
+ * post became one: an object in a field the entry types as a string, with the
+ * subject and the user lost. A second argument that is not a string therefore
+ * starts the subject, and whatever is not named falls back to the method.
+ */
+const readGateArguments = (method: string, args: unknown[]): GateArguments => {
+  const [first, second, ...rest] = args;
+  const gate = typeof first === 'string' ? first : method;
+
+  if (typeof second === 'string') {
+    const [subject, user] = rest;
+    return { gate, action: second || method, subject, user };
+  }
+
+  const [user] = rest;
+  return { gate, action: method, subject: second, user };
+};
+
 /**
  * GateWatcher tracks authorization checks in NestJS applications.
  * Monitors gate/policy evaluations to track what resources users can access,
@@ -26,6 +57,10 @@ export const NESTLENS_GATE_SERVICE = Symbol('NESTLENS_GATE_SERVICE');
 export class GateWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GateWatcher.name);
   private readonly config: GateWatcherConfig;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: GateWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
 
   constructor(
@@ -34,7 +69,9 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_GATE_SERVICE)
-    private readonly gateService?: unknown,
+    private gateService?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.gate;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -44,6 +81,18 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.gateService,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_GATE_SERVICE,
+      logger: this.logger,
+      watcher: 'GateWatcher',
+      sibling: (host) => new GateWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.gateService = attached.host as typeof this.gateService;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if gate service was provided
     if (!this.gateService) {
@@ -66,14 +115,14 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     for (const method of ['check', 'allows', 'denies', 'authorize', 'can']) {
       this.wrapped.replace(method, (original) =>
         wrapMethodPreservingShape(original, ({ args, result, error, durationMs }) => {
-          const [gate, action, subject, user] = args as [string, string?, unknown?, unknown?];
+          const { gate, action, subject, user } = readGateArguments(method, args);
 
           // `denies` answers the opposite question, so its `true` is a refusal.
           const allowed = error ? false : method === 'denies' ? !result : Boolean(result);
 
           this.collectEntry(
             gate,
-            action || method,
+            action,
             subject,
             allowed,
             user,
@@ -96,6 +145,11 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
    * the last.
    */
   onModuleDestroy(): void {
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
+
     this.wrapped?.restore();
     this.wrapped = undefined;
   }
@@ -112,6 +166,9 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     user?: unknown,
     reason?: string,
   ): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     this.collectEntry(gate, action, subject, allowed, user, reason, 0);
   }
 

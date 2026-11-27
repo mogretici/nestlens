@@ -106,6 +106,9 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
    * Call this manually for each queue you want to track.
    */
   setupQueue(queue: unknown, queueName?: string): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     if (!emitsEvents(queue)) {
       this.logger.warn('Invalid queue instance provided');
       return;
@@ -134,6 +137,9 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
    * @param queueName - Optional queue name (defaults to queue.name)
    */
   async setupBullMQQueue(queue: unknown, queueName?: string): Promise<void> {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     if (!looksUpJobs(queue)) {
       this.logger.warn('Invalid BullMQ queue instance provided');
       return;
@@ -220,6 +226,9 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
    * @param queueName - Optional queue name (defaults to queue.name)
    */
   setupQueueWithEvents(queue: unknown, queueEvents: unknown, queueName?: string): void {
+    // Off means off for the manual API too: it is injectable either way.
+    if (!this.config.enabled) return;
+
     if (!looksUpJobs(queue)) {
       this.logger.warn('Invalid BullMQ queue instance provided');
       return;

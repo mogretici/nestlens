@@ -6,11 +6,14 @@ import {
   Optional,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
+import { attachHosts } from './host-token';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { capturePayload } from './capture-payload';
+import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
  * The EventEmitter2 surface this watcher touches.
@@ -19,9 +22,9 @@ import { capturePayload } from './capture-payload';
  * imported — this describes the runtime shape.
  */
 interface EventEmitterLike {
-  onAny(listener: (event: string | string[], ...values: unknown[]) => void): unknown;
-  /** Present on EventEmitter2; absent on a bare emitter, hence the check. */
-  offAny?(listener: (event: string | string[], ...values: unknown[]) => void): unknown;
+  emit(event: unknown, ...values: unknown[]): unknown;
+  /** EventEmitter2's; a bare emitter has none, hence optional. */
+  emitAsync?(event: unknown, ...values: unknown[]): unknown;
   listeners(event: string): unknown[];
 }
 
@@ -29,9 +32,16 @@ function isEventEmitter(value: unknown): value is EventEmitterLike {
   return (
     !!value &&
     typeof value === 'object' &&
-    typeof (value as EventEmitterLike).onAny === 'function' &&
+    typeof (value as EventEmitterLike).emit === 'function' &&
     typeof (value as EventEmitterLike).listeners === 'function'
   );
+}
+
+/** What an emission said before its listeners ran. */
+interface Emission {
+  name: string;
+  values: unknown[];
+  listeners: string[];
 }
 
 // Token for injecting event emitter
@@ -41,8 +51,11 @@ export const NESTLENS_EVENT_EMITTER = Symbol('NESTLENS_EVENT_EMITTER');
 export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventWatcher.name);
   private readonly config: EventWatcherConfig;
-  /** Kept so it can be taken off again. */
-  private anyListener?: (event: string | string[], ...values: unknown[]) => void;
+  /** A watcher for each further host provided under the same token. */
+  private siblings: EventWatcher[] = [];
+  /** Gives back the hosts this watcher took; nothing, if it took none. */
+  private releaseHosts: () => void = () => undefined;
+  private wrapped?: WrappedMethods;
 
   constructor(
     private readonly collector: CollectorService,
@@ -50,7 +63,9 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     private readonly nestlensConfig: NestLensConfig,
     @Optional()
     @Inject(NESTLENS_EVENT_EMITTER)
-    private readonly eventEmitter?: unknown,
+    private eventEmitter?: unknown,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     const watcherConfig = nestlensConfig.watchers?.event;
     this.config = resolveWatcherConfig(watcherConfig);
@@ -60,6 +75,18 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     if (!this.config.enabled) {
       return;
     }
+
+    const attached = attachHosts({
+      injected: this.eventEmitter,
+      moduleRef: this.moduleRef,
+      token: NESTLENS_EVENT_EMITTER,
+      logger: this.logger,
+      watcher: 'EventWatcher',
+      sibling: (host) => new EventWatcher(this.collector, this.nestlensConfig, host as never),
+    });
+    this.eventEmitter = attached.host as typeof this.eventEmitter;
+    this.siblings = attached.siblings;
+    this.releaseHosts = attached.release;
 
     // Check if event emitter was provided
     if (!this.eventEmitter) {
@@ -74,53 +101,66 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Stops listening when the module closes.
+   * Gives the emitter back when the module closes.
    *
    * The emitter belongs to the application and outlives this module, so a
-   * listener left on it goes on recording through a collector that is gone —
+   * wrapper left on it goes on recording through a collector that is gone —
    * and a process that builds the module more than once against the same
-   * emitter, as tests and `nest start --hmr` do, adds one listener per round
-   * and records one entry per listener.
+   * emitter, as tests and `nest start --hmr` do, wraps each round on top of the
+   * last and records one entry per layer.
    */
   onModuleDestroy(): void {
-    const emitter = this.eventEmitter;
+    for (const sibling of this.siblings) sibling.onModuleDestroy();
+    this.siblings = [];
+    this.releaseHosts();
+    this.releaseHosts = () => undefined;
 
-    if (this.anyListener && isEventEmitter(emitter) && typeof emitter.offAny === 'function') {
-      emitter.offAny(this.anyListener);
-    }
-
-    this.anyListener = undefined;
+    this.wrapped?.restore();
+    this.wrapped = undefined;
   }
 
+  /**
+   * Wraps `emit` and `emitAsync`, so an entry's duration is the time the
+   * listeners took.
+   *
+   * This used to listen with `onAny`, which EventEmitter2 calls before any
+   * listener, and stop the clock at the next `setImmediate` — which measured
+   * whatever ran until the event loop came round, including everything the
+   * emitting code did after `emit()` returned, and none of what an `emitAsync`
+   * listener awaited. Around the call, `emit` is timed until its synchronous
+   * listeners return and `emitAsync` until every listener's promise settles.
+   */
   private setupInterceptors(): void {
     const emitter = this.eventEmitter;
     if (!isEventEmitter(emitter)) return;
 
-    // Use onAny to intercept all events
-    this.anyListener = (event: string | string[], ...values: unknown[]) => {
-      const startTime = Date.now();
+    this.wrapped = new WrappedMethods(emitter as unknown as Record<string, unknown>);
 
-      // Normalize event name
-      const eventName = Array.isArray(event) ? event.join('.') : event;
-
-      // Check if event should be ignored
-      if (this.config.ignoreEvents?.some((e) => eventName.includes(e))) {
-        return;
-      }
-
-      // Get listener count for this event
-      const listeners = this.getListenerNames(eventName);
-
-      // Track event emission
-      setImmediate(() => {
-        const duration = Date.now() - startTime;
-        this.collectEntry(eventName, values, listeners, duration);
-      });
-    };
-
-    emitter.onAny(this.anyListener);
+    for (const method of ['emit', 'emitAsync']) {
+      this.wrapped.replace(method, (original) =>
+        wrapMethodPreservingShape<typeof original, Emission | undefined>(
+          original,
+          ({ durationMs, context }) => {
+            if (context) this.collectEntry(context, durationMs);
+          },
+          (args) => this.readEmission(args),
+        ),
+      );
+    }
 
     this.logger.log('Event interceptors installed');
+  }
+
+  /** Read before the call: a `once` listener is gone by the time it returns. */
+  private readEmission(args: unknown[]): Emission | undefined {
+    const [event, ...values] = args;
+    const name = Array.isArray(event) ? event.map(String).join('.') : String(event);
+
+    if (this.config.ignoreEvents?.some((ignored) => name.includes(ignored))) {
+      return undefined;
+    }
+
+    return { name, values, listeners: this.getListenerNames(name) };
   }
 
   private getListenerNames(eventName: string): string[] {
@@ -141,13 +181,7 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private collectEntry(
-    name: string,
-    values: unknown[],
-    listeners: string[],
-    duration: number,
-  ): void {
-    // Combine all values into a single payload
+  private collectEntry({ name, values, listeners }: Emission, duration: number): void {
     const payload: EventEntry['payload'] = {
       name,
       payload: this.capturePayload(values),

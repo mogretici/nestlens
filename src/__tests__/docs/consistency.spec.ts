@@ -63,9 +63,43 @@ describe('Documentation consistency with code', () => {
   });
 
   describe('no stale numbers linger', () => {
-    it('the old hard-coded test count is gone from intro.md', () => {
+    it('intro.md states no test count, which is out of date the day it is written', () => {
+      // "1,312 tests" was replaced by "1,400+ tests", and that by nothing that
+      // checked it: the suite had passed 4,700 by the time anyone counted.
       const intro = readDoc('intro.md');
-      expect(intro).not.toMatch(/1,312 tests/);
+      expect(intro).not.toMatch(/\d[\d,]*\+? tests/);
+    });
+  });
+
+  /**
+   * The installation page lists the peers and their ranges, and the ranges are
+   * what npm enforces. It had fallen behind `package.json`: better-sqlite3 at
+   * `^11` while 12 and 13 were accepted, `bullmq`, `@nestjs/cache-manager`,
+   * `graphql` and the MCP SDK absent, and `@nestjs/schedule` presented as a
+   * declared peer when it is not one.
+   */
+  describe('the installation page states the peers package.json declares', () => {
+    const manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+      peerDependencies: Record<string, string>;
+    };
+    const page = () => readDoc('getting-started/installation.md');
+
+    it('names every peer with the range npm enforces', () => {
+      const peers = Object.entries(manifest.peerDependencies);
+      expect(peers.length).toBeGreaterThan(5);
+
+      const missing = peers
+        .filter(([name, range]) => !page().includes(`\`${name}\` ${range}`))
+        .map(([name, range]) => `${name} ${range}`);
+
+      expect(missing).toEqual([]);
+    });
+
+    it('presents no undeclared package as a peer', () => {
+      const listed = [...page().matchAll(/^- `(@?[a-z0-9./-]+)` [\^~\d]/gm)].map((m) => m[1]);
+      expect(listed.length).toBeGreaterThan(5);
+
+      expect(listed.filter((name) => !(name in manifest.peerDependencies))).toEqual([]);
     });
   });
 

@@ -12,7 +12,7 @@ The Exception Watcher captures unhandled exceptions and errors in your NestJS ap
 - Error message
 - Stack trace
 - HTTP status code (for HTTP exceptions)
-- Exception context (HTTP, RPC, WebSocket)
+- Exception context: always `HTTP` (see [Context Types](#context-types))
 - Request information (method, URL, body)
 - Request correlation ID
 
@@ -68,8 +68,8 @@ interface ExceptionEntry {
     message: string;              // Error message
     stack?: string;               // Stack trace
     code?: string | number;       // HTTP status or error code
-    context: string;              // 'HTTP', 'RPC', 'WebSocket', or raw type
-    request: {                    // Request info (always present in HTTP context)
+    context?: string;             // 'HTTP': only HTTP exceptions are recorded
+    request?: {                   // The request that threw
       method: string;
       url: string;
       body?: unknown;
@@ -162,11 +162,14 @@ In the NestLens dashboard, exception entries appear in the Exceptions tab showin
 
 ### Filters Available
 
-- Filter by exception type/name
-- Filter by HTTP status code
-- Filter by context (HTTP, RPC, WS)
-- Search by error message
-- Filter by time range
+- **Names** (`names`) - Contains, against the exception's class name
+- **Methods** (`methods`) - The HTTP method of the request that threw
+- **Paths** (`paths`) - The URL of the request that threw
+- **Resolved** (`resolved`) - The Exceptions page's **All / Unresolved / Resolved** tabs
+- **Search** (`search`) - The message, the stack and the request
+- **Time window** (`window`) - The last 5 minutes to 24 hours
+
+Every filter and what it matches: [Filtering](../dashboard/filtering.md#exception-filters).
 
 ## Exception Analysis
 
@@ -254,55 +257,40 @@ async upload(@UploadedFile() file: Express.Multer.File) {
 
 ## Exception Filters Integration
 
-NestLens works with custom exception filters:
+Nest gives an exception to **one** filter: the most specific that catches it —
+a method's, then a controller's, then a global one — and among global filters,
+one registered with `app.useGlobalFilters()` before one provided as
+`APP_FILTER`, which is how NestLens registers its own. So a filter of yours that
+catches an exception handles it **instead of** NestLens, and it is not recorded:
 
 ```typescript
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: HttpException, host: ArgumentsHost) {
-    // Your custom exception handling
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
-    const status = exception.getStatus();
-
-    // Exception will still be captured by NestLens
-    response.status(status).json({
-      statusCode: status,
-      message: exception.message,
-      timestamp: new Date().toISOString(),
-    });
+    // Every HttpException ends here, and NestLens never sees it.
   }
 }
 
-// Register the filter
 app.useGlobalFilters(new HttpExceptionFilter());
 ```
 
+Measured on NestJS 12.6: a `NotFoundException` with this filter registered
+globally, or on the handler, reached that filter alone. Exceptions no filter of
+yours catches are still recorded. To keep both, catch only the types your filter
+has to answer differently.
+
 ## Error Monitoring Alerts
 
-Use the Exception Watcher data to set up monitoring:
-
-```typescript
-// Example: Check for error rate spike
-const recentExceptions = await getExceptions({
-  since: Date.now() - 5 * 60 * 1000, // Last 5 minutes
-});
-
-if (recentExceptions.length > 100) {
-  // Alert: High error rate!
-  await sendAlert('High exception rate detected');
-}
-```
+To be told about exceptions as they happen, send them to a webhook: see
+[Alerting](../configuration/alerting.md), which defaults to
+`events: ['exception']`.
 
 ## Context Types
 
-Exceptions can occur in different contexts:
-
-- **HTTP** - From HTTP request handlers
-- **RPC** - From microservice RPC calls
-- **WebSocket** - From WebSocket event handlers
-
-Each context provides different metadata in the captured exception.
+Only exceptions from HTTP handlers are recorded, so `context` is always
+`HTTP`. An exception in a microservice (`rpc`) or a WebSocket gateway (`ws`)
+is handed back to Nest unrecorded, and one thrown by a GraphQL resolver is
+recorded by the [GraphQL watcher](./graphql) instead.
 
 ## Immediate Collection
 
