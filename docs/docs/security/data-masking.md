@@ -104,7 +104,9 @@ Redis keys containing sensitive patterns are automatically masked.
 
 ### Auto-Masked Key Patterns
 
-Keys matching these patterns have their values masked:
+A key containing one of these, ignoring case, keeps the key and has every other
+argument and the result replaced with `***MASKED***` — a fixed string of the
+Redis watcher's own, not `maskReplacement`:
 
 - `password`
 - `token`
@@ -122,8 +124,8 @@ Keys matching these patterns have their values masked:
 // Stored as:
 {
   command: 'set',
-  args: ['user:token:abc', '********'],
-  result: '********'
+  args: ['user:token:abc', '***MASKED***'],
+  result: '***MASKED***'
 }
 
 // Command: redis.get('user:name')
@@ -138,22 +140,11 @@ Keys matching these patterns have their values masked:
 
 ## Model Data Masking
 
-Entity data is automatically masked when captured.
-
-### Sensitive Field Patterns
-
-These field names are automatically masked:
-
-- `password`
-- `passwordHash`
-- `secret`
-- `token`
-- `apiKey`
-- `accessToken`
-- `refreshToken`
-- `creditCard`
-- `ssn`
-- `privateKey`
+Entity data, when `captureData` is on, goes through the same masker as every
+other payload: a field is masked when its name contains one of the
+[body and query parameter terms](#default-masked-bodyquery-parameters), and its
+value is replaced with `maskReplacement` — `***REDACTED***` unless configured.
+Adding a term to `sensitiveParams` therefore masks it in entities too.
 
 ### Example
 
@@ -170,8 +161,8 @@ These field names are automatically masked:
 {
   id: 123,
   email: 'user@example.com',
-  password: '***MASKED***',
-  apiKey: '***MASKED***',
+  password: '***REDACTED***',
+  apiKey: '***REDACTED***',
 }
 ```
 
@@ -280,7 +271,9 @@ The API caps what a query may ask for. These are fixed rather than configurable
 | tag name length | 100 characters |
 | entries per page (`limit`) | 1000 |
 
-Exceeding one is answered with `400` naming the parameter.
+Exceeding one of the first three is answered with `400` naming the parameter.
+`limit` is clamped instead: `limit=5000` returns a page of 1000, and a value that
+is not a number returns the default page of 50.
 
 ### How a Field Name Is Matched
 
@@ -333,7 +326,10 @@ its name contains any of these:
 - `api_key`
 - `secret`
 
-> **Note:** These defaults belong to the global `DataMaskerService`. The Model Watcher uses a separate, smaller list (see [Model Data Masking](#model-data-masking)) and replaces matched values with `***MASKED***` rather than `***REDACTED***`.
+> **Note:** These defaults belong to the global `DataMaskerService`, which masks
+> every payload on its way to storage — model entities included. The Redis
+> watcher is the one with a list of its own: see
+> [Redis Data Masking](#redis-data-masking).
 
 ## Custom Masking
 

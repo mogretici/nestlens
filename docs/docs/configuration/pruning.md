@@ -271,55 +271,56 @@ In addition to automatic pruning, you can trigger pruning manually through the N
 
 ### Trigger Manual Pruning
 
-Send a POST request to the pruning endpoint:
+Send a POST request to the pruning endpoint. It takes no body: a run uses the
+same `maxAge` as the timer, and leaves monitored tags alone the same way.
 
 ```bash
-# Prune using configured maxAge
-curl -X POST http://localhost:3000/nestlens/__nestlens__/api/prune
-
-# Prune with custom maxAge (in hours)
-curl -X POST http://localhost:3000/nestlens/__nestlens__/api/prune \
-  -H "Content-Type: application/json" \
-  -d '{"maxAge": 12}'
+curl -X POST http://localhost:3000/nestlens/__nestlens__/api/pruning/run
 ```
+
+A retention window cannot be passed per call: a run always uses the one the
+pruning service is running with, so it cannot delete more than the timer would.
+To keep less, lower `pruning.maxAge`. To delete regardless of age —
+monitored tags included — `DELETE /nestlens/__nestlens__/api/entries` does that,
+deliberately, and `?type=query` limits it to one entry type.
 
 ### Using fetch in Browser/Node.js
 
 ```typescript
-// Prune with default maxAge
-const response = await fetch('http://localhost:3000/nestlens/__nestlens__/api/prune', {
+const response = await fetch('http://localhost:3000/nestlens/__nestlens__/api/pruning/run', {
   method: 'POST',
 });
 
 const result = await response.json();
-console.log(`Deleted ${result.deletedCount} entries`);
-
-// Prune with custom maxAge
-const response = await fetch('http://localhost:3000/nestlens/__nestlens__/api/prune', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({ maxAge: 12 }),
-});
+console.log(`Deleted ${result.data.deleted} entries`);
 ```
 
 ### Response Format
 
-```typescript
+The endpoint answers `201 Created`:
+
+```json
 {
   "success": true,
-  "deletedCount": 15234,
-  "message": "Pruned 15234 entries older than 12 hours"
+  "data": {
+    "deleted": 15234,
+    "lastRun": "2026-11-27T10:00:00.000Z",
+    "nextRun": "2026-11-27T11:00:00.000Z"
+  },
+  "error": null,
+  "meta": { "timestamp": "2026-11-27T10:00:00.012Z", "duration": 12 }
 }
 ```
+
+`GET /nestlens/__nestlens__/api/pruning/status` reports the schedule and the
+settings actually in effect — a value the service refused or clamped is shown as
+the one it uses, not the one that was written.
 
 ### Use Cases for Manual Pruning
 
 1. **Immediate cleanup**: Free up disk space immediately
-2. **Custom retention**: Use different retention periods for specific scenarios
-3. **Maintenance windows**: Schedule manual pruning during low-traffic periods
-4. **Testing**: Verify pruning behavior before enabling automatic pruning
+2. **Maintenance windows**: Schedule manual pruning during low-traffic periods
+3. **Testing**: Verify pruning behavior before enabling automatic pruning
 
 ## Best Practices
 
@@ -393,10 +394,8 @@ NestLensModule.forRoot({
 For immediate space reclamation:
 
 ```bash
-# 1. Manual API pruning with aggressive maxAge
-curl -X POST http://localhost:3000/nestlens/__nestlens__/api/prune \
-  -H "Content-Type: application/json" \
-  -d '{"maxAge": 1}'
+# 1. Run pruning now, with a lower pruning.maxAge already deployed
+curl -X POST http://localhost:3000/nestlens/__nestlens__/api/pruning/run
 
 # 2. SQLite vacuum to reclaim space
 sqlite3 .cache/nestlens.db "VACUUM;"
