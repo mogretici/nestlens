@@ -55,8 +55,12 @@ jobs:
           --health-retries 5
 
     steps:
+      # The whole history and its tags: the release-type check below reads
+      # every commit since the newest release tag.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -79,6 +83,15 @@ jobs:
 
       - name: Install root dependencies
         run: npm ci
+
+      # The commit analyzer reads any body line starting with "breaking change"
+      # as a breaking change, and below 1.0 that releases 1.0.0. Two lines of
+      # prose in the 0.19.0 branch did exactly that. This runs the analyzer
+      # semantic-release runs, over the commits it would read — on a pull
+      # request, those of main since the last tag plus the branch's — and fails
+      # on a major while package.json is below 1.0, naming commit and line.
+      - name: Check the release these commits make
+        run: node scripts/check-release-type.mjs
 
       - name: Install dashboard dependencies
         run: npm ci

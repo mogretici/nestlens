@@ -179,6 +179,7 @@
     "@nestjs/typeorm": "^12.0.3",
     "@playwright/test": "^1.57.0",
     "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@swc/core": "^1.16.22",
