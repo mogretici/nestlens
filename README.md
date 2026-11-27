@@ -22,6 +22,10 @@
 </p>
 
 <p align="center">
+  <a href="https://glama.ai/mcp/servers/mogretici/nestlens"><img src="https://glama.ai/mcp/servers/mogretici/nestlens/badges/score.svg" alt="mogretici/nestlens MCP server" /></a>
+</p>
+
+<p align="center">
 <a href="https://nestlens-docs.vercel.app/docs/getting-started/installation"><img src="https://img.shields.io/badge/Getting_Started-0ea5e9?style=for-the-badge" alt="Getting Started" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/configuration/basic-config"><img src="https://img.shields.io/badge/Configuration-8b5cf6?style=for-the-badge" alt="Configuration" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/watchers/overview"><img src="https://img.shields.io/badge/Watchers-10b981?style=for-the-badge" alt="Watchers" /></a>
@@ -112,6 +116,8 @@ Visit **http://localhost:3000/nestlens** and start debugging.
 ```bash
 claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
 ```
+
+It is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.mogretici/nestlens`, so clients that browse the registry can install it from there.
 
 For a NestLens on a development or production server, run `nestlens-mcp --http` next to it and give the agent a URL. Setup for Claude Code, Cursor, VS Code and Claude Desktop is in the [MCP guide](https://nestlens-docs.vercel.app/docs/integrations/mcp).
 
