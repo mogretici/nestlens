@@ -42,7 +42,9 @@ export class OrdersResolver {
   }
 
   @Mutation(() => Order)
-  placeOrder(@Args('items', { type: () => [ID] }) items: string[]) {
+  async placeOrder(
+    @Args('items', { type: () => [ID] }) items: string[],
+  ): Promise<Order> {
     this.logger.log(`Placing order with items: ${items.join(', ')}`);
     const newOrder: Order = {
       id: String(this.db.orders.length + 1),
@@ -55,12 +57,12 @@ export class OrdersResolver {
       })),
     };
     this.db.orders.push(newOrder);
-    this.db.pubSub.publish('orderCreated', { orderCreated: newOrder });
+    await this.db.pubSub.publish('orderCreated', { orderCreated: newOrder });
     return newOrder;
   }
 
   @Subscription(() => Order, {
-    resolve: (value) => value.orderCreated,
+    resolve: (value: { orderCreated: Order }) => value.orderCreated,
   })
   orderCreated() {
     return this.db.pubSub.asyncIterableIterator('orderCreated');

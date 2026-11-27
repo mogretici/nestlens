@@ -182,6 +182,26 @@ jobs:
         run: npm ci
         working-directory: example
 
+      # Type-aware rules resolve `nestlens` from example/node_modules, so the
+      # lint needs the same install the specs below do. Warnings fail it.
+      - name: Lint example
+        run: npm run lint
+        working-directory: example
+
+      # The example's own specs: a Vitest unit project, and an e2e project that
+      # boots AppModule — the whole library through a real Nest application —
+      # in process. Nothing ran either before. They need what this job already
+      # has, the library built and then copied into example/node_modules, and
+      # they take seconds, so they run here once rather than in every browser
+      # row of the job above.
+      - name: Run example unit tests
+        run: npm test
+        working-directory: example
+
+      - name: Run example e2e tests
+        run: npm run test:e2e
+        working-directory: example
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 

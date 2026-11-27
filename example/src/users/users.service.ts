@@ -7,7 +7,7 @@ import { User } from './entities/user.entity';
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private db: DatabaseService) { }
+  constructor(private db: DatabaseService) {}
 
   findAll(): User[] {
     this.logger.log('Fetching all users');
@@ -19,7 +19,7 @@ export class UsersService {
     return this.db.users.find((u) => u.id === id);
   }
 
-  create(input: CreateUserInput): User {
+  async create(input: CreateUserInput): Promise<User> {
     this.logger.log(`Creating user: ${input.name}`);
     const newUser: User = {
       id: String(this.db.users.length + 1),
@@ -27,7 +27,7 @@ export class UsersService {
       email: input.email,
     };
     this.db.users.push(newUser);
-    this.db.pubSub.publish('userCreated', { userCreated: newUser });
+    await this.db.pubSub.publish('userCreated', { userCreated: newUser });
     return newUser;
   }
 }

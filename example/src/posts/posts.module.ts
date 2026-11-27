@@ -7,4 +7,4 @@ import { DatabaseModule } from '../database/database.module';
   imports: [DatabaseModule],
   providers: [PostsResolver],
 })
-export class PostsModule { }
+export class PostsModule {}

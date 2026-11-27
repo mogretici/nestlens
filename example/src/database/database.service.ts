@@ -5,9 +5,15 @@ import { Product } from '../products/entities/product.entity';
 import { Order } from '../orders/entities/order.entity';
 import { PubSub } from 'graphql-subscriptions';
 
+/** What each subscription trigger carries, keyed by the field it resolves. */
+type Events = {
+  userCreated: { userCreated: User };
+  orderCreated: { orderCreated: Order };
+};
+
 @Injectable()
 export class DatabaseService {
-  public pubSub = new PubSub();
+  public pubSub = new PubSub<Events>();
 
   public users: User[] = [
     { id: '1', name: 'Alice', email: 'alice@example.com' },

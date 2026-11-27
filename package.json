@@ -50,10 +50,10 @@
     "build:lib": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build:dashboard": "cd dashboard && npm run build && mkdir -p ../dist/dashboard/public && cp -r dist/* ../dist/dashboard/public/",
     "dev": "tsc --watch",
-    "lint": "eslint \"src/**/*.ts\"",
-    "lint:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
+    "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
+    "lint:fix": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
+    "format:check": "prettier --check \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test",
@@ -240,8 +240,12 @@
     }
   },
   "lint-staged": {
-    "src/**/*.ts": [
-      "eslint --fix",
+    "{src,e2e}/**/*.ts": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "playwright.config.ts": [
+      "eslint --fix --max-warnings=0",
       "prettier --write"
     ]
   }

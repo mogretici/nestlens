@@ -77,6 +77,12 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Playwright strips types without checking them, and the library's
+      # tsconfig covers src/ only, so a type error in a Playwright spec was
+      # visible to nobody. The lint step above parses them with this config.
+      - name: Type check E2E specs
+        run: npx tsc -p e2e
+
       # Five integration suites serve the real bundle and skip themselves when
       # it is not on disk. Without this step they skipped in CI and nowhere
       # else: 54 tests, covering the dashboard arriving as HTML rather than as
