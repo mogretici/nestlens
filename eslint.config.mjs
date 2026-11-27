@@ -49,6 +49,13 @@ export default [
   // own tsconfig: DOM types for the callbacks `page.evaluate` sends across,
   // and none of the library's decorator or path settings.
   typescript(['e2e/**/*.ts', 'playwright.config.ts'], './e2e/tsconfig.json'),
+  // The `nestlens-mcp` package's bin: plain CommonJS that npm runs as it is.
+  // `npx tsc -p packages/mcp` type-checks it against `nestlens/mcp`.
+  {
+    files: ['packages/mcp/*.js'],
+    languageOptions: { sourceType: 'commonjs', globals: { process: 'readonly' } },
+    rules: { 'no-undef': 'error', 'no-unused-vars': 'error', strict: ['error', 'global'] },
+  },
   {
     files: ['**/*.spec.ts', '**/*.test.ts'],
     rules: {

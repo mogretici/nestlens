@@ -4,9 +4,6 @@
   "description": "Laravel Telescope-like debugging and monitoring tool for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "nestlens-mcp": "dist/mcp/bin.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -50,10 +47,10 @@
     "build:lib": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build:dashboard": "cd dashboard && npm run build && mkdir -p ../dist/dashboard/public && cp -r dist/* ../dist/dashboard/public/",
     "dev": "tsc --watch",
-    "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
-    "lint:fix": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
-    "format:check": "prettier --check \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
+    "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts packages/mcp/bin.js",
+    "lint:fix": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts packages/mcp/bin.js --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts packages/mcp/bin.js",
+    "format:check": "prettier --check \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts packages/mcp/bin.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test",
@@ -246,6 +243,10 @@
       "prettier --write"
     ],
     "playwright.config.ts": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "packages/mcp/bin.js": [
       "eslint --fix --max-warnings=0",
       "prettier --write"
     ]
