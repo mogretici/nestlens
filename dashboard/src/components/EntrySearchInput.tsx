@@ -28,25 +28,36 @@ export default function EntrySearchInput({ placeholder = 'Search...' }: EntrySea
     setSearchInput(urlSearch);
   }
 
-  // Debounce: push input value to URL
+  // Debounce: push the field to the URL 350 ms after the last keystroke.
   useEffect(() => {
+    // Nothing to write. Arming the timer anyway made it navigate to the URL it
+    // was already on, and that navigation could land after a row click and
+    // replace the detail page the click had just pushed.
+    if (searchInput === urlSearch) return;
+
+    // React Router commits a navigation in a transition, so for as long as the
+    // next page takes to load, the URL has moved on while this field is still
+    // mounted and its cleanup has not run. Only the page that armed the timer
+    // may be written to.
+    const armedOn = window.location.pathname;
     const timer = setTimeout(() => {
+      if (window.location.pathname !== armedOn) return;
+
       setSearchParams(
         (prev) => {
-          const newParams = new URLSearchParams(prev);
-          if ((newParams.get('search') || '') === searchInput) return newParams;
+          const next = new URLSearchParams(prev);
           if (searchInput) {
-            newParams.set('search', searchInput);
+            next.set('search', searchInput);
           } else {
-            newParams.delete('search');
+            next.delete('search');
           }
-          return newParams;
+          return next;
         },
         { replace: true },
       );
     }, 350);
     return () => clearTimeout(timer);
-  }, [searchInput, setSearchParams]);
+  }, [searchInput, urlSearch, setSearchParams]);
 
   return (
     <div className="relative">
