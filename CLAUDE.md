@@ -27,6 +27,20 @@ cache (setup-node's own cache step runs the bundled npm and fails on
 `devEngines`). `src/__tests__/pinned-npm.spec.ts` enforces both, and that the
 four manifests, the lockfile's `node_modules/npm` and CONTRIBUTING.md agree.
 
+Dependency install scripts are reviewed in each manifest's `allowScripts`:
+`true` for better-sqlite3 (its script fetches the native addon) and esbuild
+(it checks the binary matches), `false` for the rest, which work without
+theirs — @swc/core's only installs `@swc/wasm` outside the lockfile when the
+native binary fails to load — and for the example's `file:..` NestLens, whose
+`prepare` would install the repository's git hooks again. npm 11 runs an
+unreviewed script and warns; npm 12 skips it, and better-sqlite3 then
+installs without a binary while the install succeeds. Entries are names,
+never `pkg@1.2.3`, which npm matches to that one version.
+`src/__tests__/install-scripts.spec.ts` fails on any package a lockfile marks
+as having an install script that no entry covers, and on entries nothing
+needs. npm 12 itself is not the pin: it does not support Node 22.13, the
+`engines` floor.
+
 ### Build
 ```bash
 npm run build              # Build library + dashboard
@@ -262,14 +276,17 @@ it is no longer required for Apollo or Mercurius.
 
 ## Testing Notes
 
-- Unit tests run on Vitest (`vitest.config.mts`); specs import `describe`,
+- Unit tests run on Vitest 5 (`vitest.config.mts`); specs import `describe`,
   `it`, `expect` and `vi` from `vitest` — there are no globals, and
   `tsconfig.json` sets `"types": ["node"]` so an installed `@types/*` package
   that declares test globals is not pulled in automatically and cannot make a
   missing import compile
-- Test setup in `src/__tests__/setup.ts`: reflect-metadata, the loopback listen
-  guard, and `vi.clearAllMocks()` after each test (not `clearMocks: true`, which
-  clears *before* each test and erases calls a `beforeAll` made)
+- Test setup in `src/__tests__/setup.ts`: reflect-metadata and the loopback
+  listen guard
+- Vitest clears every mock's calls before each test, ahead of its `beforeEach`
+  hooks (`clearMocks`, on by default since Vitest 5). A call made in `beforeAll`
+  or at module scope is gone by the time a test reads it: assert on it inside
+  the hook, or make it in `beforeEach` (`mock-history.spec.ts`)
 - Specs are compiled by SWC (`unplugin-swc`, the compiler NestJS documents for
   Vitest), which reads `experimentalDecorators`, `emitDecoratorMetadata`,
   `target` and `useDefineForClassFields` from `tsconfig.json`. The last one is
@@ -285,10 +302,9 @@ it is no longer required for Apollo or Mercurius.
   original `code`. To simulate a missing module, return a module whose
   constructor or function throws the `MODULE_NOT_FOUND` error instead
   (`storage-open-failure.spec.ts`, `storage.factory.spec.ts`)
-- `mockImplementation()` with no argument calls the original in Vitest; write
-  `mockImplementation(() => undefined)` to silence a spy. A `vi.fn` called with
-  `new` constructs with the mock as `new.target`, so a class given to
-  `mockImplementation` loses its prototype methods — use instance fields
+- `mockImplementation()` with no argument makes a `vi.spyOn` spy call the
+  original; write `mockImplementation(() => undefined)` to silence it. On a
+  `vi.fn(impl)` it drops `impl` and returns `undefined`
 - `resolve.extensions` lists `.js` before `.mjs`, as Node resolves an
   extensionless `main`. Vite's default order loaded graphql twice — `index.mjs`
   for an import, `index.js` for NestLens' `require('graphql')`.

@@ -61,6 +61,13 @@ Please be respectful and constructive in all interactions.
    npm install
    cd dashboard && npm install && cd ..
    ```
+   Each `package.json` lists in `allowScripts` the dependencies whose install
+   scripts may run (`true`) and those that work without them (`false`). npm 11
+   runs an unlisted one and warns; npm 12 skips it. When a dependency you add
+   brings a new one, `npm install-scripts ls` names it: approve it with
+   `npm install-scripts approve <package> --no-allow-scripts-pin` only if the
+   package needs what the script builds or downloads, and deny it with
+   `npm install-scripts deny <package>` otherwise.
 5. Run tests to ensure everything works:
    ```bash
    npm test

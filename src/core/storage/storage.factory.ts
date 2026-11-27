@@ -88,6 +88,26 @@ async function createSqliteStorage(config: StorageConfig): Promise<StorageInterf
   } catch (error) {
     const err = error as NodeJS.ErrnoException & { code?: string };
 
+    // Installed, but its addon is missing or does not load. npm 12 skips
+    // better-sqlite3's install script, which fetches the addon, unless the
+    // application allows it; a Node upgrade leaves one built for the old ABI.
+    // Not the file's fault, so neither the fallback nor its advice applies.
+    if (
+      err.code === 'ERR_DLOPEN_FAILED' ||
+      err.message?.includes('Could not locate the bindings file')
+    ) {
+      throw new Error(
+        `SQLite storage needs better-sqlite3's native addon, which did not load on Node ${process.version}: ` +
+          `${err.message.split('\n')[0]}\n\n` +
+          'npm 12 runs a dependency install script only when your package.json allows it, and ' +
+          "better-sqlite3's is what fetches the addon. Allow it, then build it:\n" +
+          '  npm install-scripts approve better-sqlite3 --no-allow-scripts-pin\n' +
+          '  npm rebuild better-sqlite3\n\n' +
+          'After a Node upgrade, `npm rebuild better-sqlite3` alone builds it for the new version.\n' +
+          "Or use a different storage driver: 'memory' (the default) or 'redis'.\n",
+      );
+    }
+
     if (err.code === 'MODULE_NOT_FOUND' || err.message?.includes('Cannot find module')) {
       throw new Error(
         'SQLite storage requires better-sqlite3 to be installed.\n\n' +

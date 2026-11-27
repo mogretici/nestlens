@@ -21,16 +21,11 @@ export default defineConfig({
     // Two projects rather than two config files: the unit specs sit next to
     // the code they test and the e2e specs boot AppModule from test/, the split
     // the Nest starter makes, and `--project` picks one without a second
-    // config that has to be kept in step with this one.
+    // config that has to be kept in step with this one. Both inherit
+    // everything above, the SWC plugin and `resolve.extensions` included.
     projects: [
-      {
-        extends: true,
-        test: { name: 'unit', include: ['src/**/*.spec.ts'] },
-      },
-      {
-        extends: true,
-        test: { name: 'e2e', include: ['test/**/*.e2e-spec.ts'] },
-      },
+      { test: { name: 'unit', include: ['src/**/*.spec.ts'] } },
+      { test: { name: 'e2e', include: ['test/**/*.e2e-spec.ts'] } },
     ],
     coverage: {
       provider: 'v8',

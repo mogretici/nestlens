@@ -46,7 +46,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.7",
     "@types/supertest": "^6.0.2",
-    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/coverage-v8": "^5.1.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -58,7 +58,8 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.20.0",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^4.1.12"
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2"
   },
   "packageManager": "npm@11.21.3",
   "devEngines": {
@@ -67,5 +68,13 @@
       "version": "11.21.3",
       "onFail": "error"
     }
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "@apollo/protobufjs": false,
+    "@scarf/scarf": false,
+    "@swc/core": false,
+    "fsevents": false,
+    "file:..": false
   }
 }

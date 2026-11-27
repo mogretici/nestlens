@@ -99,9 +99,9 @@ Object.defineProperty(window, 'ResizeObserver', {
   value: MockResizeObserver,
 });
 
-// Reset mocks before each test
+// Vitest clears every mock's calls before each test (`clearMocks`); the fake
+// storage and the URL hash are state it does not own.
 beforeEach(() => {
-  vi.clearAllMocks();
   localStorageMock.clear();
   window.location.hash = '';
 });
