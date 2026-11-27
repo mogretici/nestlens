@@ -1,0 +1,55 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mogretici/nestlens",
+  "title": "NestLens",
+  "description": "Lets an agent read what NestLens recorded in a NestJS app: requests, queries, exceptions and logs.",
+  "version": "0.18.1",
+  "websiteUrl": "https://nestlens-docs.vercel.app/docs/integrations/mcp",
+  "repository": {
+    "url": "https://github.com/mogretici/nestlens",
+    "source": "github",
+    "id": "1121286497"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "nestlens-mcp",
+      "version": "0.18.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--url",
+          "description": "Where NestLens is mounted: your application's address plus the dashboard path.",
+          "default": "http://localhost:3000/nestlens",
+          "format": "string"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "NESTLENS_HEADERS",
+          "description": "Headers sent with every request, as JSON, when NestLens wants credentials.",
+          "placeholder": "{\"Authorization\":\"Bearer ...\"}",
+          "format": "string",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "NESTLENS_MCP_ALLOW_WRITE",
+          "description": "Enable the tools that change data: clear, prune, pause, resolve, tags.",
+          "format": "boolean",
+          "default": "false",
+          "choices": [
+            "false",
+            "true"
+          ],
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
