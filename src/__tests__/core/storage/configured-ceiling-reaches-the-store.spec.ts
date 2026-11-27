@@ -15,6 +15,7 @@
  * Nothing said so. The store simply held ten thousand entries and the reader
  * wondered where the rest had gone.
  */
+import { describe, it, expect } from 'vitest';
 import { NestLensModule } from '../../../nestlens.module';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../../nestlens.config';
 import { resolveMaxEntries } from '../../../core/storage/storage.factory';

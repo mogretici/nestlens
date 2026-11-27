@@ -18,6 +18,7 @@
  * These run a real Fastify server with real Mercurius and read what NestLens
  * recorded.
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import mercurius from 'mercurius';
 import { CollectorService } from '../../../core/collector.service';
@@ -117,7 +118,7 @@ const ask = (
     .then((response) => ({ statusCode: response.statusCode, body: response.body }));
 
 describeMercurius('Mercurius, running', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: FastifyInstance | undefined;
 

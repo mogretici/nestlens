@@ -18,6 +18,8 @@
  * reconnection attempt, for as long as the process lives — into the logs of
  * the application NestLens exists to help somebody read.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { RedisStorage } from '../../../core/storage/redis.storage';
 
@@ -28,18 +30,18 @@ const unreachable = (): RedisStorage =>
   new RedisStorage({ host: '127.0.0.1', port: DEAD_PORT, commandTimeout: 300 });
 
 describe('a Redis that cannot be reached', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let warnings: string[];
-  let spies: jest.SpyInstance[];
+  let spies: MockInstance[];
 
   beforeEach(() => {
     warnings = [];
     spies = [
-      jest
+      vi
         .spyOn(Logger.prototype, 'warn')
         .mockImplementation((message: unknown) => void warnings.push(String(message))),
-      jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined),
+      vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined),
     ];
   });
 

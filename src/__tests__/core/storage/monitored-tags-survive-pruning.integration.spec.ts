@@ -10,6 +10,7 @@
  * applies: that is what bounds how much NestLens holds, and a monitored tag on
  * a busy route would otherwise have no bound at all.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -27,7 +28,7 @@ const entry = (message: string): Entry =>
   ({ type: 'log', payload: { level: 'info', message }, createdAt: OLD }) as unknown as Entry;
 
 describe('a monitored tag, when pruning runs', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

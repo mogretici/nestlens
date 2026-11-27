@@ -18,6 +18,7 @@
  *     subscription   data        19ea160c  {"orderCreated": {"id":"4", ...
  *     subscription   start       19ea160c  -
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../../core/collector.service';
 import { instrumentSubscriptions } from '../../../watchers/graphql/subscription/schema-instrumentation';
 import { createSubscriptionTracker } from '../../../watchers/graphql/subscription/subscription.tracker';

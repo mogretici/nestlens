@@ -13,6 +13,7 @@
  * stored per entry, indexed by tag in all three backends, and listed in the
  * dashboard's tag filter.
  */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { MAX_TAGS_PER_ENTRY, MAX_TAG_LENGTH } from '../../core/storage/tag-normalization';
 import { StorageInterface } from '../../core/storage/storage.interface';
 import { TagService } from '../../core/tag.service';

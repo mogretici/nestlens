@@ -4,6 +4,8 @@
  * Tests for the batch watcher that monitors batch/bulk operations.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,21 +13,21 @@ import { BatchWatcher, NESTLENS_BATCH_PROCESSOR } from '../../watchers/batch.wat
 
 describe('BatchWatcher', () => {
   let watcher: BatchWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createBatchProcessor = (
     overrides: Partial<{
-      process: jest.Mock;
-      processBatch: jest.Mock;
-      bulk: jest.Mock;
-      bulkProcess: jest.Mock;
+      process: Mock;
+      processBatch: Mock;
+      bulk: Mock;
+      bulkProcess: Mock;
     }> = {},
   ) => ({
-    process: jest.fn().mockResolvedValue({ processed: 10, failed: 0 }),
-    processBatch: jest.fn().mockResolvedValue({ processed: 5, failed: 1 }),
-    bulk: jest.fn().mockResolvedValue({ successful: 100 }),
-    bulkProcess: jest.fn().mockResolvedValue({}),
+    process: vi.fn().mockResolvedValue({ processed: 10, failed: 0 }),
+    processBatch: vi.fn().mockResolvedValue({ processed: 5, failed: 1 }),
+    bulk: vi.fn().mockResolvedValue({ successful: 100 }),
+    bulkProcess: vi.fn().mockResolvedValue({}),
     ...overrides,
   });
 
@@ -51,12 +53,12 @@ describe('BatchWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -164,7 +166,7 @@ describe('BatchWatcher', () => {
     it('should collect batch completed event', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue({ processed: 10, failed: 0 }),
+        process: vi.fn().mockResolvedValue({ processed: 10, failed: 0 }),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -189,7 +191,7 @@ describe('BatchWatcher', () => {
     it('should calculate batch duration', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest
+        process: vi
           .fn()
           .mockImplementation(
             () => new Promise((resolve) => setTimeout(() => resolve({ processed: 3 }), 50)),
@@ -216,7 +218,7 @@ describe('BatchWatcher', () => {
       // Arrange
       const expectedResult = { processed: 100, failed: 5, data: 'result' };
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue(expectedResult),
+        process: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -292,7 +294,7 @@ describe('BatchWatcher', () => {
     it('should collect batch failed event', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockRejectedValue(new Error('Batch processing failed')),
+        process: vi.fn().mockRejectedValue(new Error('Batch processing failed')),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -318,7 +320,7 @@ describe('BatchWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockRejectedValue(new Error('Critical error')),
+        process: vi.fn().mockRejectedValue(new Error('Critical error')),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -330,7 +332,7 @@ describe('BatchWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockRejectedValue('String error'),
+        process: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -360,7 +362,7 @@ describe('BatchWatcher', () => {
     it('should parse processed count from result', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue({ processed: 42 }),
+        process: vi.fn().mockResolvedValue({ processed: 42 }),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -380,7 +382,7 @@ describe('BatchWatcher', () => {
     it('should parse successful count from result', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue({ successful: 25 }),
+        process: vi.fn().mockResolvedValue({ successful: 25 }),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -400,7 +402,7 @@ describe('BatchWatcher', () => {
     it('should parse failed count from result', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue({ processed: 8, failed: 2 }),
+        process: vi.fn().mockResolvedValue({ processed: 8, failed: 2 }),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();
@@ -421,7 +423,7 @@ describe('BatchWatcher', () => {
     it('should parse errors array from result', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue({
+        process: vi.fn().mockResolvedValue({
           processed: 7,
           failed: 3,
           errors: ['Error 1', 'Error 2', 'Error 3'],
@@ -445,7 +447,7 @@ describe('BatchWatcher', () => {
     it('should use total items as processed when result is not object', async () => {
       // Arrange
       const processor = createBatchProcessor({
-        process: jest.fn().mockResolvedValue('success'),
+        process: vi.fn().mockResolvedValue('success'),
       });
       watcher = await createWatcher(mockConfig, processor);
       watcher.onModuleInit();

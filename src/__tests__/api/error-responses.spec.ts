@@ -15,6 +15,7 @@
  * paths, its framework versions and its middleware chain — which is what
  * `stackTraceSanitization` exists to keep out of recorded entries.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../../nestlens.module';
@@ -47,7 +48,7 @@ const ask = async (url: string, path: string): Promise<{ status: number; body: E
 };
 
 describe('what an error response says', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   describe('to a caller the guard refused', () => {
     let app: INestApplication;

@@ -4,6 +4,7 @@
  * Tests for SQLite-based entry storage.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteStorage } from '../../../core/storage/sqlite.storage';
 import { Entry } from '../../../types';
 

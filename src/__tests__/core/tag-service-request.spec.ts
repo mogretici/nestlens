@@ -13,12 +13,13 @@
  * - A caller's own `tags` were appended without checking, so a tag that
  *   repeated a derived one appeared twice.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TagService } from '../../core/tag.service';
 import { StorageInterface } from '../../core/storage/storage.interface';
 import { Entry } from '../../types';
 
 const storage = {
-  addTags: jest.fn(async () => undefined),
+  addTags: vi.fn(async () => undefined),
 } as unknown as StorageInterface;
 
 const service = new TagService(storage);
@@ -27,7 +28,7 @@ const request = (payload: Record<string, unknown>): Entry =>
   ({ id: 1, type: 'request', payload }) as unknown as Entry;
 
 describe('tagging a request', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   describe('the HTTP method tag', () => {
     it('is withheld from a GraphQL operation', async () => {

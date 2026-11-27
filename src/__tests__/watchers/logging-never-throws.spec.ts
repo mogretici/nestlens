@@ -14,6 +14,7 @@
  * The logger NestLens replaces prints both without complaint, so installing
  * NestLens turned working code into a crash at the log statement.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { NestLensLogger } from '../../watchers/log.watcher';

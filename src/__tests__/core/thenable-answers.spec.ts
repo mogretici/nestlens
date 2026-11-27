@@ -23,6 +23,7 @@
  * invisible, because that resolves a thenable on the way out. `filter` is of
  * that kind and was never wrong; it is checked here so it stays that way.
  */
+import { describe, it, expect } from 'vitest';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { CollectorService } from '../../core/collector.service';
 import { MemoryStorage } from '../../core/storage/memory.storage';

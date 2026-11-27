@@ -16,6 +16,7 @@
  * what happened to match in case, and nothing else — silently, since a search
  * that finds nothing looks like a search with no matches.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -39,7 +40,7 @@ const MESSAGES = [
 ];
 
 describe('filtering text that is not English', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

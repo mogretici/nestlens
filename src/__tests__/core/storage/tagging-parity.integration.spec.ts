@@ -14,6 +14,7 @@
  *
  * Each of those was found by a reader noticing, one release at a time.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -42,7 +43,7 @@ const withoutIds = (value: unknown): unknown =>
   );
 
 describe('the backends agree about tagging', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

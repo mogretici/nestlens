@@ -13,6 +13,7 @@
  * returned: no output, a duration of the synchronous part only, and
  * `rendered` for a render that then failed.
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { ViewWatcher } from '../../watchers/view.watcher';
@@ -39,7 +40,7 @@ const watching = (engine: Record<string, unknown>, config: NestLensConfig) => {
 };
 
 describe('the view watcher', () => {
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => vi.useRealTimers());
 
   it('keeps locals that point back at themselves', () => {
     const engine = { render: (_name: string, _locals: unknown) => '<p>ok</p>' };
@@ -57,7 +58,7 @@ describe('the view watcher', () => {
   });
 
   it('times a callback render until it calls back, and records its output', () => {
-    jest.useFakeTimers({ now: 1_000_000 });
+    vi.useFakeTimers({ now: 1_000_000 });
     const engine = {
       render: (_name: string, _locals: unknown, done: (error: unknown, html?: string) => void) => {
         setTimeout(() => done(null, '<p>late</p>'), 40);
@@ -71,7 +72,7 @@ describe('the view watcher', () => {
     });
     expect(recorded).toEqual([]);
 
-    jest.advanceTimersByTime(40);
+    vi.advanceTimersByTime(40);
 
     expect(html).toBe('<p>late</p>');
     expect(recorded).toEqual([

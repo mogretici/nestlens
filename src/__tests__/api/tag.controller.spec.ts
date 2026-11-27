@@ -4,6 +4,8 @@
  * Tests for the tag management API endpoints.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TagController } from '../../api/tag.controller';
 import { TagService } from '../../core/tag.service';
@@ -11,20 +13,20 @@ import { NESTLENS_CONFIG } from '../../nestlens.config';
 
 describe('TagController', () => {
   let controller: TagController;
-  let mockTagService: jest.Mocked<TagService>;
+  let mockTagService: Mocked<TagService>;
 
   beforeEach(async () => {
     mockTagService = {
-      getAllTags: jest.fn(),
-      findByTags: jest.fn(),
-      getEntryTags: jest.fn(),
-      addTags: jest.fn(),
-      removeTags: jest.fn(),
-      getMonitoredTagsWithCounts: jest.fn(),
-      addMonitoredTag: jest.fn(),
-      removeMonitoredTag: jest.fn(),
-      autoTag: jest.fn(),
-    } as unknown as jest.Mocked<TagService>;
+      getAllTags: vi.fn(),
+      findByTags: vi.fn(),
+      getEntryTags: vi.fn(),
+      addTags: vi.fn(),
+      removeTags: vi.fn(),
+      getMonitoredTagsWithCounts: vi.fn(),
+      addMonitoredTag: vi.fn(),
+      removeMonitoredTag: vi.fn(),
+      autoTag: vi.fn(),
+    } as unknown as Mocked<TagService>;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TagController],

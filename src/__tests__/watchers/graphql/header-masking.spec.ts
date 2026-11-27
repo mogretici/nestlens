@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { BaseGraphQLAdapter } from '../../../watchers/graphql/adapters/base.adapter';
 import { resolveGraphQLConfig, ResolvedGraphQLConfig } from '../../../watchers/graphql/types';
 import { CollectorService } from '../../../core';
@@ -96,9 +97,9 @@ describe('GraphQL header masking', () => {
     it('captures and masks headers from a request when enabled', () => {
       const adapter = makeAdapter(resolveGraphQLConfig(true));
       const result = adapter.publicCapture({
-        headers: { authorization: 'Bearer x', 'user-agent': 'jest' },
+        headers: { authorization: 'Bearer x', 'user-agent': 'test-client' },
       });
-      expect(result).toEqual({ authorization: '***', 'user-agent': 'jest' });
+      expect(result).toEqual({ authorization: '***', 'user-agent': 'test-client' });
     });
   });
 });

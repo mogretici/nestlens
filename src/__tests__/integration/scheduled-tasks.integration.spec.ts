@@ -14,6 +14,7 @@
  * callback does exist one layer above the registry. This boots a real
  * application with all three kinds and reads back what was stored.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Injectable, INestApplication, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { CronJob } from 'cron';
 import { Cron, Interval, ScheduleModule, SchedulerRegistry, Timeout } from '@nestjs/schedule';
@@ -83,7 +84,7 @@ class AppModule {}
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('recording scheduled tasks', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let entries: ScheduleEntry[];

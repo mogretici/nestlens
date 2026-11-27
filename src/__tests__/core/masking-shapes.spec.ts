@@ -20,6 +20,7 @@
  * walked as an object whatever it was, so `123` was recorded as `{}` and
  * `"hello"` as a map of character positions.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { DataMaskerService } from '../../core/data-masker.service';
 import { MemoryStorage } from '../../core/storage/memory.storage';

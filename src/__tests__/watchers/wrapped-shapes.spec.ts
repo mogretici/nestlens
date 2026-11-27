@@ -13,6 +13,7 @@
  * A template engine's render is synchronous in every common engine, and what
  * it returns is written straight into a response.
  */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { NotificationWatcher } from '../../watchers/notification.watcher';

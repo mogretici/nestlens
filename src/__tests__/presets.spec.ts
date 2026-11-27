@@ -8,6 +8,7 @@
  * reaching it at a hundred lines of configuration, arrived at by reading that
  * source.
  */
+import { describe, it, expect } from 'vitest';
 import { NestLensModule } from '../nestlens.module';
 import { NESTLENS_CONFIG, NestLensConfig } from '../nestlens.config';
 import { Entry } from '../types';

@@ -5,6 +5,7 @@
  * a list than about the property the MCP server depends on: describe a handler
  * once, where it is written, and it is a tool.
  */
+import { describe, it, expect } from 'vitest';
 import { Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Body } from '@nestjs/common';
 import { PATH_METADATA, METHOD_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { RouteParamtypes } from '@nestjs/common/enums/route-paramtypes.enum';

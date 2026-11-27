@@ -9,6 +9,7 @@
  * The upgrade path matters more than the fresh one: nobody deletes their
  * database to take a patch release.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';

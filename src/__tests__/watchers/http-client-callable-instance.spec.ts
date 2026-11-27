@@ -14,6 +14,7 @@
  * So this one is callable, like the real thing, and would fail against the
  * guard as it was written.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -21,10 +22,10 @@ import { HttpClientWatcher, NESTLENS_HTTP_CLIENT } from '../../watchers/http-cli
 
 /** A function carrying `interceptors`, which is what axios hands back. */
 const callableAxios = () => {
-  const instance = Object.assign(jest.fn(), {
+  const instance = Object.assign(vi.fn(), {
     interceptors: {
-      request: { use: jest.fn(() => 0), eject: jest.fn() },
-      response: { use: jest.fn(() => 1), eject: jest.fn() },
+      request: { use: vi.fn(() => 0), eject: vi.fn() },
+      response: { use: vi.fn(() => 1), eject: vi.fn() },
     },
   });
 
@@ -38,7 +39,7 @@ describe('a callable axios instance is accepted', () => {
     const module = await Test.createTestingModule({
       providers: [
         HttpClientWatcher,
-        { provide: CollectorService, useValue: { collect: jest.fn() } },
+        { provide: CollectorService, useValue: { collect: vi.fn() } },
         { provide: NESTLENS_CONFIG, useValue: config },
         { provide: NESTLENS_HTTP_CLIENT, useValue: client },
       ],
@@ -69,7 +70,7 @@ describe('a callable axios instance is accepted', () => {
   });
 
   it('still refuses something with no interceptors at all', async () => {
-    const notAClient = Object.assign(jest.fn(), { interceptors: {} });
+    const notAClient = Object.assign(vi.fn(), { interceptors: {} });
     const watcher = await build(notAClient);
 
     // Arrange-free: the assertion is that nothing throws and nothing installs.

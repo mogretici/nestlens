@@ -15,6 +15,7 @@
  * than the one asked and looks like an answer. `entries/cursor` pages to any
  * depth at constant cost, and the message says so.
  */
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import { EntriesQueryDto, MAX_OFFSET } from '../../api/dto';

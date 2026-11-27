@@ -15,6 +15,7 @@
  *
  * One assertion each: enable it, call the method it wrapped, and see an entry.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { BatchWatcher } from '../../watchers/batch.watcher';

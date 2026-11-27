@@ -15,6 +15,7 @@
  * are still wrapped — otherwise the test would pass just as well if the
  * interceptor never ran.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   CallHandler,
   Controller,

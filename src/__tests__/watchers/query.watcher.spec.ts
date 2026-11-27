@@ -8,6 +8,8 @@
  * Real TypeORM end-to-end coverage lives in
  * `src/__tests__/watchers/query/typeorm-integration.spec.ts`.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscoveryModule, DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
@@ -17,7 +19,7 @@ import { NestLensQuerySubscriber } from '../../watchers/query/typeorm-subscriber
 import { NestLensTypeOrmLogger } from '../../watchers/query/typeorm-logger';
 
 describe('QueryWatcher', () => {
-  let collector: jest.Mocked<CollectorService>;
+  let collector: Mocked<CollectorService>;
 
   const buildWatcher = async (config: NestLensConfig): Promise<QueryWatcher> => {
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -34,9 +36,9 @@ describe('QueryWatcher', () => {
 
   beforeEach(() => {
     collector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
   });
 
   describe('Config handling', () => {
@@ -222,7 +224,7 @@ describe('QueryWatcher', () => {
 
   describe('NestLensQuerySubscriber', () => {
     it('translates an afterQuery event into a QueryData payload', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const sub = new NestLensQuerySubscriber(handler, 'main');
       sub.afterQuery({
         query: 'SELECT 1',
@@ -242,7 +244,7 @@ describe('QueryWatcher', () => {
     });
 
     it('ignores events without a query string', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const sub = new NestLensQuerySubscriber(handler, 'main');
       sub.afterQuery({} as never);
       expect(handler).not.toHaveBeenCalled();
@@ -251,8 +253,8 @@ describe('QueryWatcher', () => {
 
   describe('NestLensTypeOrmLogger', () => {
     it('records logQueryError as a failed query and delegates to the wrapped logger', () => {
-      const handler = jest.fn();
-      const delegate = { logQueryError: jest.fn() };
+      const handler = vi.fn();
+      const delegate = { logQueryError: vi.fn() };
       const logger = new NestLensTypeOrmLogger(handler, 'default', delegate);
 
       const error = new Error('boom');
@@ -276,7 +278,7 @@ describe('QueryWatcher', () => {
     });
 
     it('records logQuerySlow with the reported execution time', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const logger = new NestLensTypeOrmLogger(handler, 'default');
       logger.logQuerySlow(450, 'SELECT * FROM big', []);
       expect(handler).toHaveBeenCalledWith(
@@ -285,12 +287,12 @@ describe('QueryWatcher', () => {
     });
 
     it('forwards delegate-only methods without invoking the handler', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const delegate = {
-        logQuery: jest.fn(),
-        logSchemaBuild: jest.fn(),
-        logMigration: jest.fn(),
-        log: jest.fn(),
+        logQuery: vi.fn(),
+        logSchemaBuild: vi.fn(),
+        logMigration: vi.fn(),
+        log: vi.fn(),
       };
       const logger = new NestLensTypeOrmLogger(handler, 'default', delegate);
 

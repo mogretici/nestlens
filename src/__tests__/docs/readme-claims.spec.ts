@@ -15,6 +15,7 @@
  * A reader who believes the promise enables the watcher, sees nothing, and
  * concludes the library is broken.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { JobWatcher } from '../../watchers/job.watcher';

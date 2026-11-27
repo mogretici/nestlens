@@ -1,3 +1,5 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { DataMaskerService } from '../../core/data-masker.service';
 import { currentRequestId, runInRequestContext } from '../../core/request-context';
@@ -11,9 +13,9 @@ import { Entry } from '../../types';
 
 describe('CollectorService', () => {
   let service: CollectorService;
-  let mockStorage: jest.Mocked<StorageInterface>;
-  let mockTagService: jest.Mocked<TagService>;
-  let mockFamilyHashService: jest.Mocked<FamilyHashService>;
+  let mockStorage: Mocked<StorageInterface>;
+  let mockTagService: Mocked<TagService>;
+  let mockFamilyHashService: Mocked<FamilyHashService>;
   let mockConfig: NestLensConfig;
 
   const createMockEntry = (overrides: Partial<Entry> = {}): Entry =>
@@ -38,22 +40,22 @@ describe('CollectorService', () => {
   beforeEach(async () => {
     // Arrange
     mockStorage = {
-      save: jest.fn(),
-      saveBatch: jest.fn(),
-      updateFamilyHash: jest.fn(),
-      find: jest.fn(),
-      findById: jest.fn(),
-      count: jest.fn(),
-      clear: jest.fn(),
-      addTags: jest.fn(),
+      save: vi.fn(),
+      saveBatch: vi.fn(),
+      updateFamilyHash: vi.fn(),
+      find: vi.fn(),
+      findById: vi.fn(),
+      count: vi.fn(),
+      clear: vi.fn(),
+      addTags: vi.fn(),
     } as any;
 
     mockTagService = {
-      autoTag: jest.fn(),
+      autoTag: vi.fn(),
     } as any;
 
     mockFamilyHashService = {
-      generateFamilyHash: jest.fn(),
+      generateFamilyHash: vi.fn(),
     } as any;
 
     mockConfig = {
@@ -76,7 +78,7 @@ describe('CollectorService', () => {
   afterEach(async () => {
     // Clean up timers and flush
     await service.shutdown();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('constructor', () => {
@@ -226,7 +228,7 @@ describe('CollectorService', () => {
 
     it('should apply filter and skip entry when filter returns false', async () => {
       // Arrange
-      mockConfig.filter = jest.fn().mockReturnValue(false);
+      mockConfig.filter = vi.fn().mockReturnValue(false);
 
       // Act
       await service.collect('request', {} as any);
@@ -238,7 +240,7 @@ describe('CollectorService', () => {
 
     it('should apply filter and include entry when filter returns true', async () => {
       // Arrange
-      mockConfig.filter = jest.fn().mockReturnValue(true);
+      mockConfig.filter = vi.fn().mockReturnValue(true);
 
       // Act
       await service.collect('request', {} as any);
@@ -249,7 +251,7 @@ describe('CollectorService', () => {
 
     it('should handle async filter', async () => {
       // Arrange
-      mockConfig.filter = jest.fn().mockResolvedValue(true);
+      mockConfig.filter = vi.fn().mockResolvedValue(true);
 
       // Act
       await service.collect('request', {} as any);
@@ -260,7 +262,7 @@ describe('CollectorService', () => {
 
     it('should fail-open when filter throws error', async () => {
       // Arrange
-      mockConfig.filter = jest.fn().mockImplementation(() => {
+      mockConfig.filter = vi.fn().mockImplementation(() => {
         throw new Error('Filter error');
       });
 
@@ -302,7 +304,7 @@ describe('CollectorService', () => {
 
     it('should apply filter and return null when filtered out', async () => {
       // Arrange
-      mockConfig.filter = jest.fn().mockReturnValue(false);
+      mockConfig.filter = vi.fn().mockReturnValue(false);
 
       // Act
       const result = await service.collectImmediate('request', {} as any);
@@ -366,7 +368,7 @@ describe('CollectorService', () => {
     it('should apply batch filter when configured', async () => {
       // Arrange
       service['buffer'] = [createMockEntry(), createMockEntry({ id: 2 })];
-      mockConfig.filterBatch = jest.fn().mockImplementation((entries) => entries.slice(0, 1));
+      mockConfig.filterBatch = vi.fn().mockImplementation((entries) => entries.slice(0, 1));
       mockStorage.saveBatch.mockResolvedValue([createMockEntry({ id: 1 })]);
 
       // Act
@@ -382,7 +384,7 @@ describe('CollectorService', () => {
     it('should handle async batch filter', async () => {
       // Arrange
       service['buffer'] = [createMockEntry()];
-      mockConfig.filterBatch = jest.fn().mockResolvedValue([createMockEntry()]);
+      mockConfig.filterBatch = vi.fn().mockResolvedValue([createMockEntry()]);
       mockStorage.saveBatch.mockResolvedValue([createMockEntry({ id: 1 })]);
 
       // Act
@@ -395,7 +397,7 @@ describe('CollectorService', () => {
     it('should fail-open when batch filter throws error', async () => {
       // Arrange
       service['buffer'] = [createMockEntry()];
-      mockConfig.filterBatch = jest.fn().mockImplementation(() => {
+      mockConfig.filterBatch = vi.fn().mockImplementation(() => {
         throw new Error('Batch filter error');
       });
       mockStorage.saveBatch.mockResolvedValue([createMockEntry({ id: 1 })]);
@@ -410,7 +412,7 @@ describe('CollectorService', () => {
     it('should skip save if all entries are filtered out', async () => {
       // Arrange
       service['buffer'] = [createMockEntry()];
-      mockConfig.filterBatch = jest.fn().mockReturnValue([]);
+      mockConfig.filterBatch = vi.fn().mockReturnValue([]);
 
       // Act
       await service.flush();
@@ -575,7 +577,7 @@ describe('CollectorService', () => {
   describe('onModuleDestroy', () => {
     it('should call shutdown', async () => {
       // Arrange
-      const shutdownSpy = jest.spyOn(service, 'shutdown');
+      const shutdownSpy = vi.spyOn(service, 'shutdown');
 
       // Act
       await service.onModuleDestroy();
@@ -646,7 +648,7 @@ describe('CollectorService', () => {
 
     it('should handle filter returning promise that rejects', async () => {
       // Arrange
-      mockConfig.filter = jest.fn().mockRejectedValue(new Error('Async filter error'));
+      mockConfig.filter = vi.fn().mockRejectedValue(new Error('Async filter error'));
 
       // Act
       await service.collect('request', {} as any);
@@ -668,12 +670,12 @@ describe('CollectorService', () => {
  * amplifying them.
  */
 describe('CollectorService when storage is unavailable', () => {
-  const brokenStorage = (): jest.Mocked<StorageInterface> =>
+  const brokenStorage = (): Mocked<StorageInterface> =>
     ({
-      save: jest.fn().mockRejectedValue(new Error('storage unavailable')),
-      saveBatch: jest.fn().mockRejectedValue(new Error('storage unavailable')),
-      updateFamilyHash: jest.fn(),
-    }) as unknown as jest.Mocked<StorageInterface>;
+      save: vi.fn().mockRejectedValue(new Error('storage unavailable')),
+      saveBatch: vi.fn().mockRejectedValue(new Error('storage unavailable')),
+      updateFamilyHash: vi.fn(),
+    }) as unknown as Mocked<StorageInterface>;
 
   const bufferOf = (collector: CollectorService): Entry[] =>
     (collector as unknown as { buffer: Entry[] }).buffer;
@@ -688,7 +690,7 @@ describe('CollectorService when storage is unavailable', () => {
   };
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('keeps the buffer bounded instead of growing with every entry', async () => {
@@ -722,7 +724,7 @@ describe('CollectorService when storage is unavailable', () => {
 
   it('reports the outage once rather than once per attempt', async () => {
     // Arrange
-    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const collector = new CollectorService(brokenStorage(), { enabled: true } as NestLensConfig);
 
     // Act
@@ -773,12 +775,12 @@ describe('CollectorService when storage is unavailable', () => {
  * property of the collector rather than of each watcher.
  */
 describe('CollectorService request correlation', () => {
-  const workingStorage = (): jest.Mocked<StorageInterface> =>
+  const workingStorage = (): Mocked<StorageInterface> =>
     ({
-      save: jest.fn().mockImplementation(async (e) => e),
-      saveBatch: jest.fn().mockImplementation(async (entries) => entries),
-      updateFamilyHash: jest.fn(),
-    }) as unknown as jest.Mocked<StorageInterface>;
+      save: vi.fn().mockImplementation(async (e) => e),
+      saveBatch: vi.fn().mockImplementation(async (entries) => entries),
+      updateFamilyHash: vi.fn(),
+    }) as unknown as Mocked<StorageInterface>;
 
   const collectAndFlush = async (
     collector: CollectorService,
@@ -786,8 +788,8 @@ describe('CollectorService request correlation', () => {
   ): Promise<Entry> => {
     await collector.collect('log', { message: 'x', level: 'log' } as never, explicitId);
     await collector.flush();
-    return (collector as unknown as { storage: jest.Mocked<StorageInterface> }).storage.saveBatch
-      .mock.calls[0][0][0] as Entry;
+    return (collector as unknown as { storage: Mocked<StorageInterface> }).storage.saveBatch.mock
+      .calls[0][0][0] as Entry;
   };
 
   it('attributes an entry to the request it was recorded inside', async () => {
@@ -871,14 +873,14 @@ describe('CollectorService request correlation', () => {
  * storage, the live tail or a webhook unmasked because a watcher forgot.
  */
 describe('CollectorService masking', () => {
-  const savingStorage = (): jest.Mocked<StorageInterface> =>
+  const savingStorage = (): Mocked<StorageInterface> =>
     ({
-      save: jest.fn().mockImplementation(async (e) => e),
-      saveBatch: jest.fn().mockImplementation(async (entries) => entries),
-      updateFamilyHash: jest.fn(),
-    }) as unknown as jest.Mocked<StorageInterface>;
+      save: vi.fn().mockImplementation(async (e) => e),
+      saveBatch: vi.fn().mockImplementation(async (entries) => entries),
+      updateFamilyHash: vi.fn(),
+    }) as unknown as Mocked<StorageInterface>;
 
-  const collectorWithMasker = (storage: jest.Mocked<StorageInterface>): CollectorService =>
+  const collectorWithMasker = (storage: Mocked<StorageInterface>): CollectorService =>
     new CollectorService(storage, { enabled: true } as NestLensConfig, new DataMaskerService());
 
   it('masks a payload before it reaches storage', async () => {

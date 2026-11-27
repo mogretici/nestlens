@@ -6,6 +6,7 @@
  * to a stand-in `cli`, and run as a process: nothing in this repository's own
  * `node_modules` can be found from there unless `NODE_PATH` points at it.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';

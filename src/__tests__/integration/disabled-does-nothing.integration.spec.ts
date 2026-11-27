@@ -11,6 +11,7 @@
  * a uuid, an AsyncLocalStorage.run, and a property written onto the request
  * ```
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../../nestlens.module';
@@ -43,7 +44,7 @@ const boot = async (enabled: boolean): Promise<INestApplication> => {
 };
 
 describe('NestLens switched off', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
 

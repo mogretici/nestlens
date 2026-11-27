@@ -7,6 +7,8 @@
  * system: that the dashboard is *on* one address and *not on* another. Only a
  * connection can say that.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { Controller, Get, INestApplication, Logger, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -60,8 +62,8 @@ const urlFor = (host: string, port: number): string =>
 /**
  * Whether a route was matched at all.
  *
- * The dashboard's static bundle lives in `dist/`, which Jest running from
- * `src/` does not have, so `index.html` is a 404 from the controller even
+ * The dashboard's static bundle lives in `dist/`, which the suite, running
+ * from `src/`, does not have, so `index.html` is a 404 from the controller even
  * where the route is registered. Nest's own unmatched-route 404 is the one
  * that answers the question here, and it is the one that says `Cannot GET`.
  */
@@ -246,12 +248,12 @@ describe('Dashboard on a listener of its own', () => {
     const unbindable = { host: '203.0.113.9', port: 0 };
 
     let errors: string[];
-    let errorSpy: jest.SpyInstance;
+    let errorSpy: MockInstance;
     let app: INestApplication;
 
     beforeAll(async () => {
       errors = [];
-      errorSpy = jest
+      errorSpy = vi
         .spyOn(Logger.prototype, 'error')
         .mockImplementation((message: unknown) => void errors.push(String(message)));
 
@@ -298,7 +300,7 @@ describe('Dashboard on a listener of its own', () => {
      * stop the first one's when its listener closed.
      */
     it('does not run their lifecycle hooks a second time', async () => {
-      const started = jest.spyOn(PruningService.prototype, 'onModuleInit');
+      const started = vi.spyOn(PruningService.prototype, 'onModuleInit');
 
       const app = await boot({ server: { host: '127.0.0.1', port: 0 } }, 'express');
 

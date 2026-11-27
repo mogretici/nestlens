@@ -14,6 +14,7 @@
  * particular fields, because the field that leaked was the one nobody had
  * thought to assert on.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -58,7 +59,7 @@ class VaultController {
 }
 
 describe('credentials never reach storage', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let stored: string;

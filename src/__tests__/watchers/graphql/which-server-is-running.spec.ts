@@ -16,6 +16,7 @@
  * available when the choice has to be made — the driver the application
  * registered is not resolvable from the container, measured.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { HttpAdapterHost } from '@nestjs/core';
 import { CollectorService } from '../../../core/collector.service';
@@ -29,7 +30,7 @@ const watcherOn = async (
   const module = await Test.createTestingModule({
     providers: [
       GraphQLWatcher,
-      { provide: CollectorService, useValue: { collect: jest.fn(), collectImmediate: jest.fn() } },
+      { provide: CollectorService, useValue: { collect: vi.fn(), collectImmediate: vi.fn() } },
       { provide: NESTLENS_CONFIG, useValue: config },
       {
         provide: HttpAdapterHost,

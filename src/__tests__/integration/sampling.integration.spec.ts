@@ -5,6 +5,7 @@
  * collector consults it, that it does so before masking and buffering, and that
  * the default path is untouched.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -54,7 +55,7 @@ const recordedEntries = async (config: NestLensConfig): Promise<number> => {
 };
 
 describe('sampling, end to end', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   it('records everything by default', async () => {
     expect(await recordedEntries({})).toBe(2);

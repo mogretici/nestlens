@@ -1,3 +1,4 @@
+import { describe, it, expect, vi } from 'vitest';
 import { createServer } from 'http';
 import type { AddressInfo } from 'net';
 import { NESTLENS_API_PREFIX } from '../../nestlens.config';
@@ -30,7 +31,7 @@ const setup = (
     json({ data: [] }),
 ) => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
-  const fetchFake = jest.fn(async (url: string | URL | Request, init?: RequestInit) => {
+  const fetchFake = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init: init ?? {} });
     return respond(String(url), init ?? {});
   });
@@ -579,7 +580,7 @@ describe('NestLensClient.invoke', () => {
         status: 302,
         headers: { Location: 'https://elsewhere.example/' },
       });
-      const cancel = jest.spyOn(response.body!, 'cancel');
+      const cancel = vi.spyOn(response.body!, 'cancel');
       const { client } = setup(() => response);
 
       await expect(client.invoke(descriptor({}))).rejects.toThrow(/redirected/);

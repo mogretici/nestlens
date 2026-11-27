@@ -14,6 +14,7 @@
  * and `Failed to flush entries, will keep retrying` in the log, until the
  * buffer's ceiling dropped the poisoned entry a thousand entries later.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -35,7 +36,7 @@ const poisoned = (): Record<string, unknown> => ({
 });
 
 describe('an entry whose payload cannot be serialised', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

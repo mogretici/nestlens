@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from 'vitest';
 import 'reflect-metadata';
 import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
 import { validate } from 'class-validator';

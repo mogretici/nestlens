@@ -6,6 +6,7 @@
  * watchers' self-filtering. Three separate releases fixed bugs caused by those
  * three answering differently, so the rules live here and are pinned here.
  */
+import { describe, it, expect } from 'vitest';
 import {
   isNestLensRequest,
   toBaseHref,

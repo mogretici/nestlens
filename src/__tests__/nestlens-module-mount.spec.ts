@@ -12,12 +12,13 @@
  * forRoot({ path: '/second' })  in another   ->  only /second exists
  * ```
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { NestLensModule } from '../nestlens.module';
 
 const warningsFrom = (work: () => void): string[] => {
   const warnings: string[] = [];
-  const spy = jest
+  const spy = vi
     .spyOn(Logger.prototype, 'warn')
     .mockImplementation((message: unknown) => void warnings.push(String(message)));
 

@@ -6,9 +6,9 @@
  * validators the query exactly as the URL spelled it. `@IsInt` on
  * `minDuration` answered `?minDuration=500` with a 400 there, `@IsDate` did the
  * same to every `from`, and the dashboard's filters stopped working in that
- * application while every suite here stayed green. A second copy is loaded
- * through `jest.isolateModules`, which is what the host's `node_modules`
- * amounts to.
+ * application while every suite here stayed green. The second copy is a real
+ * one: the package copied into a `node_modules` of the host's own and loaded
+ * from there, which is what such an application has installed.
  *
  * Implicit conversion — the host's, and the one NestLens' own pipe asks for —
  * converts by `design:type` before any `@Transform` runs. TypeScript records
@@ -18,7 +18,13 @@
  * `?beforeSequence=` for the page below sequence zero. What reaches the
  * storage is asserted here, not only the status.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import 'reflect-metadata';
+import { cpSync, mkdtempSync, rmSync } from 'fs';
+import { createRequire } from 'module';
+import { tmpdir } from 'os';
+import { dirname, join } from 'path';
 import { INestApplication, Module, ValidationPipe, ValidationPipeOptions } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -47,12 +53,15 @@ import { mutatingQueryRoutes } from '../support/query-bindings';
 
 type TransformerPackage = NonNullable<ValidationPipeOptions['transformerPackage']>;
 
+const hostDirectory = mkdtempSync(join(tmpdir(), 'nestlens-host-'));
+
+afterAll(() => rmSync(hostDirectory, { recursive: true, force: true }));
+
 const anotherClassTransformer = (): TransformerPackage => {
-  let copy: TransformerPackage | undefined;
-  jest.isolateModules(() => {
-    copy = jest.requireActual<TransformerPackage>('class-transformer');
-  });
-  return copy as TransformerPackage;
+  const installed = dirname(require.resolve('class-transformer/package.json'));
+  cpSync(installed, join(hostDirectory, 'node_modules', 'class-transformer'), { recursive: true });
+
+  return createRequire(join(hostDirectory, 'index.js'))('class-transformer') as TransformerPackage;
 };
 
 @Module({ imports: [NestLensModule.forRoot({})] })
@@ -198,7 +207,7 @@ describe.each([
   ['with implicit conversion', { transformOptions: { enableImplicitConversion: true } }],
 ])("NestLens' API behind a host ValidationPipe, %s", (_name, options) => {
   let app: INestApplication;
-  let reads: [string, jest.SpyInstance][];
+  let reads: [string, MockInstance][];
 
   beforeAll(async () => {
     app = await NestFactory.create(HostModule, new ExpressAdapter(), { logger: false });
@@ -227,16 +236,16 @@ describe.each([
       proto = Object.getPrototypeOf(proto);
     }
     reads = [
-      ...[...methods].map((name): [string, jest.SpyInstance] => [
+      ...[...methods].map((name): [string, MockInstance] => [
         name,
-        jest.spyOn(storage as never, name as never),
+        vi.spyOn(storage as never, name as never),
       ]),
-      ['findByTags', jest.spyOn(app.get(TagService), 'findByTags')],
+      ['findByTags', vi.spyOn(app.get(TagService), 'findByTags')],
     ];
   });
 
   afterAll(async () => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
     await app?.close();
   });
 

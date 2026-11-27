@@ -16,6 +16,7 @@
  * two-minute docs job rather than by the suite. A fenced block survives; an
  * indented one does not.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 

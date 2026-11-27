@@ -4,6 +4,8 @@
  * Tests for the event watcher that monitors event emissions.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,12 +13,12 @@ import { EventWatcher, NESTLENS_EVENT_EMITTER } from '../../watchers/event.watch
 
 describe('EventWatcher', () => {
   let watcher: EventWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockEventEmitter: {
-    emit: jest.Mock;
-    listeners: jest.Mock;
+    emit: Mock;
+    listeners: Mock;
   };
-  let originalEmit: jest.Mock;
+  let originalEmit: Mock;
   let mockConfig: NestLensConfig;
 
   /** Emits through whatever `emit` is on the emitter now — the watcher's, once installed. */
@@ -45,18 +47,18 @@ describe('EventWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
-    originalEmit = jest.fn().mockReturnValue(true);
+    originalEmit = vi.fn().mockReturnValue(true);
     mockEventEmitter = {
       emit: originalEmit,
-      listeners: jest.fn().mockReturnValue([]),
+      listeners: vi.fn().mockReturnValue([]),
     };
 
     mockConfig = {
@@ -68,7 +70,7 @@ describe('EventWatcher', () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   // ============================================================================
@@ -162,7 +164,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('user.logged_in', eventPayload);
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -177,7 +179,7 @@ describe('EventWatcher', () => {
     it('should handle array event names', async () => {
       // Arrange & Act
       emit(['user', 'created'], { id: 1 });
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -191,7 +193,7 @@ describe('EventWatcher', () => {
     it('should collect event duration', async () => {
       // Arrange & Act
       emit('test.event');
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -209,7 +211,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('user.created', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -226,7 +228,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('test.event', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -243,7 +245,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('test.event', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -270,7 +272,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('internal.heartbeat', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).not.toHaveBeenCalled();
@@ -286,7 +288,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('app.debug.logs', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).not.toHaveBeenCalled();
@@ -302,7 +304,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('user.created', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalled();
@@ -325,7 +327,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('event', singlePayload);
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -339,7 +341,7 @@ describe('EventWatcher', () => {
     it('should capture multiple values as array', async () => {
       // Arrange & Act
       emit('event', 'value1', 'value2', 'value3');
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -353,7 +355,7 @@ describe('EventWatcher', () => {
     it('should return undefined for no payload', async () => {
       // Arrange & Act
       emit('event');
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -370,7 +372,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('event', largePayload);
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(
@@ -397,7 +399,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('event', circularPayload);
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       const collected = mockCollector.collect.mock.calls[0][1] as unknown as { payload: any };
@@ -421,7 +423,7 @@ describe('EventWatcher', () => {
 
       // Act
       emit('test.event', {});
-      jest.runAllTimers();
+      vi.runAllTimers();
 
       // Assert
       expect(mockCollector.collect).toHaveBeenCalledWith(

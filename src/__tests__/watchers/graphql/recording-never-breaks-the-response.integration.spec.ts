@@ -16,6 +16,8 @@
  * The failures used here are the ones that can really happen — storage that is
  * not answering, and a payload the sanitizer cannot walk.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import mercurius from 'mercurius';
 import { Logger } from '@nestjs/common';
@@ -41,15 +43,15 @@ const failingCollector = (): CollectorService =>
   }) as unknown as CollectorService;
 
 describe('a watcher that fails while recording', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let warnings: string[];
-  let warnSpy: jest.SpyInstance;
+  let warnSpy: MockInstance;
 
   beforeEach(() => {
     forgetReported();
     warnings = [];
-    warnSpy = jest
+    warnSpy = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation((message: unknown) => void warnings.push(String(message)));
   });

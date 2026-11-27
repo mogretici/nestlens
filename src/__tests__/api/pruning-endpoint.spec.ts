@@ -17,6 +17,7 @@
  * server that had pruned hourly for a month still reported that pruning had
  * never run.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { MemoryStorage } from '../../core/storage/memory.storage';
 import { NestLensApiController } from '../../api/api.controller';

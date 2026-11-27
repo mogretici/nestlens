@@ -16,6 +16,7 @@
  * the caller typed — an operator reading them during an incident is reading a
  * field the subject of the investigation wrote.
  */
+import { describe, it, expect } from 'vitest';
 import { resolveClientIp, AddressableRequest } from '../../core/client-ip';
 
 const request = (

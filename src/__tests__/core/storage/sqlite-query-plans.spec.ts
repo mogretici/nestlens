@@ -19,6 +19,7 @@
  * shared runner is either flaky or so loose it proves nothing, while the plan
  * says exactly which of the two shapes the query has.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';

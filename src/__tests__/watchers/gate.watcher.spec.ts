@@ -4,6 +4,8 @@
  * Tests for the gate watcher that monitors authorization checks.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,23 +13,23 @@ import { GateWatcher, NESTLENS_GATE_SERVICE } from '../../watchers/gate.watcher'
 
 describe('GateWatcher', () => {
   let watcher: GateWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createGateService = (
     overrides: Partial<{
-      check: jest.Mock;
-      allows: jest.Mock;
-      denies: jest.Mock;
-      authorize: jest.Mock;
-      can: jest.Mock;
+      check: Mock;
+      allows: Mock;
+      denies: Mock;
+      authorize: Mock;
+      can: Mock;
     }> = {},
   ) => ({
-    check: jest.fn().mockResolvedValue(true),
-    allows: jest.fn().mockResolvedValue(true),
-    denies: jest.fn().mockResolvedValue(false),
-    authorize: jest.fn().mockResolvedValue(true),
-    can: jest.fn().mockResolvedValue(true),
+    check: vi.fn().mockResolvedValue(true),
+    allows: vi.fn().mockResolvedValue(true),
+    denies: vi.fn().mockResolvedValue(false),
+    authorize: vi.fn().mockResolvedValue(true),
+    can: vi.fn().mockResolvedValue(true),
     ...overrides,
   });
 
@@ -53,12 +55,12 @@ describe('GateWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -162,7 +164,7 @@ describe('GateWatcher', () => {
     it('should collect allowed authorization check', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockResolvedValue(true),
+        check: vi.fn().mockResolvedValue(true),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -184,7 +186,7 @@ describe('GateWatcher', () => {
     it('should calculate check duration', async () => {
       // Arrange
       const service = createGateService({
-        check: jest
+        check: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(true), 50))),
       });
@@ -208,7 +210,7 @@ describe('GateWatcher', () => {
     it('should return original result', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockResolvedValue(true),
+        check: vi.fn().mockResolvedValue(true),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -247,7 +249,7 @@ describe('GateWatcher', () => {
     it('should collect denied authorization check', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockResolvedValue(false),
+        check: vi.fn().mockResolvedValue(false),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -275,7 +277,7 @@ describe('GateWatcher', () => {
     it('should collect failed check on error', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockRejectedValue(new Error('Policy evaluation failed')),
+        check: vi.fn().mockRejectedValue(new Error('Policy evaluation failed')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -297,7 +299,7 @@ describe('GateWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockRejectedValue(new Error('Auth error')),
+        check: vi.fn().mockRejectedValue(new Error('Auth error')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -309,7 +311,7 @@ describe('GateWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const service = createGateService({
-        check: jest.fn().mockRejectedValue('String error'),
+        check: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -398,7 +400,7 @@ describe('GateWatcher', () => {
     });
 
     it('still records denies(gate, subject) as a refusal when it answers true', async () => {
-      const service = createGateService({ denies: jest.fn().mockResolvedValue(true) });
+      const service = createGateService({ denies: vi.fn().mockResolvedValue(true) });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
 

@@ -1,3 +1,5 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { plainToInstance } from 'class-transformer';
 import { NestLensApiController } from '../../api/api.controller';
@@ -19,10 +21,10 @@ function createQuery(params: Partial<Record<string, string>> = {}): CursorQueryD
 
 describe('NestLensApiController', () => {
   let controller: NestLensApiController;
-  let mockStorage: jest.Mocked<StorageInterface>;
+  let mockStorage: Mocked<StorageInterface>;
   let mockConfig: NestLensConfig;
   let mockPruningService: PruningService;
-  let mockCollectorService: jest.Mocked<CollectorService>;
+  let mockCollectorService: Mocked<CollectorService>;
 
   const createMockEntry = (overrides: Partial<Entry> = {}): Entry =>
     ({
@@ -37,21 +39,21 @@ describe('NestLensApiController', () => {
   beforeEach(async () => {
     // Arrange
     mockStorage = {
-      find: jest.fn(),
-      findById: jest.fn(),
-      findWithCursor: jest.fn(),
-      findByFamilyHash: jest.fn(),
-      count: jest.fn(),
-      getStats: jest.fn(),
-      getStorageStats: jest.fn(),
-      getLatestSequence: jest.fn(),
-      hasEntriesAfter: jest.fn(),
-      getGroupedByFamilyHash: jest.fn(),
-      prune: jest.fn(),
-      clear: jest.fn(),
-      resolveEntry: jest.fn(),
-      unresolveEntry: jest.fn(),
-      save: jest.fn(),
+      find: vi.fn(),
+      findById: vi.fn(),
+      findWithCursor: vi.fn(),
+      findByFamilyHash: vi.fn(),
+      count: vi.fn(),
+      getStats: vi.fn(),
+      getStorageStats: vi.fn(),
+      getLatestSequence: vi.fn(),
+      hasEntriesAfter: vi.fn(),
+      getGroupedByFamilyHash: vi.fn(),
+      prune: vi.fn(),
+      clear: vi.fn(),
+      resolveEntry: vi.fn(),
+      unresolveEntry: vi.fn(),
+      save: vi.fn(),
     } as any;
 
     mockConfig = {
@@ -68,16 +70,16 @@ describe('NestLensApiController', () => {
     mockPruningService = new PruningService(mockConfig, mockStorage);
 
     mockCollectorService = {
-      pause: jest.fn(),
-      resume: jest.fn(),
-      getRecordingStatus: jest.fn(),
-      getRecordingCounts: jest.fn().mockReturnValue({
+      pause: vi.fn(),
+      resume: vi.fn(),
+      getRecordingStatus: vi.fn(),
+      getRecordingCounts: vi.fn().mockReturnValue({
         recorded: 0,
         droppedBySampling: 0,
         droppedByFilter: 0,
         droppedByBuffer: 0,
       }),
-      getBufferSize: jest.fn().mockReturnValue({ pending: 0, capacity: 1000, dropped: 0 }),
+      getBufferSize: vi.fn().mockReturnValue({ pending: 0, capacity: 1000, dropped: 0 }),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -94,7 +96,7 @@ describe('NestLensApiController', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('constructor', () => {

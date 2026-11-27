@@ -13,13 +13,14 @@
  * all of it on the event loop of the application being watched, from one query
  * string. The same query is 253ms with each pattern compiled once.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { MemoryStorage } from '../../../core/storage/memory.storage';
 import { Entry } from '../../../types';
 
 const ENTRIES = 10_000;
 
 describe('the cost of a path filter', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let storage: MemoryStorage;
 

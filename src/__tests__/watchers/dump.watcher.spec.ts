@@ -4,6 +4,8 @@
  * Tests for the dump watcher that monitors database dumps, exports, imports, and migrations.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,25 +13,25 @@ import { DumpWatcher, NESTLENS_DUMP_SERVICE } from '../../watchers/dump.watcher'
 
 describe('DumpWatcher', () => {
   let watcher: DumpWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createDumpService = (
     overrides: Partial<{
-      export: jest.Mock;
-      import: jest.Mock;
-      backup: jest.Mock;
-      restore: jest.Mock;
-      migrate: jest.Mock;
-      dump: jest.Mock;
+      export: Mock;
+      import: Mock;
+      backup: Mock;
+      restore: Mock;
+      migrate: Mock;
+      dump: Mock;
     }> = {},
   ) => ({
-    export: jest.fn().mockResolvedValue({ recordCount: 100, fileSize: 1024 }),
-    import: jest.fn().mockResolvedValue({ records: 50 }),
-    backup: jest.fn().mockResolvedValue({ size: 2048 }),
-    restore: jest.fn().mockResolvedValue({ rows: 200 }),
-    migrate: jest.fn().mockResolvedValue({ count: 10 }),
-    dump: jest.fn().mockResolvedValue({ recordCount: 500 }),
+    export: vi.fn().mockResolvedValue({ recordCount: 100, fileSize: 1024 }),
+    import: vi.fn().mockResolvedValue({ records: 50 }),
+    backup: vi.fn().mockResolvedValue({ size: 2048 }),
+    restore: vi.fn().mockResolvedValue({ rows: 200 }),
+    migrate: vi.fn().mockResolvedValue({ count: 10 }),
+    dump: vi.fn().mockResolvedValue({ recordCount: 500 }),
     ...overrides,
   });
 
@@ -55,12 +57,12 @@ describe('DumpWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -154,7 +156,7 @@ describe('DumpWatcher', () => {
     it('should collect export completed event', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({
+        export: vi.fn().mockResolvedValue({
           format: 'json',
           recordCount: 100,
           fileSize: 2048,
@@ -184,7 +186,7 @@ describe('DumpWatcher', () => {
     it('should calculate export duration', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest
+        export: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
@@ -209,7 +211,7 @@ describe('DumpWatcher', () => {
       // Arrange
       const expectedResult = { success: true, file: '/backup/data.json' };
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue(expectedResult),
+        export: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -230,7 +232,7 @@ describe('DumpWatcher', () => {
     it('should collect import completed event', async () => {
       // Arrange
       const service = createDumpService({
-        import: jest.fn().mockResolvedValue({
+        import: vi.fn().mockResolvedValue({
           format: 'csv',
           recordCount: 500,
           source: '/data/import.csv',
@@ -257,7 +259,7 @@ describe('DumpWatcher', () => {
     it('should handle import failure', async () => {
       // Arrange
       const service = createDumpService({
-        import: jest.fn().mockRejectedValue(new Error('Import failed: invalid format')),
+        import: vi.fn().mockRejectedValue(new Error('Import failed: invalid format')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -284,7 +286,7 @@ describe('DumpWatcher', () => {
     it('should collect backup completed event', async () => {
       // Arrange
       const service = createDumpService({
-        backup: jest.fn().mockResolvedValue({
+        backup: vi.fn().mockResolvedValue({
           format: 'sql',
           fileSize: 10240,
           compressed: true,
@@ -320,7 +322,7 @@ describe('DumpWatcher', () => {
     it('should collect restore completed event', async () => {
       // Arrange
       const service = createDumpService({
-        restore: jest.fn().mockResolvedValue({
+        restore: vi.fn().mockResolvedValue({
           format: 'binary',
           recordCount: 1000,
           source: '/backups/db-snapshot.bin',
@@ -352,7 +354,7 @@ describe('DumpWatcher', () => {
     it('should collect migrate completed event', async () => {
       // Arrange
       const service = createDumpService({
-        migrate: jest.fn().mockResolvedValue({
+        migrate: vi.fn().mockResolvedValue({
           count: 15,
           source: 'old_db',
           destination: 'new_db',
@@ -407,7 +409,7 @@ describe('DumpWatcher', () => {
     it('should detect sql format', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ format: 'sql' }),
+        export: vi.fn().mockResolvedValue({ format: 'sql' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -427,7 +429,7 @@ describe('DumpWatcher', () => {
     it('should detect json format', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ type: 'json' }),
+        export: vi.fn().mockResolvedValue({ type: 'json' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -447,7 +449,7 @@ describe('DumpWatcher', () => {
     it('should detect csv format', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ format: 'CSV' }),
+        export: vi.fn().mockResolvedValue({ format: 'CSV' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -467,7 +469,7 @@ describe('DumpWatcher', () => {
     it('should detect binary format', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ format: 'binary' }),
+        export: vi.fn().mockResolvedValue({ format: 'binary' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -487,7 +489,7 @@ describe('DumpWatcher', () => {
     it('should default to json format', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({}),
+        export: vi.fn().mockResolvedValue({}),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -507,7 +509,7 @@ describe('DumpWatcher', () => {
     it('should detect format from options when result has none', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({}),
+        export: vi.fn().mockResolvedValue({}),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -533,7 +535,7 @@ describe('DumpWatcher', () => {
     it('should extract source from result', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ source: 'users_table' }),
+        export: vi.fn().mockResolvedValue({ source: 'users_table' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -553,7 +555,7 @@ describe('DumpWatcher', () => {
     it('should extract from field as source', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ from: 'products' }),
+        export: vi.fn().mockResolvedValue({ from: 'products' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -573,7 +575,7 @@ describe('DumpWatcher', () => {
     it('should extract destination from result', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ destination: '/backups/data.json' }),
+        export: vi.fn().mockResolvedValue({ destination: '/backups/data.json' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -593,7 +595,7 @@ describe('DumpWatcher', () => {
     it('should extract file field as destination', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ file: '/tmp/export.sql' }),
+        export: vi.fn().mockResolvedValue({ file: '/tmp/export.sql' }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -613,7 +615,7 @@ describe('DumpWatcher', () => {
     it('should extract recordCount from various fields', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ rows: 150 }),
+        export: vi.fn().mockResolvedValue({ rows: 150 }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -633,7 +635,7 @@ describe('DumpWatcher', () => {
     it('should extract fileSize from bytes field', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ bytes: 4096 }),
+        export: vi.fn().mockResolvedValue({ bytes: 4096 }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -653,7 +655,7 @@ describe('DumpWatcher', () => {
     it('should extract compressed flag', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ gzip: true }),
+        export: vi.fn().mockResolvedValue({ gzip: true }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -673,7 +675,7 @@ describe('DumpWatcher', () => {
     it('should extract encrypted flag', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue({ secure: true }),
+        export: vi.fn().mockResolvedValue({ secure: true }),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -816,7 +818,7 @@ describe('DumpWatcher', () => {
     it('should collect failed event on error', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockRejectedValue(new Error('Disk full')),
+        export: vi.fn().mockRejectedValue(new Error('Disk full')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -836,7 +838,7 @@ describe('DumpWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const service = createDumpService({
-        backup: jest.fn().mockRejectedValue(new Error('Permission denied')),
+        backup: vi.fn().mockRejectedValue(new Error('Permission denied')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -848,7 +850,7 @@ describe('DumpWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const service = createDumpService({
-        import: jest.fn().mockRejectedValue('String error'),
+        import: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -872,7 +874,7 @@ describe('DumpWatcher', () => {
     it('should extract options on failure', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockRejectedValue(new Error('Failed')),
+        export: vi.fn().mockRejectedValue(new Error('Failed')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -915,7 +917,7 @@ describe('DumpWatcher', () => {
     it('should handle null result', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue(null),
+        export: vi.fn().mockResolvedValue(null),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -948,7 +950,7 @@ describe('DumpWatcher', () => {
     it('should handle non-object result', async () => {
       // Arrange
       const service = createDumpService({
-        export: jest.fn().mockResolvedValue('success'),
+        export: vi.fn().mockResolvedValue('success'),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();

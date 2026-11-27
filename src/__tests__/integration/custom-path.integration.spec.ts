@@ -10,6 +10,7 @@
  * These tests pin the documented contract: the whole NestLens surface —
  * dashboard, API and tags — moves under the configured path together.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { INestApplication, Module, VersioningType } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -27,8 +28,8 @@ const bootWithPath = async (path?: string): Promise<INestApplication> => {
   return app;
 };
 
-// The dashboard's static bundle lives in `dist/`, which is absent when Jest runs
-// from `src/`. Route resolution is what matters here, so treat "route exists" as
+// The dashboard's static bundle lives in `dist/`, which is absent when the suite
+// runs from `src/`. Route resolution is what matters here, so treat "route exists" as
 // anything other than Nest's unmatched-route 404.
 const routeExists = (status: number, body: { message?: string }): boolean =>
   !(status === 404 && typeof body.message === 'string' && body.message.startsWith('Cannot GET'));

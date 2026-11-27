@@ -12,6 +12,8 @@
  * `forEach` where `filter` was meant returns `undefined`, which is how this
  * arrives in an application.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -26,12 +28,12 @@ const collectorWith = async (
   const saved: Entry[] = [];
 
   const storage: Partial<StorageInterface> = {
-    save: jest.fn(async (entry: Entry) => ({ ...entry, id: saved.length + 1 })),
-    saveBatch: jest.fn(async (entries: Entry[]) => {
+    save: vi.fn(async (entry: Entry) => ({ ...entry, id: saved.length + 1 })),
+    saveBatch: vi.fn(async (entries: Entry[]) => {
       saved.push(...entries);
       return entries.map((entry, index) => ({ ...entry, id: saved.length + index }));
     }),
-    updateFamilyHash: jest.fn(),
+    updateFamilyHash: vi.fn(),
   };
 
   const moduleRef = await Test.createTestingModule({
@@ -61,11 +63,11 @@ const record = async (collector: CollectorService, count = 1): Promise<void> => 
 
 describe('a batch filter that does not return a list', () => {
   let warnings: string[];
-  let warnSpy: jest.SpyInstance;
+  let warnSpy: MockInstance;
 
   beforeEach(() => {
     warnings = [];
-    warnSpy = jest
+    warnSpy = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation((message: unknown) => void warnings.push(String(message)));
   });

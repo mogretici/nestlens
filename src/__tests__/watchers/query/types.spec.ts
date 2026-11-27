@@ -1,3 +1,4 @@
+import { describe, it, expect, vi } from 'vitest';
 import {
   isLikelyTypeORMDataSource,
   isPrismaClient,
@@ -48,12 +49,12 @@ describe('Query type guards and module helpers', () => {
 
   describe('isPrismaClient', () => {
     it('returns true when $on is a function', () => {
-      const client: PrismaClient = { $on: jest.fn() };
+      const client: PrismaClient = { $on: vi.fn() };
       expect(isPrismaClient(client)).toBe(true);
     });
 
     it('returns true when $use is a function', () => {
-      const client: PrismaClient = { $use: jest.fn() };
+      const client: PrismaClient = { $use: vi.fn() };
       expect(isPrismaClient(client)).toBe(true);
     });
 

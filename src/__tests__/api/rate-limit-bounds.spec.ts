@@ -15,6 +15,7 @@
  * The limiter itself still has to work for the ordinary case, which is a
  * handful of callers, so these check both halves.
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { ExecutionContext, HttpException } from '@nestjs/common';
 import { NestLensGuard } from '../../api/api.guard';
 import { NestLensConfig } from '../../nestlens.config';
@@ -41,7 +42,7 @@ const address = (index: number): string =>
   `10.${(index >> 16) & 255}.${(index >> 8) & 255}.${index & 255}`;
 
 describe('the rate limiter', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let guard: NestLensGuard;
 

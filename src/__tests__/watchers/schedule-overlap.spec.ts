@@ -15,6 +15,7 @@
  * Both records wrong, and the one that says a failing job succeeded is the
  * worse of the two.
  */
+import { describe, it, expect } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';

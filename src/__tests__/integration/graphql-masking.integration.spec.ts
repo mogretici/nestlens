@@ -7,6 +7,7 @@
  * if both agree, and only safe if at least one of them acts — so this exercises
  * the pair on a payload shaped like the ones that were getting it wrong.
  */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { DataMaskerService } from '../../core/data-masker.service';
@@ -31,15 +32,15 @@ describe('GraphQL entries from watcher to storage', () => {
     saved = [];
 
     const storage: Partial<StorageInterface> = {
-      save: jest.fn(async (entry: Entry) => {
+      save: vi.fn(async (entry: Entry) => {
         saved.push(entry);
         return { ...entry, id: saved.length };
       }),
-      saveBatch: jest.fn(async (entries: Entry[]) => {
+      saveBatch: vi.fn(async (entries: Entry[]) => {
         saved.push(...entries);
         return entries;
       }),
-      updateFamilyHash: jest.fn(),
+      updateFamilyHash: vi.fn(),
     };
 
     const config: NestLensConfig = { enabled: true, watchers: { graphql: true } };
@@ -98,7 +99,7 @@ describe('GraphQL entries from watcher to storage', () => {
           extensions: { code: 'BAD_GATEWAY', token: 'leaked-upstream-token' },
         },
       ],
-      headers: { 'user-agent': 'jest' },
+      headers: { 'user-agent': 'test-client' },
       user: { id: 'u1', name: 'Wearer', email: 'wearer@example.com' },
     }) as unknown as GraphQLPayload;
 

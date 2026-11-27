@@ -12,6 +12,7 @@
  * alerting — and asks what the reader would ask: did the failure reach the
  * page, and did the pager ring.
  */
+import { it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import mercurius from 'mercurius';
 import { Test } from '@nestjs/testing';
@@ -32,7 +33,7 @@ import { describeMercurius } from '../support/mercurius-pairing';
 const WEBHOOK = 'http://alerts.test/hook';
 
 describeMercurius('a failing resolver, recorded and announced', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: FastifyInstance;
   let storage: MemoryStorage;

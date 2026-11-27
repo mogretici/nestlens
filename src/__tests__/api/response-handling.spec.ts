@@ -12,6 +12,7 @@
  * request. This test is what makes that failure visible on the machine of
  * whoever adds the handler, rather than in a user's application.
  */
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import { METHOD_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { RouteParamtypes } from '@nestjs/common/enums/route-paramtypes.enum';

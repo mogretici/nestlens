@@ -17,6 +17,7 @@
  * themselves, so neither is the only thing standing between a long string and
  * the event loop.
  */
+import { describe, it, expect } from 'vitest';
 import { FamilyHashService } from '../../core/family-hash.service';
 import { Entry } from '../../types';
 

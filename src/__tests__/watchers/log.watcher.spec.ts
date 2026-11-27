@@ -4,6 +4,8 @@
  * Tests for the logger that extends ConsoleLogger and collects log entries.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
+import type { Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,7 +13,7 @@ import { NestLensLogger } from '../../watchers/log.watcher';
 
 describe('NestLensLogger', () => {
   let logger: NestLensLogger;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   // Suppress console output during tests
@@ -31,10 +33,10 @@ describe('NestLensLogger', () => {
       debug: console.debug,
       verbose: console.log,
     };
-    console.log = jest.fn();
-    console.warn = jest.fn();
-    console.error = jest.fn();
-    console.debug = jest.fn();
+    console.log = vi.fn();
+    console.warn = vi.fn();
+    console.error = vi.fn();
+    console.debug = vi.fn();
   });
 
   afterAll(() => {
@@ -58,9 +60,9 @@ describe('NestLensLogger', () => {
 
   beforeEach(() => {
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,

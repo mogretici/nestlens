@@ -12,6 +12,7 @@
  * These go over real HTTP because the validation pipe is what does the work,
  * and calling the handler directly walks past it.
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';

@@ -4,6 +4,7 @@
  * What matters here is who gets in. The endpoint reaches an application's
  * recorded requests, so the tests are mostly about the ways it must say no.
  */
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -33,11 +34,11 @@ const tool = (
 });
 
 const fakeClient = () => {
-  const manifest = jest.fn(async (): Promise<NestLensToolManifest> => ({
+  const manifest = vi.fn(async (): Promise<NestLensToolManifest> => ({
     version: 1,
     tools: [tool('get_stats'), tool('clear', { method: 'DELETE', mutates: true })],
   }));
-  const invoke = jest.fn(async (t: NestLensToolDescriptor): Promise<unknown> => ({
+  const invoke = vi.fn(async (t: NestLensToolDescriptor): Promise<unknown> => ({
     data: { ran: t.name },
   }));
   return { client: { manifest, invoke } as unknown as NestLensClient, manifest, invoke };
@@ -279,12 +280,12 @@ describe('bearerToken', () => {
 });
 
 describe('a failure inside the server', () => {
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('answers 500 with a generic message, and writes the detail to stderr', async () => {
     const { server } = await start();
-    const stderr = jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    jest.spyOn(serverModule, 'createNestLensMcpServer').mockImplementation(() => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.spyOn(serverModule, 'createNestLensMcpServer').mockImplementation(() => {
       throw new Error('ENOENT /home/app/.secrets/token');
     });
 

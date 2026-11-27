@@ -16,6 +16,7 @@
  * These boot a real application on each arrangement a reader would write and
  * ask the host object whether it was wrapped.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { DynamicModule, Global, Injectable, Logger, Module, Provider, Scope } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import axios from 'axios';
@@ -175,7 +176,7 @@ const boot = async (
 };
 
 describe('a watcher handed a service under a token', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   describe.each(Object.keys(ARRANGEMENTS))('provided in %s', (where) => {
     it.each(CASES.map((c) => [c.watcher, c] as const))('%s finds it', async (_name, c) => {
@@ -219,7 +220,7 @@ describe('a watcher handed a service under a token', () => {
       }
     }
 
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const app = await boot(
       { watchers: { gate: true } },
       ARRANGEMENTS['the root module']({ provide: NESTLENS_GATE_SERVICE, useClass: ScopedGate }),
@@ -263,7 +264,7 @@ describe('a watcher handed a service under a token', () => {
       @Module({ providers: [{ provide: NESTLENS_GATE_SERVICE, useClass: PerRequestGate }] })
       class PerRequestGateModule {}
 
-      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       const app = await boot(
         { watchers: { gate: true } },
         {
@@ -299,7 +300,7 @@ describe('a watcher handed a service under a token', () => {
     @Module({ imports: [NestLensModule.forRoot({ path: '/lens-dup', watchers: { gate: true } })] })
     class DuplicateLensModule {}
 
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const app = await boot(
       { path: '/lens-main', watchers: { gate: true } },
       { imports: [FirstGateModule, SecondGateModule, DuplicateLensModule], providers: [] },
@@ -352,7 +353,7 @@ describe('a watcher handed a service under a token', () => {
    * for the same token. Both wrapped the host, so each call was recorded twice.
    */
   it('wraps a host once however many NestLensModules find it', async () => {
-    const collect = jest.spyOn(CollectorService.prototype, 'collect');
+    const collect = vi.spyOn(CollectorService.prototype, 'collect');
     const gate = { can: () => true };
 
     @Module({ imports: [NestLensModule.forRoot({ path: '/lens-b', watchers: { gate: true } })] })
@@ -433,7 +434,7 @@ describe('a watcher handed a service under a token', () => {
       ARRANGEMENTS['the root module']({ provide: NESTLENS_GATE_SERVICE, useValue: gate }),
     );
     const collector = app.get(CollectorService);
-    const collect = jest.spyOn(CollectorService.prototype, 'collect');
+    const collect = vi.spyOn(CollectorService.prototype, 'collect');
 
     gate.can();
     const ours = collect.mock.calls.filter(

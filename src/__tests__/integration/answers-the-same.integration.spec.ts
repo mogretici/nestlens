@@ -21,6 +21,7 @@
  *
  * This compares the two, response by response.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import {
   Body,
   Controller,
@@ -135,7 +136,7 @@ class BoomController {
 }
 
 describe('an application answers the same with NestLens as without', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let bare: INestApplication;
   let watched: INestApplication;

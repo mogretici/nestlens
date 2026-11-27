@@ -19,6 +19,7 @@
  * Those were caught downstream by the collector's own defaults, so they never
  * reached storage; a term the reader added had nothing behind it.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { HttpClientWatcher } from '../../watchers/http-client.watcher';

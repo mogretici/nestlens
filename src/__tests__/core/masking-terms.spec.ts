@@ -8,6 +8,7 @@
  * `{ replace: [...] }` is that way, and it has to be written out so it cannot
  * happen by accident.
  */
+import { describe, it, expect } from 'vitest';
 import { DataMaskerService } from '../../core/data-masker.service';
 import { replacesDefaults, resolveMaskingTerms } from '../../core/masking-terms';
 

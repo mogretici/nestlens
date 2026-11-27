@@ -1,3 +1,4 @@
+import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../nestlens.module';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
@@ -51,8 +52,8 @@ describe('NestLensModule', () => {
 
       it('should log warning when disabled', () => {
         // Arrange
-        const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
-        const loggerWarnSpy = jest.spyOn((NestLensModule as any).logger, 'warn');
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const loggerWarnSpy = vi.spyOn((NestLensModule as any).logger, 'warn');
         const config: NestLensConfig = { enabled: false };
 
         // Act
@@ -680,7 +681,7 @@ describe('NestLensModule', () => {
     it('should log initialization message', async () => {
       // Arrange
       const module = new NestLensModule({} as NestLensConfig);
-      const logSpy = jest.spyOn((NestLensModule as any).logger, 'log');
+      const logSpy = vi.spyOn((NestLensModule as any).logger, 'log');
 
       // Act
       await module.onModuleInit();

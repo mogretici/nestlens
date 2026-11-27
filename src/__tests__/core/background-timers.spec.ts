@@ -13,16 +13,17 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect, vi } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { PruningService } from '../../core/pruning.service';
 import { StorageInterface } from '../../core/storage/storage.interface';
 import { NestLensConfig } from '../../nestlens.config';
 
 const storage = {
-  save: jest.fn().mockResolvedValue({}),
-  saveBatch: jest.fn().mockResolvedValue([]),
-  prune: jest.fn().mockResolvedValue(0),
-  getStats: jest.fn().mockResolvedValue({ total: 0, byType: {} }),
+  save: vi.fn().mockResolvedValue({}),
+  saveBatch: vi.fn().mockResolvedValue([]),
+  prune: vi.fn().mockResolvedValue(0),
+  getStats: vi.fn().mockResolvedValue({ total: 0, byType: {} }),
 } as unknown as StorageInterface;
 
 const timerOf = (service: object, field: string): NodeJS.Timeout | undefined =>

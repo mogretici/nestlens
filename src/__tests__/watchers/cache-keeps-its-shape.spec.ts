@@ -14,6 +14,7 @@
  * `wrapMethodPreservingShape` exists. Eight watchers use it; this was the one
  * that did not.
  */
+import { describe, it, expect } from 'vitest';
 import { CacheWatcher } from '../../watchers/cache.watcher';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';

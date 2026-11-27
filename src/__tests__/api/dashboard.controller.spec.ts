@@ -5,6 +5,8 @@
  * host application's global interceptors cannot rewrite the dashboard's HTML
  * or assets. These tests capture what it hands to the HTTP adapter.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ApplicationConfig, HttpAdapterHost } from '@nestjs/core';
 import { NotFoundException, RequestMethod, StreamableFile } from '@nestjs/common';
@@ -13,11 +15,11 @@ import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
 
 // readFileSync is the only fs call that matters here; existsSync drives the
 // not-found paths.
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
+vi.mock('fs', () => ({
+  existsSync: vi.fn(),
   // The controller serves what the directory listing contains, so the mock has
   // to answer with the names the tests ask for.
-  readdirSync: jest.fn(() => [
+  readdirSync: vi.fn(() => [
     'main.js',
     'styles.css',
     'font.woff2',
@@ -30,7 +32,7 @@ jest.mock('fs', () => ({
     'icon.svg',
     'logo.svg',
   ]),
-  readFileSync: jest.fn(() => Buffer.from('<html><head></head><body></body></html>')),
+  readFileSync: vi.fn(() => Buffer.from('<html><head></head><body></body></html>')),
 }));
 
 import { existsSync, readFileSync } from 'fs';
@@ -101,8 +103,8 @@ describe('DashboardController', () => {
   };
 
   beforeEach(async () => {
-    (existsSync as jest.Mock).mockReset().mockReturnValue(true);
-    (readFileSync as jest.Mock)
+    (existsSync as Mock).mockReset().mockReturnValue(true);
+    (readFileSync as Mock)
       .mockReset()
       .mockReturnValue(Buffer.from('<html><head></head><body></body></html>'));
     controller = await build();
@@ -132,7 +134,7 @@ describe('DashboardController', () => {
     });
 
     it('throws NotFoundException when the bundle is missing', () => {
-      (existsSync as jest.Mock).mockReturnValue(false);
+      (existsSync as Mock).mockReturnValue(false);
 
       expect(() => controller.serveDashboard(RES)).toThrow(NotFoundException);
     });
@@ -266,7 +268,7 @@ describe('DashboardController', () => {
     });
 
     it('throws NotFoundException when the asset is missing', () => {
-      (existsSync as jest.Mock).mockReturnValue(false);
+      (existsSync as Mock).mockReturnValue(false);
 
       expect(() => controller.serveAssets('nope.js', RES)).toThrow(NotFoundException);
     });
@@ -279,7 +281,7 @@ describe('DashboardController', () => {
       controller.serveAssets('main.js', RES);
       controller.serveAssets('main.js', RES);
 
-      expect(readFileSync as jest.Mock).toHaveBeenCalledTimes(1);
+      expect(readFileSync as Mock).toHaveBeenCalledTimes(1);
       expect(written.status).toBe(200);
     });
 
@@ -290,7 +292,7 @@ describe('DashboardController', () => {
      * — is a 404 rather than the ENOENT it would otherwise become.
      */
     it('turns a file that vanished into a 404', () => {
-      (readFileSync as jest.Mock).mockImplementationOnce(() => {
+      (readFileSync as Mock).mockImplementationOnce(() => {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
       });
 
@@ -331,7 +333,7 @@ describe('DashboardController', () => {
     });
 
     it('throws NotFoundException when the file is missing', () => {
-      (existsSync as jest.Mock).mockReturnValue(false);
+      (existsSync as Mock).mockReturnValue(false);
 
       expect(() => controller.serveStaticFile('nope', RES)).toThrow(NotFoundException);
     });

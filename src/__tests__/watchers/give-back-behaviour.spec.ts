@@ -15,6 +15,7 @@
  *
  * Three lifecycles against one object, then: is the object as it was found?
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig } from '../../nestlens.config';
 import { CacheWatcher } from '../../watchers/cache.watcher';

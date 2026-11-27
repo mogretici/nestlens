@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from 'vitest';
 import { FamilyHashService } from '../core/family-hash.service';
 import { ExceptionEntry, QueryEntry, LogEntry, RequestEntry } from '../types';
 

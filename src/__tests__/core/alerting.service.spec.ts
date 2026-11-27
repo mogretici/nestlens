@@ -1,3 +1,5 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { Subject } from 'rxjs';
 import { AlertingService } from '../../core/alerting.service';
 import { CollectorService } from '../../core/collector.service';
@@ -6,7 +8,7 @@ import { Entry, ExceptionEntry } from '../../types';
 
 describe('AlertingService', () => {
   let stream: Subject<Entry>;
-  let fetchMock: jest.Mock;
+  let fetchMock: Mock;
   let clock: number;
 
   const exceptionEntry = (overrides: Partial<ExceptionEntry['payload']> = {}): ExceptionEntry =>
@@ -32,14 +34,14 @@ describe('AlertingService', () => {
   beforeEach(() => {
     stream = new Subject<Entry>();
     clock = 1_000_000;
-    fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
 
     (global as any).fetch = fetchMock;
   });
 
   afterEach(() => {
     stream.complete();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   const flush = (): Promise<void> => new Promise((r) => setImmediate(r));

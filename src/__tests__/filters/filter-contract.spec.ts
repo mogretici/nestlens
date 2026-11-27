@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
 import * as path from 'node:path';
 import * as ts from 'typescript';

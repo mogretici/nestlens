@@ -11,6 +11,7 @@
  * consulted, and a monitored tag does not stand in the way. Monitoring says
  * *do not let pruning take these*; pressing delete says something else.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -29,7 +30,7 @@ const entry = (type: EntryType, i: number): Entry =>
   }) as unknown as Entry;
 
 describe('clearing entries', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
 

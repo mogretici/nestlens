@@ -12,6 +12,7 @@
  * methods the watcher is about to call — which is how the TypeORM half has
  * always found its DataSources.
  */
+import { describe, it, expect, vi } from 'vitest';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../../nestlens.config';
@@ -192,7 +193,7 @@ describe('a Prisma 6.14+ or 7 client, which has no $use', () => {
   });
 
   it('says once, and exactly how, when the client was built without query logging', async () => {
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     try {
       await build([prismaSixClient(false).client, prismaSixClient(false).client]);
@@ -207,7 +208,7 @@ describe('a Prisma 6.14+ or 7 client, which has no $use', () => {
   });
 
   it('says nothing about a client whose configuration it cannot read', async () => {
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const prisma = prismaSixClient(false);
     delete (prisma.client as { _engineConfig?: unknown })._engineConfig;
 
@@ -222,7 +223,7 @@ describe('a Prisma 6.14+ or 7 client, which has no $use', () => {
   });
 
   it('names both ways of turning query logging on', async () => {
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     try {
       await build([prismaSixClient(false).client]);
@@ -234,7 +235,7 @@ describe('a Prisma 6.14+ or 7 client, which has no $use', () => {
   });
 
   it('says nothing when query logging is on', async () => {
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     try {
       await build([prismaSixClient(true).client]);

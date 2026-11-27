@@ -4,6 +4,8 @@
  * Tests for the notification watcher that monitors multi-channel notifications.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -14,25 +16,25 @@ import {
 
 describe('NotificationWatcher', () => {
   let watcher: NotificationWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createNotificationService = (
     overrides: Partial<{
-      sendEmail: jest.Mock;
-      sendSms: jest.Mock;
-      sendPush: jest.Mock;
-      sendSocket: jest.Mock;
-      sendWebhook: jest.Mock;
-      send: jest.Mock;
+      sendEmail: Mock;
+      sendSms: Mock;
+      sendPush: Mock;
+      sendSocket: Mock;
+      sendWebhook: Mock;
+      send: Mock;
     }> = {},
   ) => ({
-    sendEmail: jest.fn().mockResolvedValue({ messageId: 'email-123' }),
-    sendSms: jest.fn().mockResolvedValue({ messageId: 'sms-123' }),
-    sendPush: jest.fn().mockResolvedValue({ messageId: 'push-123' }),
-    sendSocket: jest.fn().mockResolvedValue({ delivered: true }),
-    sendWebhook: jest.fn().mockResolvedValue({ status: 200 }),
-    send: jest.fn().mockResolvedValue({ success: true }),
+    sendEmail: vi.fn().mockResolvedValue({ messageId: 'email-123' }),
+    sendSms: vi.fn().mockResolvedValue({ messageId: 'sms-123' }),
+    sendPush: vi.fn().mockResolvedValue({ messageId: 'push-123' }),
+    sendSocket: vi.fn().mockResolvedValue({ delivered: true }),
+    sendWebhook: vi.fn().mockResolvedValue({ status: 200 }),
+    send: vi.fn().mockResolvedValue({ success: true }),
     ...overrides,
   });
 
@@ -58,12 +60,12 @@ describe('NotificationWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -161,7 +163,7 @@ describe('NotificationWatcher', () => {
     it('should skip missing methods', async () => {
       // Arrange
       const partialService = {
-        sendEmail: jest.fn().mockResolvedValue({}),
+        sendEmail: vi.fn().mockResolvedValue({}),
         // Other methods missing
       } as any;
       watcher = await createWatcher(mockConfig, partialService);
@@ -203,7 +205,7 @@ describe('NotificationWatcher', () => {
     it('should calculate notification duration', async () => {
       // Arrange
       const service = createNotificationService({
-        sendEmail: jest
+        sendEmail: vi
           .fn()
           .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({}), 50))),
       });
@@ -228,7 +230,7 @@ describe('NotificationWatcher', () => {
       // Arrange
       const expectedResult = { messageId: 'abc-123', accepted: true };
       const service = createNotificationService({
-        sendEmail: jest.fn().mockResolvedValue(expectedResult),
+        sendEmail: vi.fn().mockResolvedValue(expectedResult),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -392,7 +394,7 @@ describe('NotificationWatcher', () => {
     it('should collect failed notification', async () => {
       // Arrange
       const service = createNotificationService({
-        sendEmail: jest.fn().mockRejectedValue(new Error('SMTP connection failed')),
+        sendEmail: vi.fn().mockRejectedValue(new Error('SMTP connection failed')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -414,7 +416,7 @@ describe('NotificationWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const service = createNotificationService({
-        sendSms: jest.fn().mockRejectedValue(new Error('SMS gateway error')),
+        sendSms: vi.fn().mockRejectedValue(new Error('SMS gateway error')),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();
@@ -428,7 +430,7 @@ describe('NotificationWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const service = createNotificationService({
-        sendPush: jest.fn().mockRejectedValue('String error'),
+        sendPush: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, service);
       watcher.onModuleInit();

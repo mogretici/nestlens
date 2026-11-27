@@ -13,6 +13,7 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
+import { describe, it, expect } from 'vitest';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import {
   compress,

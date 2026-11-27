@@ -8,6 +8,7 @@
  * separates them is the code, the message, and whether a stack goes out —
  * which is the part that reaches somebody who has just been refused.
  */
+import { describe, it, expect } from 'vitest';
 import { ArgumentsHost, BadRequestException, HttpStatus, NotFoundException } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { NestLensApiExceptionFilter } from '../../api/filters/api-exception.filter';

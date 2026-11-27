@@ -15,6 +15,7 @@
  * the process is still here, the client got its response, and the entry says
  * what was thrown.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
@@ -57,7 +58,7 @@ class ThrowingController {
 }
 
 describe('a controller that throws a non-Error', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   let app: INestApplication;
   let url: string;

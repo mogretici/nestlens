@@ -22,6 +22,7 @@
  * Their manual `track*` methods are the documented way to use them, and there
  * was no way to hold one.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 

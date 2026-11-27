@@ -10,6 +10,7 @@
  * without anybody hearing about it, which is how `subscriptions` came to be
  * five settings that did nothing.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../../core/collector.service';
 import { createApolloAdapter } from '../../../watchers/graphql/adapters/apollo.adapter';
 import { resolveGraphQLConfig } from '../../../watchers/graphql/types';

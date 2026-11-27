@@ -14,6 +14,7 @@
  * A subscription is the one thing NestLens watches that lives for hours, so
  * work per message and bytes per message are the two figures that matter.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../../core/collector.service';
 import { createSubscriptionTracker } from '../../../watchers/graphql/subscription/subscription.tracker';
 import { sanitizeResponse } from '../../../watchers/graphql/utils/variable-sanitizer';

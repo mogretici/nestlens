@@ -17,6 +17,7 @@
  * So this asserts the thing the deployment actually needed: a logger the host
  * installed before `listen()` is still the one in use afterwards.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Controller, Get, INestApplication, Logger, LoggerService, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';

@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ApolloAdapter } from '../../../watchers/graphql/adapters/apollo.adapter';
 import { resolveGraphQLConfig } from '../../../watchers/graphql/types';
 import { CollectorService } from '../../../core';
@@ -19,10 +20,10 @@ describe('Apollo plugin registered twice', () => {
   const collected: string[] = [];
 
   const collector = {
-    collect: jest.fn(async (type: string) => {
+    collect: vi.fn(async (type: string) => {
       collected.push(type);
     }),
-    collectImmediate: jest.fn(async (type: string) => {
+    collectImmediate: vi.fn(async (type: string) => {
       collected.push(type);
       return null;
     }),
@@ -46,7 +47,7 @@ describe('Apollo plugin registered twice', () => {
 
   beforeEach(() => {
     collected.length = 0;
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('starts the operation once when two plugins receive it', async () => {

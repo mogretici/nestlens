@@ -18,6 +18,7 @@
  * The injection is escaped for its context regardless, because a defence that
  * depends on a second one staying correct is one defence.
  */
+import { describe, it, expect } from 'vitest';
 import { toBaseHref, toRoutePrefix } from '../../api/route-path';
 
 describe('the configured mount path', () => {

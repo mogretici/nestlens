@@ -4,6 +4,8 @@
  * Tests for the redis watcher that monitors Redis operations.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,63 +13,63 @@ import { RedisWatcher, NESTLENS_REDIS_CLIENT } from '../../watchers/redis.watche
 
 describe('RedisWatcher', () => {
   let watcher: RedisWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
 
   const createRedisClient = (
     overrides: Partial<{
-      get: jest.Mock;
-      set: jest.Mock;
-      del: jest.Mock;
-      exists: jest.Mock;
-      expire: jest.Mock;
-      ttl: jest.Mock;
-      incr: jest.Mock;
-      decr: jest.Mock;
-      lpush: jest.Mock;
-      rpush: jest.Mock;
-      lpop: jest.Mock;
-      rpop: jest.Mock;
-      lrange: jest.Mock;
-      hget: jest.Mock;
-      hset: jest.Mock;
-      hdel: jest.Mock;
-      hgetall: jest.Mock;
-      sadd: jest.Mock;
-      srem: jest.Mock;
-      smembers: jest.Mock;
-      zadd: jest.Mock;
-      zrem: jest.Mock;
-      zrange: jest.Mock;
-      mget: jest.Mock;
-      mset: jest.Mock;
+      get: Mock;
+      set: Mock;
+      del: Mock;
+      exists: Mock;
+      expire: Mock;
+      ttl: Mock;
+      incr: Mock;
+      decr: Mock;
+      lpush: Mock;
+      rpush: Mock;
+      lpop: Mock;
+      rpop: Mock;
+      lrange: Mock;
+      hget: Mock;
+      hset: Mock;
+      hdel: Mock;
+      hgetall: Mock;
+      sadd: Mock;
+      srem: Mock;
+      smembers: Mock;
+      zadd: Mock;
+      zrem: Mock;
+      zrange: Mock;
+      mget: Mock;
+      mset: Mock;
     }> = {},
   ) => ({
-    get: jest.fn().mockResolvedValue('value'),
-    set: jest.fn().mockResolvedValue('OK'),
-    del: jest.fn().mockResolvedValue(1),
-    exists: jest.fn().mockResolvedValue(1),
-    expire: jest.fn().mockResolvedValue(1),
-    ttl: jest.fn().mockResolvedValue(3600),
-    incr: jest.fn().mockResolvedValue(1),
-    decr: jest.fn().mockResolvedValue(0),
-    lpush: jest.fn().mockResolvedValue(1),
-    rpush: jest.fn().mockResolvedValue(1),
-    lpop: jest.fn().mockResolvedValue('item'),
-    rpop: jest.fn().mockResolvedValue('item'),
-    lrange: jest.fn().mockResolvedValue(['item1', 'item2']),
-    hget: jest.fn().mockResolvedValue('field-value'),
-    hset: jest.fn().mockResolvedValue(1),
-    hdel: jest.fn().mockResolvedValue(1),
-    hgetall: jest.fn().mockResolvedValue({ field: 'value' }),
-    sadd: jest.fn().mockResolvedValue(1),
-    srem: jest.fn().mockResolvedValue(1),
-    smembers: jest.fn().mockResolvedValue(['member1', 'member2']),
-    zadd: jest.fn().mockResolvedValue(1),
-    zrem: jest.fn().mockResolvedValue(1),
-    zrange: jest.fn().mockResolvedValue(['item1', 'item2']),
-    mget: jest.fn().mockResolvedValue(['value1', 'value2']),
-    mset: jest.fn().mockResolvedValue('OK'),
+    get: vi.fn().mockResolvedValue('value'),
+    set: vi.fn().mockResolvedValue('OK'),
+    del: vi.fn().mockResolvedValue(1),
+    exists: vi.fn().mockResolvedValue(1),
+    expire: vi.fn().mockResolvedValue(1),
+    ttl: vi.fn().mockResolvedValue(3600),
+    incr: vi.fn().mockResolvedValue(1),
+    decr: vi.fn().mockResolvedValue(0),
+    lpush: vi.fn().mockResolvedValue(1),
+    rpush: vi.fn().mockResolvedValue(1),
+    lpop: vi.fn().mockResolvedValue('item'),
+    rpop: vi.fn().mockResolvedValue('item'),
+    lrange: vi.fn().mockResolvedValue(['item1', 'item2']),
+    hget: vi.fn().mockResolvedValue('field-value'),
+    hset: vi.fn().mockResolvedValue(1),
+    hdel: vi.fn().mockResolvedValue(1),
+    hgetall: vi.fn().mockResolvedValue({ field: 'value' }),
+    sadd: vi.fn().mockResolvedValue(1),
+    srem: vi.fn().mockResolvedValue(1),
+    smembers: vi.fn().mockResolvedValue(['member1', 'member2']),
+    zadd: vi.fn().mockResolvedValue(1),
+    zrem: vi.fn().mockResolvedValue(1),
+    zrange: vi.fn().mockResolvedValue(['item1', 'item2']),
+    mget: vi.fn().mockResolvedValue(['value1', 'value2']),
+    mset: vi.fn().mockResolvedValue('OK'),
     ...overrides,
   });
 
@@ -93,12 +95,12 @@ describe('RedisWatcher', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockConfig = {
       enabled: true,
@@ -216,7 +218,7 @@ describe('RedisWatcher', () => {
     it('should collect successful get operation', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('cached-value'),
+        get: vi.fn().mockResolvedValue('cached-value'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -239,7 +241,7 @@ describe('RedisWatcher', () => {
     it('should calculate command duration', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest
+        get: vi
           .fn()
           .mockImplementation(
             () => new Promise((resolve) => setTimeout(() => resolve('value'), 50)),
@@ -265,7 +267,7 @@ describe('RedisWatcher', () => {
     it('should return original result', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('original'),
+        get: vi.fn().mockResolvedValue('original'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -528,7 +530,7 @@ describe('RedisWatcher', () => {
     it('should collect error status', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockRejectedValue(new Error('Connection refused')),
+        get: vi.fn().mockRejectedValue(new Error('Connection refused')),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -548,7 +550,7 @@ describe('RedisWatcher', () => {
     it('should re-throw the error', async () => {
       // Arrange
       const client = createRedisClient({
-        set: jest.fn().mockRejectedValue(new Error('Timeout')),
+        set: vi.fn().mockRejectedValue(new Error('Timeout')),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -560,7 +562,7 @@ describe('RedisWatcher', () => {
     it('should handle non-Error objects', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockRejectedValue('String error'),
+        get: vi.fn().mockRejectedValue('String error'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -590,7 +592,7 @@ describe('RedisWatcher', () => {
     it('should mask password key values', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('secret-password'),
+        get: vi.fn().mockResolvedValue('secret-password'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -610,7 +612,7 @@ describe('RedisWatcher', () => {
     it('should mask token key values', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('jwt-token-123'),
+        get: vi.fn().mockResolvedValue('jwt-token-123'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -630,7 +632,7 @@ describe('RedisWatcher', () => {
     it('should mask secret key values', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('api-secret'),
+        get: vi.fn().mockResolvedValue('api-secret'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -650,7 +652,7 @@ describe('RedisWatcher', () => {
     it('should mask session key values', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('session-data'),
+        get: vi.fn().mockResolvedValue('session-data'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -688,7 +690,7 @@ describe('RedisWatcher', () => {
     it('should not mask non-sensitive keys', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('normal-value'),
+        get: vi.fn().mockResolvedValue('normal-value'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -715,7 +717,7 @@ describe('RedisWatcher', () => {
       // Arrange
       const largeValue = 'x'.repeat(5000);
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue(largeValue),
+        get: vi.fn().mockResolvedValue(largeValue),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -763,7 +765,7 @@ describe('RedisWatcher', () => {
       // Arrange
       mockConfig.watchers = { redis: { enabled: true, maxResultSize: 0 } };
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue('super-secret-session-token'),
+        get: vi.fn().mockResolvedValue('super-secret-session-token'),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -788,7 +790,7 @@ describe('RedisWatcher', () => {
       mockConfig.watchers = { redis: { enabled: true, maxResultSize: 100 } };
       const mediumValue = 'x'.repeat(200);
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue(mediumValue),
+        get: vi.fn().mockResolvedValue(mediumValue),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -814,7 +816,7 @@ describe('RedisWatcher', () => {
     it('should handle null result', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue(null),
+        get: vi.fn().mockResolvedValue(null),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -834,7 +836,7 @@ describe('RedisWatcher', () => {
     it('should handle empty args', async () => {
       // Arrange
       const client = createRedisClient({
-        get: jest.fn().mockResolvedValue(null),
+        get: vi.fn().mockResolvedValue(null),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();
@@ -891,7 +893,7 @@ describe('RedisWatcher', () => {
       const circularObj: any = {};
       circularObj.self = circularObj;
       const client = createRedisClient({
-        hgetall: jest.fn().mockResolvedValue(circularObj),
+        hgetall: vi.fn().mockResolvedValue(circularObj),
       });
       watcher = await createWatcher(mockConfig, client);
       watcher.onModuleInit();

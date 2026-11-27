@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { parseCliOptions } from '../../mcp/cli';
 
 describe('parseCliOptions', () => {

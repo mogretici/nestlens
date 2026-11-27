@@ -14,6 +14,7 @@
  * each started was never emptied either — one entry per job, for the life of
  * the process.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { JobWatcher } from '../../watchers/job.watcher';
 import { NestLensConfig } from '../../nestlens.config';

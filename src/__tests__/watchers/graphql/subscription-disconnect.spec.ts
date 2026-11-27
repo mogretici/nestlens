@@ -16,6 +16,7 @@
  * blip — is how a subscription ordinarily ends, so the page showed every one
  * of them still running.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../../core/collector.service';
 import { GraphQLPayload } from '../../../types';
 import { SubscriptionTracker } from '../../../watchers/graphql/subscription/subscription.tracker';
@@ -45,7 +46,7 @@ const build = () => {
 const runOne = async (): Promise<ReturnType<typeof build>> => {
   const built = build();
 
-  built.tracker.handleConnection('c1', '127.0.0.1', 'jest', 'graphql-ws');
+  built.tracker.handleConnection('c1', '127.0.0.1', 'test-client', 'graphql-ws');
   await built.tracker.handleStart({
     connectionId: 'c1',
     subscriptionId: 's1',

@@ -11,6 +11,7 @@
  * application. It also means the loss is silent, and `dropped` is the only
  * place it shows.
  */
+import { describe, it, expect, afterEach } from 'vitest';
 import { CollectorService } from '../../core/collector.service';
 import { MemoryStorage } from '../../core/storage/memory.storage';
 import { NestLensConfig } from '../../nestlens.config';

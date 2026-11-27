@@ -14,6 +14,7 @@
  * `exceptions: 0`; eight deliberately broken queries produced four `graphql`
  * entries with `hasErrors: true` while the exception count stayed at zero.
  */
+import { describe, it, expect, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import mercurius from 'mercurius';
 import { CollectorService } from '../../../core/collector.service';
@@ -53,7 +54,7 @@ const recorder = (): { collector: CollectorService; collected: Collected[] } => 
 };
 
 describeMercurius('a resolver that throws, on Mercurius', () => {
-  jest.setTimeout(30_000);
+  vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
   const ask = async (
     query: string,

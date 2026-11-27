@@ -17,6 +17,7 @@
  * CI builds first now. This exists so the arrangement is visible — a skip that
  * nobody can see is a test that does not exist.
  */
+import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 

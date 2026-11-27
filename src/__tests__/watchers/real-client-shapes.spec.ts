@@ -15,6 +15,7 @@
  * Both were found from outside. These take the shapes from the installed
  * packages instead, which is the only way a fake cannot drift.
  */
+import { describe, it, expect, vi } from 'vitest';
 import axios from 'axios';
 import { HttpService } from '@nestjs/axios';
 import { Test } from '@nestjs/testing';
@@ -32,7 +33,7 @@ const watcherOver = async <T>(
   const module = await Test.createTestingModule({
     providers: [
       Watcher,
-      { provide: CollectorService, useValue: { collect: jest.fn(), collectImmediate: jest.fn() } },
+      { provide: CollectorService, useValue: { collect: vi.fn(), collectImmediate: vi.fn() } },
       { provide: NESTLENS_CONFIG, useValue: config },
       { provide: token, useValue: client },
     ],
@@ -135,7 +136,7 @@ describe('the cache watcher, against cache-manager', () => {
           provide: CollectorService,
           useValue: {
             collect: (_type: string, payload: unknown) => void collected.push(payload),
-            collectImmediate: jest.fn(),
+            collectImmediate: vi.fn(),
           },
         },
         { provide: NESTLENS_CONFIG, useValue: { watchers: { cache: { enabled: true } } } },
@@ -176,7 +177,7 @@ describe('the cache watcher, against cache-manager', () => {
           useValue: {
             collect: (_type: string, payload: { operation: string; key: string }) =>
               void collected.push(payload),
-            collectImmediate: jest.fn(),
+            collectImmediate: vi.fn(),
           },
         },
         { provide: NESTLENS_CONFIG, useValue: { watchers: { cache: { enabled: true } } } },

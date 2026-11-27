@@ -13,6 +13,7 @@
  * The window is compared as text, which is what `createdAt` is on every
  * backend and what SQLite's index can answer.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -25,7 +26,7 @@ import { Entry } from '../../../types';
 const REDIS_URL = process.env.REDIS_URL;
 
 describe('the window and the duration', () => {
-  jest.setTimeout(60_000);
+  vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

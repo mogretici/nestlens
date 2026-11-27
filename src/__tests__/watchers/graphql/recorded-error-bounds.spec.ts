@@ -14,6 +14,7 @@
  * one field over: bounded in depth, unbounded in size, so a 100KB argument was
  * stored whole.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../../core/collector.service';
 import { createApolloAdapter } from '../../../watchers/graphql/adapters/apollo.adapter';
 import { resolveGraphQLConfig } from '../../../watchers/graphql/types';

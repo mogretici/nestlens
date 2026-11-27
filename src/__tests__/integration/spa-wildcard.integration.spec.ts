@@ -14,6 +14,7 @@
  * versions this machine cannot install; the compatibility matrix in CI runs the
  * whole thing on NestJS 9, 10, 11 and 12.
  */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ConsoleLogger, INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
@@ -145,8 +146,8 @@ describeWithDashboard('the mounted catch-all', () => {
 
     // Act
     app = await NestFactory.create(AppModule, new ExpressAdapter(), { logger });
-    // Under ts-jest the controller resolves the bundle relative to `src/`; the
-    // build puts it under `dist/`.
+    // Run from source, the controller resolves the bundle relative to `src/`;
+    // the build puts it under `dist/`.
     (app.get(DashboardController) as unknown as { dashboardPath: string }).dashboardPath =
       dashboardPublic;
     await app.listen(0, '127.0.0.1');

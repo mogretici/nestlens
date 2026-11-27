@@ -19,6 +19,7 @@
  * checks all of them at once, so the next watcher that borrows something is
  * caught by the suite rather than by a fourth round.
  */
+import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 

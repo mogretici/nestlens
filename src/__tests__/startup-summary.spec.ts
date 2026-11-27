@@ -7,6 +7,7 @@
  * a store recording health checks and nothing else, a webhook that could not
  * fire — and three of the four are visible here the moment the process starts.
  */
+import { describe, it, expect } from 'vitest';
 import { startupSummary } from '../startup-summary';
 import { NestLensConfig } from '../nestlens.config';
 

@@ -7,6 +7,7 @@
  * so the decision is made from the request id and every entry under that id
  * gets the same answer.
  */
+import { describe, it, expect } from 'vitest';
 import { createSampler } from '../../core/sampling';
 import { Entry } from '../../types';
 

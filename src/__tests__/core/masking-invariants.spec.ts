@@ -15,6 +15,7 @@
  *   3. what it returns is bounded, whatever came in
  *   4. what it returns carries no value a sensitive name was attached to
  */
+import { describe, it, expect } from 'vitest';
 import { DataMaskerService } from '../../core/data-masker.service';
 import { serializePayload } from '../../core/storage/serialize-payload';
 

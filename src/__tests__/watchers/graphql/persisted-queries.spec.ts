@@ -16,6 +16,7 @@
  * fifteen minutes, a handful of entries, and months of a dashboard showing a
  * fraction of the traffic.
  */
+import { describe, it, expect } from 'vitest';
 import { CollectorService } from '../../../core/collector.service';
 import { ApolloAdapter } from '../../../watchers/graphql/adapters/apollo.adapter';
 import { GraphQLPayload } from '../../../types';

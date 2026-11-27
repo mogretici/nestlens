@@ -1,6 +1,12 @@
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { createStorage } from '../../../core/storage/storage.factory';
 import { MemoryStorage } from '../../../core/storage/memory.storage';
+import { RedisStorage } from '../../../core/storage/redis.storage';
+
+// Nothing in this file uses a real Redis store; the redis-driver tests choose
+// what the constructor and `initialize` do.
+vi.mock('../../../core/storage/redis.storage', () => ({ RedisStorage: vi.fn() }));
 
 describe('createStorage', () => {
   describe('memory driver', () => {
@@ -56,54 +62,52 @@ describe('createStorage', () => {
    * This used to build a real client against localhost:6379 inside a
    * `try`/`catch` whose `catch` only ran when ioredis was missing — and ioredis
    * is a devDependency here, so it never was. The test asserted nothing, and it
-   * left a client behind reconnecting forever, which is why jest stopped
-   * exiting after this file.
+   * left a client behind reconnecting forever, which is why the test run
+   * stopped exiting after this file.
    *
    * The behaviour worth testing is the one a consumer hits: they picked the
    * redis driver without installing ioredis, and the message has to tell them
-   * what to do. That is reproduced by making the module unresolvable.
+   * what to do. That is reproduced by a store that fails the way a missing
+   * module does.
    */
   describe('redis driver', () => {
     /**
-     * Isolated rather than reset afterwards: a bare `jest.resetModules()` gives
-     * the rest of the file a second copy of every module, and `toBeInstanceOf`
-     * then fails with "Expected MemoryStorage, received MemoryStorage".
+     * The constructor throws rather than the module: Vitest wraps an error
+     * thrown by a mock factory in its own, without the `code` this branches on.
+     * Both the import and the construction sit inside the one `try`.
      */
-    const withMockedRedisStorage = async (
-      factory: () => unknown,
-      assert: (attempt: Promise<unknown>) => Promise<void>,
-    ): Promise<void> =>
-      jest.isolateModulesAsync(async () => {
-        jest.doMock('../../../core/storage/redis.storage', factory);
-        const { createStorage: isolated } = await import('../../../core/storage/storage.factory');
-
-        await assert(isolated({ driver: 'redis', redis: { host: 'localhost' } }));
-      });
-
     it('explains how to install ioredis when it is missing', async () => {
-      await withMockedRedisStorage(
-        () => {
-          const error = new Error("Cannot find module 'ioredis'") as NodeJS.ErrnoException;
-          error.code = 'MODULE_NOT_FOUND';
-          throw error;
-        },
-        (attempt) => expect(attempt).rejects.toThrow(/npm install ioredis/),
+      vi.mocked(RedisStorage).mockImplementationOnce(
+        class {
+          constructor() {
+            const error = new Error("Cannot find module 'ioredis'") as NodeJS.ErrnoException;
+            error.code = 'MODULE_NOT_FOUND';
+            throw error;
+          }
+        } as unknown as typeof RedisStorage,
       );
+
+      await expect(
+        createStorage({ driver: 'redis', redis: { host: 'localhost' } }),
+      ).rejects.toThrow(/npm install ioredis/);
     });
 
     it('passes other failures through rather than blaming the install', async () => {
-      await withMockedRedisStorage(
-        () => ({
-          RedisStorage: class {
-            async initialize(): Promise<void> {
-              throw new Error('WRONGPASS invalid username-password pair');
-            }
-          },
-        }),
-        // A bad password is not a missing package, and saying so would send the
-        // reader off installing something they already have.
-        (attempt) => expect(attempt).rejects.toThrow(/WRONGPASS/),
+      vi.mocked(RedisStorage).mockImplementationOnce(
+        // An instance field: Vitest constructs with the mock as `new.target`,
+        // so methods on this class's prototype would not reach the instance.
+        class {
+          initialize = async (): Promise<void> => {
+            throw new Error('WRONGPASS invalid username-password pair');
+          };
+        } as unknown as typeof RedisStorage,
       );
+
+      // A bad password is not a missing package, and saying so would send the
+      // reader off installing something they already have.
+      await expect(
+        createStorage({ driver: 'redis', redis: { host: 'localhost' } }),
+      ).rejects.toThrow(/WRONGPASS/);
     });
   });
 
@@ -186,7 +190,7 @@ describe('createStorage', () => {
     it('warns that memory storage cannot be shared between workers', async () => {
       // Arrange
       process.env.NODE_APP_INSTANCE = '2';
-      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
       // Act
       const storage = await createStorage({ driver: 'memory' });
@@ -201,7 +205,7 @@ describe('createStorage', () => {
     it('stays quiet in a single process', async () => {
       // Arrange
       delete process.env.NODE_APP_INSTANCE;
-      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
       // Act
       const storage = await createStorage({ driver: 'memory' });

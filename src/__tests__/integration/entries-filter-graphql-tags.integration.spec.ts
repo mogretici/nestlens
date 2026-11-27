@@ -12,6 +12,7 @@
  *   - case-insensitive tag filtering (badge click), and
  *   - search matching entry tags (search-by-tag feature).
  */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import 'reflect-metadata';
 import { Controller, Get, INestApplication, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -59,7 +60,7 @@ describe('Entries filter pipe + GraphQL tags + search (real HTTP)', () => {
       duration: 12,
       statusCode: 200,
       hasErrors: false,
-      headers: { authorization: '***', 'user-agent': 'jest' },
+      headers: { authorization: '***', 'user-agent': 'test-client' },
       user: { id: 'user-7' },
       tags: ['checkout'],
     });

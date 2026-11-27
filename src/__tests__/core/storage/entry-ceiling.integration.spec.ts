@@ -17,6 +17,7 @@
  * per check against ten thousand rows, so the cost of the feature is the
  * deletion itself and not the looking.
  */
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -36,7 +37,7 @@ const entry = (i: number): Entry =>
   ({ type: 'log', payload: { level: 'info', message: `m${i}` } }) as unknown as Entry;
 
 describe('the entry ceiling', () => {
-  jest.setTimeout(120_000);
+  vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
   let workspace: string;
   let backends: { name: string; storage: StorageInterface }[];

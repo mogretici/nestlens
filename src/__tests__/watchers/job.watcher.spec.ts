@@ -4,6 +4,8 @@
  * Tests for the job watcher that monitors Bull/BullMQ queue jobs.
  * Follows AAA (Arrange-Act-Assert) pattern.
  */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Mock, Mocked } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CollectorService } from '../../core/collector.service';
 import { NESTLENS_CONFIG, NestLensConfig } from '../../nestlens.config';
@@ -11,12 +13,12 @@ import { JobWatcher } from '../../watchers/job.watcher';
 
 describe('JobWatcher', () => {
   let watcher: JobWatcher;
-  let mockCollector: jest.Mocked<CollectorService>;
+  let mockCollector: Mocked<CollectorService>;
   let mockConfig: NestLensConfig;
   let mockQueue: {
     name: string;
-    on: jest.Mock;
-    getJob: jest.Mock;
+    on: Mock;
+    getJob: Mock;
   };
   let eventHandlers: Record<string, Function>;
 
@@ -33,20 +35,20 @@ describe('JobWatcher', () => {
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     eventHandlers = {};
 
     mockCollector = {
-      collect: jest.fn(),
-      collectImmediate: jest.fn(),
-    } as unknown as jest.Mocked<CollectorService>;
+      collect: vi.fn(),
+      collectImmediate: vi.fn(),
+    } as unknown as Mocked<CollectorService>;
 
     mockQueue = {
       name: 'test-queue',
-      on: jest.fn((event, handler) => {
+      on: vi.fn((event, handler) => {
         eventHandlers[event] = handler;
       }),
-      getJob: jest.fn(),
+      getJob: vi.fn(),
     };
 
     mockConfig = {
@@ -594,7 +596,7 @@ describe('JobWatcher', () => {
       // Arrange
       mockConfig.watchers = { job: { enabled: false } };
       const disabledWatcher = await createWatcher(mockConfig);
-      const loggerSpy = jest.spyOn((disabledWatcher as any).logger, 'debug');
+      const loggerSpy = vi.spyOn((disabledWatcher as any).logger, 'debug');
 
       // Act
       disabledWatcher.onModuleInit();
@@ -620,10 +622,10 @@ describe('JobWatcher', () => {
       const mockClient = { options: { host: 'localhost', port: 6379 } };
       const mockBullMQQueue = {
         name: 'test-queue',
-        getJob: jest.fn(),
+        getJob: vi.fn(),
         client: Promise.resolve(mockClient),
       };
-      const errorSpy = jest.spyOn((watcher as any).logger, 'error');
+      const errorSpy = vi.spyOn((watcher as any).logger, 'error');
 
       // Act - should catch the require error
       await watcher.setupBullMQQueue(mockBullMQQueue);
@@ -636,7 +638,7 @@ describe('JobWatcher', () => {
 
     it('should close managed QueueEvents', async () => {
       // Arrange
-      const mockQueueEvents = { close: jest.fn().mockResolvedValue(undefined) };
+      const mockQueueEvents = { close: vi.fn().mockResolvedValue(undefined) };
       (watcher as any).managedQueueEvents.push(mockQueueEvents);
 
       // Act
@@ -649,7 +651,7 @@ describe('JobWatcher', () => {
 
     it('should handle close errors gracefully', async () => {
       // Arrange
-      const mockQueueEvents = { close: jest.fn().mockRejectedValue(new Error('Close error')) };
+      const mockQueueEvents = { close: vi.fn().mockRejectedValue(new Error('Close error')) };
       (watcher as any).managedQueueEvents.push(mockQueueEvents);
 
       // Act & Assert - should not throw
@@ -665,10 +667,10 @@ describe('JobWatcher', () => {
   describe('BullMQ Queue Setup', () => {
     let mockBullMQQueue: {
       name: string;
-      getJob: jest.Mock;
+      getJob: Mock;
     };
     let mockQueueEvents: {
-      on: jest.Mock;
+      on: Mock;
     };
     let bullMQEventHandlers: Record<string, Function>;
 
@@ -677,11 +679,11 @@ describe('JobWatcher', () => {
 
       mockBullMQQueue = {
         name: 'bullmq-test-queue',
-        getJob: jest.fn(),
+        getJob: vi.fn(),
       };
 
       mockQueueEvents = {
-        on: jest.fn((event, handler) => {
+        on: vi.fn((event, handler) => {
           bullMQEventHandlers[event] = handler;
         }),
       };
@@ -1012,7 +1014,7 @@ describe('JobWatcher', () => {
       it('should handle getJob errors gracefully', async () => {
         // Arrange
         mockBullMQQueue.getJob.mockRejectedValue(new Error('Redis error'));
-        const debugSpy = jest.spyOn((watcher as any).logger, 'debug');
+        const debugSpy = vi.spyOn((watcher as any).logger, 'debug');
 
         // Act - call the handler
         await bullMQEventHandlers['active']?.({ jobId: 'err-1' });
@@ -1028,7 +1030,7 @@ describe('JobWatcher', () => {
         mockCollector.collect.mockImplementationOnce(() => {
           throw new Error('Collector error');
         });
-        const debugSpy = jest.spyOn((watcher as any).logger, 'debug');
+        const debugSpy = vi.spyOn((watcher as any).logger, 'debug');
 
         // Act - call the handler, should not throw
         await bullMQEventHandlers['completed']?.({ jobId: 'err-2', returnvalue: '' });
@@ -1085,7 +1087,7 @@ describe('JobWatcher', () => {
       // Arrange
       watcher.setupQueue(mockQueue as any);
       mockQueue.getJob.mockRejectedValueOnce(new Error('Queue error'));
-      const debugSpy = jest.spyOn((watcher as any).logger, 'debug');
+      const debugSpy = vi.spyOn((watcher as any).logger, 'debug');
 
       // Act - call the handler (it's synchronous but triggers async work)
       eventHandlers['delayed']?.('job-1');
