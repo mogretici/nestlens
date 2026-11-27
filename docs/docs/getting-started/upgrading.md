@@ -28,6 +28,32 @@ removed configuration key is a TypeScript error. At runtime a removed key is
 ignored, so a configuration written in JavaScript has to be checked against the
 sections below.
 
+## 0.18.0 → 0.18.1
+
+Nothing to edit. One failure is reported differently.
+
+### SQLite storage fails at startup when better-sqlite3's addon does not load
+
+With `storage.driver: 'sqlite'`, an installed `better-sqlite3` whose native
+addon is missing or will not load used to be read as a problem with the
+database file: NestLens logged *Could not open the SQLite database*, advised
+moving `storage.sqlite.filename`, and fell back to in-memory storage. The file
+had nothing to do with it. It now fails at startup, as a missing
+`better-sqlite3` already did, with the reason and the two commands that build
+the addon:
+
+```bash
+npm install-scripts approve better-sqlite3 --no-allow-scripts-pin
+npm rebuild better-sqlite3
+```
+
+The addon goes missing when npm 12 blocks better-sqlite3's install script — it
+runs only when your `package.json` allows it, see
+[SQLite storage on npm 12](./installation.md#sqlite-storage-on-npm-12) — and
+stops loading after a Node upgrade without a rebuild, where
+`npm rebuild better-sqlite3` alone is enough. The in-memory and Redis drivers,
+and a database file that cannot be opened, behave as before.
+
 ## 0.17.x → 0.18.0
 
 Nothing to edit. Three things change: the Node.js floor, the `better-sqlite3`
