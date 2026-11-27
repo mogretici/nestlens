@@ -1,3 +1,15 @@
+# [0.18.0](https://github.com/mogretici/nestlens/compare/v0.17.3...v0.18.0) (2026-11-27)
+
+
+### Bug Fixes
+
+* install better-sqlite3 12, which ships a Node 26 binary ([dcc0530](https://github.com/mogretici/nestlens/commit/dcc053091c5bdc1f5088d2f7d91ccfb5eb8ad1aa))
+
+
+### Features
+
+* require Node 22.13 or later, and test Node 26 ([ac1101b](https://github.com/mogretici/nestlens/commit/ac1101bb8b8c862c44600dd627058f26329a6f9c)), closes [nodejs/node#56194](https://github.com/nodejs/node/issues/56194)
+
 ## [0.17.3](https://github.com/mogretici/nestlens/compare/v0.17.2...v0.17.3) (2026-11-27)
 
 

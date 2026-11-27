@@ -1,7 +1,7 @@
 {
   "name": "nestlens-dashboard",
   "private": true,
-  "version": "0.17.3",
+  "version": "0.18.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
