@@ -125,11 +125,14 @@ The store's `maxEntries` ceiling still applies; see
 
 ## Browser Support
 
-The dashboard is optimized for modern browsers:
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
+The dashboard's stylesheet is built with Tailwind CSS 4, which depends on
+cascade layers, `@property` and `color-mix()`. It needs:
+
+- Chrome or Edge 111+
+- Firefox 128+
+- Safari 16.4+
+
+An older browser opens the dashboard but does not style it correctly.
 
 ## Mobile Responsiveness
 

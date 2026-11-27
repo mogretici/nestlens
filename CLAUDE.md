@@ -109,7 +109,7 @@ session, each time looking like the fix had not worked.
 
 ### Monorepo Structure
 - `src/` - NestJS library (TypeScript, CommonJS)
-- `dashboard/` - React SPA (Vite, TypeScript, Tailwind)
+- `dashboard/` - React SPA (Vite, TypeScript, Tailwind CSS 4)
 - `example/` - Demo NestJS app for testing
 - `e2e/` - Playwright end-to-end tests
 - `docs/` - Docusaurus documentation site
@@ -147,6 +147,11 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
 - Fetches data from `/nestlens/__nestlens__/api/*` (the mount point, then the API prefix, then `api`)
 - Components in `components/`, pages in `pages/`
 - Types mirror backend Entry types in `types.ts`
+- Styling is Tailwind CSS 4 through `@tailwindcss/vite`, configured in CSS:
+  `src/index.css` holds the theme, the dark variant and the base styles, and
+  there is no `tailwind.config.js` or PostCSS config. `src/tailwind3-defaults.css`
+  keeps Tailwind 3's palette and font so the move to 4 changed no pixels;
+  removing it is a visible redesign, not a cleanup.
 
 ### Module Registration
 `NestLensModule.forRoot(config)` in `nestlens.module.ts`:
