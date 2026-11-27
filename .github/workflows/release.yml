@@ -62,13 +62,15 @@ jobs:
         run: npm ci
         working-directory: dashboard
 
+      # Build first: the suites that serve the built dashboard skip themselves
+      # when dist/dashboard/public/index.html is missing, as ci.yml explains.
+      - name: Build
+        run: npm run build
+
       - name: Run tests
         run: npm test
         env:
           REDIS_URL: redis://127.0.0.1:6379
-
-      - name: Build
-        run: npm run build
 
       - name: Release
         id: release
