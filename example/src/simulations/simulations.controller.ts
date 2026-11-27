@@ -1,6 +1,25 @@
 import { Controller, Post, Body, Inject, Logger } from '@nestjs/common';
-import { CollectorService } from 'nestlens';
+import {
+  CollectorService,
+  type BatchEntry,
+  type CommandEntry,
+  type DumpEntry,
+  type HttpClientEntry,
+  type JobEntry,
+  type MailEntry,
+  type ModelEntry,
+  type NotificationEntry,
+  type ScheduleEntry,
+  type ViewEntry,
+} from 'nestlens';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+
+/** Whether a value from a request body is one of the values an entry allows. */
+const isOneOf = <T extends string>(
+  values: readonly T[],
+  value: string | undefined,
+): value is T =>
+  value !== undefined && (values as readonly string[]).includes(value);
 
 @ApiTags('test-simulations')
 @Controller('test')
@@ -255,12 +274,16 @@ export class SimulationsController {
       },
     ];
 
-    const statuses: Array<
-      'waiting' | 'active' | 'completed' | 'failed' | 'delayed'
-    > = ['waiting', 'active', 'completed', 'failed', 'delayed'];
-    const status =
-      (body.status as any) ||
-      statuses[Math.floor(Math.random() * statuses.length)];
+    const statuses: Array<JobEntry['payload']['status']> = [
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+    ];
+    const status = isOneOf(statuses, body.status)
+      ? body.status
+      : statuses[Math.floor(Math.random() * statuses.length)];
     const job = jobs[Math.floor(Math.random() * jobs.length)];
 
     await this.collector.collect('job', {
@@ -289,7 +312,9 @@ export class SimulationsController {
   async testMail(
     @Body() body: { status?: string },
   ): Promise<{ success: boolean }> {
-    const mails = [
+    const mails: Array<
+      Pick<MailEntry['payload'], 'to' | 'subject' | 'from' | 'cc' | 'bcc'>
+    > = [
       {
         to: 'user@example.com',
         subject: 'Welcome to Our Platform!',
@@ -346,8 +371,8 @@ export class SimulationsController {
       to: mail.to,
       subject: mail.subject,
       from: mail.from,
-      cc: (mail as any).cc,
-      bcc: (mail as any).bcc,
+      cc: mail.cc,
+      bcc: mail.bcc,
       html: `<h1>${mail.subject}</h1><p>This is a test email.</p>`,
       status,
       error:
@@ -365,7 +390,11 @@ export class SimulationsController {
   async testSchedule(
     @Body() body: { status?: string },
   ): Promise<{ success: boolean }> {
-    const schedules = [
+    const schedules: Array<
+      Pick<ScheduleEntry['payload'], 'name' | 'cron' | 'interval'> & {
+        description: string;
+      }
+    > = [
       {
         name: 'CleanupExpiredSessions',
         cron: '0 0 * * *',
@@ -418,14 +447,14 @@ export class SimulationsController {
       },
     ];
 
-    const statuses: Array<'started' | 'completed' | 'failed'> = [
+    const statuses: Array<ScheduleEntry['payload']['status']> = [
       'started',
       'completed',
       'failed',
     ];
-    const status =
-      (body.status as any) ||
-      statuses[Math.floor(Math.random() * statuses.length)];
+    const status = isOneOf(statuses, body.status)
+      ? body.status
+      : statuses[Math.floor(Math.random() * statuses.length)];
     const schedule = schedules[Math.floor(Math.random() * schedules.length)];
 
     const nextRun = new Date();
@@ -434,7 +463,7 @@ export class SimulationsController {
     await this.collector.collect('schedule', {
       name: schedule.name,
       cron: schedule.cron,
-      interval: (schedule as any).interval,
+      interval: schedule.interval,
       status,
       duration:
         status !== 'started'
@@ -548,7 +577,7 @@ export class SimulationsController {
     @Body() body: { action?: string },
   ): Promise<{ success: boolean }> {
     const actions: Array<{
-      action: any;
+      action: ModelEntry['payload']['action'];
       entity: string;
       data?: unknown;
       where?: unknown;
@@ -633,7 +662,7 @@ export class SimulationsController {
     @Body() body: { type?: string },
   ): Promise<{ success: boolean }> {
     const notifications: Array<{
-      type: any;
+      type: NotificationEntry['payload']['type'];
       recipient: string | string[];
       title: string;
       message: string;
@@ -738,7 +767,7 @@ export class SimulationsController {
   ): Promise<{ success: boolean }> {
     const views: Array<{
       template: string;
-      format: any;
+      format: ViewEntry['payload']['format'];
       locals?: Record<string, unknown>;
       dataSize?: number;
       outputSize?: number;
@@ -879,13 +908,17 @@ export class SimulationsController {
       },
     ];
 
-    const statuses: any[] = ['executing', 'completed', 'failed'];
-    const statusMap: Record<string, any> = {
+    const statuses: Array<CommandEntry['payload']['status']> = [
+      'executing',
+      'completed',
+      'failed',
+    ];
+    const statusMap: Record<string, CommandEntry['payload']['status']> = {
       running: 'executing',
       completed: 'completed',
       failed: 'failed',
     };
-    const status: any = body.status
+    const status: CommandEntry['payload']['status'] = body.status
       ? statusMap[body.status] || 'completed'
       : statuses[Math.floor(Math.random() * statuses.length)];
     const selected = commands[Math.floor(Math.random() * commands.length)];
@@ -1078,14 +1111,14 @@ export class SimulationsController {
       },
     ];
 
-    const statuses: Array<'completed' | 'partial' | 'failed'> = [
+    const statuses: Array<BatchEntry['payload']['status']> = [
       'completed',
       'partial',
       'failed',
     ];
-    const status =
-      (body.status as any) ||
-      statuses[Math.floor(Math.random() * statuses.length)];
+    const status = isOneOf(statuses, body.status)
+      ? body.status
+      : statuses[Math.floor(Math.random() * statuses.length)];
     const selected = batches[Math.floor(Math.random() * batches.length)];
 
     const processedItems =
@@ -1124,8 +1157,8 @@ export class SimulationsController {
     @Body() body: { status?: string },
   ): Promise<{ success: boolean }> {
     const dumps: Array<{
-      operation: any;
-      format: any;
+      operation: DumpEntry['payload']['operation'];
+      format: DumpEntry['payload']['format'];
       source?: string;
       destination?: string;
       recordCount?: number;
@@ -1227,7 +1260,11 @@ export class SimulationsController {
   async testHttpClient(
     @Body() body: { status?: string },
   ): Promise<{ success: boolean }> {
-    const requests = [
+    type SimulatedRequest = Pick<
+      HttpClientEntry['payload'],
+      'method' | 'url' | 'hostname' | 'path' | 'statusCode' | 'error'
+    >;
+    const requests: SimulatedRequest[] = [
       {
         method: 'GET',
         url: 'https://api.example.com/users',
@@ -1251,7 +1288,7 @@ export class SimulationsController {
       },
     ];
 
-    const errorRequests = [
+    const errorRequests: SimulatedRequest[] = [
       {
         method: 'GET',
         url: 'https://api.example.com/not-found',
@@ -1281,7 +1318,7 @@ export class SimulationsController {
       requestHeaders: { 'Content-Type': 'application/json' },
       statusCode: selected.statusCode,
       duration: Math.floor(Math.random() * 500) + 50,
-      error: (selected as any).error,
+      error: selected.error,
     });
 
     return { success: true };

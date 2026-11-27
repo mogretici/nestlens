@@ -30,7 +30,7 @@ export class PostsResolver {
   }
 
   @ResolveField('comments', () => [Comment], { nullable: true })
-  getComments(@Parent() post: Post) {
+  getComments(): Comment[] {
     return [];
   }
 }

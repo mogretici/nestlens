@@ -7,7 +7,6 @@ import {
   Delete,
   Body,
   Param,
-  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UsersService } from './users.service';
