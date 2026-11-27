@@ -52,19 +52,19 @@ export function useGraphQLToolbar() {
     <div className="flex items-center space-x-1">
       <button
         onClick={handleExpandAll}
-        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
         title="Expand all"
       >
         <Maximize2 className="h-3.5 w-3.5 text-gray-500" />
       </button>
       <button
         onClick={handleCollapseAll}
-        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
         title="Collapse all"
       >
         <Minimize2 className="h-3.5 w-3.5 text-gray-500" />
       </button>
-      <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
+      <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
       <button
         onClick={toggleSearch}
         className={`p-1.5 rounded transition-colors ${
@@ -78,7 +78,7 @@ export function useGraphQLToolbar() {
       </button>
       <button
         onClick={() => handleCopy(code)}
-        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
         title="Copy query"
       >
         {copied ? (
@@ -99,7 +99,7 @@ export function useGraphQLToolbar() {
           value={state.searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search fields, arguments..."
-          className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           autoFocus
         />
         {state.searchTerm && (

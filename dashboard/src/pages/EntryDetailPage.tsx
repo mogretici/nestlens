@@ -267,7 +267,7 @@ function EntryHeading({ entry }: { entry: Entry }) {
                     {entry.payload.operationName || '(anonymous)'}
                   </h1>
                   {entry.payload.hasErrors && (
-                    <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
+                    <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-sm bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">
                       Error
                     </span>
                   )}
@@ -350,8 +350,8 @@ function RawPayload({ entry }: { entry: Entry }) {
 function DetailViewSkeleton() {
   return (
     <div className="animate-pulse space-y-3" aria-hidden="true">
-      <div className="h-8 rounded bg-gray-100 dark:bg-gray-800" />
-      <div className="h-40 rounded bg-gray-100 dark:bg-gray-800" />
+      <div className="h-8 rounded-sm bg-gray-100 dark:bg-gray-800" />
+      <div className="h-40 rounded-sm bg-gray-100 dark:bg-gray-800" />
     </div>
   );
 }

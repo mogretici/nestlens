@@ -43,7 +43,7 @@ function TableSkeleton({ columns, rows = 5 }: { columns: number; rows?: number }
         <tr key={rowIndex} className="animate-pulse">
           {Array.from({ length: columns }).map((_, colIndex) => (
             <td key={colIndex} className="px-4 py-3">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-sm w-3/4"></div>
             </td>
           ))}
         </tr>
@@ -284,7 +284,7 @@ export default function DataTable<T>({
                         : 'bg-white dark:bg-gray-900'
                     }
                     hover:bg-primary-50/50 dark:hover:bg-primary-900/10
-                    focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-inset
+                    focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-inset
                     ${selectedRowIndex === index ? 'bg-primary-50 dark:bg-primary-900/20' : ''}
                     ${rowClassName ? rowClassName(row) : ''}
                   `}

@@ -183,7 +183,7 @@ export default function PageHeader({
               }`}
               title={autoRefreshEnabled ? 'Auto-refresh enabled' : 'Auto-refresh disabled'}
             >
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
               <span>Auto Refresh</span>
             </button>
           )}

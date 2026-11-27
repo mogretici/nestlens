@@ -417,7 +417,7 @@ export default function Layout() {
             })}
           </nav>
           {/* Mobile Footer - Fixed at bottom */}
-          <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700">
+          <div className="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-center gap-1">
               <RecordingToggle />
               <button
@@ -506,7 +506,7 @@ export default function Layout() {
                             aria-current={isActive ? 'page' : undefined}
                             className={`group flex items-center justify-between px-3 py-2 rounded-lg transition-all duration-150 ${
                               isActive
-                                ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-200 font-medium shadow-sm'
+                                ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-200 font-medium shadow-xs'
                                 : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-white'
                             }`}
                           >
@@ -538,7 +538,7 @@ export default function Layout() {
           </nav>
 
           {/* Footer - Fixed at bottom */}
-          <div className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700">
+          <div className="shrink-0 p-3 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-center gap-1">
               {/* Recording Toggle */}
               <RecordingToggle />

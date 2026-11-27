@@ -236,7 +236,7 @@ function StatCard({
     <Component
       onClick={onClick}
       className={`${statusBgColors[status]} rounded-lg border p-4 ${
-        onClick ? 'cursor-pointer hover:shadow-sm transition-all text-left w-full' : ''
+        onClick ? 'cursor-pointer hover:shadow-xs transition-all text-left w-full' : ''
       }`}
     >
       <div className="flex items-start justify-between">
@@ -625,12 +625,12 @@ export default function DashboardPage() {
                     onClick={() => navigate(`${getTypeRoute(entry.type)}/${entry.id}`)}
                     className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer flex items-center gap-3 transition-colors"
                   >
-                    <div className="flex-shrink-0 p-2 rounded-lg bg-gray-100 dark:bg-gray-700/50">
+                    <div className="shrink-0 p-2 rounded-lg bg-gray-100 dark:bg-gray-700/50">
                       <Icon className={`h-4 w-4 ${typeIconColors[entry.type] || 'text-gray-500'}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${getBadgeColor(entry.type)}`}>
+                        <span className={`inline-flex px-1.5 py-0.5 rounded-sm text-[10px] font-semibold uppercase ${getBadgeColor(entry.type)}`}>
                           {entry.type}
                         </span>
                         <span className="text-sm text-gray-900 dark:text-white truncate font-mono">
@@ -643,10 +643,10 @@ export default function DashboardPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex-shrink-0 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    <div className="shrink-0 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                       {formatDistanceToNow(parseDate(entry.createdAt), { addSuffix: true })}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 flex-shrink-0" />
+                    <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600 shrink-0" />
                   </div>
                 );
               })

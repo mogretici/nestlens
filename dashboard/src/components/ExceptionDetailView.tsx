@@ -41,7 +41,7 @@ export default function ExceptionDetailView({ entry }: ExceptionDetailViewProps)
           </h2>
         </div>
         <div className="p-4">
-          <dl className="divide-y-0">
+          <dl className="*:not-first:border-y-0">
             <DetailRow
               label="Time"
               value={
@@ -79,7 +79,7 @@ export default function ExceptionDetailView({ entry }: ExceptionDetailViewProps)
               <DetailRow
                 label="Error Code"
                 value={
-                  <code className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                  <code className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-sm">
                     {payload.code}
                   </code>
                 }
@@ -98,7 +98,7 @@ export default function ExceptionDetailView({ entry }: ExceptionDetailViewProps)
             </h2>
           </div>
           <div className="p-4">
-            <dl className="divide-y-0">
+            <dl className="*:not-first:border-y-0">
               <DetailRow
                 label="Method"
                 value={

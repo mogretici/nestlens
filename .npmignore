@@ -18,8 +18,6 @@ coverage/
 tsconfig.json
 dashboard/tsconfig*.json
 dashboard/vite.config.ts
-dashboard/tailwind.config.js
-dashboard/postcss.config.js
 
 # Dev dependencies
 .idea/

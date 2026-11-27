@@ -90,13 +90,13 @@ function TimingBreakdown({
       <div className="flex flex-wrap gap-3 text-xs text-gray-600 dark:text-gray-400">
         {segments.map((segment, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded ${segment.color}`} />
+            <div className={`w-2.5 h-2.5 rounded-sm ${segment.color}`} />
             <span>{segment.label}: {formatDuration(segment.value ?? 0)}</span>
           </div>
         ))}
         {unmeasured > 0 && (
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded bg-gray-300 dark:bg-gray-600" />
+            <div className="w-2.5 h-2.5 rounded-sm bg-gray-300 dark:bg-gray-600" />
             <span>Other: {formatDuration(unmeasured)}</span>
           </div>
         )}
@@ -221,9 +221,9 @@ function ResolverWaterfall({ traces, totalDuration }: { traces: GraphQLEntry['pa
             <div className="w-40 truncate text-gray-600 dark:text-gray-400 font-mono" title={trace.path}>
               {trace.fieldName}
             </div>
-            <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-700 rounded relative">
+            <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-700 rounded-sm relative">
               <div
-                className="absolute h-full bg-primary-400 dark:bg-primary-500 rounded"
+                className="absolute h-full bg-primary-400 dark:bg-primary-500 rounded-sm"
                 style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
                 title={`${trace.path}: ${formatDuration(durationMs)}`}
               />
@@ -291,7 +291,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   ) : (
     <div className="p-8 text-center text-gray-500 dark:text-gray-400">
       <p>No headers captured for this operation.</p>
-      <p className="text-xs mt-1">Ensure <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">captureHeaders</code> is enabled in the GraphQL watcher config.</p>
+      <p className="text-xs mt-1">Ensure <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm">captureHeaders</code> is enabled in the GraphQL watcher config.</p>
     </div>
   );
 
@@ -327,7 +327,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
   ) : (
     <div className="p-8 text-center text-gray-500 dark:text-gray-400">
       <p>Resolver tracing not enabled for this operation.</p>
-      <p className="text-xs mt-1">Enable <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">traceFieldResolvers</code> in GraphQL watcher config.</p>
+      <p className="text-xs mt-1">Enable <code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-sm">traceFieldResolvers</code> in GraphQL watcher config.</p>
     </div>
   );
 
@@ -385,7 +385,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
           </h2>
         </div>
         <div className="p-4">
-          <dl className="divide-y-0">
+          <dl className="*:not-first:border-y-0">
             <DetailRow
               label="Time"
               value={
@@ -530,7 +530,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
             </h2>
           </div>
           <div className="p-4">
-            <dl className="divide-y-0">
+            <dl className="*:not-first:border-y-0">
               <DetailRow label="Batch ID" value={<code className="font-mono text-sm">{payload.batchId}</code>} />
               {payload.batchSize !== undefined && (
                 <DetailRow
@@ -557,7 +557,7 @@ export default function GraphQLDetailView({ entry }: GraphQLDetailViewProps) {
             </h2>
           </div>
           <div className="p-4">
-            <dl className="divide-y-0">
+            <dl className="*:not-first:border-y-0">
               <DetailRow label="Subscription ID" value={<code className="font-mono text-sm">{payload.subscriptionId}</code>} />
               {payload.subscriptionEvent && (
                 <DetailRow label="Event" value={<span className="capitalize">{payload.subscriptionEvent}</span>} />

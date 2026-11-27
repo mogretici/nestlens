@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
 
@@ -24,7 +25,7 @@ const trailingSlashRedirect = () => ({
 });
 
 export default defineConfig({
-  plugins: [react(), trailingSlashRedirect()],
+  plugins: [react(), tailwindcss(), trailingSlashRedirect()],
   // Relative asset URLs so one build can be mounted at any `NestLensConfig.path`.
   // DashboardController injects a matching <base href> into index.html.
   base: './',

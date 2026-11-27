@@ -331,7 +331,7 @@ function GraphQLNodeView({
     return (
       <>
         {text.slice(0, idx)}
-        <span className="bg-yellow-300 dark:bg-yellow-600 rounded px-0.5">{text.slice(idx, idx + searchTerm.length)}</span>
+        <span className="bg-yellow-300 dark:bg-yellow-600 rounded-sm px-0.5">{text.slice(idx, idx + searchTerm.length)}</span>
         {text.slice(idx + searchTerm.length)}
       </>
     );
@@ -466,13 +466,13 @@ function GraphQLNodeView({
   return (
     <div className={matchesSearch && searchTerm ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}>
       <div
-        className="group flex items-start py-0.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded transition-colors font-mono text-sm"
+        className="group flex items-start py-0.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-sm transition-colors font-mono text-sm"
         style={{ paddingLeft: indent }}
       >
         {/* Collapse toggle */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className={`w-5 h-5 flex items-center justify-center flex-shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 rounded' : ''}`}
+          className={`w-5 h-5 flex items-center justify-center shrink-0 ${hasChildren ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm' : ''}`}
           disabled={!hasChildren}
         >
           {hasChildren && (

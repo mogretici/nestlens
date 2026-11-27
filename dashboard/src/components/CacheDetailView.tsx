@@ -129,7 +129,7 @@ export default function CacheDetailView({ entry }: CacheDetailViewProps) {
           </h2>
         </div>
         <div className="p-4">
-          <dl className="divide-y-0">
+          <dl className="*:not-first:border-y-0">
             <DetailRow
               label="Time"
               value={
@@ -153,7 +153,7 @@ export default function CacheDetailView({ entry }: CacheDetailViewProps) {
               label="Key"
               value={
                 <div className="flex items-center space-x-2">
-                  <Key className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                  <Key className="h-4 w-4 text-gray-400 shrink-0" />
                   <code className="text-sm font-mono text-gray-900 dark:text-white break-all">
                     {payload.key}
                   </code>

@@ -84,7 +84,7 @@ export default function MonitoredTags() {
           <button
             onClick={() => setAdding(true)}
             aria-label="Monitor a tag"
-            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="p-1 rounded-sm hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -106,14 +106,14 @@ export default function MonitoredTags() {
           {tags.map(({ tag, count }) => (
             <span
               key={tag}
-              className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide shadow ${getBadgeColor(tag)}`}
+              className={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide shadow-sm ${getBadgeColor(tag)}`}
             >
               {tag}
               <span className="ml-1 font-normal opacity-80">{count}</span>
               <button
                 onClick={() => void remove(tag)}
                 aria-label={`Stop monitoring ${tag}`}
-                className="ml-1 hover:opacity-70 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded"
+                className="ml-1 hover:opacity-70 focus:outline-hidden focus:ring-2 focus:ring-primary-500 rounded-sm"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -133,19 +133,19 @@ export default function MonitoredTags() {
                 placeholder="Tag to keep..."
                 aria-label="Tag to monitor"
                 autoFocus
-                className="px-2 py-0.5 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 w-28 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="px-2 py-0.5 text-xs border rounded-sm dark:bg-gray-700 dark:border-gray-600 w-28 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
               />
               <button
                 onClick={() => void add()}
                 aria-label="Save monitored tag"
-                className="text-xs text-primary-600 dark:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded"
+                className="text-xs text-primary-600 dark:text-primary-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 rounded-sm"
               >
                 ✓
               </button>
               <button
                 onClick={() => setAdding(false)}
                 aria-label="Cancel monitoring a tag"
-                className="text-xs text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded"
+                className="text-xs text-gray-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500 rounded-sm"
               >
                 ×
               </button>
