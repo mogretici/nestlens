@@ -11,7 +11,7 @@
  * were broken and fixed:
  *
  *     Bull queue      5 listeners per round, never removed
- *     EventEmitter2   one `onAny` per round
+ *     EventEmitter2   one `onAny` per round (it wraps `emit` now)
  *
  * Three lifecycles against one object, then: is the object as it was found?
  */
@@ -227,25 +227,21 @@ describe('a watcher that borrows, three times over', () => {
     expect(methodsOf(client)).toEqual(before);
   });
 
-  it('takes its listener off the event emitter', async () => {
-    const listeners: unknown[] = [];
+  it('gives the event emitter its emit back', async () => {
     const emitter = {
-      onAny: (listener: unknown) => listeners.push(listener),
-      offAny: (listener: unknown) => {
-        const index = listeners.indexOf(listener);
-        if (index >= 0) listeners.splice(index, 1);
-      },
       on: () => undefined,
       eventNames: () => [],
       listeners: () => [],
       emit: () => true,
+      emitAsync: async () => [],
     };
+    const before = methodsOf(emitter);
 
     await threeLifecycles(
       () => new EventWatcher(collector, config({ event: true }), emitter) as unknown as Lifecycle,
     );
 
-    expect(listeners).toEqual([]);
+    expect(methodsOf(emitter)).toEqual(before);
   });
 
   it('still records through the wrapper it installed', async () => {

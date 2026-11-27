@@ -51,8 +51,11 @@ const isThenable = (value: unknown): value is PromiseLike<unknown> =>
 export const wrapMethodPreservingShape = <T extends AnyMethod, C = undefined>(
   original: T,
   record: (outcome: MethodOutcome<C>) => void,
-  /** Reads whatever has to be measured before the call, such as memory. */
-  before?: () => C,
+  /**
+   * Reads whatever has to be measured before the call, such as memory, or
+   * what the arguments say before the method can change what they refer to.
+   */
+  before?: (args: unknown[]) => C,
 ): T => {
   const report = (outcome: MethodOutcome<C>): void => {
     try {
@@ -67,7 +70,7 @@ export const wrapMethodPreservingShape = <T extends AnyMethod, C = undefined>(
     // A `before` that throws must not stop the call it was measuring.
     let context: C;
     try {
-      context = before?.() as C;
+      context = before?.(args) as C;
     } catch {
       context = undefined as C;
     }

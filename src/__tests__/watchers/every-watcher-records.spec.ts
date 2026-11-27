@@ -169,16 +169,14 @@ describe('a watcher that is switched on', () => {
 
   it('records an emitted event', async () => {
     const { types, collector } = recorder();
-    let listener: ((event: string, ...values: unknown[]) => void) | undefined;
     const emitter = {
-      onAny: (handler: (event: string, ...values: unknown[]) => void) => void (listener = handler),
-      offAny: () => undefined,
+      emit: (_event: string, ..._values: unknown[]): boolean => true,
       listeners: () => [],
     };
 
     const watcher = new EventWatcher(collector, config({ event: true }), emitter) as Lifecycle;
     await watcher.onModuleInit?.();
-    listener?.('order.created', { id: 1 });
+    emitter.emit('order.created', { id: 1 });
     await settle();
 
     expect(types).toContain('event');

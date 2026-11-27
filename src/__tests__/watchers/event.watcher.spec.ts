@@ -13,11 +13,15 @@ describe('EventWatcher', () => {
   let watcher: EventWatcher;
   let mockCollector: jest.Mocked<CollectorService>;
   let mockEventEmitter: {
-    onAny: jest.Mock;
+    emit: jest.Mock;
     listeners: jest.Mock;
   };
+  let originalEmit: jest.Mock;
   let mockConfig: NestLensConfig;
-  let capturedOnAnyHandler: Function | undefined;
+
+  /** Emits through whatever `emit` is on the emitter now — the watcher's, once installed. */
+  const emit = (...args: unknown[]): unknown =>
+    (mockEventEmitter.emit as unknown as (...values: unknown[]) => unknown)(...args);
 
   const createWatcher = async (
     config: NestLensConfig,
@@ -43,17 +47,15 @@ describe('EventWatcher', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    capturedOnAnyHandler = undefined;
 
     mockCollector = {
       collect: jest.fn(),
       collectImmediate: jest.fn(),
     } as unknown as jest.Mocked<CollectorService>;
 
+    originalEmit = jest.fn().mockReturnValue(true);
     mockEventEmitter = {
-      onAny: jest.fn((handler) => {
-        capturedOnAnyHandler = handler;
-      }),
+      emit: originalEmit,
       listeners: jest.fn().mockReturnValue([]),
     };
 
@@ -92,7 +94,7 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Assert - should not setup interceptors
-      expect(mockEventEmitter.onAny).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).toBe(originalEmit);
     });
 
     it('should be enabled by default when watchers config is undefined', async () => {
@@ -119,7 +121,7 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Assert
-      expect(mockEventEmitter.onAny).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).toBe(originalEmit);
     });
 
     it('should handle missing event emitter gracefully', async () => {
@@ -138,8 +140,9 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Assert
-      expect(mockEventEmitter.onAny).toHaveBeenCalled();
-      expect(capturedOnAnyHandler).toBeDefined();
+      expect(mockEventEmitter.emit).not.toBe(originalEmit);
+      emit('test.event', 1);
+      expect(originalEmit).toHaveBeenCalledWith('test.event', 1);
     });
   });
 
@@ -158,7 +161,7 @@ describe('EventWatcher', () => {
       const eventPayload = { userId: 123, action: 'login' };
 
       // Act
-      capturedOnAnyHandler?.('user.logged_in', eventPayload);
+      emit('user.logged_in', eventPayload);
       jest.runAllTimers();
 
       // Assert
@@ -173,7 +176,7 @@ describe('EventWatcher', () => {
 
     it('should handle array event names', async () => {
       // Arrange & Act
-      capturedOnAnyHandler?.(['user', 'created'], { id: 1 });
+      emit(['user', 'created'], { id: 1 });
       jest.runAllTimers();
 
       // Assert
@@ -187,7 +190,7 @@ describe('EventWatcher', () => {
 
     it('should collect event duration', async () => {
       // Arrange & Act
-      capturedOnAnyHandler?.('test.event');
+      emit('test.event');
       jest.runAllTimers();
 
       // Assert
@@ -205,7 +208,7 @@ describe('EventWatcher', () => {
       mockEventEmitter.listeners.mockReturnValue([mockListener]);
 
       // Act
-      capturedOnAnyHandler?.('user.created', {});
+      emit('user.created', {});
       jest.runAllTimers();
 
       // Assert
@@ -222,7 +225,7 @@ describe('EventWatcher', () => {
       mockEventEmitter.listeners.mockReturnValue([() => {}]);
 
       // Act
-      capturedOnAnyHandler?.('test.event', {});
+      emit('test.event', {});
       jest.runAllTimers();
 
       // Assert
@@ -239,7 +242,7 @@ describe('EventWatcher', () => {
       mockEventEmitter.listeners.mockReturnValue([{ handler: true }]);
 
       // Act
-      capturedOnAnyHandler?.('test.event', {});
+      emit('test.event', {});
       jest.runAllTimers();
 
       // Assert
@@ -266,7 +269,7 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Act
-      capturedOnAnyHandler?.('internal.heartbeat', {});
+      emit('internal.heartbeat', {});
       jest.runAllTimers();
 
       // Assert
@@ -282,7 +285,7 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Act
-      capturedOnAnyHandler?.('app.debug.logs', {});
+      emit('app.debug.logs', {});
       jest.runAllTimers();
 
       // Assert
@@ -298,7 +301,7 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Act
-      capturedOnAnyHandler?.('user.created', {});
+      emit('user.created', {});
       jest.runAllTimers();
 
       // Assert
@@ -321,7 +324,7 @@ describe('EventWatcher', () => {
       const singlePayload = { user: 'test' };
 
       // Act
-      capturedOnAnyHandler?.('event', singlePayload);
+      emit('event', singlePayload);
       jest.runAllTimers();
 
       // Assert
@@ -335,7 +338,7 @@ describe('EventWatcher', () => {
 
     it('should capture multiple values as array', async () => {
       // Arrange & Act
-      capturedOnAnyHandler?.('event', 'value1', 'value2', 'value3');
+      emit('event', 'value1', 'value2', 'value3');
       jest.runAllTimers();
 
       // Assert
@@ -349,7 +352,7 @@ describe('EventWatcher', () => {
 
     it('should return undefined for no payload', async () => {
       // Arrange & Act
-      capturedOnAnyHandler?.('event');
+      emit('event');
       jest.runAllTimers();
 
       // Assert
@@ -366,7 +369,7 @@ describe('EventWatcher', () => {
       const largePayload = { data: 'x'.repeat(100000) };
 
       // Act
-      capturedOnAnyHandler?.('event', largePayload);
+      emit('event', largePayload);
       jest.runAllTimers();
 
       // Assert
@@ -393,7 +396,7 @@ describe('EventWatcher', () => {
       circularPayload.self = circularPayload;
 
       // Act
-      capturedOnAnyHandler?.('event', circularPayload);
+      emit('event', circularPayload);
       jest.runAllTimers();
 
       // Assert
@@ -417,7 +420,7 @@ describe('EventWatcher', () => {
       watcher.onModuleInit();
 
       // Act
-      capturedOnAnyHandler?.('test.event', {});
+      emit('test.event', {});
       jest.runAllTimers();
 
       // Assert
