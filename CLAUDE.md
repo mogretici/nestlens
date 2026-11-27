@@ -74,8 +74,14 @@ node --cpu-prof scripts/benchmark-load-server.mjs 4201 '{}'
 
 ### Linting
 ```bash
-npm run lint               # ESLint on src/**/*.ts
+npm run lint               # ESLint on src/, e2e/ and playwright.config.ts
+npx tsc -p e2e             # Type-check the Playwright specs (CI runs it)
 ```
+
+The Playwright specs have their own `e2e/tsconfig.json` — DOM types for the
+callbacks `page.evaluate` sends to the browser, none of the library's decorator
+or path settings — and ESLint parses them with it. Playwright strips types
+without checking them, so without `tsc -p e2e` a type error there reaches no one.
 
 ### Example App
 ```bash
@@ -90,8 +96,10 @@ cd example && npm run test:e2e     # Boots AppModule in-process (`e2e` project, 
 
 The example has its own `vitest.config.mts`, built like the library's: SWC
 through `unplugin-swc`, and `resolve.extensions` with `.js` before `.mjs`
-(`example/src/one-graphql.spec.ts` fails without it). CI does not run these
-specs; the Playwright suite is what drives the example there.
+(`example/src/one-graphql.spec.ts` fails without it). CI runs both projects
+in the E2E workflow's built-package job, after the build and the example
+install; `src/__tests__/example-specs-in-ci.spec.ts` fails if they stop running
+or move ahead of either.
 
 The example installs NestLens from `file:..` as a **copy**, not a symlink
 (`example/.npmrc` sets `install-links=true`). A symlink makes Node load
@@ -105,6 +113,19 @@ already satisfied and leaves the old copy in place, so the example keeps
 running whatever version was installed first — it was found sitting three
 releases behind, which silently made every E2E run test stale code. Delete
 `example/node_modules/nestlens` first.
+
+**The lockfile goes stale the same way.** `example/package-lock.json` copies
+the library's manifest into `node_modules/nestlens` — version, dependency
+ranges, engines, bin — and `npm install --package-lock-only` reports "up to
+date" without rewriting it. `sync-versions` writes the version at release;
+anything else that changes in the root `package.json` (a dependency, `engines`)
+needs the entry regenerated in the same commit:
+```bash
+cd example && npm install nestlens@file:.. --package-lock-only --ignore-scripts
+```
+Naming the dependency is what makes npm re-read the manifest and re-resolve
+what it pulls in. `src/__tests__/release-versions.spec.ts` compares the entry
+field by field with `package.json` and fails until it is done.
 
 **A running example has to be restarted.** `DashboardController` reads the
 built dashboard once, at bootstrap, so a rebuilt bundle reaches a live server
@@ -309,8 +330,8 @@ it is no longer required for Apollo or Mercurius.
   release (`.github/workflows/release.yml`); nothing else in the repository
   tests what npm actually serves, which is how 0.8.0 shipped a dashboard that
   was blank in a browser with every suite green.
-- Lint, type check, **build**, library tests and dashboard tests run on every
-  push and pull request (`.github/workflows/ci.yml`) — about two minutes. The
+- Lint, type check (library and Playwright specs), **build**, library tests
+  and dashboard tests run on every push and pull request (`.github/workflows/ci.yml`) — about two minutes. The
   build step is not optional: five integration suites serve the real bundle and
   skip themselves when `dist/dashboard/public/index.html` is missing, and
   without it 54 tests skipped in CI and nowhere else — the ones covering the
@@ -322,7 +343,10 @@ it is no longer required for Apollo or Mercurius.
   alone; what the suite drives is the example application, which runs the whole
   library, and on one branch of forty-five commits thirty changed none of the
   listed paths — including the Redis rewrite and the watcher wrapping fix,
-  which are exactly the changes that produce a blank dashboard. All three browsers run nightly at 03:00 UTC. Actions tab →
+  which are exactly the changes that produce a blank dashboard. The
+  built-package job also runs the example's own Vitest specs (`npm test` and
+  `npm run test:e2e` in `example/`), which take seconds and need exactly the
+  build and install it already does. All three browsers run nightly at 03:00 UTC. Actions tab →
   **E2E** → *Run workflow* still runs it on demand, with `all` as a browser
   option.
 - It used to be manual only, on the grounds that it is slow on a two-core
