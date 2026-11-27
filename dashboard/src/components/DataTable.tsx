@@ -382,7 +382,7 @@ export function TagsList({ tags, max = 3, onTagClick }: TagsListProps) {
           tabIndex={onTagClick ? 0 : undefined}
           aria-label={onTagClick ? `Click to filter by ${tag.toUpperCase()}` : undefined}
           className={`
-            inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
+            inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold uppercase tracking-wide shadow-sm
             ${getBadgeColor(tag)}
             ${onTagClick ? 'cursor-pointer hover:scale-105' : ''}
             transition-transform
@@ -446,7 +446,7 @@ export function GraphQLErrorBadge({ onClick }: GraphQLErrorBadgeProps) {
     <button
       onClick={onClick}
       className={`
-        inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
+        inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold uppercase tracking-wide shadow-sm
         ${colorClass}
         ${onClick ? 'cursor-pointer hover:scale-105' : ''}
         transition-transform
@@ -473,7 +473,7 @@ export function N1WarningBadge({ count, onClick }: N1WarningBadgeProps) {
       onClick={onClick}
       title={`${count} potential N+1 ${count === 1 ? 'query' : 'queries'} detected`}
       className={`
-        inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shadow
+        inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-bold uppercase tracking-wide shadow-sm
         ${colorClass}
         ${onClick ? 'cursor-pointer hover:scale-105' : ''}
         transition-transform

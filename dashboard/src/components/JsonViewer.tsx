@@ -206,7 +206,7 @@ const JsonNode = memo(function JsonNode({
   return (
     <>
       <div
-        className={`group flex items-start py-px hover:bg-gray-100 dark:hover:bg-white/5 rounded cursor-pointer transition-colors ${
+        className={`group flex items-start py-px hover:bg-gray-100 dark:hover:bg-white/5 rounded-sm cursor-pointer transition-colors ${
           hasMatch ? 'bg-yellow-500/10' : ''
         }`}
         onClick={isExpandable ? handleToggle : undefined}
@@ -417,7 +417,7 @@ export default function JsonViewer({
         {searchable && (
           <button
             onClick={toggleSearch}
-            className={`p-1.5 rounded transition-colors ${
+            className={`p-1.5 rounded-sm transition-colors ${
               showSearch
                 ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500'
@@ -517,7 +517,7 @@ export default function JsonViewer({
           {searchable && (
             <button
               onClick={toggleSearch}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded-sm transition-colors ${
                 showSearch
                   ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                   : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500'

@@ -80,7 +80,7 @@ export function useJsonToolbar() {
       <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
       <button
         onClick={toggleSearch}
-        className={`p-1.5 rounded transition-colors ${
+        className={`p-1.5 rounded-sm transition-colors ${
           state.showSearch
             ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
             : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500'

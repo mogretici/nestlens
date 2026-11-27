@@ -126,7 +126,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
           >
             {tab.label}
             <span
-              className={`inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium rounded ${
+              className={`inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium rounded-sm ${
                 activeTab === tab.id
                   ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                   : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
