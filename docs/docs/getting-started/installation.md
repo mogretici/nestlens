@@ -52,8 +52,8 @@ npm install nestlens
 
 NestLens requires these peer dependencies (likely already in your NestJS project):
 
-- `@nestjs/common` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0
-- `@nestjs/core` ^9.0.0 || ^10.0.0 || ^11.0.0 || ^12.0.0
+- `@nestjs/common` ^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0
+- `@nestjs/core` ^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0
 - `reflect-metadata` ^0.1.13 || ^0.2.0
 - `rxjs` ^7.0.0
 

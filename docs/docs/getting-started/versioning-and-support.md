@@ -43,7 +43,8 @@ the wording of log messages.
 ## Supported NestJS and Node versions
 
 Every release is tested against this matrix in CI, on both the Express and
-Fastify adapters:
+Fastify adapters. The NestJS 9 row is 9.4.3 or later, which is what the peer
+range admits — `^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0`:
 
 | | Node 20 | Node 22 | Node 24 |
 | --- | --- | --- | --- |

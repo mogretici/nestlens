@@ -179,7 +179,8 @@ reads the Express the adapter actually loads.
 
 ## Verified NestJS and Node versions
 
-Every release is tested against this matrix in CI:
+Every release is tested against this matrix in CI; the NestJS 9 row is 9.4.3
+or later:
 
 | | Node 20 | Node 22 | Node 24 |
 | --- | --- | --- | --- |
