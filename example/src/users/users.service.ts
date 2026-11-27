@@ -7,7 +7,7 @@ import { User } from './entities/user.entity';
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private db: DatabaseService) { }
+  constructor(private db: DatabaseService) {}
 
   findAll(): User[] {
     this.logger.log('Fetching all users');
