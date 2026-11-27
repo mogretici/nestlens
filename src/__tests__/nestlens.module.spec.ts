@@ -36,8 +36,12 @@ describe('NestLensModule', () => {
           provide: NESTLENS_CONFIG,
           useValue: expect.objectContaining({ enabled: false }),
         });
+        const isConfiguration = (provider: unknown): boolean => {
+          const { provide, useValue } = provider as { provide?: unknown; useValue?: unknown };
+          return typeof provide === 'symbol' && (useValue as NestLensConfig)?.enabled === false;
+        };
         const others = (dynamicModule.providers ?? []).filter(
-          (provider) => (provider as { provide?: unknown }).provide !== NESTLENS_CONFIG,
+          (provider) => !isConfiguration(provider),
         );
         expect(
           others.every((provider) =>

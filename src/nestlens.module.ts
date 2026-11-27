@@ -7,6 +7,7 @@ import {
   Logger,
   Module,
   OnModuleInit,
+  Optional,
   Provider,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
@@ -234,11 +235,25 @@ const ALL_WATCHERS_OFF: NestLensConfig = {
   ) as NestLensConfig['watchers'],
 };
 
+/**
+ * The configuration as `forRoot` resolved it, for the module `forRoot` returned.
+ *
+ * Provided there and never exported. `imports: [NestLensModule]` in a feature
+ * module makes Nest instantiate the class a second time, and the hooks below
+ * belong to the class: through the global `NESTLENS_CONFIG` that instance
+ * printed the startup summary again and applied the request-context middleware
+ * a second time on every request — and with NestLens off, where nothing shares
+ * `NESTLENS_CONFIG`, it stopped the application booting. Only the module
+ * `forRoot` built can see this token, so the other instance does nothing.
+ */
+const FOR_ROOT_CONFIG = Symbol('NESTLENS_FOR_ROOT_CONFIG');
+
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
   constructor(
-    @Inject(NESTLENS_CONFIG)
-    private readonly config: NestLensConfig,
+    @Optional()
+    @Inject(FOR_ROOT_CONFIG)
+    private readonly config?: NestLensConfig,
   ) {}
 
   /**
@@ -255,7 +270,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
    * the library off, plus a property written onto every request object.
    */
   configure(consumer: MiddlewareConsumer): void {
-    if (this.config.enabled === false) {
+    if (!this.config || this.config.enabled === false) {
       return;
     }
 
@@ -281,6 +296,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
             provide: NESTLENS_CONFIG,
             useValue: mergedConfig,
           },
+          { provide: FOR_ROOT_CONFIG, useValue: mergedConfig },
           // Still injectable, and inert: a service written against a watcher's
           // manual API boots, and its calls do nothing.
           ...[...OPT_IN_WATCHERS, NestLensLogger].map((provided) => ({
@@ -302,9 +318,12 @@ export class NestLensModule implements NestModule, OnModuleInit {
 
     // Settles the SPA catch-all's syntax against the adapter Nest was given;
     // see spa-wildcard.ts for why that cannot be decided here.
-    const providers: Provider[] = ownServer
-      ? [{ provide: NESTLENS_SERVER_CONFIG, useValue: ownServer }, NestLensDashboardServer]
-      : [NestLensGuard, SpaRouteRegistrar];
+    const providers: Provider[] = [
+      { provide: FOR_ROOT_CONFIG, useValue: mergedConfig },
+      ...(ownServer
+        ? [{ provide: NESTLENS_SERVER_CONFIG, useValue: ownServer }, NestLensDashboardServer]
+        : [NestLensGuard, SpaRouteRegistrar]),
+    ];
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
     const controllers = ownServer
       ? []
@@ -472,7 +491,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
   async onModuleInit() {
     // forRoot has already said "NestLens is disabled"; a summary after it
     // described a recorder and a dashboard that do not exist.
-    if (this.config.enabled === false) return;
+    if (!this.config || this.config.enabled === false) return;
 
     // What it is doing, not that it started: three of the four configuration
     // mistakes an application reported are visible in this line.
