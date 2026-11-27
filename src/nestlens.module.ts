@@ -181,6 +181,29 @@ class NestLensScheduleModule {
   }
 }
 
+/**
+ * A configuration with its `undefined` values left out, at every depth.
+ *
+ * `undefined` is "not configured", so it has to leave the default in place.
+ * Spread as it was, `watchers: { gate: undefined }` replaced the default
+ * `false` with `undefined` — which a watcher reads as on — and
+ * `path: process.env.NESTLENS_PATH` with the variable unset replaced the mount
+ * point. Only plain objects are walked: an array is a value, and an object of a
+ * class is the application's, to be handed on as it is.
+ */
+const withoutUndefined = <T>(value: T): T => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, withoutUndefined(entry)]),
+  ) as T;
+};
+
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
   constructor(
@@ -442,7 +465,7 @@ export class NestLensModule implements NestModule, OnModuleInit {
   private static mergeConfig(input: NestLensConfig): NestLensConfig {
     // A preset is settings, not behaviour: it is folded in first so everything
     // written here overrides it, exactly as a default would.
-    const config = applyPreset(input);
+    const config = applyPreset(withoutUndefined(input));
 
     return {
       ...DEFAULT_CONFIG,
