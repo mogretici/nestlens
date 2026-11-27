@@ -372,6 +372,65 @@ describe('GateWatcher', () => {
       );
     });
 
+    // The arguments are read as `(gate, action?, subject?, user?)`, but the
+    // shape Laravel made common — `allows('update-post', post)` — names no
+    // action. Read by position, the post became the action: an object in a
+    // field typed `string`, and the subject and user were lost.
+    it('reads a second argument that is not a string as the subject, not the action', async () => {
+      const service = createGateService();
+      watcher = await createWatcher(mockConfig, service);
+      watcher.onModuleInit();
+      const post = { id: 7, type: 'Post' };
+      const user = { id: 42 };
+
+      await service.allows('update-post', post, user);
+
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'gate',
+        expect.objectContaining({
+          gate: 'update-post',
+          action: 'allows',
+          subject: 'Post',
+          userId: 42,
+          allowed: true,
+        }),
+      );
+    });
+
+    it('still records denies(gate, subject) as a refusal when it answers true', async () => {
+      const service = createGateService({ denies: jest.fn().mockResolvedValue(true) });
+      watcher = await createWatcher(mockConfig, service);
+      watcher.onModuleInit();
+
+      await service.denies('delete-post', { id: 7, type: 'Post' });
+
+      expect(mockCollector.collect).toHaveBeenCalledWith(
+        'gate',
+        expect.objectContaining({
+          gate: 'delete-post',
+          action: 'denies',
+          subject: 'Post',
+          allowed: false,
+        }),
+      );
+    });
+
+    it('never records anything but a string as the gate or the action', async () => {
+      const service = createGateService();
+      watcher = await createWatcher(mockConfig, service);
+      watcher.onModuleInit();
+
+      await service.can({ id: 1 }, 42);
+      await service.check();
+
+      for (const [, payload] of mockCollector.collect.mock.calls) {
+        const { gate, action } = payload as { gate: unknown; action: unknown };
+        expect(typeof gate).toBe('string');
+        expect(typeof action).toBe('string');
+      }
+      expect(mockCollector.collect).toHaveBeenCalledTimes(2);
+    });
+
     it('should wrap authorize method', async () => {
       // Arrange
       const service = createGateService();

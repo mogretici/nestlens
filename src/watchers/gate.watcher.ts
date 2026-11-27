@@ -17,6 +17,35 @@ import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
  */
 export const NESTLENS_GATE_SERVICE = Symbol('NESTLENS_GATE_SERVICE');
 
+interface GateArguments {
+  gate: string;
+  action: string;
+  subject?: unknown;
+  user?: unknown;
+}
+
+/**
+ * Reads a wrapped call as `(gate, action?, subject?, user?)`.
+ *
+ * Only a string names the gate or the action. `allows('update-post', post)` —
+ * the shape Laravel made common — names no action, and read by position the
+ * post became one: an object in a field the entry types as a string, with the
+ * subject and the user lost. A second argument that is not a string therefore
+ * starts the subject, and whatever is not named falls back to the method.
+ */
+const readGateArguments = (method: string, args: unknown[]): GateArguments => {
+  const [first, second, ...rest] = args;
+  const gate = typeof first === 'string' ? first : method;
+
+  if (typeof second === 'string') {
+    const [subject, user] = rest;
+    return { gate, action: second || method, subject, user };
+  }
+
+  const [user] = rest;
+  return { gate, action: method, subject: second, user };
+};
+
 /**
  * GateWatcher tracks authorization checks in NestJS applications.
  * Monitors gate/policy evaluations to track what resources users can access,
@@ -66,14 +95,14 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     for (const method of ['check', 'allows', 'denies', 'authorize', 'can']) {
       this.wrapped.replace(method, (original) =>
         wrapMethodPreservingShape(original, ({ args, result, error, durationMs }) => {
-          const [gate, action, subject, user] = args as [string, string?, unknown?, unknown?];
+          const { gate, action, subject, user } = readGateArguments(method, args);
 
           // `denies` answers the opposite question, so its `true` is a refusal.
           const allowed = error ? false : method === 'denies' ? !result : Boolean(result);
 
           this.collectEntry(
             gate,
-            action || method,
+            action,
             subject,
             allowed,
             user,
