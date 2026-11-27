@@ -71,3 +71,10 @@ export const compatibility = (): {
     include: job.strategy?.matrix?.include ?? [],
   };
 };
+
+/** `release.yml`'s smoke job: the Node versions it runs on, and its own steps. */
+export const smoke = (): { readonly nodes: string[]; readonly steps: readonly Step[] } => {
+  const job = jobOf('release.yml', 'smoke');
+
+  return { nodes: listOf(job, 'node'), steps: job.steps ?? [] };
+};

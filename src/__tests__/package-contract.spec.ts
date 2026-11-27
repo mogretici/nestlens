@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { builtinModules } from 'module';
 import { join, relative, resolve } from 'path';
-import { compatibility, majorOf } from './support/ci-matrix';
+import { compatibility, majorOf, smoke } from './support/ci-matrix';
 
 const SRC_ROOT = resolve(__dirname, '..');
 const REPO_ROOT = resolve(SRC_ROOT, '..');
@@ -313,6 +313,20 @@ describe('package contract', () => {
       expect(row).toBeDefined();
       expect(companions).toBeDefined();
       expect({ ...row, node: undefined }).toEqual({ ...companions, node: undefined });
+    });
+
+    /**
+     * The smoke test is the only check of what npm serves, and it ran on Node
+     * 22 alone. A dependency that installs there and is dropped on the newest
+     * line — better-sqlite3 11 on Node 26 — passes it, so it runs on the exact
+     * floor and on the newest line the matrix tests.
+     */
+    it('smokes the published package on the floor and on the newest line', () => {
+      const { nodes, steps } = smoke();
+      const setup = steps.find((step) => step.uses === './.github/actions/setup-node');
+
+      expect(nodes).toEqual([floor, String(lines[lines.length - 1])]);
+      expect(setup?.with?.['node-version']).toBe('${{ matrix.node }}');
     });
   });
 
