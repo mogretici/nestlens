@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Controller, Post, Body, Inject, Logger } from '@nestjs/common';
 import {
   CollectorService,
@@ -1034,12 +1035,12 @@ export class SimulationsController {
       },
     ];
 
-    const selected =
-      body.result === 'denied'
-        ? gates.filter((g) => !g.allowed)[
-            Math.floor(Math.random() * gates.filter((g) => !g.allowed).length)
-          ]
-        : gates[Math.floor(Math.random() * gates.length)];
+    // An authorization decision, even a simulated one: CodeQL treats
+    // Math.random() feeding `allowed` as insecure randomness, and randomInt
+    // costs nothing here.
+    const candidates =
+      body.result === 'denied' ? gates.filter((g) => !g.allowed) : gates;
+    const selected = candidates[randomInt(candidates.length)];
 
     await this.collector.collect('gate', {
       gate: selected.gate,
@@ -1048,7 +1049,7 @@ export class SimulationsController {
       userId: selected.userId,
       allowed: selected.allowed,
       reason: selected.reason,
-      duration: Math.floor(Math.random() * 5) + 1,
+      duration: randomInt(1, 6),
       context: selected.context,
     });
 
