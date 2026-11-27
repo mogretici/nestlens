@@ -59,11 +59,15 @@ const COPIED_FIELDS = [
   'workspaces',
 ] as const;
 
-/** What npm writes for a field: nothing for an empty object, the type of a license object. */
-const asLocked = (value: unknown): unknown => {
+/**
+ * What npm writes for a field: nothing for an empty object, and for `license`
+ * alone the type of a license object (arborist's metaFieldFromPkg) — a
+ * `funding` object, say, is kept whole.
+ */
+const asLocked = (field: string, value: unknown): unknown => {
   if (!value) return undefined;
   if (typeof value !== 'object') return value;
-  if ('type' in value && typeof value.type === 'string') return value.type;
+  if (field === 'license' && 'type' in value && typeof value.type === 'string') return value.type;
 
   return Object.keys(value).length > 0 ? value : undefined;
 };
@@ -95,7 +99,7 @@ describe('the versions a release writes', () => {
       ];
 
       expect(entry, 'example/package-lock.json has no node_modules/nestlens').toBeDefined();
-      expect(entry[field], REGENERATE).toEqual(asLocked(manifest[field]));
+      expect(entry[field], REGENERATE).toEqual(asLocked(field, manifest[field]));
     },
   );
 
