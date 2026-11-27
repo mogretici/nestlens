@@ -84,7 +84,14 @@ cd example && rm -rf node_modules/nestlens && npm install   # After every rebuil
 cd example && npm start    # Run example NestJS app with NestLens
 cd example && ./test-requests.sh  # Generate test data for every entry type; needs the app
                                    # running, curl and python3. Args: [base URL] [mount path]
+cd example && npm test     # Example's own Vitest specs (`unit` project, src/**/*.spec.ts)
+cd example && npm run test:e2e     # Boots AppModule in-process (`e2e` project, test/)
 ```
+
+The example has its own `vitest.config.mts`, built like the library's: SWC
+through `unplugin-swc`, and `resolve.extensions` with `.js` before `.mjs`
+(`example/src/one-graphql.spec.ts` fails without it). CI does not run these
+specs; the Playwright suite is what drives the example there.
 
 The example installs NestLens from `file:..` as a **copy**, not a symlink
 (`example/.npmrc` sets `install-links=true`). A symlink makes Node load
