@@ -30,7 +30,8 @@ sections below.
 
 ## 0.17.x → 0.18.0
 
-Nothing to edit. The one change is the Node.js floor.
+Nothing to edit. Two things change: the Node.js floor, and the `better-sqlite3`
+NestLens installs.
 
 ### Node 20 is no longer supported
 
@@ -53,6 +54,21 @@ An application on NestJS 9 to 11 still on Node 20 will most likely keep working
 for now, but it is no longer tested, and a future release may use something
 Node 20 does not have. If `npm install` now warns about the engine, the fix is
 to upgrade Node rather than to pin NestLens.
+
+### `better-sqlite3` 12 is the one installed
+
+NestLens lists `better-sqlite3` as an optional dependency so that the SQLite
+driver works without a second install. It asked for the 11 line, while every
+test ran on 12. The 11 line has no prebuilt binary for Node 26 and does not
+compile there, so npm skipped it without an error and `storage.driver: 'sqlite'`
+answered *SQLite storage requires better-sqlite3 to be installed*. It now asks
+for `^12.11.1`, which installs prebuilt on Node 22, 24 and 26.
+
+The peer range narrows to match, from `^11.0.0 || ^12.0.0 || ^13.0.0` to
+`^12.0.0`. npm installs NestLens's own copy whatever the application has, so 11
+and 13 were never what NestLens ran on by default, and nothing tested them. An
+application on 11 or 13 keeps its own and gets a second copy nested under
+`nestlens`; nothing to change.
 
 ## 0.16.x → 0.17.0
 

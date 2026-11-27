@@ -33,6 +33,7 @@ const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'ut
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   engines?: { node?: string };
   main?: string;
   types?: string;
@@ -312,6 +313,72 @@ describe('package contract', () => {
       expect(row).toBeDefined();
       expect(companions).toBeDefined();
       expect({ ...row, node: undefined }).toEqual({ ...companions, node: undefined });
+    });
+  });
+
+  /**
+   * An optional dependency is installed into every application that installs
+   * NestLens, and the suite runs whatever the devDependency names. They had
+   * drifted a major apart: the suite ran better-sqlite3 12 while the package
+   * asked for `^11.6.0`, which has no prebuilt binary for Node 26 and does not
+   * compile against its V8 — npm dropped it silently, and `nestlens/storage/sqlite`
+   * failed to load in every fresh install on a Node the matrix called green.
+   *
+   * The peer range has to say the same. npm installs the optional copy whatever
+   * the application has, so a peer range wider than that line promised majors
+   * nothing installs by default and nothing tests.
+   */
+  describe('the optional dependencies are the line the suite tests', () => {
+    /** `^12.11.1` → [12, 11, 1]; anything not in that form is reported, not guessed at. */
+    const caret = (range: string | undefined): number[] | undefined => {
+      const parts = range?.match(/^\^(\d+)\.(\d+)\.(\d+)$/);
+      return parts ? parts.slice(1).map(Number) : undefined;
+    };
+    const atLeast = (version: number[], floor: number[]): boolean => {
+      const index = version.findIndex((part, i) => part !== floor[i]);
+      return index === -1 || (version[index] as number) > (floor[index] as number);
+    };
+    const optional = Object.entries(packageJson.optionalDependencies ?? {});
+
+    it('there are some', () => {
+      expect(optional.length).toBeGreaterThan(0);
+    });
+
+    it('each shares its major with the devDependency and admits its version', () => {
+      const drift = optional
+        .map(([name, range]) => {
+          const tested = packageJson.devDependencies?.[name];
+          const floor = caret(range);
+          const version = caret(tested);
+          const drifted = `${name}: optional ${range}, devDependency ${tested ?? 'missing'}`;
+
+          if (floor === undefined || version === undefined) return drifted;
+
+          return floor[0] === version[0] && atLeast(version, floor) ? undefined : drifted;
+        })
+        .filter((line): line is string => line !== undefined);
+
+      expect(drift).toEqual([]);
+    });
+
+    it('a peer of the same name admits the tested version, on that major and no other', () => {
+      const drift = optional
+        .filter(([name]) => packageJson.peerDependencies?.[name] !== undefined)
+        .map(([name, range]) => {
+          const peer = packageJson.peerDependencies?.[name] as string;
+          const alternatives = peer.split('||').map((part) => caret(part.trim()));
+          const line = caret(range)?.[0];
+          const tested = caret(packageJson.devDependencies?.[name]);
+
+          return tested !== undefined &&
+            alternatives.every((floor) => floor !== undefined && floor[0] === line) &&
+            alternatives.some((floor) => floor !== undefined && atLeast(tested, floor))
+            ? undefined
+            : `${name}: peer ${peer}, optional ${range}`;
+        })
+        .filter((line): line is string => line !== undefined);
+
+      expect(drift).toEqual([]);
     });
   });
 

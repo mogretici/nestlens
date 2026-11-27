@@ -73,9 +73,10 @@ These ship with NestLens — you don't need to install them:
 
 Install these only when you use the matching feature. They are declared as
 optional peer dependencies, so npm will not complain if they are missing, and
-the ranges are the ones npm checks when they are present:
+the ranges are the ones npm checks when they are present — except
+`better-sqlite3`, which NestLens installs itself (see below):
 
-- `better-sqlite3` ^11.0.0 || ^12.0.0 || ^13.0.0 — SQLite storage driver
+- `better-sqlite3` ^12.0.0 — SQLite storage driver
 - `ioredis` ^5.0.0 — Redis storage driver
 - `bullmq` ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 — Job watcher on BullMQ queues
 - `@nestjs/cache-manager` ^1.0.0 || ^2.0.0 || ^3.0.0 || ^12.0.0 — Cache watcher
@@ -98,9 +99,16 @@ are handed the application's own client or service through a token
 (`NESTLENS_REDIS_CLIENT`, `NESTLENS_EVENT_EMITTER`, …), so the version is
 whichever the application uses.
 
-> `better-sqlite3` is also listed as an `optionalDependency`, so npm tries to
-> install it automatically; if the native build fails, NestLens still works on
-> the default in-memory storage.
+> `better-sqlite3` is also an `optionalDependency` (`^12.11.1`), so npm
+> installs it with NestLens and there is nothing to add. npm installs that copy
+> whatever the application has: an application on another major — 11 or 13 —
+> keeps its own and gets a second one nested under `nestlens` (measured with
+> npm 11.21.3). If the native install fails, npm skips the package without an
+> error; NestLens still runs on the default in-memory storage, and
+> `storage.driver: 'sqlite'` fails at startup asking for `better-sqlite3`.
+>
+> pnpm and Yarn do not document what they do with a package that is both an
+> optional dependency and a peer, and NestLens is not tested with them.
 
 ## HTTP Adapter Compatibility
 
