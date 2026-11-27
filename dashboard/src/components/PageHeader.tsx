@@ -183,7 +183,7 @@ export default function PageHeader({
               }`}
               title={autoRefreshEnabled ? 'Auto-refresh enabled' : 'Auto-refresh disabled'}
             >
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
               <span>Auto Refresh</span>
             </button>
           )}
@@ -243,7 +243,7 @@ export default function PageHeader({
                     className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors group uppercase"
                   >
                     <span>{filter.value}</span>
-                    <X className="h-3 w-3 opacity-60 group-hover:opacity-100" />
+                    <X className="h-3 w-3 opacity-60 group-hover:opacity-100 group-focus-visible:opacity-100" />
                   </button>
                 ))}
               </div>

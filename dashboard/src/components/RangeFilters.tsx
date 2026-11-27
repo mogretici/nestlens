@@ -29,7 +29,7 @@ const SELECT_CLASS =
   // The browser's own outline is replaced, not removed: without the ring these
   // two were the only controls in the dashboard a keyboard could reach and not
   // see, against a page that says focus indicators are visible throughout.
-  'border-0 p-0 pr-1 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer';
+  'border-0 p-0 pr-1 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-primary-500 cursor-pointer';
 
 /**
  * The two range filters, side by side above the table.
@@ -45,7 +45,7 @@ export default function RangeFilters({ route }: RangeFiltersProps) {
   return (
     <div className="flex items-center gap-4">
       <label className={WRAPPER_CLASS}>
-        <Clock className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+        <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className="sr-only">Time window</span>
         <select
           aria-label="Time window"
@@ -60,12 +60,12 @@ export default function RangeFilters({ route }: RangeFiltersProps) {
             </option>
           ))}
         </select>
-        <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-60" aria-hidden="true" />
+        <ChevronDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
       </label>
 
       {measuresDuration && (
         <label className={WRAPPER_CLASS}>
-          <Timer className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="sr-only">Minimum duration</span>
           <select
             aria-label="Minimum duration"
@@ -80,7 +80,7 @@ export default function RangeFilters({ route }: RangeFiltersProps) {
               </option>
             ))}
           </select>
-          <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-60" aria-hidden="true" />
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
         </label>
       )}
     </div>

@@ -120,13 +120,13 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
             onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${
               activeTab === tab.id
-                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
             }`}
           >
             {tab.label}
             <span
-              className={`inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium rounded ${
+              className={`inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium rounded-sm ${
                 activeTab === tab.id
                   ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                   : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-400'
@@ -161,7 +161,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                   <code className="text-sm font-mono text-gray-700 dark:text-gray-300 truncate flex-1 mr-4">
                     {truncate(query.payload.query, 70)}
                   </code>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     {query.payload.slow && (
                       <ClickableBadge listType="queries">SLOW</ClickableBadge>
                     )}
@@ -201,7 +201,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="text-sm text-gray-500 dark:text-gray-400">
                       {formatDistanceToNow(parseDate(exception.createdAt), { addSuffix: true })}
                     </span>
@@ -235,7 +235,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                     </ClickableBadge>
                   )}
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm text-gray-500 dark:text-gray-400">
                     {formatDistanceToNow(parseDate(log.createdAt), { addSuffix: true })}
                   </span>
@@ -261,7 +261,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                     {event.payload.listeners.length} listener(s)
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm font-mono text-gray-500 dark:text-gray-400">
                     {formatDuration(event.payload.duration)}
                   </span>
@@ -292,7 +292,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                     on {job.payload.queue}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   {job.payload.duration !== undefined && (
                     <span className="text-sm font-mono text-gray-500 dark:text-gray-400">
                       {formatDuration(job.payload.duration)}
@@ -327,7 +327,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                     </ClickableBadge>
                   )}
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm font-mono text-gray-500 dark:text-gray-400">
                     {formatDuration(cache.payload.duration)}
                   </span>
@@ -358,7 +358,7 @@ export default function RelatedEntries({ entries }: RelatedEntriesProps) {
                     to {Array.isArray(mailEntry.payload.to) ? mailEntry.payload.to.join(', ') : mailEntry.payload.to}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
                   <span className="text-sm font-mono text-gray-500 dark:text-gray-400">
                     {formatDuration(mailEntry.payload.duration)}
                   </span>

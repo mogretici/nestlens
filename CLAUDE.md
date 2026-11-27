@@ -116,7 +116,7 @@ session, each time looking like the fix had not worked.
 
 ### Monorepo Structure
 - `src/` - NestJS library (TypeScript, CommonJS)
-- `dashboard/` - React SPA (Vite, TypeScript, Tailwind)
+- `dashboard/` - React SPA (Vite, TypeScript, Tailwind CSS 4)
 - `example/` - Demo NestJS app for testing
 - `e2e/` - Playwright end-to-end tests
 - `docs/` - Docusaurus documentation site
@@ -154,6 +154,19 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
 - Fetches data from `/nestlens/__nestlens__/api/*` (the mount point, then the API prefix, then `api`)
 - Components in `components/`, pages in `pages/`
 - Types mirror backend Entry types in `types.ts`
+- Styling is Tailwind CSS 4 through `@tailwindcss/vite`, configured in CSS:
+  `src/index.css` holds the theme, the dark variant and the base styles, and
+  there is no `tailwind.config.js` or PostCSS config. `src/tailwind3-defaults.css`
+  keeps Tailwind 3's palette, font and line heights, so the move to 4 left the
+  dashboard looking as it did; removing it is a visible redesign, not a cleanup.
+- A variant on a pseudo-element is lost without a warning: `@apply dark:…` on
+  `::-webkit-scrollbar-thumb` becomes `::-webkit-scrollbar-thumb:is(.dark *)`,
+  which is not a valid selector; Lightning CSS empties it to `:is()` and the
+  minified build drops the rule. Write those selectors in plain CSS
+  (`stylesheet.spec.ts` checks every stylesheet under `src/`). Playwright's
+  headless Chromium hides scrollbars, so only WebKit screenshots show them.
+- `npm run typecheck` covers the app and `vite.config.ts`; a bare `tsc` reads
+  only the first.
 
 ### Module Registration
 `NestLensModule.forRoot(config)` in `nestlens.module.ts`:

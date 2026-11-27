@@ -197,7 +197,7 @@ export default function StackTraceViewer({
                   </>
                 )}
                 {isOrigin && (
-                  <span className="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded">
+                  <span className="ml-2 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-sm">
                     origin
                   </span>
                 )}

@@ -129,7 +129,7 @@ export default function Tabs({ tabs, defaultTab, hashKey, headerRight, onTabChan
             <span className="flex items-center gap-2">
               {tab.label}
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded">
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-sm">
                   {tab.badge}
                 </span>
               )}

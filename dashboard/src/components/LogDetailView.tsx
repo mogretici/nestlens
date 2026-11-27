@@ -52,7 +52,7 @@ export default function LogDetailView({ entry }: LogDetailViewProps) {
           </h2>
         </div>
         <div className="p-4">
-          <dl className="divide-y-0">
+          <dl className="*:not-first:border-y-0">
             <DetailRow
               label="Time"
               value={

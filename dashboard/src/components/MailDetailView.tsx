@@ -48,7 +48,7 @@ export default function MailDetailView({ entry }: MailDetailViewProps) {
       content: (
         <div className="p-4">
           <div
-            className="mail-preview bg-white text-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg p-4 max-h-[500px] overflow-auto shadow-sm"
+            className="mail-preview bg-white text-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg p-4 max-h-[500px] overflow-auto shadow-xs"
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(payload.html) }}
           />
         </div>
@@ -155,7 +155,7 @@ export default function MailDetailView({ entry }: MailDetailViewProps) {
           </h2>
         </div>
         <div className="p-4">
-          <dl className="divide-y-0">
+          <dl className="*:not-first:border-y-0">
             <DetailRow
               label="Time"
               value={

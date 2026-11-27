@@ -159,7 +159,7 @@ export default function SqlViewer({
             {parameters.map((param, index) => (
               <span
                 key={index}
-                className="inline-flex items-center px-2 py-1 rounded bg-gray-200 dark:bg-gray-800 text-sm font-mono"
+                className="inline-flex items-center px-2 py-1 rounded-sm bg-gray-200 dark:bg-gray-800 text-sm font-mono"
               >
                 <span className="text-purple-600 dark:text-purple-400 mr-1">${index + 1}:</span>
                 <span className="text-gray-700 dark:text-gray-300">

@@ -63,7 +63,7 @@ export function EntryTags({
       {localTags.map((tag) => (
         <span
           key={tag}
-          className={`inline-flex items-center rounded font-bold uppercase tracking-wide shadow ${sizeClasses} ${getBadgeColor(tag)}`}
+          className={`inline-flex items-center rounded-sm font-bold uppercase tracking-wide shadow-sm ${sizeClasses} ${getBadgeColor(tag)}`}
         >
           {tag.toUpperCase()}
           {editable && (
@@ -95,7 +95,7 @@ export function EntryTags({
                 }}
                 placeholder="New tag..."
                 aria-label="New tag"
-                className="px-2 py-0.5 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 w-24"
+                className="px-2 py-0.5 text-xs border rounded-sm dark:bg-gray-700 dark:border-gray-600 w-24"
                 autoFocus
               />
               <button

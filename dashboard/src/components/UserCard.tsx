@@ -30,11 +30,11 @@ export default function UserCard({ user }: UserCardProps) {
         </h2>
       </div>
       <div className="p-4">
-        <dl className="divide-y-0">
+        <dl className="*:not-first:border-y-0">
           <DetailRow
             label="ID"
             value={
-              <code className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+              <code className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-sm">
                 {String(user.id)}
               </code>
             }
