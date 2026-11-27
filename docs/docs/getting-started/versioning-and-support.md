@@ -16,6 +16,11 @@ NestLens follows [semantic versioning](https://semver.org). From `1.0` onward:
   features. Safe to take.
 - **Patch** (`1.0` → `1.0.1`) — a fix. Safe to take.
 
+Before `1.0` — today — a minor release may also break something
+([SemVer §4](https://semver.org/#spec-item-4)), and a patch is still a fix.
+Every such change is listed in [upgrading](./upgrading.md) with the edit it
+asks for.
+
 Releases are published by CI from `main`, and every one of them is installed
 into an empty project and booted before it is considered done — the same check
 that runs locally as `npm run test:smoke`.
