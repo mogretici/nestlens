@@ -194,7 +194,7 @@
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
-    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/coverage-v8": "^5.1.2",
     "axios": "^1.19.0",
     "better-sqlite3": "^12.11.1",
     "cache-manager": "^7.2.9",
@@ -219,7 +219,8 @@
     "typeorm": "^0.3.20",
     "typescript": "^5.7.2",
     "unplugin-swc": "^2.0.0",
-    "vitest": "^4.1.12",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2",
     "yaml": "^2.9.1"
   },
   "overrides": {

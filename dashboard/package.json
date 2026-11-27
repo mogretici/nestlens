@@ -35,7 +35,7 @@
     "@typescript-eslint/eslint-plugin": "^8.74.0",
     "@typescript-eslint/parser": "^8.74.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/coverage-v8": "^5.1.2",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -45,7 +45,7 @@
     "tailwindcss": "^4.3.5",
     "typescript": "^5.7.2",
     "vite": "^6.4.5",
-    "vitest": "^4.1.12"
+    "vitest": "^5.1.2"
   },
   "packageManager": "npm@11.21.3",
   "devEngines": {
