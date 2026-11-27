@@ -46,7 +46,7 @@ Every release is tested against this matrix in CI, on both the Express and
 Fastify adapters. The NestJS 9 row is 9.4.3 or later, which is what the peer
 range admits — `^9.4.3 || ^10.0.0 || ^11.0.0 || ^12.0.0`:
 
-| | Node 20 | Node 22 | Node 24 |
+| | Node 22 | Node 24 | Node 26 |
 | --- | --- | --- | --- |
 | **NestJS 9** | ✅ | ✅ | ✅ |
 | **NestJS 10** | ✅ | ✅ | ✅ |
@@ -58,12 +58,13 @@ get — `@nestjs/graphql`, `@nestjs/apollo`, `@nestjs/mercurius`,
 `@nestjs/schedule`, `@nestjs/typeorm`, `@nestjs/axios`, `@nestjs/cache-manager`
 — and fails if any of them resolves to a release meant for another NestJS.
 
-The Node.js floor on NestJS 12 is higher than on 9 to 11, and AWS Lambda needs
-a flag: see [NestJS 12 and Node.js](./installation.md#nestjs-12-and-nodejs).
-
-`engines` asks for Node 20 or newer, and a contract test fails the build if the
-floor of that matrix and the floor in `engines` ever disagree — a version cannot
-be claimed without being run.
+`engines` asks for Node 22.13 or newer, and a contract test fails the build if
+the floor of that matrix and the floor in `engines` ever disagree — a version
+cannot be claimed without being run. CI runs 22.13.0 itself as well as the
+newest 22.x. 22.13 rather than 22.0 because NestJS 12 needs Node to load an ES
+module through `require`, which 22.12 does with a warning at every boot and 22.13
+without one; AWS Lambda needs a flag for it: see
+[NestJS 12 and Node.js](./installation.md#nestjs-12-and-nodejs).
 
 ### How long a version stays supported
 
@@ -72,7 +73,9 @@ be claimed without being run.
   [security policy](https://github.com/mogretici/nestlens/security/policy) says
   the same.
 - **Node** — a Node release leaves the matrix when it reaches end-of-life, in
-  the first NestLens minor after that date. Node 18 left this way.
+  the first NestLens minor after that date. Node 18 left this way; Node 20
+  should have left with 0.10 and stayed until 0.18
+  ([upgrade notes](./upgrading.md#node-20-is-no-longer-supported)).
 - **NestJS** — a NestJS major leaves the matrix when NestLens can no longer
   support it without compromising the others, and never in a patch release.
 

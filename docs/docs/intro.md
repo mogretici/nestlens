@@ -33,7 +33,7 @@ NestLens captures and visualizes everything happening in your NestJS application
 | **Automatic ORM Detection** | TypeORM and Prisma found on their own; Prisma 6.14+ needs query logging on the client |
 | **Express & Fastify** | Works with both NestJS HTTP adapters, no extra setup |
 | **TypeScript Native** | Full type safety throughout |
-| **Production Ready** | Tested on NestJS 9–12 and Node 20–24, on Express and Fastify; every release is installed from npm and booted before it counts |
+| **Production Ready** | Tested on NestJS 9–12 and Node 22, 24 and 26, on Express and Fastify; every release is installed from npm and booted before it counts |
 
 ## Quick Preview
 

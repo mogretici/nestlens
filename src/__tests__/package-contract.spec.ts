@@ -19,6 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { builtinModules } from 'module';
 import { join, relative, resolve } from 'path';
+import { compatibility, majorOf, smoke } from './support/ci-matrix';
 
 const SRC_ROOT = resolve(__dirname, '..');
 const REPO_ROOT = resolve(SRC_ROOT, '..');
@@ -32,6 +33,7 @@ const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'ut
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   engines?: { node?: string };
   main?: string;
   types?: string;
@@ -276,27 +278,122 @@ describe('package contract', () => {
    *
    * A version in `engines` that the matrix never exercises is untested, and a
    * version the matrix exercises that `engines` excludes is a job proving
-   * something the package refuses to install on.
+   * something the package refuses to install on. `node: 22` resolves to the
+   * newest 22.x, so the exact floor is run by a row of its own.
    */
-  it('tests every Node version it claims to support, and claims every one it tests', () => {
-    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
-    const matrix = workflow.match(/^\s*node:\s*\[([^\]]+)\]/m)?.[1];
-    expect(matrix).toBeDefined();
+  describe('the Node versions it claims are the ones it runs', () => {
+    const floor = (packageJson.engines?.node ?? '').replace(/^>=\s*/, '');
+    const matrix = compatibility();
+    const lines = [...matrix.nodes, ...matrix.includedNodes].map(majorOf).sort((a, b) => a - b);
 
-    const tested = (matrix as string)
-      .split(',')
-      .map((value) => Number.parseInt(value.trim(), 10))
-      .sort((a, b) => a - b);
-    const minimum = Number.parseInt(
-      (packageJson.engines?.node ?? '').replace(/[^\d.]/g, '').split('.')[0] as string,
-      10,
-    );
+    it('names an exact floor', () => {
+      expect(floor).toMatch(/^\d+\.\d+\.\d+$/);
+    });
 
-    expect(tested.length).toBeGreaterThan(0);
-    expect(Number.isNaN(minimum)).toBe(false);
-    // The floor of the matrix is what `engines` may promise: anything lower is
-    // a claim nothing backs.
-    expect(tested[0]).toBe(minimum);
+    it("the oldest line the matrix runs is the floor's", () => {
+      expect(matrix.nodes.length).toBeGreaterThan(1);
+      expect(lines[0]).toBe(majorOf(floor));
+    });
+
+    it('a compatibility row runs the floor itself', () => {
+      expect(matrix.includedNodes).toContain(floor);
+    });
+
+    /**
+     * An `include` row whose Node is not on the axis becomes a job of its own
+     * and gets only the keys it names, so it carries its NestJS's companions in
+     * full or tests the devDependencies' instead.
+     */
+    it('the floor row pins the same companions as its NestJS', () => {
+      const row = matrix.include.find((entry) => String(entry.node) === floor);
+      const companions = matrix.include.find(
+        (entry) => entry.node === undefined && String(entry.nestjs) === String(row?.nestjs),
+      );
+
+      expect(row).toBeDefined();
+      expect(companions).toBeDefined();
+      expect({ ...row, node: undefined }).toEqual({ ...companions, node: undefined });
+    });
+
+    /**
+     * The smoke test is the only check of what npm serves, and it ran on Node
+     * 22 alone. A dependency that installs there and is dropped on the newest
+     * line — better-sqlite3 11 on Node 26 — passes it, so it runs on the exact
+     * floor and on the newest line the matrix tests.
+     */
+    it('smokes the published package on the floor and on the newest line', () => {
+      const { nodes, steps } = smoke();
+      const setup = steps.find((step) => step.uses === './.github/actions/setup-node');
+
+      expect(nodes).toEqual([floor, String(lines[lines.length - 1])]);
+      expect(setup?.with?.['node-version']).toBe('${{ matrix.node }}');
+    });
+  });
+
+  /**
+   * An optional dependency is installed into every application that installs
+   * NestLens, and the suite runs whatever the devDependency names. They had
+   * drifted a major apart: the suite ran better-sqlite3 12 while the package
+   * asked for `^11.6.0`, which has no prebuilt binary for Node 26 and does not
+   * compile against its V8 — npm dropped it silently, and `nestlens/storage/sqlite`
+   * failed to load in every fresh install on a Node the matrix called green.
+   *
+   * The peer range has to say the same. npm installs the optional copy whatever
+   * the application has, so a peer range wider than that line promised majors
+   * nothing installs by default and nothing tests.
+   */
+  describe('the optional dependencies are the line the suite tests', () => {
+    /** `^12.11.1` → [12, 11, 1]; anything not in that form is reported, not guessed at. */
+    const caret = (range: string | undefined): number[] | undefined => {
+      const parts = range?.match(/^\^(\d+)\.(\d+)\.(\d+)$/);
+      return parts ? parts.slice(1).map(Number) : undefined;
+    };
+    const atLeast = (version: number[], floor: number[]): boolean => {
+      const index = version.findIndex((part, i) => part !== floor[i]);
+      return index === -1 || (version[index] as number) > (floor[index] as number);
+    };
+    const optional = Object.entries(packageJson.optionalDependencies ?? {});
+
+    it('there are some', () => {
+      expect(optional.length).toBeGreaterThan(0);
+    });
+
+    it('each shares its major with the devDependency and admits its version', () => {
+      const drift = optional
+        .map(([name, range]) => {
+          const tested = packageJson.devDependencies?.[name];
+          const floor = caret(range);
+          const version = caret(tested);
+          const drifted = `${name}: optional ${range}, devDependency ${tested ?? 'missing'}`;
+
+          if (floor === undefined || version === undefined) return drifted;
+
+          return floor[0] === version[0] && atLeast(version, floor) ? undefined : drifted;
+        })
+        .filter((line): line is string => line !== undefined);
+
+      expect(drift).toEqual([]);
+    });
+
+    it('a peer of the same name admits the tested version, on that major and no other', () => {
+      const drift = optional
+        .filter(([name]) => packageJson.peerDependencies?.[name] !== undefined)
+        .map(([name, range]) => {
+          const peer = packageJson.peerDependencies?.[name] as string;
+          const alternatives = peer.split('||').map((part) => caret(part.trim()));
+          const line = caret(range)?.[0];
+          const tested = caret(packageJson.devDependencies?.[name]);
+
+          return tested !== undefined &&
+            alternatives.every((floor) => floor !== undefined && floor[0] === line) &&
+            alternatives.some((floor) => floor !== undefined && atLeast(tested, floor))
+            ? undefined
+            : `${name}: peer ${peer}, optional ${range}`;
+        })
+        .filter((line): line is string => line !== undefined);
+
+      expect(drift).toEqual([]);
+    });
   });
 
   /**

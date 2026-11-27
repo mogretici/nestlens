@@ -21,9 +21,8 @@ Please be respectful and constructive in all interactions.
    npm 10, npm 10.9 has crashed resolving the dashboard, and npm 11.6.2 and
    11.21.3 write the example's lockfile differently — so npm 10.9 and later
    refuse to run here at all unless they are that version (`EBADDEVENGINES`).
-   npm 10.8, which Node 20 ships, predates the check and says nothing. npm 11
-   needs Node 20.17 or later, and the test suite (Vitest, on Vite 8) needs
-   Node 20.19 or later, or 22.12 or later.
+   Node itself has to be 22.13 or later, which is what `engines` asks for; the
+   test suite (Vitest, on Vite 8) needs 22.12.
 
    Pick the line that matches how Node is installed:
 

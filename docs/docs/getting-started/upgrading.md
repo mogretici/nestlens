@@ -20,12 +20,65 @@ for how long.
 `1.0` will be the latest `0.x` with a promise attached. Take the sections below
 from the version you are on; they are cumulative, and the ones that need an
 edit are `0.17.0` (`storage.redis.maxEntries`), `0.8.0` (configuration keys,
-entry points) and `0.6.0` (the `path` option).
+entry points) and `0.6.0` (the `path` option). `0.18.0` asks for nothing in the
+code, but for Node 22.13 or later.
 
 The quickest way to find out where you stand is to install and compile: every
 removed configuration key is a TypeScript error. At runtime a removed key is
 ignored, so a configuration written in JavaScript has to be checked against the
 sections below.
+
+## 0.17.x → 0.18.0
+
+Nothing to edit. Three things change: the Node.js floor, the `better-sqlite3`
+NestLens installs, and — already in 0.17.3 — the browsers the dashboard supports.
+
+### Node 20 is no longer supported
+
+`engines` now asks for **Node 22.13 or newer**. Node 20 reached end-of-life on
+30 April 2026 and stopped receiving security updates; under
+[the policy](./versioning-and-support.md#how-long-a-version-stays-supported) it
+should have left with 0.10 and stayed until 0.18. The matrix is now Node 22, 24
+and 26 — Node 26 has been LTS since 28 October 2026 and was previously
+untested — on every NestJS from 9 to 12.
+
+The floor is 22.13 rather than 22.0 because NestJS 12 and `@nestjs/cache-manager`
+12 are ESM only. Node loads an ES module through `require` from 22.12; on 22.11
+NestLens fails at its first `require('@nestjs/common')` with `ERR_REQUIRE_ESM`
+on NestJS 12, and 22.12 prints an `ExperimentalWarning` about it at every boot,
+which 22.13 no longer does — see
+[NestJS 12 and Node.js](./installation.md#nestjs-12-and-nodejs). CI runs 22.13.0
+itself, not only the newest 22.x.
+
+An application on NestJS 9 to 11 still on Node 20 will most likely keep working
+for now, but it is no longer tested, and a future release may use something
+Node 20 does not have. If `npm install` now warns about the engine, the fix is
+to upgrade Node rather than to pin NestLens.
+
+### `better-sqlite3` 12 is the one installed
+
+NestLens lists `better-sqlite3` as an optional dependency so that the SQLite
+driver works without a second install. It asked for the 11 line, while every
+test ran on 12. The 11 line has no prebuilt binary for Node 26 and does not
+compile there, so npm skipped it without an error and `storage.driver: 'sqlite'`
+answered *SQLite storage requires better-sqlite3 to be installed*. It now asks
+for `^12.11.1`, which installs prebuilt on Node 22, 24 and 26.
+
+The peer range narrows to match, from `^11.0.0 || ^12.0.0 || ^13.0.0` to
+`^12.0.0`. npm installs NestLens's own copy whatever the application has, so 11
+and 13 were never what NestLens ran on by default, and nothing tested them. An
+application on 11 or 13 keeps its own and gets a second copy nested under
+`nestlens`; nothing to change.
+
+### The dashboard needs a current browser
+
+Since 0.17.3 the dashboard's stylesheet is built with Tailwind CSS 4, which
+relies on cascade layers, `@property` and `color-mix()`. The dashboard needs
+Chrome or Edge 111+, Firefox 128+ or Safari 16.4+; it was previously documented
+for Chrome 90, Firefox 88 and Safari 14. An older browser still loads it but
+does not style it correctly. Nothing changes in your application or its
+configuration, and on a supported browser the dashboard looks as it did. See
+[Browser Support](../dashboard/overview.md#browser-support).
 
 ## 0.16.x → 0.17.0
 
@@ -267,24 +320,15 @@ reads the Express the adapter actually loads.
 
 ## Verified NestJS and Node versions
 
-Every release is tested against this matrix in CI; the NestJS 9 row is 9.4.3
-or later:
-
-| | Node 20 | Node 22 | Node 24 |
-| --- | --- | --- | --- |
-| **NestJS 9** | ✅ | ✅ | ✅ |
-| **NestJS 10** | ✅ | ✅ | ✅ |
-| **NestJS 11** | ✅ | ✅ | ✅ |
-| **NestJS 12** | ✅ | ✅ | ✅ |
-
-Both the Express and Fastify adapters are covered.
+The matrix every release is tested against is on
+[versioning and support](./versioning-and-support.md#supported-nestjs-and-node-versions).
 
 ### Node 18 is no longer supported
 
-`engines` now asks for **Node 20 or newer**. Node 18 reached end-of-life in
-April 2025 and stopped receiving security updates; the matrix above covers the
-versions that still do, including Node 24, which has been LTS since October 2025
-and was previously untested.
+From 0.9.0, `engines` asked for **Node 20 or newer**. Node 18 reached end-of-life in
+April 2025 and stopped receiving security updates; the matrix then covered Node
+20, 22 and 24, including Node 24, which had been LTS since October 2025 and was
+previously untested.
 
 Nothing in NestLens requires a Node 20 feature today, so an application still on
 Node 18 will most likely keep working — but it is no longer tested, and a future

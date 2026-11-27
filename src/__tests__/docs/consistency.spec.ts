@@ -13,6 +13,7 @@ import { join } from 'path';
 import { DEFAULT_CONFIG } from '../../nestlens.config';
 import { GRAPHQL_DEFAULTS } from '../../watchers/graphql/types';
 import { DataMaskerService } from '../../core/data-masker.service';
+import { compatibility } from '../support/ci-matrix';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 const docsDir = join(REPO_ROOT, 'docs', 'docs');
@@ -329,6 +330,94 @@ describe('Documentation consistency with code', () => {
 
       // The badge strip is the only place a reader sees the whole list.
       expect(linked.size).toBe(watcherCount);
+    });
+  });
+
+  /**
+   * The package-contract spec ties the matrix floor to `engines`; nothing tied
+   * the pages that tell a reader which Node to run. Node 20 left the matrix
+   * eight minors after its end-of-life, and five pages, a workflow comment and
+   * the contributor guide each had to be found by hand — the next change of
+   * line would leave whichever one was missed promising a runtime nothing runs.
+   */
+  describe('the supported Node versions are the ones CI runs', () => {
+    const matrix = compatibility();
+    const nodes = matrix.nodes.map(Number);
+    const nestjs = matrix.nestjs.map(Number);
+    const { engines } = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+      engines: { node: string };
+    };
+    /** `>=22.13.0` → `22.13.0` and `22.13` */
+    const floor = engines.node.replace(/^>=\s*/, '');
+    const shortFloor = floor.replace(/\.0$/, '');
+    /** `[22, 24, 26]` → `22, 24 and 26` */
+    const spoken = `${nodes.slice(0, -1).join(', ')} and ${nodes.at(-1)}`;
+
+    it('reads both lists from the matrix, and a plain floor from engines', () => {
+      expect(nodes.length).toBeGreaterThan(1);
+      expect(nestjs.length).toBeGreaterThan(1);
+      expect(floor).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    const nodeTableHeaders = (text: string): string[] =>
+      text.split('\n').filter((line) => /^\| \| Node /.test(line));
+
+    it('the versioning page tabulates every NestJS in the matrix against every Node in it', () => {
+      const text = readDoc('getting-started/versioning-and-support.md');
+
+      expect(nodeTableHeaders(text)).toEqual([
+        `| | ${nodes.map((node) => `Node ${node}`).join(' | ')} |`,
+      ]);
+
+      const rows = text
+        .split('\n')
+        .filter((line) => /^\| \*\*NestJS \d+\*\* \|/.test(line))
+        .map((line) => line.trim());
+
+      expect(rows).toEqual(
+        nestjs.map((major) => `| **NestJS ${major}** |${' ✅ |'.repeat(nodes.length)}`),
+      );
+    });
+
+    it('the upgrade notes link to that table rather than keep a copy', () => {
+      // A second copy sat under the 0.9 history and had to be edited with every
+      // change of line, which is how history comes to describe the present.
+      const text = readDoc('getting-started/upgrading.md');
+
+      expect(nodeTableHeaders(text)).toEqual([]);
+      expect(text).toContain('./versioning-and-support.md#supported-nestjs-and-node-versions');
+    });
+
+    it('the installation page states the engines floor and the lines tested', () => {
+      const text = readDoc('getting-started/installation.md');
+
+      expect(text).toContain(`- Node.js >= ${floor}\n`);
+      expect(text).toContain(`tested against Node ${spoken} on each`);
+    });
+
+    it('the versioning page states the engines floor', () => {
+      expect(readDoc('getting-started/versioning-and-support.md')).toContain(
+        `\`engines\` asks for Node ${shortFloor} or newer`,
+      );
+    });
+
+    it('the introduction states the lines tested', () => {
+      expect(readDoc('intro.md')).toContain(`Node ${spoken},`);
+    });
+
+    it('the contributor guide states the engines floor', () => {
+      const guide = readFileSync(join(REPO_ROOT, 'CONTRIBUTING.md'), 'utf8');
+
+      expect(guide).toContain(`Node itself has to be ${shortFloor} or later`);
+    });
+
+    it('the auto-merge workflow names the matrix it waits for', () => {
+      const autoMerge = readFileSync(
+        join(REPO_ROOT, '.github', 'workflows', 'dependabot-auto-merge.yml'),
+        'utf8',
+      );
+
+      expect(autoMerge).toContain(`# ${nestjs.join('/')} × Node ${nodes.join('/')} matrix`);
     });
   });
 

@@ -6,19 +6,23 @@ sidebar_position: 1
 
 ## Requirements
 
-- Node.js >= 20.0.0 — **20.19 or 22.12 and later on NestJS 12**
+- Node.js >= 22.13.0
 - NestJS >= 9.0.0 (supports 9, 10, 11, 12)
 - TypeScript >= 4.7
 
-Every release is tested against Node 20, 22 and 24 on each of those NestJS
+Every release is tested against Node 22, 24 and 26 on each of those NestJS
 versions, with both the Express and Fastify adapters.
 
 ### NestJS 12 and Node.js
 
 NestJS 12 ships as ESM only, and a CommonJS application — NestLens included —
-loads it through `require(esm)`. Node enables that from **20.19** and **22.12**
-onwards, so those are the real floor on NestJS 12; NestJS 9 to 11 still run on
-any Node 20.
+loads it through `require(esm)`, which Node enables from **22.12** onwards. So
+does `@nestjs/cache-manager` 12, which an application on NestJS 9 to 11 installs
+too. On an older Node 22 the first `require` of either fails with
+`ERR_REQUIRE_ESM`. 22.12 itself prints an `ExperimentalWarning` at every boot —
+*CommonJS module … is loading ES Module …/@nestjs/common/index.js using
+require()* — which 22.13 only prints under `--trace-require-module`. That is
+why the floor is 22.13.
 
 On AWS Lambda's Node.js runtimes `require(esm)` is disabled by default. NestJS's
 [migration guide](https://docs.nestjs.com/migration-guide) has the function set
@@ -69,9 +73,10 @@ These ship with NestLens — you don't need to install them:
 
 Install these only when you use the matching feature. They are declared as
 optional peer dependencies, so npm will not complain if they are missing, and
-the ranges are the ones npm checks when they are present:
+the ranges are the ones npm checks when they are present — except
+`better-sqlite3`, which NestLens installs itself (see below):
 
-- `better-sqlite3` ^11.0.0 || ^12.0.0 || ^13.0.0 — SQLite storage driver
+- `better-sqlite3` ^12.0.0 — SQLite storage driver
 - `ioredis` ^5.0.0 — Redis storage driver
 - `bullmq` ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 — Job watcher on BullMQ queues
 - `@nestjs/cache-manager` ^1.0.0 || ^2.0.0 || ^3.0.0 || ^12.0.0 — Cache watcher
@@ -94,9 +99,16 @@ are handed the application's own client or service through a token
 (`NESTLENS_REDIS_CLIENT`, `NESTLENS_EVENT_EMITTER`, …), so the version is
 whichever the application uses.
 
-> `better-sqlite3` is also listed as an `optionalDependency`, so npm tries to
-> install it automatically; if the native build fails, NestLens still works on
-> the default in-memory storage.
+> `better-sqlite3` is also an `optionalDependency` (`^12.11.1`), so npm
+> installs it with NestLens and there is nothing to add. npm installs that copy
+> whatever the application has: an application on another major — 11 or 13 —
+> keeps its own and gets a second one nested under `nestlens` (measured with
+> npm 11.21.3). If the native install fails, npm skips the package without an
+> error; NestLens still runs on the default in-memory storage, and
+> `storage.driver: 'sqlite'` fails at startup asking for `better-sqlite3`.
+>
+> pnpm and Yarn do not document what they do with a package that is both an
+> optional dependency and a peer, and NestLens is not tested with them.
 
 ## HTTP Adapter Compatibility
 

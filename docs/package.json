@@ -62,7 +62,7 @@
     ]
   },
   "engines": {
-    "node": ">=20.0"
+    "node": ">=22.13.0"
   },
   "packageManager": "npm@11.21.3",
   "devEngines": {

@@ -89,11 +89,24 @@ jobs:
   # serves into an empty project and opens it — the check that was done by hand
   # after 0.8.0 shipped a dashboard that was blank in a browser while every
   # suite passed.
+  #
+  # It runs on the exact floor `engines` names and on the newest line the
+  # compatibility matrix tests.
+  # On the floor alone it passed a package whose optional better-sqlite3 had no
+  # binary for Node 26 and did not compile there, so npm dropped it and the
+  # SQLite entry point failed to load. The script only reads the registry and
+  # installs into a temporary directory, so the two jobs share nothing; each
+  # waits for the version on its own.
   smoke:
-    name: Smoke test the published package
+    name: Smoke test the published package on Node ${{ matrix.node }}
     needs: release
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22.13.0, 26]
 
     steps:
       - name: Checkout
@@ -102,7 +115,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
 
       - name: Install ${{ needs.release.outputs.version }} from npm and boot it
         run: node scripts/smoke-published-package.mjs ${{ needs.release.outputs.version }}

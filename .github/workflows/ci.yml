@@ -124,7 +124,9 @@ jobs:
   # range that had quietly stopped being true would have shipped unnoticed.
   #
   # NestJS 12 is ESM only. NestLens stays CommonJS and loads it through
-  # require(esm) — Node 20.19 and 22.12 onwards, which every row here runs.
+  # require(esm), which Node enables from 22.12 and stops warning about at
+  # every boot from 22.13 — the floor `engines` names. `node: 22` resolves to
+  # the newest 22.x, so the floor itself runs in a row of its own below.
   # The suite runs on Vitest, which hands `node_modules` to Node's own loader,
   # so the tests load NestJS the way an application does.
   compatibility:
@@ -136,11 +138,13 @@ jobs:
       fail-fast: false
       matrix:
         nestjs: [9, 10, 11, 12]
-        # The Node versions still receiving security updates. 18 was dropped
-        # once it went end-of-life: testing a runtime nobody should be running
-        # costs a third of this matrix and proves nothing about the ones people
-        # are. 24 has been LTS since October 2025 and was untested until now.
-        node: [20, 22, 24]
+        # The LTS lines still receiving security updates. A line leaves in the
+        # first NestLens minor after its end-of-life, as the versioning page
+        # promises: 18 left that way, and 20 — end-of-life on 30 April 2026 —
+        # was still here eight minors later, while 26, LTS since 28 October
+        # 2026, was never run. The floor must equal `engines`; the
+        # package-contract spec fails the build when they part.
+        node: [22, 24, 26]
         include:
           # Companion packages have their own peer ranges, so each NestJS
           # version is paired with the release an application on that version
@@ -204,6 +208,20 @@ jobs:
             axios: 12
             cache-manager: 12
           - nestjs: 12
+            schedule: 12
+            mercurius: 16
+            graphql: 14
+            apollo-server: 5
+            typeorm: 12
+            axios: 12
+            cache-manager: 12
+          # The exact floor `engines` names, which `node: 22` never selects. A
+          # Node that is not on the axis makes a job of its own carrying only
+          # the keys written here, so the NestJS 12 companions are repeated in
+          # full; the package-contract spec checks the two rows agree. NestJS
+          # 12 because it is the line that needs require(esm) to load at all.
+          - nestjs: 12
+            node: 22.13.0
             schedule: 12
             mercurius: 16
             graphql: 14
@@ -312,10 +330,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The Node Vercel deploys with, not the floor. docs/package.json asks for
+      # `>=22.13.0`, and Vercel maps an open range to the newest LTS it offers
+      # (26 today) — so building on 22 checked a runtime the deployment never
+      # uses. `lts/*` follows Vercel as new lines arrive; the two can differ
+      # only in the weeks before Vercel adds a new LTS.
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-version: 22
+          node-version: lts/*
           cache: true
 
       # The API reference is generated from `src/` by typedoc. Without the
