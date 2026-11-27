@@ -1,3 +1,28 @@
+# [0.17.0](https://github.com/mogretici/nestlens/compare/v0.16.0...v0.17.0) (2026-11-27)
+
+
+### Bug Fixes
+
+* **cache:** record clear(), which is how cache-manager 6 and 7 are emptied ([7b13f90](https://github.com/mogretici/nestlens/commit/7b13f903b99b940ed7ab66433e98fba8c5980d7b))
+* **config:** a key written without a value means not configured ([9fa8bb7](https://github.com/mogretici/nestlens/commit/9fa8bb7caa1262596bf67f6aad49553939977a80))
+* **deps:** require NestJS 9.4.3 or later in the 9 line ([e85547d](https://github.com/mogretici/nestlens/commit/e85547d9f06257338be5711eaaf4f0c5aa8cc685))
+* **deps:** require uuid 11.1.1 ([ff9a6b2](https://github.com/mogretici/nestlens/commit/ff9a6b23fd2970a2b9c0d7334f25aa0dcbd7a0b2))
+* **event:** time the listeners, not the event loop ([2c808c1](https://github.com/mogretici/nestlens/commit/2c808c1cb3c5690fe69d5f5308f0f4efd480bf75))
+* **example:** its own tests run again on NestJS 12 ([4463071](https://github.com/mogretici/nestlens/commit/44630717a4b41cd242b12f87917cadc8b4f0d512)), closes [#140](https://github.com/mogretici/nestlens/issues/140)
+* **exception:** drop the RPC and WebSocket branches nothing reached ([2b86c54](https://github.com/mogretici/nestlens/commit/2b86c54f3b9cd968649eb0c843a090bfed15595f))
+* **gate:** read a check's arguments by type, not position ([57042bd](https://github.com/mogretici/nestlens/commit/57042bda6f66d170b32a2f94e556e6f5eae49e25))
+* **log:** record the object passed after the message as metadata ([62baa7d](https://github.com/mogretici/nestlens/commit/62baa7d2c58d1053a79c9dabaa387933da143917))
+* **query:** record Prisma 6.14 and 7 from their query events, and say when a client logs none ([961ca7d](https://github.com/mogretici/nestlens/commit/961ca7d996ede904421eade3783f4d96e77c8808))
+* **storage:** the Redis ceiling is storage.maxEntries, not a storage.redis setting ([8f2188c](https://github.com/mogretici/nestlens/commit/8f2188c3f98d9c71eecf3f2c9efab990e134431f))
+* **view:** keep circular locals, and time a render that calls back ([b0cfc56](https://github.com/mogretici/nestlens/commit/b0cfc56a4fba325c35b7b6b1156e835abe329c9d))
+* **watchers:** every provider of a token is recorded, and a host is held per application ([b5048f8](https://github.com/mogretici/nestlens/commit/b5048f87937b65efa6f827f42775971ef935ee7a))
+* **watchers:** judge each provider of a token by its own scope, and warn once about a duplicate import ([f1a9ec5](https://github.com/mogretici/nestlens/commit/f1a9ec581ec68e2b6a3bdf45b81ebc357db1efcb))
+
+
+### Features
+
+* **watchers:** find a host provided anywhere, and inject a watcher whether it is on or not ([bacd66d](https://github.com/mogretici/nestlens/commit/bacd66ddc9651018b317d7250e195e664d6d458c))
+
 # [0.16.0](https://github.com/mogretici/nestlens/compare/v0.15.0...v0.16.0) (2026-11-26)
 
 
