@@ -344,6 +344,7 @@ The tool is named after the method (`get_recent_entries`). Its parameters — th
 | Symptom | Cause |
 | --- | --- |
 | The client shows `nestlens` as failed or does not list its tools | Run the same command in a terminal (`npx -y nestlens-mcp --url ...`). It prints why to stderr. A client started before the config was saved is a common cause — restart it. |
+| `sh: nestlens-mcp: command not found` | The config uses the `npx -y -p nestlens -p @modelcontextprotocol/sdk nestlens-mcp` form of 0.18 and earlier. Since 0.19.0 the command is the `nestlens-mcp` package: `npx -y nestlens-mcp`, see [upgrading](../getting-started/upgrading.md#018x--0190). |
 | `@modelcontextprotocol/sdk is not installed` | A `nestlens` older than 0.19.0 in your project still has its own `nestlens-mcp` command, and `npx nestlens-mcp` runs it. Name the package's release instead — `npx -y nestlens-mcp@latest` — or upgrade `nestlens`. |
 | `Could not reach NestLens` | The application is not running, or `--url` is wrong. |
 | `answered with something that is not JSON ... dashboard mount` | `--url` points at the application, not at the dashboard mount. Add the path, for example `/nestlens`. |
