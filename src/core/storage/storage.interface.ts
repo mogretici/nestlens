@@ -71,12 +71,16 @@ export interface StorageInterface {
   getStorageStats(): Promise<StorageStats>;
 
   /**
-   * Delete entries older than given date
+   * Delete entries older than `before`, and say how many went.
+   *
+   * An entry carrying a monitored tag is kept however old it is: monitoring a
+   * tag means *do not let pruning take these*, and every built-in driver keeps
+   * them. Compare `clear`, which deletes them too.
    */
   prune(before: Date): Promise<number>;
 
   /**
-   * Delete entries older than given date for a specific type
+   * `prune`, for one entry type. Monitored-tag entries are kept the same way.
    */
   pruneByType(type: EntryType, before: Date): Promise<number>;
 

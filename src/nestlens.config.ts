@@ -463,8 +463,6 @@ export interface RedisStorageConfig {
   url?: string;
   /** Command timeout in milliseconds. Default: 5000 */
   commandTimeout?: number;
-  /** Set by the factory from `storage.maxEntries`; not configured here. */
-  maxEntries?: number;
 }
 
 /**

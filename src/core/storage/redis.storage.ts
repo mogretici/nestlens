@@ -78,6 +78,17 @@ const PIPELINE_CHUNK = 500;
 const isPlainRequest = (entry: Pick<Entry, 'type' | 'payload'>): boolean =>
   entry.type === 'request' && (entry.payload as { isGraphQL?: boolean })?.isGraphQL !== true;
 
+/**
+ * What a `RedisStorage` is built with: the `storage.redis` settings, and the
+ * ceiling, which NestLens takes from `storage.maxEntries` because it is one
+ * setting for every driver. Only someone constructing the storage by hand —
+ * for a `STORAGE` provider of their own — passes `maxEntries` here.
+ */
+export interface RedisStorageOptions extends RedisStorageConfig {
+  /** The most entries to keep. Default: 10000; `0` keeps everything. */
+  maxEntries?: number;
+}
+
 /** Splits ids into pipeline-sized runs. */
 const inChunks = <T>(items: T[], size = PIPELINE_CHUNK): T[][] => {
   const chunks: T[][] = [];
@@ -116,7 +127,7 @@ export class RedisStorage implements StorageInterface, OnModuleDestroy {
   private readonly limitCheckEvery: number;
   private readonly config: RedisStorageConfig;
 
-  constructor(config: RedisStorageConfig = {}) {
+  constructor(config: RedisStorageOptions = {}) {
     this.config = config;
     this.keyPrefix = config.keyPrefix ?? 'nestlens:';
     this.maxEntries = Math.max(0, config.maxEntries ?? 10_000);
