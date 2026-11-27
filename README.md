@@ -22,10 +22,6 @@
 </p>
 
 <p align="center">
-  <a href="https://glama.ai/mcp/servers/mogretici/nestlens"><img src="https://glama.ai/mcp/servers/mogretici/nestlens/badges/score.svg" alt="mogretici/nestlens MCP server" /></a>
-</p>
-
-<p align="center">
 <a href="https://nestlens-docs.vercel.app/docs/getting-started/installation"><img src="https://img.shields.io/badge/Getting_Started-0ea5e9?style=for-the-badge" alt="Getting Started" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/configuration/basic-config"><img src="https://img.shields.io/badge/Configuration-8b5cf6?style=for-the-badge" alt="Configuration" /></a>
 <a href="https://nestlens-docs.vercel.app/docs/watchers/overview"><img src="https://img.shields.io/badge/Watchers-10b981?style=for-the-badge" alt="Watchers" /></a>
@@ -35,6 +31,9 @@
 <p align="center">
   <a href="https://lutfuogretici.medium.com/nestlens-laravel-telescope-finally-comes-to-nestjs-93f5a2c1f521">
     <img src="https://img.shields.io/badge/Read_the_Story_on_Medium-000000?style=for-the-badge&logo=medium" alt="Medium Article" />
+  </a>
+  <a href="https://glama.ai/mcp/servers/mogretici/nestlens">
+    <img src="https://glama.ai/mcp/servers/mogretici/nestlens/badges/score.svg" alt="mogretici/nestlens MCP server" height="28" />
   </a>
 </p>
 
