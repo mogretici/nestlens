@@ -359,6 +359,10 @@ it is no longer required for Apollo or Mercurius.
   without it 54 tests skipped in CI and nowhere else — the ones covering the
   dashboard arriving as HTML rather than as a JSON string, which is the failure
   that shipped in 0.8.0
+- The unit-test job first runs `npm ls --all --package-lock-only` in each of
+  the four lockfile directories, which fails on a tree npm calls invalid even
+  though `npm ci` installs it; the docs job runs `npm run typecheck` before the
+  build, which does not type-check. `ci-static-checks.spec.ts` keeps both
 - E2E (`.github/workflows/e2e.yml`) runs chromium plus the production project on
   any pull request touching `src/`, `dashboard/`, `e2e/`, `example/` or
   `package.json`, and on pushes to main. The filter used to name `src/api/`

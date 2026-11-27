@@ -64,6 +64,19 @@ jobs:
           node-version: 22
           cache: true
 
+      # `npm ci` installs a lockfile whose tree npm itself calls invalid. The
+      # example's had grown from a tree in which chokidar 4 sat at the top, and
+      # four copies of @angular-devkit/core took it for their optional peer
+      # `^5.0.0`; nothing failed. `--package-lock-only` reads each lockfile
+      # alone, so this needs no install and runs before any.
+      - name: Check every lockfile's dependency tree
+        run: |
+          for dir in . dashboard example docs; do
+            echo "::group::$dir"
+            (cd "$dir" && npm ls --all --package-lock-only > /dev/null) || exit 1
+            echo "::endgroup::"
+          done
+
       - name: Install root dependencies
         run: npm ci
 
@@ -355,6 +368,13 @@ jobs:
 
       - name: Install documentation dependencies
         run: npm ci
+        working-directory: docs
+
+      # Docusaurus compiles the site without type-checking it: the build stayed
+      # green while React 19's removal of the global `JSX` namespace broke the
+      # search bar's types.
+      - name: Type check
+        run: npm run typecheck
         working-directory: docs
 
       - name: Build
