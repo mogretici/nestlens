@@ -328,10 +328,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The Node Vercel deploys with, not the floor. docs/package.json asks for
+      # `>=22.13.0`, and Vercel maps an open range to the newest LTS it offers
+      # (26 today) — so building on 22 checked a runtime the deployment never
+      # uses. `lts/*` follows Vercel as new lines arrive; the two can differ
+      # only in the weeks before Vercel adds a new LTS.
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-version: 22
+          node-version: lts/*
           cache: true
 
       # The API reference is generated from `src/` by typedoc. Without the
