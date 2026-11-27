@@ -108,7 +108,7 @@ const JsonNode = memo(function JsonNode({
   }, [value]);
 
   const renderValue = () => {
-    const highlight = isValueMatch ? 'bg-yellow-400/30 rounded px-0.5' : '';
+    const highlight = isValueMatch ? 'bg-yellow-400/30 rounded-sm px-0.5' : '';
 
     switch (type) {
       case 'null':
@@ -192,7 +192,7 @@ const JsonNode = memo(function JsonNode({
         ))}
         <div className="flex items-start">
           {/* Empty space for copy button alignment */}
-          <span className="w-6 flex-shrink-0" />
+          <span className="w-6 shrink-0" />
           <div style={{ paddingLeft: depth * 16 + 16 }} className="text-gray-600 dark:text-gray-400">
             {type === 'array' ? ']' : '}'}
           </div>
@@ -206,16 +206,16 @@ const JsonNode = memo(function JsonNode({
   return (
     <>
       <div
-        className={`group flex items-start py-[1px] hover:bg-gray-100 dark:hover:bg-white/5 rounded cursor-pointer transition-colors ${
+        className={`group flex items-start py-px hover:bg-gray-100 dark:hover:bg-white/5 rounded-sm cursor-pointer transition-colors ${
           hasMatch ? 'bg-yellow-500/10' : ''
         }`}
         onClick={isExpandable ? handleToggle : undefined}
       >
         {/* Copy button - fixed at far left */}
-        <span className="w-6 h-6 flex items-center justify-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="w-6 h-6 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           <button
             onClick={handleCopyValue}
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             title="Copy value"
           >
             <Copy className="w-4 h-4" />
@@ -225,7 +225,7 @@ const JsonNode = memo(function JsonNode({
         {/* Indented content */}
         <div className="flex items-start flex-1" style={{ paddingLeft: indent }}>
           {/* Expand/collapse icon */}
-          <span className="w-4 h-5 flex items-center justify-center flex-shrink-0">
+          <span className="w-4 h-5 flex items-center justify-center shrink-0">
             {isExpandable && !isEmpty && (
               isExpanded ? (
                 <ChevronDown className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
@@ -238,7 +238,7 @@ const JsonNode = memo(function JsonNode({
           {/* Key */}
           {keyName !== null && (
             <>
-              <span className={`${isArrayItem ? 'text-gray-500' : 'text-blue-700 dark:text-blue-300'} ${isKeyMatch ? 'bg-yellow-400/30 rounded px-0.5' : ''}`}>
+              <span className={`${isArrayItem ? 'text-gray-500' : 'text-blue-700 dark:text-blue-300'} ${isKeyMatch ? 'bg-yellow-400/30 rounded-sm px-0.5' : ''}`}>
                 {isArrayItem ? keyName : `"${keyName}"`}
               </span>
               <span className="text-gray-500 mx-1">:</span>
@@ -401,23 +401,23 @@ export default function JsonViewer({
       <div className={`flex items-center space-x-1 ${title ? '' : 'ml-auto'}`}>
         <button
           onClick={handleExpandAll}
-          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
           title="Expand all"
         >
           <Maximize2 className="h-3.5 w-3.5 text-gray-500" />
         </button>
         <button
           onClick={handleCollapseAll}
-          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
           title="Collapse all"
         >
           <Minimize2 className="h-3.5 w-3.5 text-gray-500" />
         </button>
-        <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
+        <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
         {searchable && (
           <button
             onClick={toggleSearch}
-            className={`p-1.5 rounded transition-colors ${
+            className={`p-1.5 rounded-sm transition-colors ${
               showSearch
                 ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                 : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500'
@@ -429,7 +429,7 @@ export default function JsonViewer({
         )}
         <button
           onClick={handleCopy}
-          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+          className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
           title="Copy JSON"
         >
           {copied ? (
@@ -452,7 +452,7 @@ export default function JsonViewer({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search keys and values..."
-          className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           autoFocus
         />
         {searchTerm && (
@@ -498,26 +498,26 @@ export default function JsonViewer({
           {/* Expand/Collapse All */}
           <button
             onClick={handleExpandAll}
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
             title="Expand all"
           >
             <Maximize2 className="h-3.5 w-3.5 text-gray-500" />
           </button>
           <button
             onClick={handleCollapseAll}
-            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
             title="Collapse all"
           >
             <Minimize2 className="h-3.5 w-3.5 text-gray-500" />
           </button>
 
-          <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
+          <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
 
           {/* Search */}
           {searchable && (
             <button
               onClick={toggleSearch}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded-sm transition-colors ${
                 showSearch
                   ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                   : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500'
@@ -531,7 +531,7 @@ export default function JsonViewer({
           {/* Copy All */}
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm transition-colors"
             title="Copy JSON"
           >
             {copied ? (
@@ -559,7 +559,7 @@ export default function JsonViewer({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search keys and values..."
-              className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               autoFocus
             />
             {searchTerm && (

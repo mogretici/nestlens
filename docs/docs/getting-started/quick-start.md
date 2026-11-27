@@ -22,6 +22,10 @@ import { NestLensModule } from 'nestlens';
 export class AppModule {}
 ```
 
+`forRoot` belongs in the root module, once. It is global: a feature module takes
+`CollectorService` or a watcher such as `GateWatcher` in its constructor without
+importing `NestLensModule` again.
+
 ## Step 2: (Optional) Use NestLens Logger
 
 To capture all application logs, use the NestLensLogger:

@@ -86,7 +86,7 @@ export default function QueriesPage() {
       render: (entry) => (
         <div className="flex items-start space-x-2">
           {entry.payload.slow && (
-            <Zap className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <Zap className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
           )}
           <TextCell mono truncate maxWidth="400px">
             {entry.payload.query.length > 100

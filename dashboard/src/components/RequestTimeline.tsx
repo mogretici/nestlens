@@ -169,9 +169,9 @@ export default function RequestTimeline({ request, related }: RequestTimelinePro
                 {span.label}
               </span>
 
-              <span className="relative w-1/2 shrink-0 h-4 rounded bg-gray-100 dark:bg-gray-800">
+              <span className="relative w-1/2 shrink-0 h-4 rounded-sm bg-gray-100 dark:bg-gray-800">
                 <span
-                  className={`absolute top-0 h-full rounded ${colour}`}
+                  className={`absolute top-0 h-full rounded-sm ${colour}`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                   data-testid="timeline-bar"
                 />

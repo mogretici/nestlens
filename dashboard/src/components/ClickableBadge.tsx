@@ -162,7 +162,7 @@ export default function ClickableBadge({
         }
       } : undefined}
       title={displayText}
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap shadow ${colorClass} ${clickableStyles} ${isClickable ? 'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1' : ''} ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold uppercase tracking-wide max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap shadow-sm ${colorClass} ${clickableStyles} ${isClickable ? 'focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-offset-1' : ''} ${className}`}
     >
       {displayText}
     </span>
@@ -186,13 +186,13 @@ export function FilterBadge({ children, onRemove, className = '' }: FilterBadgeP
   return (
     <span
       title={displayText}
-      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide max-w-[200px] shadow ${colorClass} ${className}`}
+      className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-bold uppercase tracking-wide max-w-[200px] shadow-sm ${colorClass} ${className}`}
     >
       <span className="truncate">{displayText}</span>
       <button
         onClick={onRemove}
         aria-label={`Remove filter: ${displayText}`}
-        className="ml-1 flex-shrink-0 hover:opacity-70 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 rounded"
+        className="ml-1 shrink-0 hover:opacity-70 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:ring-offset-1 rounded-sm"
       >
         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

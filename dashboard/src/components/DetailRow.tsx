@@ -6,6 +6,12 @@ interface DetailRowProps {
   className?: string;
 }
 
+/**
+ * The detail views wrap these rows in `<dl className="*:not-first:border-y-0">`,
+ * which leaves a separator under the first row only. That is what the v3
+ * markup drew, and it is kept on purpose; separating every row is a design
+ * change, not a fix.
+ */
 export default function DetailRow({ label, value, className = '' }: DetailRowProps) {
   return (
     <div className={`grid grid-cols-[180px_1fr] gap-4 py-3 border-b border-gray-100 dark:border-gray-700 last:border-0 ${className}`}>
