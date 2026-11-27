@@ -1,3 +1,11 @@
+# [0.19.0](https://github.com/mogretici/nestlens/compare/v0.18.1...v0.19.0) (2026-11-27)
+
+
+### Features
+
+* **mcp:** list nestlens-mcp in the official MCP Registry ([352c592](https://github.com/mogretici/nestlens/commit/352c592b929dca5eb9d993383242f0981bed7a27))
+* **mcp:** ship the MCP server as the nestlens-mcp package ([187b3ce](https://github.com/mogretici/nestlens/commit/187b3ceb02ba62da5865b5112a27ab09e622b80f))
+
 ## [0.18.1](https://github.com/mogretici/nestlens/compare/v0.18.0...v0.18.1) (2026-11-27)
 
 

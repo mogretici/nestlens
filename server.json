@@ -3,7 +3,7 @@
   "name": "io.github.mogretici/nestlens",
   "title": "NestLens",
   "description": "Lets an agent read what NestLens recorded in a NestJS app: requests, queries, exceptions and logs.",
-  "version": "0.18.1",
+  "version": "0.19.0",
   "websiteUrl": "https://nestlens-docs.vercel.app/docs/integrations/mcp",
   "repository": {
     "url": "https://github.com/mogretici/nestlens",
@@ -15,7 +15,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "nestlens-mcp",
-      "version": "0.18.1",
+      "version": "0.19.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
