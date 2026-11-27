@@ -3,6 +3,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Tailwind 4 puts `hover:` inside `@media (hover: hover)`, so a tap no longer
+ * reveals what hover reveals: the JSON viewer's copy button stayed invisible,
+ * and still clickable, on a phone. This is the upgrade guide's own override
+ * ("Hover styles on mobile") and keeps Tailwind 3's behaviour.
+ */
+@custom-variant hover (&:hover);
+
 @theme {
   --color-primary-50: #f0f9ff;
   --color-primary-100: #e0f2fe;
