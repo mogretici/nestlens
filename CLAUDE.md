@@ -217,8 +217,9 @@ it is no longer required for Apollo or Mercurius.
 
 - Unit tests run on Vitest (`vitest.config.mts`); specs import `describe`,
   `it`, `expect` and `vi` from `vitest` — there are no globals, and
-  `tsconfig.json` sets `"types": ["node"]` so a test-runner's global types
-  arriving through some dependency cannot make a missing import compile
+  `tsconfig.json` sets `"types": ["node"]` so an installed `@types/*` package
+  that declares test globals is not pulled in automatically and cannot make a
+  missing import compile
 - Test setup in `src/__tests__/setup.ts`: reflect-metadata, the loopback listen
   guard, and `vi.clearAllMocks()` after each test (not `clearMocks: true`, which
   clears *before* each test and erases calls a `beforeAll` made)

@@ -22,7 +22,8 @@ Please be respectful and constructive in all interactions.
    11.21.3 write the example's lockfile differently — so npm 10.9 and later
    refuse to run here at all unless they are that version (`EBADDEVENGINES`).
    npm 10.8, which Node 20 ships, predates the check and says nothing. npm 11
-   needs Node 20.17 or later.
+   needs Node 20.17 or later, and the test suite (Vitest, on Vite 8) needs
+   Node 20.19 or later, or 22.12 or later.
 
    Pick the line that matches how Node is installed:
 
