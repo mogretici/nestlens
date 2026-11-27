@@ -27,6 +27,20 @@ cache (setup-node's own cache step runs the bundled npm and fails on
 `devEngines`). `src/__tests__/pinned-npm.spec.ts` enforces both, and that the
 four manifests, the lockfile's `node_modules/npm` and CONTRIBUTING.md agree.
 
+Dependency install scripts are reviewed in each manifest's `allowScripts`:
+`true` for better-sqlite3 (its script fetches the native addon) and esbuild
+(it checks the binary matches), `false` for the rest, which work without
+theirs — @swc/core's only installs `@swc/wasm` outside the lockfile when the
+native binary fails to load — and for the example's `file:..` NestLens, whose
+`prepare` would install the repository's git hooks again. npm 11 runs an
+unreviewed script and warns; npm 12 skips it, and better-sqlite3 then
+installs without a binary while the install succeeds. Entries are names,
+never `pkg@1.2.3`, which npm matches to that one version.
+`src/__tests__/install-scripts.spec.ts` fails on any package a lockfile marks
+as having an install script that no entry covers, and on entries nothing
+needs. npm 12 itself is not the pin: it does not support Node 22.13, the
+`engines` floor.
+
 ### Build
 ```bash
 npm run build              # Build library + dashboard

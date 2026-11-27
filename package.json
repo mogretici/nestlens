@@ -245,5 +245,11 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "@apollo/protobufjs": false,
+    "@swc/core": false,
+    "fsevents": false
   }
 }

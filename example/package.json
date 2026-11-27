@@ -67,5 +67,13 @@
       "version": "11.21.3",
       "onFail": "error"
     }
+  },
+  "allowScripts": {
+    "better-sqlite3": true,
+    "@apollo/protobufjs": false,
+    "@scarf/scarf": false,
+    "@swc/core": false,
+    "fsevents": false,
+    "file:..": false
   }
 }

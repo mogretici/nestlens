@@ -23,11 +23,11 @@
  * Following AAA (Arrange-Act-Assert).
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { parse } from 'yaml';
+import { lockedDirectories, ROOT } from './support/locked-directories';
 
-const ROOT = resolve(__dirname, '..', '..');
 const WORKFLOWS = join(ROOT, '.github', 'workflows');
 const COMPOSITE = './.github/actions/setup-node';
 
@@ -53,16 +53,6 @@ interface Job {
   readonly id: string;
   readonly steps: readonly Step[];
 }
-
-/** The root and every top-level directory that keeps its own lockfile. */
-const lockedDirectories = (): string[] => [
-  '.',
-  ...readdirSync(ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
-    .map((entry) => entry.name)
-    .filter((name) => existsSync(join(ROOT, name, 'package-lock.json')))
-    .sort(),
-];
 
 const manifest = (directory: string): Manifest =>
   JSON.parse(readFileSync(join(ROOT, directory, 'package.json'), 'utf8')) as Manifest;
