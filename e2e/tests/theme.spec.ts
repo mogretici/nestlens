@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { DashboardPage } from '../page-objects/dashboard.page';
 
 test.describe('Theme', () => {
@@ -113,8 +113,49 @@ test.describe('Scrollbars', () => {
    * page, so the main scrollbar stayed light in the dark theme. Firefox does
    * not implement `::-webkit-scrollbar` and follows `color-scheme` instead.
    */
-  const pageScrollbar = (page: import('@playwright/test').Page, part: string) =>
-    page.evaluate((pseudo) => getComputedStyle(document.documentElement, pseudo).backgroundColor, part);
+  const pageTrack = (page: Page) =>
+    page.evaluate(() => getComputedStyle(document.documentElement, '::-webkit-scrollbar-track').backgroundColor);
+
+  /**
+   * The thumb's colour, read from the stylesheet rather than from
+   * getComputedStyle.
+   *
+   * Chromium on Linux resolves `getComputedStyle(html, '::-webkit-scrollbar-thumb')`
+   * as if the thumb were hovered, whatever the pointer is doing: it returns the
+   * `:hover` colour in both themes, with the pointer outside the page, while
+   * the thumb it actually paints (with Playwright's `--hide-scrollbars` lifted)
+   * is the plain one. On macOS it returns the plain colour. So this resolves
+   * the cascade itself: the last rule for the thumb, without `:hover`, whose
+   * selector reaches <html>.
+   */
+  const pageThumb = (page: Page) =>
+    page.evaluate(() => {
+      const PART = '::-webkit-scrollbar-thumb';
+      const rules: CSSStyleRule[] = [];
+      const collect = (list: CSSRuleList): void => {
+        for (const rule of Array.from(list)) {
+          if (rule instanceof CSSStyleRule) rules.push(rule);
+          else if ('cssRules' in rule) collect((rule as CSSGroupingRule).cssRules);
+        }
+      };
+      for (const sheet of Array.from(document.styleSheets)) collect(sheet.cssRules);
+
+      const winner = rules
+        .filter((rule) => rule.selectorText.endsWith(PART) && rule.style.backgroundColor)
+        .filter((rule) => {
+          const scope = rule.selectorText.slice(0, -PART.length);
+          return scope === '' || document.documentElement.matches(scope);
+        })
+        .pop();
+      if (!winner) return null;
+
+      const swatch = document.createElement('div');
+      swatch.style.backgroundColor = winner.style.backgroundColor;
+      document.body.append(swatch);
+      const colour = getComputedStyle(swatch).backgroundColor;
+      swatch.remove();
+      return colour;
+    });
 
   test('the page scrollbar is dark in the dark theme', async ({ page, browserName }) => {
     test.skip(browserName === 'firefox', 'Firefox styles scrollbars through color-scheme.');
@@ -123,8 +164,8 @@ test.describe('Scrollbars', () => {
     await page.goto('/requests');
     await page.waitForSelector('html.dark');
 
-    expect(await pageScrollbar(page, '::-webkit-scrollbar-thumb')).toBe('rgb(75, 85, 99)');
-    expect(await pageScrollbar(page, '::-webkit-scrollbar-track')).toBe('rgb(31, 41, 55)');
+    expect(await pageThumb(page)).toBe('rgb(75, 85, 99)');
+    expect(await pageTrack(page)).toBe('rgb(31, 41, 55)');
   });
 
   test('the page scrollbar is light in the light theme', async ({ page, browserName }) => {
@@ -134,7 +175,7 @@ test.describe('Scrollbars', () => {
     await page.goto('/requests');
     await page.waitForSelector('html:not(.dark)');
 
-    expect(await pageScrollbar(page, '::-webkit-scrollbar-thumb')).toBe('rgb(209, 213, 219)');
-    expect(await pageScrollbar(page, '::-webkit-scrollbar-track')).toBe('rgb(243, 244, 246)');
+    expect(await pageThumb(page)).toBe('rgb(209, 213, 219)');
+    expect(await pageTrack(page)).toBe('rgb(243, 244, 246)');
   });
 });

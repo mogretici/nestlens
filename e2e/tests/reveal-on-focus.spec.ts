@@ -65,15 +65,28 @@ test.describe('controls revealed on hover', () => {
   test.describe('on a touch screen', () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-    test('tapping a row shows its copy button', async ({ page, request, browserName }) => {
+    /**
+     * A phone puts the tapped element in `:hover` and leaves it there, so the
+     * product has to let `hover:` apply on a device that reports
+     * `(hover: none)`. Tailwind 4 wraps `hover:` in `@media (hover: hover)`,
+     * which is what the `hover` variant override in index.css undoes.
+     *
+     * This sets the hover state directly instead of tapping. Headless Chromium
+     * on Linux follows a tap's synthetic click with a mouse move back to the
+     * emulated cursor, at (0, 0), so the row loses `:hover` 10 ms later; the
+     * button faded in and straight back out on CI. A phone does not do that,
+     * and the property being tested is the stylesheet's, not the emulator's.
+     */
+    test('a hovered row shows its copy button on a device without hover', async ({ page, request, browserName }) => {
       test.skip(browserName === 'firefox', 'Firefox has no mobile emulation in Playwright.');
 
       await page.goto(`/requests/${await requestWithBody(request)}`);
-      const copy = page.getByTitle('Copy value').first();
-      const holder = copy.locator('xpath=..');
+      expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true);
+
+      const holder = page.getByTitle('Copy value').first().locator('xpath=..');
       await expect(holder).toHaveCSS('opacity', '0');
 
-      await holder.locator('xpath=..').tap();
+      await holder.locator('xpath=..').hover();
 
       await expect(holder).toHaveCSS('opacity', '1');
     });
