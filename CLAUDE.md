@@ -74,7 +74,7 @@ node --cpu-prof scripts/benchmark-load-server.mjs 4201 '{}'
 
 ### Linting
 ```bash
-npm run lint               # ESLint on src/, e2e/ and playwright.config.ts
+npm run lint               # ESLint on src/, e2e/ and playwright.config.ts; fails on any warning
 npx tsc -p e2e             # Type-check the Playwright specs (CI runs it)
 ```
 
@@ -82,6 +82,10 @@ The Playwright specs have their own `e2e/tsconfig.json` — DOM types for the
 callbacks `page.evaluate` sends to the browser, none of the library's decorator
 or path settings — and ESLint parses them with it. Playwright strips types
 without checking them, so without `tsc -p e2e` a type error there reaches no one.
+
+Every rule here is a warning, so `--max-warnings=0` is what makes one fail CI
+(and the pre-commit hook): without it, `npm run lint` exited 0 on warnings and
+one sat in `src/` unfixed. The dashboard's `lint` does the same.
 
 ### Example App
 ```bash

@@ -50,7 +50,7 @@
     "build:lib": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "build:dashboard": "cd dashboard && npm run build && mkdir -p ../dist/dashboard/public && cp -r dist/* ../dist/dashboard/public/",
     "dev": "tsc --watch",
-    "lint": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
+    "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
     "lint:fix": "eslint \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
     "format:check": "prettier --check \"src/**/*.ts\" \"e2e/**/*.ts\" playwright.config.ts",
@@ -241,11 +241,11 @@
   },
   "lint-staged": {
     "{src,e2e}/**/*.ts": [
-      "eslint --fix",
+      "eslint --fix --max-warnings=0",
       "prettier --write"
     ],
     "playwright.config.ts": [
-      "eslint --fix",
+      "eslint --fix --max-warnings=0",
       "prettier --write"
     ]
   }
