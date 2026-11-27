@@ -470,6 +470,10 @@ export class NestLensModule implements NestModule, OnModuleInit {
   }
 
   async onModuleInit() {
+    // forRoot has already said "NestLens is disabled"; a summary after it
+    // described a recorder and a dashboard that do not exist.
+    if (this.config.enabled === false) return;
+
     // What it is doing, not that it started: three of the four configuration
     // mistakes an application reported are visible in this line.
     NestLensModule.logger.log(startupSummary(this.config));
