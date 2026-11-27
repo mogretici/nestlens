@@ -12,7 +12,7 @@ NestLens is a Laravel Telescope-inspired debugging and monitoring tool for NestJ
 Every `package.json` with a lockfile pins **npm 11.21.3** (`packageManager`
 and `devEngines`, exact). npm 10.9 and later refuse every command — `npm ci`,
 `npm run`, `npm test`, the husky hooks — with `EBADDEVENGINES` under any other
-version; npm 10.8 (Node 20's) does not check. Install it with
+version — which includes the npm Node 22 ships. Install it with
 `npm install --global npm@11.21.3`, or without touching the global npm:
 ```bash
 npm install --global --prefix /tmp/npm-11.21.3 npm@11.21.3

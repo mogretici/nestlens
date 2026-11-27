@@ -6,19 +6,23 @@ sidebar_position: 1
 
 ## Requirements
 
-- Node.js >= 20.0.0 — **20.19 or 22.12 and later on NestJS 12**
+- Node.js >= 22.13.0
 - NestJS >= 9.0.0 (supports 9, 10, 11, 12)
 - TypeScript >= 4.7
 
-Every release is tested against Node 20, 22 and 24 on each of those NestJS
+Every release is tested against Node 22, 24 and 26 on each of those NestJS
 versions, with both the Express and Fastify adapters.
 
 ### NestJS 12 and Node.js
 
 NestJS 12 ships as ESM only, and a CommonJS application — NestLens included —
-loads it through `require(esm)`. Node enables that from **20.19** and **22.12**
-onwards, so those are the real floor on NestJS 12; NestJS 9 to 11 still run on
-any Node 20.
+loads it through `require(esm)`, which Node enables from **22.12** onwards. So
+does `@nestjs/cache-manager` 12, which an application on NestJS 9 to 11 installs
+too. On an older Node 22 the first `require` of either fails with
+`ERR_REQUIRE_ESM`. 22.12 itself prints an `ExperimentalWarning` at every boot —
+*CommonJS module … is loading ES Module …/@nestjs/common/index.js using
+require()* — which 22.13 only prints under `--trace-require-module`. That is
+why the floor is 22.13.
 
 On AWS Lambda's Node.js runtimes `require(esm)` is disabled by default. NestJS's
 [migration guide](https://docs.nestjs.com/migration-guide) has the function set

@@ -19,6 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { builtinModules } from 'module';
 import { join, relative, resolve } from 'path';
+import { compatibility, majorOf } from './support/ci-matrix';
 
 const SRC_ROOT = resolve(__dirname, '..');
 const REPO_ROOT = resolve(SRC_ROOT, '..');
@@ -276,27 +277,42 @@ describe('package contract', () => {
    *
    * A version in `engines` that the matrix never exercises is untested, and a
    * version the matrix exercises that `engines` excludes is a job proving
-   * something the package refuses to install on.
+   * something the package refuses to install on. `node: 22` resolves to the
+   * newest 22.x, so the exact floor is run by a row of its own.
    */
-  it('tests every Node version it claims to support, and claims every one it tests', () => {
-    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
-    const matrix = workflow.match(/^\s*node:\s*\[([^\]]+)\]/m)?.[1];
-    expect(matrix).toBeDefined();
+  describe('the Node versions it claims are the ones it runs', () => {
+    const floor = (packageJson.engines?.node ?? '').replace(/^>=\s*/, '');
+    const matrix = compatibility();
+    const lines = [...matrix.nodes, ...matrix.includedNodes].map(majorOf).sort((a, b) => a - b);
 
-    const tested = (matrix as string)
-      .split(',')
-      .map((value) => Number.parseInt(value.trim(), 10))
-      .sort((a, b) => a - b);
-    const minimum = Number.parseInt(
-      (packageJson.engines?.node ?? '').replace(/[^\d.]/g, '').split('.')[0] as string,
-      10,
-    );
+    it('names an exact floor', () => {
+      expect(floor).toMatch(/^\d+\.\d+\.\d+$/);
+    });
 
-    expect(tested.length).toBeGreaterThan(0);
-    expect(Number.isNaN(minimum)).toBe(false);
-    // The floor of the matrix is what `engines` may promise: anything lower is
-    // a claim nothing backs.
-    expect(tested[0]).toBe(minimum);
+    it("the oldest line the matrix runs is the floor's", () => {
+      expect(matrix.nodes.length).toBeGreaterThan(1);
+      expect(lines[0]).toBe(majorOf(floor));
+    });
+
+    it('a compatibility row runs the floor itself', () => {
+      expect(matrix.includedNodes).toContain(floor);
+    });
+
+    /**
+     * An `include` row whose Node is not on the axis becomes a job of its own
+     * and gets only the keys it names, so it carries its NestJS's companions in
+     * full or tests the devDependencies' instead.
+     */
+    it('the floor row pins the same companions as its NestJS', () => {
+      const row = matrix.include.find((entry) => String(entry.node) === floor);
+      const companions = matrix.include.find(
+        (entry) => entry.node === undefined && String(entry.nestjs) === String(row?.nestjs),
+      );
+
+      expect(row).toBeDefined();
+      expect(companions).toBeDefined();
+      expect({ ...row, node: undefined }).toEqual({ ...companions, node: undefined });
+    });
   });
 
   /**

@@ -20,12 +20,39 @@ for how long.
 `1.0` will be the latest `0.x` with a promise attached. Take the sections below
 from the version you are on; they are cumulative, and the ones that need an
 edit are `0.17.0` (`storage.redis.maxEntries`), `0.8.0` (configuration keys,
-entry points) and `0.6.0` (the `path` option).
+entry points) and `0.6.0` (the `path` option). `0.18.0` asks for nothing in the
+code, but for Node 22.13 or later.
 
 The quickest way to find out where you stand is to install and compile: every
 removed configuration key is a TypeScript error. At runtime a removed key is
 ignored, so a configuration written in JavaScript has to be checked against the
 sections below.
+
+## 0.17.x → 0.18.0
+
+Nothing to edit. The one change is the Node.js floor.
+
+### Node 20 is no longer supported
+
+`engines` now asks for **Node 22.13 or newer**. Node 20 reached end-of-life on
+30 April 2026 and stopped receiving security updates; under
+[the policy](./versioning-and-support.md#how-long-a-version-stays-supported) it
+should have left with 0.10 and stayed until 0.18. The matrix is now Node 22, 24
+and 26 — Node 26 has been LTS since 28 October 2026 and was previously
+untested — on every NestJS from 9 to 12.
+
+The floor is 22.13 rather than 22.0 because NestJS 12 and `@nestjs/cache-manager`
+12 are ESM only. Node loads an ES module through `require` from 22.12; on 22.11
+NestLens fails at its first `require('@nestjs/common')` with `ERR_REQUIRE_ESM`
+on NestJS 12, and 22.12 prints an `ExperimentalWarning` about it at every boot,
+which 22.13 no longer does — see
+[NestJS 12 and Node.js](./installation.md#nestjs-12-and-nodejs). CI runs 22.13.0
+itself, not only the newest 22.x.
+
+An application on NestJS 9 to 11 still on Node 20 will most likely keep working
+for now, but it is no longer tested, and a future release may use something
+Node 20 does not have. If `npm install` now warns about the engine, the fix is
+to upgrade Node rather than to pin NestLens.
 
 ## 0.16.x → 0.17.0
 
@@ -267,24 +294,15 @@ reads the Express the adapter actually loads.
 
 ## Verified NestJS and Node versions
 
-Every release is tested against this matrix in CI; the NestJS 9 row is 9.4.3
-or later:
-
-| | Node 20 | Node 22 | Node 24 |
-| --- | --- | --- | --- |
-| **NestJS 9** | ✅ | ✅ | ✅ |
-| **NestJS 10** | ✅ | ✅ | ✅ |
-| **NestJS 11** | ✅ | ✅ | ✅ |
-| **NestJS 12** | ✅ | ✅ | ✅ |
-
-Both the Express and Fastify adapters are covered.
+The matrix every release is tested against is on
+[versioning and support](./versioning-and-support.md#supported-nestjs-and-node-versions).
 
 ### Node 18 is no longer supported
 
-`engines` now asks for **Node 20 or newer**. Node 18 reached end-of-life in
-April 2025 and stopped receiving security updates; the matrix above covers the
-versions that still do, including Node 24, which has been LTS since October 2025
-and was previously untested.
+From 0.9.0, `engines` asked for **Node 20 or newer**. Node 18 reached end-of-life in
+April 2025 and stopped receiving security updates; the matrix then covered Node
+20, 22 and 24, including Node 24, which had been LTS since October 2025 and was
+previously untested.
 
 Nothing in NestLens requires a Node 20 feature today, so an application still on
 Node 18 will most likely keep working — but it is no longer tested, and a future

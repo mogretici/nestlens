@@ -11,7 +11,7 @@ name: Dependabot auto-merge
 # What makes it safe is not that Dependabot is trustworthy — a security fix can
 # arrive as a major version with breaking changes — but that this waits for the
 # checks and merges nothing until they are green: the unit suite, the NestJS
-# 9/10/11/12 × Node 20/22/24 matrix, the documentation build and CodeQL. A bump
+# 9/10/11/12 × Node 22/24/26 matrix, the documentation build and CodeQL. A bump
 # that breaks any of them stays in the pull request, waiting to be looked at.
 #
 # The waiting is done here rather than by branch protection on purpose. Required
