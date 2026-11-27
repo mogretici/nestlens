@@ -72,16 +72,30 @@
   height: 8px;
 }
 
+/* `dark:` cannot follow a pseudo-element, so the dark selector is spelled out */
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-gray-800;
+  background-color: var(--color-gray-100);
+}
+
+:is(.dark *)::-webkit-scrollbar-track {
+  background-color: var(--color-gray-800);
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 dark:bg-gray-600 rounded-sm;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-gray-300);
+}
+
+:is(.dark *)::-webkit-scrollbar-thumb {
+  background-color: var(--color-gray-600);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400 dark:bg-gray-500;
+  background-color: var(--color-gray-400);
+}
+
+:is(.dark *)::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-gray-500);
 }
 
 /* Code block styling */

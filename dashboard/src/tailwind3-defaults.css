@@ -10,6 +10,10 @@
  * named platform fonts, which picks a different face wherever the system UI
  * font is not first in that list, as on most Linux desktops.
  *
+ * Line heights: Tailwind 4 writes them as ratios, calc(1 / 0.75) for text-xs.
+ * Safari lays text out in 1/64 px steps, so each line came out 1/64 px short
+ * of v3's 1rem and the drift redrew every page from the first table row down.
+ *
  * Moving to Tailwind 4 was not meant to restyle the dashboard. Adopting the new
  * defaults is a design decision of its own; deleting this file is all it takes.
  */
@@ -17,6 +21,15 @@
   --font-sans:
     ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
     'Noto Color Emoji';
+
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
 
   --color-slate-50: #f8fafc;
   --color-slate-100: #f1f5f9;
