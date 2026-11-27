@@ -1,11 +1,11 @@
 /**
  * Recording Prisma on the Prisma people are running.
  *
- * The integration was written against `$use`, the middleware API of Prisma 5
- * and earlier. Prisma removed it in 6.0 — the package does not carry it at all;
- * in 7 the name survives only in a list of words a model may not be called —
- * and client extensions took its place. So the setup this project documents
- * recorded nothing on either current major, and said `Invalid Prisma client
+ * The integration was written against `$use`, the middleware API. Prisma removed
+ * it in 6.14.0 — 6.13.0's runtime still carries it, 6.14.0's does not; in 7 the
+ * name survives only in a list of words a model may not be called — and client
+ * extensions took its place. So the setup this project documents recorded
+ * nothing on 6.14 and later, and said `Invalid Prisma client
  * provided` about a client that was perfectly valid.
  *
  * The clients here are the two shapes rather than the real thing: `@prisma/client`
@@ -35,7 +35,7 @@ const watcherFor = (config: NestLensConfig = { watchers: { model: true } }) => {
   return { watcher: new ModelWatcher(collector, config), recorded };
 };
 
-/** Prisma 6 and 7: `$extends`, no `$use`. */
+/** Prisma 6.14 and later, 7 included: `$extends`, no `$use`. */
 const extensibleClient = () => {
   const calls: { args: unknown }[] = [];
 
@@ -95,7 +95,7 @@ const extensibleClient = () => {
   };
 };
 
-/** Prisma 5 and earlier: `$use`. */
+/** Prisma 6.13 and earlier: `$use`. */
 const middlewareClient = () => {
   const installed: ((
     params: unknown,
@@ -113,7 +113,7 @@ const middlewareClient = () => {
   };
 };
 
-describe('Prisma 6 and later, where middleware is gone', () => {
+describe('Prisma 6.14 and later, where middleware is gone', () => {
   it('records an operation', async () => {
     const { watcher, recorded } = watcherFor();
     const client = watcher.setupPrismaClient(extensibleClient());
@@ -173,7 +173,7 @@ describe('Prisma 6 and later, where middleware is gone', () => {
   });
 });
 
-describe('Prisma 5 and earlier, where middleware is what there is', () => {
+describe('Prisma 6.13 and earlier, where middleware is what there is', () => {
   it('still installs the middleware', async () => {
     const { watcher, recorded } = watcherFor();
     const client = middlewareClient();

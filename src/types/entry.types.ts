@@ -103,8 +103,11 @@ export interface QueryEntry extends BaseEntry {
     parameters?: unknown[];
     duration: number;
     slow: boolean;
-    source?: string; // 'typeorm' | 'prisma' | 'mongoose' | 'raw'
+    /** `'typeorm'` or `'prisma'` from the watcher; whatever a custom integration sets. */
+    source?: string;
+    /** The TypeORM `DataSource` name. Prisma queries carry none. */
     connection?: string;
+    /** Never set by the watcher; for a custom integration that has one to give. */
     stack?: string;
   };
 }

@@ -27,7 +27,7 @@ interface EntityEventLike {
 type LoadHook = (entity: unknown, event: EntityEventLike) => void;
 type EntityHook = (event: EntityEventLike) => void;
 
-/** The Prisma middleware surface, which Prisma 5 and earlier have. */
+/** The Prisma middleware surface, which Prisma 6.13 and earlier have. */
 interface PrismaMiddlewareParams {
   model?: string;
   action?: string;
@@ -45,7 +45,7 @@ interface PrismaWithMiddleware {
 /**
  * What a client extension is handed for one operation.
  *
- * Prisma removed `$use` in its 6.0 — the package does not carry it at all —
+ * Prisma removed `$use` in 6.14.0 — the runtime does not carry it from there —
  * and client extensions are the supported replacement. The shape is the same
  * information under different names: `operation` for `action`, and `query` for
  * `next`.
@@ -261,9 +261,9 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
    * Records what a Prisma client runs, and hands back the client to use.
    *
    * Two integrations, because Prisma has had two. `$use` is the middleware API
-   * of Prisma 5 and earlier; Prisma removed it in 6.0 — the package does not
-   * carry it at all — and client extensions took its place. This watcher knew
-   * only the first, so on Prisma 6 and 7 the documented setup recorded nothing
+   * of Prisma 6.13 and earlier; Prisma removed it in 6.14.0 — the runtime does
+   * not carry it from there — and client extensions took its place. This watcher
+   * knew only the first, so on Prisma 6.14 and 7 the documented setup recorded nothing
    * and said `Invalid Prisma client provided`, blaming a client that was
    * perfectly valid.
    *
@@ -311,8 +311,8 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     // Neither, which is not a Prisma client at all — the message says what was
     // looked for rather than pronouncing on what was passed.
     this.logger.warn(
-      'ModelWatcher: the object passed to setupPrismaClient() has neither `$use` (Prisma 5 and ' +
-        'earlier) nor `$extends` (Prisma 6 and later), so nothing is being recorded for it.',
+      'ModelWatcher: the object passed to setupPrismaClient() has neither `$use` (Prisma 6.13 ' +
+        'and earlier) nor `$extends` (Prisma 4.16 and later), so nothing is being recorded for it.',
     );
 
     return prismaClient;

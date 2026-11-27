@@ -8,6 +8,7 @@ import {
   isPrismaClient,
   PrismaClient,
   PrismaMiddlewareParams,
+  PrismaQueryEvent,
   TypeORMDataSourceLike,
   TypeORMLoggerLike,
 } from './types';
@@ -25,6 +26,17 @@ export interface QueryData {
   success?: boolean;
   error?: unknown;
 }
+
+/** A query event's parameters arrive as JSON text: `'["x",-1,0]'`. */
+const parseQueryParams = (params: string | undefined): unknown[] | undefined => {
+  if (!params) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(params);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [params];
+  }
+};
 
 const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
 const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
@@ -144,19 +156,30 @@ export class QueryWatcher implements OnApplicationBootstrap {
     try {
       let attached = 0;
 
-      for (const client of this.discoverPrismaClients()) {
-        if (this.attachPrismaMiddleware(client)) {
-          attached += 1;
-        }
-      }
-
+      let unlogged = 0;
+      const clients = this.discoverPrismaClients();
       const globalPrisma = (global as Record<string, unknown>)['prisma'];
-      if (isPrismaClient(globalPrisma) && this.attachPrismaMiddleware(globalPrisma)) {
+      if (isPrismaClient(globalPrisma)) clients.push(globalPrisma);
+
+      for (const client of clients) {
+        const outcome = this.attachPrismaClient(client);
+        if (outcome === 'none') continue;
         attached += 1;
+        if (outcome === 'events-unlogged') unlogged += 1;
       }
 
       if (attached > 0) {
         this.logger.log(`Prisma query watcher attached to ${attached} client(s)`);
+      }
+
+      if (unlogged > 0) {
+        this.logger.warn(
+          `${unlogged} Prisma client(s) were built without query logging, so their queries are ` +
+            'not being recorded. Prisma 6.14 removed the middleware API, and from 6.14 on a client ' +
+            'reports its queries only when it is constructed with query logging: new ' +
+            "PrismaClient({ log: [{ emit: 'event', level: 'query' }] }), or super({ log: [...] }) " +
+            "in a PrismaService. log: ['query'] works as well, and also prints every query.",
+        );
       }
     } catch (error) {
       this.logger.debug(`Prisma attach skipped: ${String(error)}`);
@@ -184,16 +207,56 @@ export class QueryWatcher implements OnApplicationBootstrap {
     return clients;
   }
 
-  private attachPrismaMiddleware(client: PrismaClient): boolean {
-    if (!client.$use) return false;
-
+  /**
+   * Attaches to a client by whichever API its Prisma has.
+   *
+   * `$use`, the middleware API of Prisma 6.13 and earlier, records each operation
+   * as `Model.action`. Prisma 6.14 removed it, and 6.14 and 7 offer the `query` log
+   * event instead — the SQL, its parameters and how long it took — which a
+   * client emits only when it was built with query logging. Whether it was is
+   * read from the client's engine configuration, so a client that will never
+   * emit is reported rather than left recording nothing in silence. Measured
+   * against @prisma/client 6.19.3 and 7.10.1.
+   */
+  private attachPrismaClient(
+    client: PrismaClient,
+  ): 'middleware' | 'events' | 'events-unlogged' | 'none' {
     // One client can be injected into many providers, and the global may be
     // the same object again.
     const marked = client as unknown as Record<symbol, boolean | undefined>;
-    if (marked[PRISMA_ATTACHED]) return false;
-    marked[PRISMA_ATTACHED] = true;
+    if (marked[PRISMA_ATTACHED]) return 'none';
 
-    client.$use(
+    if (client.$use) {
+      marked[PRISMA_ATTACHED] = true;
+      this.attachPrismaMiddleware(client.$use.bind(client));
+      return 'middleware';
+    }
+
+    if (!client.$on) return 'none';
+
+    marked[PRISMA_ATTACHED] = true;
+    client.$on('query', (event: PrismaQueryEvent) => {
+      this.handleQuery({
+        query: event.query,
+        parameters: parseQueryParams(event.params),
+        duration: Number(event.duration) || 0,
+        source: 'prisma',
+        success: true,
+      });
+    });
+
+    // An engine configuration it cannot read is not evidence of anything, so
+    // only one that says query logging is off is reported.
+    const engineConfig = (client as { _engineConfig?: unknown })._engineConfig;
+    const unlogged =
+      typeof engineConfig === 'object' &&
+      engineConfig !== null &&
+      (engineConfig as { logQueries?: unknown }).logQueries !== true;
+    return unlogged ? 'events-unlogged' : 'events';
+  }
+
+  private attachPrismaMiddleware(use: NonNullable<PrismaClient['$use']>): void {
+    use(
       async (
         params: PrismaMiddlewareParams,
         next: (params: PrismaMiddlewareParams) => Promise<unknown>,
@@ -222,8 +285,6 @@ export class QueryWatcher implements OnApplicationBootstrap {
         }
       },
     );
-
-    return true;
   }
 
   /**
