@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { NestLensModule } from '../nestlens.module';
 import { NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, ModuleRef } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
 import { PruningService } from '../core/pruning.service';
 import { TagService } from '../core/tag.service';
@@ -675,7 +675,7 @@ describe('NestLensModule', () => {
   describe('OnModuleInit Implementation', () => {
     it('should implement onModuleInit method', () => {
       // Arrange
-      const module = new NestLensModule({} as NestLensConfig);
+      const module = new NestLensModule({} as NestLensConfig, {} as ModuleRef);
 
       // Assert
       expect(module.onModuleInit).toBeDefined();
@@ -684,7 +684,7 @@ describe('NestLensModule', () => {
 
     it('should log initialization message', async () => {
       // Arrange
-      const module = new NestLensModule({} as NestLensConfig);
+      const module = new NestLensModule({} as NestLensConfig, {} as ModuleRef);
       const logSpy = vi.spyOn((NestLensModule as any).logger, 'log');
 
       // Act

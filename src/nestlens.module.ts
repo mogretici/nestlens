@@ -12,7 +12,7 @@ import {
   VERSION_NEUTRAL,
 } from '@nestjs/common';
 import { PATH_METADATA, VERSION_METADATA } from '@nestjs/common/constants';
-import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, ModuleRef } from '@nestjs/core';
 import { applyPreset } from './presets';
 import { startupSummary } from './startup-summary';
 import {
@@ -248,13 +248,35 @@ const ALL_WATCHERS_OFF: NestLensConfig = {
  */
 const FOR_ROOT_CONFIG = Symbol('NESTLENS_FOR_ROOT_CONFIG');
 
+/** Whether a `forRoot` anywhere in this application provided a configuration. */
+const configuredElsewhere = (moduleRef: ModuleRef): boolean => {
+  try {
+    moduleRef.get(NESTLENS_CONFIG, { strict: false });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 @Module({})
 export class NestLensModule implements NestModule, OnModuleInit {
   constructor(
     @Optional()
     @Inject(FOR_ROOT_CONFIG)
-    private readonly config?: NestLensConfig,
-  ) {}
+    private readonly config: NestLensConfig | undefined,
+    moduleRef: ModuleRef,
+  ) {
+    // The class imported with no `forRoot` in the application configures
+    // nothing. Asked through the container rather than a static flag, so two
+    // applications in one process each get their own answer.
+    if (!config && !configuredElsewhere(moduleRef)) {
+      throw new Error(
+        'NestLensModule was imported without NestLensModule.forRoot(), so nothing configures it ' +
+          'and it would record nothing. Call NestLensModule.forRoot() once, in the root module; ' +
+          'it is global, so feature modules do not import NestLensModule.',
+      );
+    }
+  }
 
   /**
    * Opens a request context around every request.

@@ -89,3 +89,35 @@ describe('NestLensModule imported by a feature module as well', () => {
     expect(response.status).toBe(200);
   });
 });
+
+/**
+ * Without any `forRoot`, the class import configures nothing, and saying so at
+ * boot is the point. It used to fail there by accident — the instance could
+ * not find NESTLENS_CONFIG — and tolerating the double import above must not
+ * turn that into an application that boots and records nothing.
+ */
+describe('NestLensModule imported with no forRoot anywhere', () => {
+  it('refuses to boot, and says what to call', async () => {
+    @Module({ imports: [FeatureModule] })
+    class AppModule {}
+
+    await expect(Test.createTestingModule({ imports: [AppModule] }).compile()).rejects.toThrow(
+      'NestLensModule.forRoot()',
+    );
+  });
+
+  it('still boots two applications in one process when each calls forRoot', async () => {
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
+    const first = await boot(true);
+    const second = await boot(true);
+
+    try {
+      expect((await fetch(`${await second.getUrl()}/probe`)).status).toBe(200);
+    } finally {
+      await second.close();
+      await first.close();
+      vi.restoreAllMocks();
+    }
+  });
+});
