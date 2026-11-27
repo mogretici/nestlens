@@ -80,12 +80,15 @@
   height: 8px;
 }
 
-/* `dark:` cannot follow a pseudo-element, so the dark selector is spelled out */
+/*
+ * `dark:` cannot follow a pseudo-element, so the dark selector is spelled out.
+ * `.dark` itself is <html>, which owns the page's own scrollbar.
+ */
 ::-webkit-scrollbar-track {
   background-color: var(--color-gray-100);
 }
 
-:is(.dark *)::-webkit-scrollbar-track {
+:is(.dark, .dark *)::-webkit-scrollbar-track {
   background-color: var(--color-gray-800);
 }
 
@@ -94,7 +97,7 @@
   background-color: var(--color-gray-300);
 }
 
-:is(.dark *)::-webkit-scrollbar-thumb {
+:is(.dark, .dark *)::-webkit-scrollbar-thumb {
   background-color: var(--color-gray-600);
 }
 
@@ -102,7 +105,7 @@
   background-color: var(--color-gray-400);
 }
 
-:is(.dark *)::-webkit-scrollbar-thumb:hover {
+:is(.dark, .dark *)::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-gray-500);
 }
 

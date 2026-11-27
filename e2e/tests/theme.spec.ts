@@ -105,3 +105,36 @@ test.describe('Native controls', () => {
     expect(await declaredScheme(page)).toBe('light');
   });
 });
+
+test.describe('Scrollbars', () => {
+  /**
+   * `.dark` sits on <html>, and the page's own scrollbar belongs to <html>.
+   * A rule written for `.dark *` reaches every scrolling panel but not the
+   * page, so the main scrollbar stayed light in the dark theme. Firefox does
+   * not implement `::-webkit-scrollbar` and follows `color-scheme` instead.
+   */
+  const pageScrollbar = (page: import('@playwright/test').Page, part: string) =>
+    page.evaluate((pseudo) => getComputedStyle(document.documentElement, pseudo).backgroundColor, part);
+
+  test('the page scrollbar is dark in the dark theme', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'Firefox styles scrollbars through color-scheme.');
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('/requests');
+    await page.waitForSelector('html.dark');
+
+    expect(await pageScrollbar(page, '::-webkit-scrollbar-thumb')).toBe('rgb(75, 85, 99)');
+    expect(await pageScrollbar(page, '::-webkit-scrollbar-track')).toBe('rgb(31, 41, 55)');
+  });
+
+  test('the page scrollbar is light in the light theme', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'Firefox styles scrollbars through color-scheme.');
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/requests');
+    await page.waitForSelector('html:not(.dark)');
+
+    expect(await pageScrollbar(page, '::-webkit-scrollbar-thumb')).toBe('rgb(209, 213, 219)');
+    expect(await pageScrollbar(page, '::-webkit-scrollbar-track')).toBe('rgb(243, 244, 246)');
+  });
+});
