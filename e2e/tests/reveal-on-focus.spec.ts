@@ -9,7 +9,8 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
  * what hover reveals, or the button is invisible but still clickable.
  */
 
-const ENTRIES = 'http://localhost:3000/nestlens/__nestlens__/api/entries/cursor?type=request&limit=100';
+const ENTRIES =
+  'http://localhost:3000/nestlens/__nestlens__/api/entries/cursor?type=request&limit=100';
 
 interface RequestEntry {
   id: number;
@@ -21,7 +22,10 @@ async function requestWithBody(request: APIRequestContext): Promise<number> {
   const response = await request.get(ENTRIES);
   const { data } = (await response.json()) as { data: RequestEntry[] };
   const entry = data.find(
-    ({ payload }) => typeof payload.body === 'object' && payload.body !== null && Object.keys(payload.body).length > 0,
+    ({ payload }) =>
+      typeof payload.body === 'object' &&
+      payload.body !== null &&
+      Object.keys(payload.body).length > 0,
   );
   if (!entry) throw new Error('The seeded example app has no request with a body.');
 
@@ -32,7 +36,9 @@ async function tabTo(page: Page, name: string): Promise<void> {
   for (let presses = 0; presses < 80; presses++) {
     await page.keyboard.press('Tab');
     const focused = await page.evaluate(
-      () => document.activeElement?.getAttribute('title') ?? document.activeElement?.getAttribute('aria-label'),
+      () =>
+        document.activeElement?.getAttribute('title') ??
+        document.activeElement?.getAttribute('aria-label'),
     );
     if (focused === name) return;
   }
@@ -48,10 +54,15 @@ test.describe('controls revealed on hover', () => {
     await tabTo(page, 'Copy value');
 
     await expect(page.getByTitle('Copy value').first()).toBeFocused();
-    await expect(page.locator('button[title="Copy value"]:focus').locator('xpath=..')).toHaveCSS('opacity', '1');
+    await expect(page.locator('button[title="Copy value"]:focus').locator('xpath=..')).toHaveCSS(
+      'opacity',
+      '1',
+    );
   });
 
-  test("a filter chip's remove icon shows fully when the chip has keyboard focus", async ({ page }) => {
+  test("a filter chip's remove icon shows fully when the chip has keyboard focus", async ({
+    page,
+  }) => {
     await page.goto('/requests?tags=SUCCESS');
     const chip = page.getByRole('button', { name: 'Remove Tag filter: SUCCESS' });
     await expect(chip).toBeVisible();
@@ -77,7 +88,11 @@ test.describe('controls revealed on hover', () => {
      * button faded in and straight back out on CI. A phone does not do that,
      * and the property being tested is the stylesheet's, not the emulator's.
      */
-    test('a hovered row shows its copy button on a device without hover', async ({ page, request, browserName }) => {
+    test('a hovered row shows its copy button on a device without hover', async ({
+      page,
+      request,
+      browserName,
+    }) => {
       test.skip(browserName === 'firefox', 'Firefox has no mobile emulation in Playwright.');
 
       await page.goto(`/requests/${await requestWithBody(request)}`);
