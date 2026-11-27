@@ -32,6 +32,9 @@
   <a href="https://lutfuogretici.medium.com/nestlens-laravel-telescope-finally-comes-to-nestjs-93f5a2c1f521">
     <img src="https://img.shields.io/badge/Read_the_Story_on_Medium-000000?style=for-the-badge&logo=medium" alt="Medium Article" />
   </a>
+  <a href="https://dev.to/mogretici/nestlens-laravel-telescope-finally-comes-to-nestjs-3f3o">
+    <img src="https://img.shields.io/badge/Read_on_DEV-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white" alt="Read on DEV" />
+  </a>
   <a href="https://glama.ai/mcp/servers/mogretici/nestlens">
     <img src="https://glama.ai/mcp/servers/mogretici/nestlens/badges/score.svg" alt="mogretici/nestlens MCP server" height="28" />
   </a>
