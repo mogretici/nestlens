@@ -99,6 +99,10 @@ import { NestLensModule } from 'nestlens';
 export class AppModule {}
 ```
 
+`forRoot` belongs in the root module, once. It is global: a feature module takes
+`CollectorService` or a watcher such as `GateWatcher` in its constructor without
+importing `NestLensModule` again.
+
 Visit **http://localhost:3000/nestlens** and start debugging.
 
 ### Let an AI agent read it
