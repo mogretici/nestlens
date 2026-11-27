@@ -132,6 +132,7 @@ export interface LogEntry extends BaseEntry {
     message: string;
     context?: string;
     stack?: string;
+    /** The one plain object passed after the message: `log('Paid', { orderId }, 'Billing')`. */
     metadata?: Record<string, unknown>;
   };
 }
