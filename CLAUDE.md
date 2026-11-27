@@ -153,9 +153,11 @@ Watchers create `Entry` objects via CollectorService. Entry types are defined in
   keeps Tailwind 3's palette, font and line heights, so the move to 4 left the
   dashboard looking as it did; removing it is a visible redesign, not a cleanup.
 - A variant on a pseudo-element is lost without a warning: `@apply dark:…` on
-  `::-webkit-scrollbar-thumb` compiles to `::-webkit-scrollbar-thumb:is(.dark *)`,
-  which no browser accepts, and the minifier drops it. Write those selectors in
-  plain CSS (`stylesheet.spec.ts` checks every stylesheet under `src/`).
+  `::-webkit-scrollbar-thumb` becomes `::-webkit-scrollbar-thumb:is(.dark *)`,
+  which is not a valid selector; Lightning CSS empties it to `:is()` and the
+  minified build drops the rule. Write those selectors in plain CSS
+  (`stylesheet.spec.ts` checks every stylesheet under `src/`). Playwright's
+  headless Chromium hides scrollbars, so only WebKit screenshots show them.
 - `npm run typecheck` covers the app and `vite.config.ts`; a bare `tsc` reads
   only the first.
 

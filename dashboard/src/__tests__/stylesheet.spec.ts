@@ -3,8 +3,8 @@
  *
  * `dark:` compiles to `&:is(.dark *)`, which on `::-webkit-scrollbar-track`
  * builds `::-webkit-scrollbar-track:is(.dark *)`: no selector may follow a
- * pseudo-element that way, so the build's minifier and every browser discard
- * the rule. Tailwind 3 moved the pseudo-element to the end; Tailwind 4 does
+ * pseudo-element that way, so Lightning CSS empties it to `:is()` and the
+ * minified build drops the rule. Tailwind 3 moved the pseudo-element to the end; Tailwind 4 does
  * not, and says nothing. The dashboard's scrollbars stayed light in the dark
  * theme with the build green. Rules on a pseudo-element name their dark
  * selector in plain CSS instead.
