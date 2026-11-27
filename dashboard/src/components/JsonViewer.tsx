@@ -212,7 +212,7 @@ const JsonNode = memo(function JsonNode({
         onClick={isExpandable ? handleToggle : undefined}
       >
         {/* Copy button - fixed at far left */}
-        <span className="w-6 h-6 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="w-6 h-6 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           <button
             onClick={handleCopyValue}
             className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
