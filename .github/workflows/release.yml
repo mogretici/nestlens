@@ -142,9 +142,9 @@ jobs:
   # the library released and its smoke test running. It publishes with npm's
   # trusted publishing, as the library is published — the OIDC token, no
   # secret — which npm can only be set up for once the package exists, so its
-  # first version was published by hand (CLAUDE.md, "Releasing and the MCP
-  # Registry"). A version npm already has is skipped: re-running the failed
-  # jobs of a release finishes the ones after this.
+  # first version was published by hand (RELEASING.md). A version npm already
+  # has is skipped: re-running the failed jobs of a release finishes the ones
+  # after this.
   mcp-publish:
     name: Publish nestlens-mcp ${{ needs.release.outputs.version }}
     needs: release
@@ -183,7 +183,7 @@ jobs:
             exit 0
           fi
           if ! npm view nestlens-mcp name > /dev/null 2>&1; then
-            echo "::error::nestlens-mcp is not on npm yet. Its first version is published by hand and trusted publishing set up after it: CLAUDE.md, 'Releasing and the MCP Registry'."
+            echo "::error::nestlens-mcp is not on npm yet. Its first version is published by hand and trusted publishing set up after it: RELEASING.md, 'Its first publish, once'."
             exit 1
           fi
           npm publish --access public
