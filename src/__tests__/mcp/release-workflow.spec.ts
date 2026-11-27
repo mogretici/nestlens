@@ -96,6 +96,36 @@ describe('the release workflow', () => {
     expect(reader).toBeGreaterThan(semanticRelease);
   });
 
+  /**
+   * semantic-release pushes the tag, publishes to npm and then creates the
+   * GitHub release. When that last step fails, the job fails with the library
+   * already out — and re-running it finds the branch behind the remote,
+   * releases nothing and reports `released=false`, so the jobs after it never
+   * ran for that version. The version is therefore read even when the release
+   * step fails, "released" means the tag exists, and the jobs after it run
+   * unless the run was cancelled.
+   */
+  it('reads the version even when semantic-release fails part-way, and trusts the tag', () => {
+    const steps = workflow().release.steps;
+    const reader = steps.find((step) => runs(step, /released=/)) as Step & { if?: string };
+
+    expect(reader.if).toBe('${{ !cancelled() }}');
+    expect(reader.run).toMatch(/git ls-remote --exit-code --tags origin "refs\/tags\/v\$version"/);
+    expect(reader.run).toMatch(/-n "\$BEFORE"/);
+  });
+
+  it('runs the jobs after the release unless the run was cancelled', () => {
+    const jobs = workflow();
+
+    for (const id of ['smoke', 'mcp-publish', 'mcp-smoke', 'mcp-registry']) {
+      expect(jobs[id]?.if, id).toMatch(/^\$\{\{ !cancelled\(\) && /);
+    }
+    expect(jobs.smoke?.if).toMatch(/needs\.release\.outputs\.version != ''/);
+    expect(jobs['mcp-smoke']?.if).toMatch(/needs\.mcp-publish\.result == 'success'/);
+    expect(jobs['mcp-registry']?.if).toMatch(/needs\.mcp-publish\.result == 'success'/);
+    expect(jobs['mcp-registry']?.if).toMatch(/needs\.mcp-smoke\.result == 'success'/);
+  });
+
   it('leaves nestlens-mcp out of semantic-release, which publishes the library only', () => {
     const config = JSON.parse(readFileSync(join(ROOT, '.releaserc.json'), 'utf8')) as {
       plugins: unknown[];
@@ -122,6 +152,15 @@ describe('publishing nestlens-mcp', () => {
     expect(id).not.toBe('release');
     expect(needs(job)).toEqual(['release']);
     expect(job.if).toMatch(RELEASED);
+  });
+
+  it('waits for npm to serve the library it pins, which a failed npm publish never does', () => {
+    const [, job] = wrapperPublisher();
+    const wait = job.steps.findIndex((step) => runs(step, /npm view "nestlens@\$VERSION" version/));
+    const publish = job.steps.findIndex((step) => runs(step, /npm publish\b/));
+
+    expect(wait).toBeGreaterThan(-1);
+    expect(wait).toBeLessThan(publish);
   });
 
   it('publishes packages/mcp from the release tag', () => {
@@ -169,12 +208,15 @@ describe('smoke-testing nestlens-mcp', () => {
 });
 
 describe('publishing to the MCP Registry', () => {
-  it('is a job of its own, after nestlens-mcp is published', () => {
+  it('is a job of its own, after nestlens-mcp is published and has started from npm', () => {
+    // An entry cannot be edited once published, so a wrapper that installs but
+    // does not start must not reach it.
     const [publisherId] = wrapperPublisher();
+    const [smokeId] = wrapperSmoke();
     const [id, job] = registryPublisher();
 
     expect(id).not.toBe(publisherId);
-    expect(needs(job)).toEqual(expect.arrayContaining(['release', publisherId]));
+    expect(needs(job)).toEqual(expect.arrayContaining(['release', publisherId, smokeId]));
   });
 
   it('publishes the server.json of the release tag', () => {

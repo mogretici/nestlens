@@ -88,14 +88,27 @@ jobs:
       # semantic-release writes the released version into package.json before
       # publishing, so this is the version that just went out — or, when nothing
       # was released, the one already on npm, which is still worth checking.
+      #
+      # It runs even when the step above failed. semantic-release pushes the
+      # tag, publishes to npm and then creates the GitHub release; a failure in
+      # that last step fails the job with the library already out, and a re-run
+      # of it finds the branch behind the remote and releases nothing. So a
+      # version counts as released when it changed and its tag reached the
+      # remote — the jobs after this run on that, and mcp-publish waits for npm
+      # to serve the library before it publishes anything that pins it.
       - name: Read the released version
         id: version
+        if: ${{ !cancelled() }}
         env:
           BEFORE: ${{ steps.before.outputs.version }}
         run: |
           version=$(node -p "require('./package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "$version" != "$BEFORE" ]; then released=true; else released=false; fi
+          released=false
+          if [ -n "$BEFORE" ] && [ "$version" != "$BEFORE" ] &&
+            git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            released=true
+          fi
           echo "released=$released" >> "$GITHUB_OUTPUT"
 
   # Everything above tests the source tree. This installs what npm actually
@@ -113,6 +126,7 @@ jobs:
   smoke:
     name: Smoke test the published package on Node ${{ matrix.node }}
     needs: release
+    if: ${{ !cancelled() && needs.release.outputs.version != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -148,9 +162,9 @@ jobs:
   mcp-publish:
     name: Publish nestlens-mcp ${{ needs.release.outputs.version }}
     needs: release
-    if: needs.release.outputs.released == 'true'
+    if: ${{ !cancelled() && needs.release.outputs.released == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
       id-token: write
@@ -166,6 +180,22 @@ jobs:
         with:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
+
+      # The tag is pushed before semantic-release publishes to npm, so a tag
+      # alone does not mean the library is out. Ten minutes covers npm's CDN
+      # (see scripts/smoke-published-package.mjs); a library that never appears
+      # was not published, and nothing that pins it is.
+      - name: Wait for npm to serve nestlens ${{ needs.release.outputs.version }}
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          for attempt in $(seq 1 60); do
+            if npm view "nestlens@$VERSION" version > /dev/null 2>&1; then exit 0; fi
+            echo "waiting for nestlens@$VERSION on registry.npmjs.org ($attempt/60)"
+            sleep 10
+          done
+          echo "::error::nestlens@$VERSION is not on npm, so nestlens-mcp@$VERSION is not published"
+          exit 1
 
       - name: Publish packages/mcp
         working-directory: packages/mcp
@@ -194,6 +224,7 @@ jobs:
   mcp-smoke:
     name: Smoke test nestlens-mcp on Node ${{ matrix.node }}
     needs: [release, mcp-publish]
+    if: ${{ !cancelled() && needs.mcp-publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -219,10 +250,13 @@ jobs:
   # checks that the npm release carries the entry's name in `mcpName`, and the
   # OIDC token it accepts from this workflow grants `io.github.<owner>/*` with
   # no secret to keep. It checks out the release tag for the same reason the
-  # publish job does.
+  # publish job does, and waits for the smoke test: an entry cannot be edited
+  # once published, so a wrapper that installs but does not start must not get
+  # one.
   mcp-registry:
     name: Publish ${{ needs.release.outputs.version }} to the MCP Registry
-    needs: [release, mcp-publish]
+    needs: [release, mcp-publish, mcp-smoke]
+    if: ${{ !cancelled() && needs.mcp-publish.result == 'success' && needs.mcp-smoke.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

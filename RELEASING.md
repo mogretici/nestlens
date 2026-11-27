@@ -46,34 +46,53 @@ subject is what a reader of the changelog sees.
      as `chore(release): <version> [skip ci]`, tags it `v<version>` and pushes;
    - publishes `nestlens` to npm with trusted publishing and creates the GitHub
      release.
-3. Reports the version and whether it changed — `released` is false for a
-   merge that released nothing, and the jobs below then do not run.
+3. Reports the version, and whether it was released: the version changed and
+   its tag `v<version>` reached the remote. It does so even when step 2
+   failed part-way — see below.
 
 `src/__tests__/release-versions.spec.ts` fails when any of the synced files
 falls behind `package.json`.
 
 ### After it
 
-None of these can fail the release or skip another's checks. Each that needs
-the new versions checks out the tag, because the commit the workflow ran on
-still holds the old ones.
+None of these can fail the release or skip another's checks, and each runs
+unless the run was cancelled — also when the `release` job failed after
+publishing. Each that needs the new versions checks out the tag, because the
+commit the workflow ran on still holds the old ones.
 
-| Job | What it does |
-| --- | --- |
-| `smoke` | Installs the published `nestlens` into an empty project on the Node floor (22.13.0) and on 26, boots NestJS and checks the dashboard, an asset and the API (`scripts/smoke-published-package.mjs`). |
-| `mcp-publish` | Publishes `packages/mcp` — the `nestlens-mcp` package — with trusted publishing. A version npm already has is skipped. |
-| `mcp-smoke` | Starts what npm serves with `npx -y nestlens-mcp@<version>` from an empty directory on the same two Node versions and speaks MCP to it: `initialize`, `tools/list` (`scripts/smoke-mcp-package.mjs`). |
-| `mcp-registry` | Waits for npm to serve `nestlens-mcp` with its `mcpName`, verifies the pinned `mcp-publisher` with cosign, logs in to the official MCP Registry with GitHub OIDC and publishes `server.json`. |
+| Job | Runs when | What it does |
+| --- | --- | --- |
+| `smoke` | the `release` job reported a version | Installs the published `nestlens` into an empty project on the Node floor (22.13.0) and on 26, boots NestJS and checks the dashboard, an asset and the API (`scripts/smoke-published-package.mjs`). |
+| `mcp-publish` | a version was released | Waits for npm to serve that `nestlens`, then publishes `packages/mcp` — the `nestlens-mcp` package — with trusted publishing. A version npm already has is skipped. |
+| `mcp-smoke` | `mcp-publish` succeeded | Starts what npm serves with `npx -y nestlens-mcp@<version>` from an empty directory on the same two Node versions and speaks MCP to it: `initialize`, `tools/list` (`scripts/smoke-mcp-package.mjs`). |
+| `mcp-registry` | `mcp-publish` and `mcp-smoke` succeeded | Waits for npm to serve `nestlens-mcp` with its `mcpName`, verifies the pinned `mcp-publisher` with cosign, logs in to the official MCP Registry with GitHub OIDC and publishes `server.json`. An entry cannot be edited once published, so a wrapper that does not start never gets one. |
 
 `src/__tests__/mcp/release-workflow.spec.ts` holds the shape of these jobs.
 
-### When a job after the release fails
+### When something fails
 
-Open the release's run and use **Re-run failed jobs**. `mcp-publish` skips a
-version that is already on npm, so a re-run finishes whatever came after the
-failure without publishing anything twice. The registry refuses a version it
-already has and a published entry cannot be edited, so a change to
-`server.json` reaches the registry with the next release.
+**A job after the release** (`smoke`, `mcp-publish`, `mcp-smoke`,
+`mcp-registry`): open the run and re-run that job — **Re-run failed jobs**, or
+the job's own re-run button. GitHub re-runs the jobs that depend on it, and the
+jobs it leaves alone keep their outputs from the first attempt, version
+included ([re-running workflows and jobs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs)).
+`mcp-publish` skips a version that is already on npm, so nothing is published
+twice.
+
+**The `release` job, after it published** — semantic-release pushes the tag,
+publishes to npm and only then creates the GitHub release, so a failure there
+leaves the library out and the job red. The jobs after it still run for that
+version: the version is read after a failed step too, and counts as released
+once its tag is on the remote; `mcp-publish` waits for npm to serve the library
+first, so a tag whose npm publish failed publishes nothing that pins it. Do
+**not** re-run the `release` job itself, or **Re-run failed jobs** while it is
+among them: a second semantic-release finds `main` behind the remote, releases
+nothing and reports `released=false`, and the jobs after it are skipped. Re-run
+the failed jobs after it one by one instead, and create the missing GitHub
+release by hand from the tag and the `CHANGELOG.md` section.
+
+The registry refuses a version it already has and a published entry cannot be
+edited, so a change to `server.json` reaches the registry with the next release.
 
 To publish the registry entry by hand instead, from a checkout of the tag:
 
@@ -119,32 +138,53 @@ node scripts/smoke-mcp-package.mjs --tarball "$packed/nestlens-mcp-$v.tgz" --lib
 
 ### Its first publish, once
 
-npm only lets a package that exists be given a trusted publisher, so the first
-version of `nestlens-mcp` is published by a maintainer. Until then
-`mcp-publish` fails with a message pointing here.
+npm only gives a trusted publisher to a package that exists, so the first
+version of `nestlens-mcp` is published by a maintainer, from a laptop.
 
-1. Let the release run. `nestlens` is published, and `mcp-publish` fails
-   because `nestlens-mcp` is not on npm.
-2. From a checkout of the tag, with `npm login` done and 2FA on the account:
+**Until then `npx -y nestlens-mcp` fails with a 404.** The release that first
+ships the package — and the documentation, which deploys from `main` — already
+tell people to run it. Publish it as soon as that release run finishes. This one
+version has no provenance attestation; npm adds one only to versions published
+through trusted publishing.
+
+1. Merge, and let the release run. `nestlens` is published, and `mcp-publish`
+   fails: `nestlens-mcp is not on npm yet`.
+2. At once, from a checkout of the tag, with `npm login` done and 2FA on the
+   account:
 
    ```bash
+   git checkout v<version>
    cd packages/mcp
    npm publish --access public
    ```
 
-3. Give it a trusted publisher (npm 11.15 or later):
+3. Re-run the failed jobs of that release run. `mcp-publish` finds the version
+   on npm and skips, then `mcp-smoke` and `mcp-registry` run. Nothing here
+   needs trusted publishing yet.
+4. Before the **next** release is merged — not earlier than two days before
+   it — give the package a trusted publisher (npm 11.15 or later):
 
    ```bash
    npm trust github nestlens-mcp --file release.yml --repo mogretici/nestlens --allow-publish
    ```
 
    or on npmjs.com, under the package's Settings → Trusted publishing, with the
-   workflow `release.yml` and "npm publish" allowed. Two npm rules apply:
-   a configuration made since September 2026 allows only `npm stage publish`
-   unless direct publishing is allowed as above, and a new configuration
-   expires unless a publish succeeds through it within two days — set it up
-   when the next release is close, and recreate it if it expired.
-4. Re-run the failed jobs of the release run: `mcp-publish` finds the version
-   on npm and skips, and `mcp-smoke` and `mcp-registry` run.
+   workflow `release.yml` and direct publishing allowed. Two rules from npm's
+   [trusted publishers](https://docs.npmjs.com/trusted-publishers) page decide
+   the timing and the flag:
+   - "A newly created trusted publisher configuration must complete its first
+     successful publish within 2 days", or it expires and has to be deleted and
+     created again. The first publish through it is the next release's
+     `mcp-publish`, so set it up when that release is close.
+   - "Configurations created after Sep 03, 2026 are automatically set to allow
+     `npm stage publish`", with direct publishing a choice. `mcp-publish` runs
+     `npm publish`, so allow it — the CLI asks for at least one of
+     `--allow-publish` and `--allow-stage-publish`
+     ([npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust)).
 
-From the next release on, everything above happens on its own.
+   A release merged with no valid configuration fails `mcp-publish` at
+   `npm publish`; npm's page names the error "Unable to authenticate"
+   (`ENEEDAUTH`). Publish that version by hand as in step 2 and re-run the
+   failed jobs, as in step 3.
+
+From then on, everything above happens on its own.
