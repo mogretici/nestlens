@@ -62,6 +62,10 @@ const needs = (job: Job): readonly string[] =>
 const runs = (step: Step, pattern: RegExp): boolean =>
   typeof step.run === 'string' && pattern.test(step.run);
 
+/** A literal in the step's script — for a URL, where a regex would also match other hosts. */
+const runsText = (step: Step, text: string): boolean =>
+  typeof step.run === 'string' && step.run.includes(text);
+
 const jobRunning = (pattern: RegExp, description: string): [string, Job] => {
   const found = Object.entries(workflow()).find(([, job]) =>
     job.steps.some((step) => runs(step, pattern)),
@@ -237,7 +241,7 @@ describe('publishing to the MCP Registry', () => {
   it('waits until npm serves nestlens-mcp with the name the entry claims, before logging in', () => {
     const [, job] = registryPublisher();
     const wait = job.steps.findIndex(
-      (step) => runs(step, /registry\.npmjs\.org\/nestlens-mcp\//) && runs(step, /mcpName/),
+      (step) => runsText(step, 'https://registry.npmjs.org/nestlens-mcp/') && runs(step, /mcpName/),
     );
     const login = job.steps.findIndex((step) => runs(step, /mcp-publisher login/));
 
