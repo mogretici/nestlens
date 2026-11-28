@@ -688,43 +688,44 @@ All API endpoints require the same authentication as the dashboard.
 
 ### Where can I get help?
 
-1. **Documentation**: Read the full docs at [NestLens Docs](/)
-2. **GitHub Issues**: Report bugs or request features
-3. **GitHub Discussions**: Ask questions and share ideas
-4. **Stack Overflow**: Tag questions with `nestlens`
+1. **This documentation** — the [Debugging](#debugging) and
+   [Integration Issues](#integration-issues) sections above cover the questions
+   asked most.
+2. **[GitHub Issues](https://github.com/mogretici/nestlens/issues)** — search
+   for your problem, then open a bug report or a feature request.
+
+A suspected security vulnerability goes through the
+[private reporting form](https://github.com/mogretici/nestlens/security/advisories/new)
+instead, never a public issue.
 
 ### How do I report a bug?
 
-1. Check [GitHub Issues](https://github.com/mogretici/nestlens/issues) for existing reports
-2. Create a new issue with:
-   - NestLens version
-   - NestJS version
-   - Node version
-   - Minimal reproduction example
-   - Expected vs actual behavior
-   - Error messages/logs
+Search the [existing issues](https://github.com/mogretici/nestlens/issues?q=is%3Aissue)
+first, then open a
+[bug report](https://github.com/mogretici/nestlens/issues/new?template=bug_report.yml).
+The form asks for what a fix needs:
+
+- the NestLens, NestJS and Node versions, the HTTP adapter, the storage driver
+  and the package manager
+- your `forRoot()` configuration, with secrets replaced by `***`
+- the line NestLens logs at startup under `[NestLens]` — it states what is
+  recorded, where it is stored and where the dashboard is mounted, which
+  answers most configuration questions on its own
+- the smallest steps that reproduce it
 
 ### How do I request a feature?
 
-1. Check [GitHub Discussions](https://github.com/mogretici/nestlens/discussions)
-2. Search for similar requests
-3. Create a new discussion with:
-   - Clear description of the feature
-   - Use case / problem it solves
-   - Example of how it would work
-   - Willingness to contribute
+Open a
+[feature request](https://github.com/mogretici/nestlens/issues/new?template=feature_request.yml).
+Describe the problem first — what you are trying to see or do, and what gets in
+the way — and how you picture it working second.
 
 ### Can I contribute?
 
-Yes! Contributions are welcome:
-
-1. **Code**: Submit pull requests
-2. **Documentation**: Improve docs
-3. **Bug Reports**: Report issues
-4. **Feature Ideas**: Suggest enhancements
-5. **Testing**: Test beta features
-
-See `CONTRIBUTING.md` in the repository.
+Yes. Bug fixes, new watchers, dashboard improvements and documentation are all
+welcome as pull requests. [CONTRIBUTING.md](https://github.com/mogretici/nestlens/blob/main/CONTRIBUTING.md)
+covers setting up the repository, running the tests and how commit messages
+decide the next version.
 
 ## Next Steps
 

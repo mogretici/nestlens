@@ -72,11 +72,11 @@ draws:
 
 - the dashboard showing recorded data to someone who is *authorized* to see it.
   That is the product. Restricting who is authorized is
-  [your configuration](https://mogretici.github.io/nestlens/docs/security/access-control)
+  [your configuration](https://nestlens-docs.vercel.app/docs/security/access-control)
 - NestLens being enabled in production and therefore recording production data.
   It is off in production by default (`allowedEnvironments` is
   `['development', 'local', 'test']`); turning it on is a deliberate act, and
-  [the production guide](https://mogretici.github.io/nestlens/docs/security/production-usage)
+  [the production guide](https://nestlens-docs.vercel.app/docs/security/production-usage)
   covers what to do about it
 - vulnerabilities in a peer dependency, unless NestLens is what makes them
   reachable — report those upstream
