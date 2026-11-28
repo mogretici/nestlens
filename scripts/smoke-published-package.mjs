@@ -19,6 +19,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { waitForInstallable } from './registry-wait.mjs';
 
 const PORT = 3987;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -28,7 +29,8 @@ const argv = process.argv.slice(2);
 const tarballFlag = argv.indexOf('--tarball');
 const tarball = tarballFlag === -1 ? undefined : resolve(argv[tarballFlag + 1] ?? '');
 const version =
-  tarball || argv.find((argument) => !argument.startsWith('--')) ||
+  tarball ||
+  argv.find((argument) => !argument.startsWith('--')) ||
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 const failures = [];
@@ -53,20 +55,8 @@ const run = (command, args, options = {}) =>
  */
 const REGISTRY_ATTEMPTS = 60;
 
-async function waitForRegistry(target) {
-  for (let attempt = 1; attempt <= REGISTRY_ATTEMPTS; attempt += 1) {
-    try {
-      run('npm', ['view', `nestlens@${target}`, 'version']);
-      return;
-    } catch {
-      console.log(
-        `  … waiting for nestlens@${target} on the registry (${attempt}/${REGISTRY_ATTEMPTS})`,
-      );
-      await delay(10_000);
-    }
-  }
-  throw new Error(`nestlens@${target} never appeared on the registry`);
-}
+const waitForRegistry = (target) =>
+  waitForInstallable([['nestlens', target]], { attempts: REGISTRY_ATTEMPTS, intervalMs: 10_000 });
 
 /**
  * A NestJS application without a TypeScript build: decorators are ordinary
@@ -83,7 +73,7 @@ const { NestLensModule } = require('nestlens');
 class AppModule {}
 Module({ imports: [NestLensModule.forRoot({ watchers: { request: true } })] })(AppModule);
 
-NestFactory.create(AppModule, { logger: false })
+NestFactory.create(AppModule, { logger: ['warn', 'error'] })
   .then((app) => app.listen(${PORT}, '127.0.0.1'))
   .then(() => console.log('LISTENING'))
   .catch((error) => {
@@ -120,10 +110,15 @@ try {
   writeFileSync(join(workspace, 'main.js'), APP);
 
   const { spawn } = await import('node:child_process');
-  server = spawn(process.execPath, ['main.js'], { cwd: workspace, stdio: ['ignore', 'pipe', 'pipe'] });
+  server = spawn(process.execPath, ['main.js'], {
+    cwd: workspace,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
   const stderr = [];
+  const stdout = [];
   server.stderr.on('data', (chunk) => stderr.push(chunk.toString()));
+  server.stdout.on('data', (chunk) => stdout.push(chunk.toString()));
 
   const listening = await Promise.race([
     new Promise((resolveReady) => {
@@ -139,7 +134,10 @@ try {
 
   const html = await fetch(MOUNT);
   const body = await html.text();
-  check('the dashboard responds with HTML', html.headers.get('content-type')?.includes('text/html'));
+  check(
+    'the dashboard responds with HTML',
+    html.headers.get('content-type')?.includes('text/html'),
+  );
   check('the mount point is injected', body.includes('<base href="/nestlens/"'));
   check('the bundle is told where it is', body.includes('__NESTLENS_BASE__'));
 
@@ -157,7 +155,10 @@ try {
       script.slice(0, 80),
     );
     check('the script is compressed', asset.headers.get('content-encoding') === 'br');
-    check('the script is cacheable forever', asset.headers.get('cache-control')?.includes('immutable'));
+    check(
+      'the script is cacheable forever',
+      asset.headers.get('cache-control')?.includes('immutable'),
+    );
   }
 
   const api = await fetch(`${MOUNT}/__nestlens__/api/entries?type=request`);
@@ -176,14 +177,47 @@ try {
   check('the API returns JSON, not the SPA fallback', payload !== undefined, raw.slice(0, 80));
   check('the API returns the documented envelope', payload?.success === true, raw.slice(0, 200));
 
+  // Every watcher reports whether it can record. This application has no ORM,
+  // so the query watcher is on with nothing to watch: the startup warning has
+  // to say so, and the route has to report the request watcher as recording.
+  const watchers = await fetch(`${MOUNT}/__nestlens__/api/watchers`)
+    .then((response) => response.json())
+    .catch(() => undefined);
+  const states = Object.fromEntries((watchers?.data ?? []).map((w) => [w.type, w.state]));
+  check(
+    'the watcher status route answers',
+    Array.isArray(watchers?.data),
+    JSON.stringify(watchers)?.slice(0, 200),
+  );
+  check(
+    'the request watcher reports itself recording',
+    states.request === 'recording',
+    JSON.stringify(states),
+  );
+  check(
+    'the query watcher with no ORM reports itself waiting',
+    states.query === 'waiting',
+    JSON.stringify(states),
+  );
+  const output = stdout.join('') + stderr.join('');
+  check(
+    'startup warns about the watchers that cannot record',
+    /recording nothing[\s\S]*watchers\.query/.test(output),
+    output.slice(-600),
+  );
+
   // The published entry points, from a consumer's position.
-  const resolution = run(process.execPath, [
-    '-e',
-    `require('nestlens/storage/sqlite');
+  const resolution = run(
+    process.execPath,
+    [
+      '-e',
+      `require('nestlens/storage/sqlite');
      require('nestlens/storage/redis');
      try { require('nestlens/dist/core/collector.service'); console.log('LEAKED'); }
      catch (error) { console.log(error.code); }`,
-  ], { cwd: workspace });
+    ],
+    { cwd: workspace },
+  );
 
   check('the storage entry points resolve', !resolution.includes('Error'), resolution.trim());
   check(

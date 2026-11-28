@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
+import { waitForInstallable } from './registry-wait.mjs';
 
 const argv = process.argv.slice(2);
 const option = (name) => {
@@ -58,20 +59,15 @@ const run = (command, args, options = {}) =>
 /** Ten minutes, for the reason scripts/smoke-published-package.mjs gives. */
 const REGISTRY_ATTEMPTS = 60;
 
-async function waitForRegistry(target) {
-  for (let attempt = 1; attempt <= REGISTRY_ATTEMPTS; attempt += 1) {
-    try {
-      run('npm', ['view', `nestlens-mcp@${target}`, 'version']);
-      return;
-    } catch {
-      console.log(
-        `  … waiting for nestlens-mcp@${target} on the registry (${attempt}/${REGISTRY_ATTEMPTS})`,
-      );
-      await delay(10_000);
-    }
-  }
-  throw new Error(`nestlens-mcp@${target} never appeared on the registry`);
-}
+/** The wrapper pins the library at the same version, so install needs both. */
+const waitForRegistry = (target) =>
+  waitForInstallable(
+    [
+      ['nestlens-mcp', target],
+      ['nestlens', target],
+    ],
+    { attempts: REGISTRY_ATTEMPTS, intervalMs: 10_000 },
+  );
 
 /**
  * Starts the command, sends `initialize` and `tools/list` as newline-delimited
@@ -179,7 +175,15 @@ try {
     args = ['--yes', `nestlens-mcp@${version}`, ...URL_ARGS];
   }
 
-  const result = await handshake(command, args, workspace);
+  // The wait reads the same document npx does, but two CDN edges can still
+  // disagree for a moment; a version npm says does not exist is worth asking
+  // about again rather than failing a release that did publish.
+  let result = await handshake(command, args, workspace);
+  for (let retry = 1; !tarball && retry <= 3 && /ETARGET/.test(result.stderr); retry += 1) {
+    console.log(`  … npx could not see nestlens-mcp@${version} yet, asking again (${retry}/3)`);
+    await delay(30_000);
+    result = await handshake(command, args, workspace);
+  }
   if (result.error) {
     check('answers initialize and tools/list', false, `${result.error}\n${result.stderr}`);
   } else {

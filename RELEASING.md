@@ -75,9 +75,9 @@ commit the workflow ran on still holds the old ones.
 
 | Job | Runs when | What it does |
 | --- | --- | --- |
-| `smoke` | the `release` job reported a version | Installs the published `nestlens` into an empty project on the Node floor (22.13.0) and on 26, boots NestJS and checks the dashboard, an asset and the API (`scripts/smoke-published-package.mjs`). |
+| `smoke` | the `release` job reported a version | Installs the published `nestlens` into an empty project on the Node floor (22.13.0) and on 26, boots NestJS and checks the dashboard, an asset, the API, the watcher status route and the startup warning (`scripts/smoke-published-package.mjs`). It first waits until npm would *install* the version — the abbreviated packument `npm install` reads, which the CDN caches apart from the one `npm view` reads (`scripts/registry-wait.mjs`). |
 | `mcp-publish` | a version was released | Waits for npm to serve that `nestlens`, then publishes `packages/mcp` — the `nestlens-mcp` package — with trusted publishing. A version npm already has is skipped. |
-| `mcp-smoke` | `mcp-publish` succeeded | Starts what npm serves with `npx -y nestlens-mcp@<version>` from an empty directory on the same two Node versions and speaks MCP to it: `initialize`, `tools/list` (`scripts/smoke-mcp-package.mjs`). |
+| `mcp-smoke` | `mcp-publish` succeeded | Starts what npm serves with `npx -y nestlens-mcp@<version>` from an empty directory on the same two Node versions and speaks MCP to it: `initialize`, `tools/list` (`scripts/smoke-mcp-package.mjs`). It waits until both `nestlens-mcp` and the `nestlens` it pins are installable, and asks again if npx still answers ETARGET: 0.20.0 failed both jobs on a version `npm view` already showed. |
 | `mcp-registry` | `mcp-publish` and `mcp-smoke` succeeded | Waits for npm to serve `nestlens-mcp` with its `mcpName`, verifies the pinned `mcp-publisher` with cosign, logs in to the official MCP Registry with GitHub OIDC and publishes `server.json`. An entry cannot be edited once published, so a wrapper that does not start never gets one. |
 
 `src/__tests__/mcp/release-workflow.spec.ts` holds the shape of these jobs.
