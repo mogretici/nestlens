@@ -85,6 +85,32 @@ const config: Config = {
         readme: 'none',
       },
     ],
+    [
+      // `/llms.txt` and `/llms-full.txt` (llmstxt.org), for agents that read the
+      // site instead of crawling it. The generated reference is left out: it is
+      // two thirds of the pages and most of the bytes, and its signatures are
+      // what an agent already reads from the package's own typings.
+      'docusaurus-plugin-llms',
+      {
+        description:
+          'Laravel Telescope-like debugging and monitoring for NestJS: requests, queries, exceptions, jobs and more, recorded by watchers and shown in a real-time dashboard, with an MCP server for AI agents.',
+        ignoreFiles: ['api-reference/**'],
+        includeOrder: [
+          'intro.md',
+          'getting-started/**',
+          'configuration/**',
+          'watchers/**',
+          'dashboard/**',
+          'integrations/**',
+          'security/**',
+          'advanced/**',
+          'faq.md',
+          'api/**',
+        ],
+        excludeImports: true,
+        removeDuplicateHeadings: true,
+      },
+    ],
   ],
 
   themes: [

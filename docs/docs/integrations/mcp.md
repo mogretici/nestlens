@@ -158,7 +158,7 @@ For a remote server, give it the URL and the header instead of a command:
 
 ### VS Code
 
-<a href="https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522nestlens%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522nestlens-mcp%2522%252C%2522--url%2522%252C%2522http%253A%252F%252Flocalhost%253A3000%252Fnestlens%2522%255D%257D"><img src="https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" /></a>
+[![Install in VS Code](https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522nestlens%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522nestlens-mcp%2522%252C%2522--url%2522%252C%2522http%253A%252F%252Flocalhost%253A3000%252Fnestlens%2522%255D%257D)
 
 The button opens VS Code with the local server filled in, for you to review before it is added. To share it with the team, write it to `.vscode/mcp.json`. The top-level key here is `servers`, and `inputs` prompts for the token so it is never written to the file:
 
