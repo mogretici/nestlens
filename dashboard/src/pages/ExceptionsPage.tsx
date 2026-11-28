@@ -270,6 +270,7 @@ export default function ExceptionsPage() {
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/exceptions/${entry.id}`)}
           emptyMessage="No exceptions recorded yet"
+          watcher="exception"
           error={error}
           onRetry={refresh}
           emptyIcon={<AlertTriangle className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

@@ -7,6 +7,7 @@ import {
   PruningStatus,
   StorageStats,
   CheckNewResponse,
+  WatcherStatusReport,
 } from './types';
 import { nestlensUrl } from './basePath';
 
@@ -390,4 +391,8 @@ export async function resumeRecording(): Promise<{ success: boolean; data: Recor
  */
 export async function getRecordingStatus(): Promise<ApiResponse<RecordingStatus>> {
   return fetchApi('/recording/status');
+}
+
+export async function getWatcherStatus(): Promise<ApiResponse<WatcherStatusReport[]>> {
+  return fetchApi('/watchers');
 }

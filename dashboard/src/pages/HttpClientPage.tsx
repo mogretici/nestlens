@@ -182,6 +182,7 @@ export default function HttpClientPage() {
           onRowClick={(entry) => navigate(`/http-client/${entry.id}`)}
           rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No outgoing HTTP requests recorded yet"
+          watcher="http-client"
           error={error}
           onRetry={refresh}
           emptyIcon={<Globe className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

@@ -194,6 +194,7 @@ export default function DumpsPage() {
           onRowClick={(entry) => navigate(`/dumps/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No data dumps recorded yet"
+          watcher="dump"
           error={error}
           onRetry={refresh}
           emptyIcon={<HardDrive className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

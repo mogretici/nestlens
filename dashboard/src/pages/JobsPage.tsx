@@ -169,6 +169,7 @@ export default function JobsPage() {
           onRowClick={(entry) => navigate(`/jobs/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No jobs recorded yet"
+          watcher="job"
           error={error}
           onRetry={refresh}
           emptyIcon={<Briefcase className="h-8 w-8 text-gray-400 dark:text-gray-500" />}
