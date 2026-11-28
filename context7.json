@@ -1,0 +1,30 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "NestLens",
+  "description": "Laravel Telescope-inspired debugging and monitoring for NestJS. Watchers record requests, queries, exceptions, logs, jobs, cache, events, mail, GraphQL and more, shown in a real-time dashboard mounted in the application, with in-memory, SQLite or Redis storage and an MCP server that lets AI agents read what was recorded.",
+  "folders": ["docs/docs"],
+  "excludeFolders": [
+    "src",
+    "dashboard",
+    "example",
+    "e2e",
+    "packages",
+    "scripts",
+    "assets",
+    ".github",
+    ".husky",
+    "node_modules"
+  ],
+  "excludeFiles": ["CHANGELOG.md", "CONTRIBUTING.md", "RELEASING.md", "SECURITY.md", "CLAUDE.md"],
+  "rules": [
+    "Call NestLensModule.forRoot() once, in the root module. It is global: feature modules inject CollectorService or a watcher such as GateWatcher without importing NestLensModule.",
+    "An application that imports NestLensModule but never calls forRoot() fails at startup with an error saying so: nothing would configure it.",
+    "The dashboard is served at the path option, /nestlens by default (http://localhost:3000/nestlens), and its REST API under <path>/__nestlens__/api.",
+    "Storage is in memory by default and lost on restart. driver: 'sqlite' needs better-sqlite3 installed; driver: 'redis' needs ioredis.",
+    "The dashboard and API answer only when NODE_ENV is development, local or test (authorization.allowedEnvironments), but recording runs wherever enabled is true: gate enabled by environment.",
+    "Before allowing NestLens in another environment, configure authorization.allowedIps or authorization.canAccess, and read the production usage guide.",
+    "The GraphQL watcher is off by default. With watchers: { graphql: true } it registers itself with Apollo or Mercurius; no plugin wiring is needed.",
+    "Bull and BullMQ queues are recorded after jobWatcher.setupQueue(queue, name); Prisma model entries after modelWatcher.setupPrismaClient(client). TypeORM is found on its own.",
+    "AI agents read NestLens through the nestlens-mcp package. Its --url is the application address plus the mount path, such as http://localhost:3000/nestlens. It is read-only unless --allow-write is set."
+  ]
+}

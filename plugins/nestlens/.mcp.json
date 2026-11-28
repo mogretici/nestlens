@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nestlens": {
+      "command": "npx",
+      "args": ["-y", "nestlens-mcp", "--url", "${user_config.url}"]
+    }
+  }
+}

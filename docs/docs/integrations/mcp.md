@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # MCP Server (AI agents)
 
-`nestlens-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that lets an AI agent — Claude Code, Cursor, VS Code, Claude Desktop, anything that speaks MCP — look at what NestLens has recorded: requests, queries, exceptions, logs, jobs and the rest.
+`nestlens-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that lets an AI agent — Claude Code, Codex, Cursor, VS Code, Claude Desktop, anything that speaks MCP — look at what NestLens has recorded: requests, queries, exceptions, logs, jobs and the rest.
 
 Ask an agent *"why was `/orders` slow in the last ten minutes?"* or *"what exceptions are still unresolved?"* and it reads the answer from NestLens instead of you copying it out of the dashboard.
 
@@ -13,11 +13,17 @@ It is a thin client over the REST API the dashboard already uses. Nothing is add
 ## Quick start
 
 1. Run your application with NestLens mounted (the dashboard opens at `http://localhost:3000/nestlens`).
-2. Add the server to your agent. For Claude Code:
+2. Add the server to your agent. For Claude Code or Codex:
 
    ```bash
+   # Claude Code
    claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
+
+   # Codex
+   codex mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
    ```
+
+   For VS Code, [install it with one click](#vs-code); for the others, see [Add it to your agent](#add-it-to-your-agent).
 
 3. Ask it something: *"Use NestLens to show me the slowest requests."*
 
@@ -97,6 +103,57 @@ claude mcp list        # nestlens: ✔ Connected
 
 or type `/mcp` inside Claude Code. Remove it with `claude mcp remove nestlens`.
 
+### Claude Code plugin
+
+The repository is also a Claude Code [plugin marketplace](https://code.claude.com/docs/en/plugins/create-marketplace). Its `nestlens` plugin adds the same local server, read-only, and a `debug` skill that tells the agent how to work with it: check that the application calls `NestLensModule.forRoot()`, list the tools before calling one, and follow a request through its `requestId`.
+
+Inside Claude Code:
+
+```text
+/plugin marketplace add mogretici/nestlens
+/plugin install nestlens@nestlens
+```
+
+or from your shell:
+
+```bash
+claude plugin marketplace add mogretici/nestlens
+claude plugin install nestlens@nestlens
+```
+
+The plugin has one option, **NestLens URL**, which defaults to `http://localhost:3000/nestlens`. Change it in `/config`, or set it when installing:
+
+```bash
+claude plugin install nestlens@nestlens --config url=http://localhost:4000/nestlens
+```
+
+The skill runs when you ask about a slow or failing request, an exception or a query, or as `/nestlens:debug`. The plugin's server is named `plugin:nestlens:nestlens` in `/mcp`, so it sits beside one added with `claude mcp add` rather than replacing it. Remove one of the two if you have both. Remove the plugin with `claude plugin uninstall nestlens@nestlens`.
+
+### Codex
+
+**Local** — written to `~/.codex/config.toml`, which the Codex CLI and IDE extension share:
+
+```bash
+codex mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
+```
+
+or write the table yourself, in `~/.codex/config.toml` or a project's `.codex/config.toml`:
+
+```toml
+[mcp_servers.nestlens]
+command = "npx"
+args = ["-y", "nestlens-mcp", "--url", "http://localhost:3000/nestlens"]
+```
+
+**Remote** — Codex reads the bearer token from an environment variable, so it is never written to the file:
+
+```bash
+codex mcp add nestlens --url https://nestlens-mcp.example.com/mcp \
+  --bearer-token-env-var NESTLENS_MCP_TOKEN
+```
+
+Check it with `codex mcp list`, or type `/mcp` inside Codex. Remove it with `codex mcp remove nestlens`.
+
 ### Cursor
 
 Add it to `.cursor/mcp.json` in the project, or to `~/.cursor/mcp.json` for every project:
@@ -127,7 +184,9 @@ For a remote server, give it the URL and the header instead of a command:
 
 ### VS Code
 
-`.vscode/mcp.json`. The top-level key here is `servers`, and `inputs` prompts for the token so it is never written to the file:
+[![Install in VS Code](https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522nestlens%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522nestlens-mcp%2522%252C%2522--url%2522%252C%2522http%253A%252F%252Flocalhost%253A3000%252Fnestlens%2522%255D%257D)
+
+The button opens VS Code with the local server filled in, for you to review before it is added. To share it with the team, write it to `.vscode/mcp.json`. The top-level key here is `servers`, and `inputs` prompts for the token so it is never written to the file:
 
 ```json
 {

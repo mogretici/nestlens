@@ -1,0 +1,21 @@
+{
+  "name": "nestlens",
+  "displayName": "NestLens",
+  "description": "Connects Claude Code to NestLens through nestlens-mcp, read-only, and adds a skill for debugging a NestJS application from what NestLens recorded.",
+  "author": {
+    "name": "mogretici",
+    "url": "https://github.com/mogretici"
+  },
+  "homepage": "https://nestlens-docs.vercel.app/docs/integrations/mcp",
+  "repository": "https://github.com/mogretici/nestlens",
+  "license": "MIT",
+  "keywords": ["nestjs", "debugging", "monitoring", "telescope", "mcp"],
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "NestLens URL",
+      "description": "Your application's address plus the path NestLens is mounted at (the path option of NestLensModule.forRoot).",
+      "default": "http://localhost:3000/nestlens"
+    }
+  }
+}
