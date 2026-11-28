@@ -121,9 +121,16 @@ codex mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestle
   <a href="https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522nestlens%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522nestlens-mcp%2522%252C%2522--url%2522%252C%2522http%253A%252F%252Flocalhost%253A3000%252Fnestlens%2522%255D%257D"><img src="https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" /></a>
 </p>
 
+In Claude Code, the plugin adds the server and a debugging skill:
+
+```text
+/plugin marketplace add mogretici/nestlens
+/plugin install nestlens@nestlens
+```
+
 It is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.mogretici/nestlens`, so clients that browse the registry can install it from there.
 
-For a NestLens on a development or production server, run `nestlens-mcp --http` next to it and give the agent a URL. Setup for Claude Code, Cursor, VS Code and Claude Desktop is in the [MCP guide](https://nestlens-docs.vercel.app/docs/integrations/mcp).
+For a NestLens on a development or production server, run `nestlens-mcp --http` next to it and give the agent a URL. Setup for Claude Code, Codex, VS Code, Cursor and Claude Desktop is in the [MCP guide](https://nestlens-docs.vercel.app/docs/integrations/mcp).
 
 <br/>
 
