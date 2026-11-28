@@ -53,6 +53,12 @@ Switch off one you do not use with `watchers.<name>: false`. GET /nestlens/__nes
 `NestLensLogger`, or has no TypeORM `DataSource` or Prisma client, sees the
 warning on its first start after upgrading. Either fix what it names or switch
 the watcher off — `watchers: { log: false }` — and it is not printed again.
+An application with a catch-all exception filter of its own registered after
+NestLens's — `app.useGlobalFilters()`, or `APP_FILTER` in a module imported
+after `NestLensModule` — sees `watchers.exception` in it too: that filter takes
+every exception first, and NestLens has never recorded one there. See
+[Exception Filters Integration](../watchers/exception.md#exception-filters-integration).
+
 `GET /nestlens/__nestlens__/api/watchers` and the dashboard report the same
 states; see [Is a watcher recording?](../watchers/overview.md#is-a-watcher-recording)
 

@@ -184,7 +184,7 @@ added to the request path.
 | Watcher | `recording` when | Otherwise |
 | --- | --- | --- |
 | Request | It is switched on: it is a global interceptor. | — |
-| Exception | It is switched on: it is a global exception filter. | — |
+| Exception | No global filter of the application's that catches everything is tried before it. | `waiting`: a `@Catch()` filter registered after it — `app.useGlobalFilters()`, or `APP_FILTER` in a module imported after `NestLensModule` — takes every exception first. |
 | Query | A TypeORM `DataSource`, or a Prisma client built with query logging, was among the providers at bootstrap. | `waiting`: none was, or every Prisma client was built without query logging. |
 | Log | `NestLensLogger` is the application logger (`app.useLogger(app.get(NestLensLogger))`), or something has called it. | `waiting` |
 | Cache | A cache manager under `CACHE_MANAGER` was wrapped. | `waiting` |

@@ -279,6 +279,22 @@ globally, or on the handler, reached that filter alone. Exceptions no filter of
 yours catches are still recorded. To keep both, catch only the types your filter
 has to answer differently.
 
+Among global filters, Nest tries the one registered **last** first. Measured on
+Express and Fastify with a `@Catch()` filter that catches everything:
+
+| Where your catch-all filter is registered | What NestLens records |
+| --- | --- |
+| `app.useGlobalFilters(new CatchAllFilter())` | Nothing |
+| `{ provide: APP_FILTER, useClass: CatchAllFilter }` in a module imported after `NestLensModule` | Nothing |
+| `{ provide: APP_FILTER, useClass: CatchAllFilter }` in `AppModule` itself | Every exception: it is registered before NestLens's filter |
+
+The exception watcher reads the same list. With a catch-all ahead of it, it
+reports itself `waiting`, naming the filter, and the startup warning lists it;
+with a filter of narrower types ahead of it, it reports `recording` and names
+the types that go to your filter instead. A filter on a controller or a method
+is not in that list and is not reported. See
+[Is a watcher recording?](./overview.md#is-a-watcher-recording)
+
 ## Error Monitoring Alerts
 
 To be told about exceptions as they happen, send them to a webhook: see
