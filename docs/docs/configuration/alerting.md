@@ -119,6 +119,19 @@ Alerting never interferes with your application:
 
 A dead webhook URL will not slow down or break your app.
 
+The log line names the webhook by its position in `webhooks` and its host,
+never by its URL:
+
+```text
+WARN [AlertingService] webhook #2 (api.telegram.org) responded 401
+```
+
+A chat webhook's URL is its credential — Telegram's bot token is in the path,
+and so are Slack's and Discord's secrets — so a failed delivery cannot put one
+in your logs. Before 0.20.1 the line quoted the URL whole; if alerts failed on
+an earlier version, treat a token that appeared in those logs as exposed and
+rotate it.
+
 ## Choosing what to alert on
 
 `events` accepts any entry type, or the word `'failures'`:

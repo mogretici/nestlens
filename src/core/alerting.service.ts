@@ -89,6 +89,22 @@ interface AlertSummary {
 }
 
 /**
+ * A webhook as a log line may name it: its position and host, never its URL.
+ *
+ * Every chat webhook carries its credential in the URL — Telegram's bot token
+ * sits in the path, Slack's and Discord's secrets are the path — and a delivery
+ * failure used to log the URL whole. An application found its Telegram token
+ * in its logs that way, on every alert that failed.
+ */
+const describeWebhook = (webhook: AlertingWebhook, index: number): string => {
+  try {
+    return `webhook #${index + 1} (${new URL(webhook.url).host})`;
+  } catch {
+    return `webhook #${index + 1}`;
+  }
+};
+
+/**
  * Sends collected entries (exceptions by default) to Slack/Discord/generic
  * webhooks in real time. Subscribes to the collector's entry stream, so it
  * never blocks request handling; every delivery is fire-and-forget with a
@@ -139,7 +155,7 @@ export class AlertingService implements OnModuleInit, OnModuleDestroy {
       webhooks
         .filter((webhook) => announces(webhook.events ?? DEFAULT_EVENTS, entry))
         .filter((webhook) => !this.isThrottled(webhook, entry))
-        .map((webhook) => this.send(webhook, entry)),
+        .map((webhook) => this.send(webhook, webhooks.indexOf(webhook), entry)),
     );
   }
 
@@ -226,7 +242,7 @@ export class AlertingService implements OnModuleInit, OnModuleDestroy {
     return `${entry.type}`;
   }
 
-  private async send(webhook: AlertingWebhook, entry: Entry): Promise<void> {
+  private async send(webhook: AlertingWebhook, index: number, entry: Entry): Promise<void> {
     const summary = this.summarize(entry);
     const body = this.formatPayload(webhook.type ?? 'generic', summary, entry);
     const timeoutMs = Math.min(this.config?.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
@@ -241,10 +257,11 @@ export class AlertingService implements OnModuleInit, OnModuleDestroy {
         signal: controller.signal,
       });
       if (!response.ok) {
-        this.logger.warn(`Webhook ${webhook.url} responded ${response.status}`);
+        this.logger.warn(`${describeWebhook(webhook, index)} responded ${response.status}`);
       }
     } catch (error) {
-      this.logger.warn(`Webhook ${webhook.url} delivery error: ${String(error)}`);
+      const name = describeWebhook(webhook, index);
+      this.logger.warn(`${name} delivery error: ${String(error).split(webhook.url).join(name)}`);
     } finally {
       clearTimeout(timer);
     }
