@@ -92,10 +92,10 @@ export class GraphQLWatcher
   /**
    * Which server was found, and whether the plugin reached it.
    *
-   * Detection is by package, so an application that has `@apollo/server`
-   * installed for something else gets an adapter and an `@Plugin()` offered to
-   * a server that does not exist. The schema is what proves one does:
-   * `GraphQLModule` builds it in its own `onModuleInit`, before anything asks.
+   * Detection is by package, so an installed `@apollo/server` gives an adapter
+   * whether or not a server exists. Registration is what says one does: Apollo
+   * starting with the `@Plugin()` provider, Mercurius accepting the hooks, or
+   * the application taking the plugin from `getPlugin()` to wire it by hand.
    */
   watcherStatus(): WatcherStatus {
     if (!this.config.enabled) return switchedOff(watcherDocs('watchers/graphql'));
@@ -120,14 +120,6 @@ export class GraphQLWatcher
       return {
         state: 'waiting',
         reason: `The ${server} adapter is ready, and its plugin has not been registered with the server, automatically or through getPlugin().`,
-        docs,
-      };
-    }
-
-    if (this.registrationMode === 'auto' && adapter.type === 'apollo' && !this.findSchema()) {
-      return {
-        state: 'waiting',
-        reason: 'No GraphQL schema was found: GraphQLModule from @nestjs/graphql is not imported.',
         docs,
       };
     }

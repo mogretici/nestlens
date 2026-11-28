@@ -255,14 +255,33 @@ const server = new ApolloServer({
 });
 ```
 
-Mercurius takes it as a set of hooks, each registered by name:
+Mercurius takes it as a set of hooks. Its `addHook` is typed one hook name at
+a time, so each is registered under its own name:
 
 ```typescript
-const hooks = app.get(GraphQLWatcher).getPlugin() as Record<string, (...args: unknown[]) => Promise<void>>;
+import { GraphQLWatcher } from 'nestlens';
 
-for (const [name, hook] of Object.entries(hooks)) {
-  fastify.graphql.addHook(name, hook);
-}
+type Hook = (...args: unknown[]) => Promise<void>;
+type HookName =
+  | 'preParsing'
+  | 'preValidation'
+  | 'preExecution'
+  | 'onResolution'
+  | 'preSubscriptionParsing'
+  | 'preSubscriptionExecution'
+  | 'onSubscriptionResolution'
+  | 'onSubscriptionEnd';
+
+const hooks = app.get(GraphQLWatcher).getPlugin() as Record<HookName, Hook>;
+
+fastify.graphql.addHook('preParsing', hooks.preParsing);
+fastify.graphql.addHook('preValidation', hooks.preValidation);
+fastify.graphql.addHook('preExecution', hooks.preExecution);
+fastify.graphql.addHook('onResolution', hooks.onResolution);
+fastify.graphql.addHook('preSubscriptionParsing', hooks.preSubscriptionParsing);
+fastify.graphql.addHook('preSubscriptionExecution', hooks.preSubscriptionExecution);
+fastify.graphql.addHook('onSubscriptionResolution', hooks.onSubscriptionResolution);
+fastify.graphql.addHook('onSubscriptionEnd', hooks.onSubscriptionEnd);
 ```
 
 Leave it out where NestLens registers the plugin itself: a second registration

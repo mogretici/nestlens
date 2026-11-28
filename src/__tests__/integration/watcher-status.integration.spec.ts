@@ -16,6 +16,8 @@ import { Controller, Get, INestApplication, Logger, Module, Provider } from '@ne
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import axios from 'axios';
+import { ApolloServer, ApolloServerPlugin } from '@apollo/server';
+import { NestLensApolloPlugin } from '../../watchers/graphql/adapters';
 import { NestLensModule } from '../../nestlens.module';
 import { NestLensConfig } from '../../nestlens.config';
 import {
@@ -28,6 +30,7 @@ import {
   JobWatcher,
 } from '../../index';
 import { WatcherStatusReport, WatcherStatusService } from '../../watchers/watcher-status.service';
+import { CollectorService } from '../../core/collector.service';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -161,15 +164,56 @@ describe('a watcher with nothing handed over', () => {
     });
   });
 
-  it('reports GraphQL with Apollo installed and no GraphQLModule as waiting', async () => {
-    // @apollo/server is installed here, so the adapter is created and its
-    // plugin offered; without GraphQLModule there is no server to receive it.
+  it('reports GraphQL with Apollo installed and no server using the plugin as waiting', async () => {
+    // @apollo/server is installed here, so the adapter is created and the
+    // plugin offered through @Plugin(); without GraphQLModule no server takes it.
     const booted = await boot({ watchers: { graphql: true } });
 
     expect(booted.status('graphql')).toMatchObject({
       state: 'waiting',
-      reason: expect.stringContaining('No GraphQL schema was found'),
+      reason: expect.stringContaining('has not been registered'),
     });
+  });
+
+  it('reports the @Plugin() provider as registered once an Apollo server starts with it', async () => {
+    // @nestjs/apollo hands every @Plugin() provider to the ApolloServer it
+    // builds; this does the same with the real server. (GraphQLModule itself
+    // needs @as-integrations/express5, which the example has and this
+    // repository does not.)
+    const booted = await boot({ watchers: { graphql: true } });
+    expect(booted.status('graphql').state).toBe('waiting');
+
+    const server = new ApolloServer({
+      typeDefs: 'type Query { hello: String }',
+      resolvers: { Query: { hello: () => 'hi' } },
+      plugins: [booted.app.get(NestLensApolloPlugin) as unknown as ApolloServerPlugin],
+    });
+    await server.start();
+    await server.stop();
+
+    expect(booted.status('graphql').state).toBe('recording');
+  });
+
+  it('reports an Apollo server wired by hand as recording, and records its operations', async () => {
+    // The Manual Wiring case of the GraphQL page: no GraphQLModule, the plugin
+    // from getPlugin() handed to an ApolloServer the application builds.
+    const booted = await boot({ watchers: { graphql: true } });
+    const collector = booted.app.get(CollectorService);
+    const collect = vi.spyOn(collector, 'collect');
+    const collectImmediate = vi.spyOn(collector, 'collectImmediate');
+
+    const server = new ApolloServer({
+      typeDefs: 'type Query { hello: String }',
+      resolvers: { Query: { hello: () => 'hi' } },
+      plugins: [booted.app.get(GraphQLWatcher).getPlugin() as ApolloServerPlugin],
+    });
+    await server.start();
+    await server.executeOperation({ query: '{ hello }' });
+    await server.stop();
+
+    const types = [...collect.mock.calls, ...collectImmediate.mock.calls].map(([type]) => type);
+    expect(types).toContain('graphql');
+    expect(booted.status('graphql').state).toBe('recording');
   });
 
   it('reports a GraphQL plugin wired by hand through getPlugin() as recording', async () => {

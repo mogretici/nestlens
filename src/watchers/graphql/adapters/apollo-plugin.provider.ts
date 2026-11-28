@@ -112,11 +112,22 @@ export class NestLensApolloPlugin implements OnModuleInit {
       requestDidStart?: (requestContext: unknown) => Promise<unknown>;
     };
     this.initialized = true;
+  }
 
-    // Mark as auto-registered
-    this.graphqlWatcher.markAutoRegistered();
+  /**
+   * Apollo calls this when a server that holds the plugin starts, which is the
+   * proof it was registered.
+   *
+   * It was marked registered in `onModuleInit`, whenever `@apollo/server` was
+   * installed — with no `GraphQLModule` to discover the `@Plugin()`, that said
+   * a server was recording when none existed, and it made a plugin handed out
+   * by `getPlugin()` look like this one.
+   */
+  async serverWillStart(): Promise<void> {
+    if (!this.plugin) return;
 
-    this.logger.log('Apollo plugin auto-registered via @Plugin decorator');
+    this.graphqlWatcher?.markAutoRegistered();
+    this.logger.log('Apollo plugin registered: Apollo Server started with it');
   }
 
   /**
