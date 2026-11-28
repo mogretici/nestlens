@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+  Optional,
+} from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, QueryWatcherConfig } from '../../nestlens.config';
@@ -43,14 +50,38 @@ const parseQueryParams = (params: string | undefined): unknown[] | undefined => 
 const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
 const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
 
+/** What was put on a DataSource, so it can be taken off again. */
+interface AttachedDataSource {
+  dataSource: TypeORMDataSourceLike;
+  subscriber: NestLensQuerySubscriber;
+  wrapped: NestLensTypeOrmLogger;
+  original: TypeORMLoggerLike | undefined;
+}
+
+/**
+ * Who records a Prisma client's queries now, kept on the client.
+ *
+ * Prisma can add a middleware or a `query` listener and cannot remove either,
+ * so the one installed stays for the life of the client and forwards to the
+ * watcher that owns it. Closing hands the client back; the next application's
+ * watcher takes it over rather than installing a second listener.
+ */
+interface PrismaAttachment {
+  owner?: QueryWatcher;
+}
+
+type MarkedPrismaClient = PrismaClient & { [PRISMA_ATTACHED]?: PrismaAttachment };
+
 @Injectable()
-export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatus {
+export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(QueryWatcher.name);
   private readonly config: QueryWatcherConfig;
   /** What `onApplicationBootstrap` attached to, which is what the status reports. */
   private readonly attached = { dataSources: 0, prismaClients: 0, unloggedPrismaClients: 0 };
   /** It attaches during bootstrap, so the startup report waits for it. */
   private readonly releaseStartupReport: () => void;
+  private readonly attachedDataSources: AttachedDataSource[] = [];
+  private readonly ownedPrismaClients: PrismaAttachment[] = [];
 
   constructor(
     private readonly collector: CollectorService,
@@ -103,6 +134,37 @@ export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatu
     } finally {
       this.releaseStartupReport();
     }
+  }
+
+  /**
+   * Gives back every DataSource and Prisma client it attached to.
+   *
+   * The marks that stop two watchers attaching to one object were never taken
+   * off, so after an application closed — `nest start --hmr`, a test suite,
+   * two applications in one process — the next found them and attached to
+   * nothing, while the closed application's collector went on being called.
+   */
+  onModuleDestroy(): void {
+    for (const { dataSource, subscriber, wrapped, original } of this.attachedDataSources) {
+      const index = dataSource.subscribers?.indexOf(subscriber) ?? -1;
+      if (index >= 0) dataSource.subscribers?.splice(index, 1);
+
+      if (dataSource.logger === wrapped) {
+        try {
+          (dataSource as { logger: TypeORMLoggerLike | undefined }).logger = original;
+        } catch {
+          // A getter-only logger was never replaced in the first place.
+        }
+      }
+
+      delete (dataSource as unknown as Record<symbol, unknown>)[TYPEORM_ATTACHED];
+    }
+    this.attachedDataSources.length = 0;
+
+    for (const attachment of this.ownedPrismaClients) {
+      if (attachment.owner === this) attachment.owner = undefined;
+    }
+    this.ownedPrismaClients.length = 0;
   }
 
   private attach(): void {
@@ -186,6 +248,7 @@ export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatu
       // Subscriber alone still covers the success path in that case.
     }
 
+    this.attachedDataSources.push({ dataSource: ds, subscriber, wrapped, original });
     return true;
   }
 
@@ -275,27 +338,22 @@ export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatu
   ): 'middleware' | 'events' | 'events-unlogged' | 'none' {
     // One client can be injected into many providers, and the global may be
     // the same object again.
-    const marked = client as unknown as Record<symbol, boolean | undefined>;
-    if (marked[PRISMA_ATTACHED]) return 'none';
+    const marked = client as MarkedPrismaClient;
+    if (!client.$use && !client.$on) return 'none';
 
-    if (client.$use) {
-      marked[PRISMA_ATTACHED] = true;
-      this.attachPrismaMiddleware(client.$use.bind(client));
-      return 'middleware';
+    const existing = marked[PRISMA_ATTACHED];
+    if (existing?.owner) return 'none';
+
+    const attachment = existing ?? {};
+    attachment.owner = this;
+    this.ownedPrismaClients.push(attachment);
+
+    if (!existing) {
+      Object.defineProperty(marked, PRISMA_ATTACHED, { value: attachment, configurable: true });
+      this.installPrismaRecording(client, attachment);
     }
 
-    if (!client.$on) return 'none';
-
-    marked[PRISMA_ATTACHED] = true;
-    client.$on('query', (event: PrismaQueryEvent) => {
-      this.handleQuery({
-        query: event.query,
-        parameters: parseQueryParams(event.params),
-        duration: Number(event.duration) || 0,
-        source: 'prisma',
-        success: true,
-      });
-    });
+    if (client.$use) return 'middleware';
 
     // An engine configuration it cannot read is not evidence of anything, so
     // only one that says query logging is off is reported.
@@ -307,7 +365,30 @@ export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatu
     return unlogged ? 'events-unlogged' : 'events';
   }
 
-  private attachPrismaMiddleware(use: NonNullable<PrismaClient['$use']>): void {
+  /** Installed once per client; records through whichever watcher owns it at the time. */
+  private installPrismaRecording(client: PrismaClient, attachment: PrismaAttachment): void {
+    const record = (data: QueryData): void => attachment.owner?.handleQuery(data);
+
+    if (client.$use) {
+      this.attachPrismaMiddleware(client.$use.bind(client), record);
+      return;
+    }
+
+    client.$on?.('query', (event: PrismaQueryEvent) => {
+      record({
+        query: event.query,
+        parameters: parseQueryParams(event.params),
+        duration: Number(event.duration) || 0,
+        source: 'prisma',
+        success: true,
+      });
+    });
+  }
+
+  private attachPrismaMiddleware(
+    use: NonNullable<PrismaClient['$use']>,
+    record: (data: QueryData) => void,
+  ): void {
     use(
       async (
         params: PrismaMiddlewareParams,
@@ -316,7 +397,7 @@ export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatu
         const start = Date.now();
         try {
           const result = await next(params);
-          this.handleQuery({
+          record({
             query: `${params.model ?? 'unknown'}.${params.action}`,
             parameters: params.args ? [params.args] : undefined,
             duration: Date.now() - start,
@@ -325,7 +406,7 @@ export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatu
           });
           return result;
         } catch (error) {
-          this.handleQuery({
+          record({
             query: `${params.model ?? 'unknown'}.${params.action}`,
             parameters: params.args ? [params.args] : undefined,
             duration: Date.now() - start,
