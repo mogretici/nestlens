@@ -184,8 +184,8 @@ added to the request path.
 | Watcher | `recording` when | Otherwise |
 | --- | --- | --- |
 | Request | It is switched on: it is a global interceptor. | — |
-| Exception | No global filter of the application's that takes every exception is tried before it. | `waiting`: a `@Catch()` or `@Catch(Error)` filter registered after it — `app.useGlobalFilters()` before the application starts, or `APP_FILTER` in a module imported after `NestLensModule` — takes them first. |
-| Query | A TypeORM `DataSource` or a Prisma client was among the providers at bootstrap: a client of Prisma 6.13 or earlier through its `$use` middleware, with or without logging; from 6.14 on, one built with a query log option. | `waiting`: none was; every Prisma client from 6.14 on was built without query logging; or each is recorded by another application in the same process. A client made with `$extends` is not found: it has neither `$on` nor `$use`. |
+| Exception | No global filter of the application's that takes every exception is tried before it. | `waiting`: a `@Catch()`, `@Catch(Error)` or `@Catch(Object)` filter registered after it — `app.useGlobalFilters()` before the application starts, or `APP_FILTER` in a module imported after `NestLensModule` — takes them first. |
+| Query | A TypeORM `DataSource` or a Prisma client was among the providers at bootstrap: a client of Prisma 6.13 or earlier through its `$use` middleware, with or without logging; from 6.14 on, one built with a query log option. | `waiting`: none was; every Prisma client from 6.14 on was built without query logging; or each is recorded by another application in the same process, until that application closes and this one takes it over. A client made with `$extends` is not found: it has neither `$on` nor `$use`. |
 | Log | `NestLensLogger` is the application logger (`app.useLogger(app.get(NestLensLogger))`), or something has called it. | `waiting` |
 | Cache | A cache manager under `CACHE_MANAGER` was wrapped. | `waiting` |
 | Event | An emitter under `NESTLENS_EVENT_EMITTER` was wrapped. | `waiting` |

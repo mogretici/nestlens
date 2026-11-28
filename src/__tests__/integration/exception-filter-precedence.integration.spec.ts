@@ -58,6 +58,10 @@ class CatchHttpExceptions extends CatchEverything {}
 @Catch(Error)
 class CatchErrors extends CatchEverything {}
 
+/** Every Error is an Object too, so this takes as much as `@Catch(Error)`. */
+@Catch(Object)
+class CatchObjects extends CatchEverything {}
+
 /** Two catch-alls, each answering with its own name. */
 @Catch()
 class RegisteredFirst implements ExceptionFilter {
@@ -104,7 +108,8 @@ type Arrangement =
   | 'two catch-alls'
   | 'useGlobalFilters Error'
   | 'APP_FILTER Error after NestLens'
-  | 'useGlobalFilters catch-all after listen';
+  | 'useGlobalFilters catch-all after listen'
+  | 'useGlobalFilters Object';
 
 const measure = async (
   platform: 'express' | 'fastify',
@@ -142,6 +147,7 @@ const measure = async (
     app.useGlobalFilters(new CatchHttpExceptions());
   }
   if (arrangement === 'useGlobalFilters Error') app.useGlobalFilters(new CatchErrors());
+  if (arrangement === 'useGlobalFilters Object') app.useGlobalFilters(new CatchObjects());
   if (arrangement === 'two catch-alls') {
     app.useGlobalFilters(new RegisteredFirst(), new RegisteredSecond());
   }
@@ -155,7 +161,9 @@ const measure = async (
     const url = await app.getUrl();
     const answer = (await (await fetch(`${url}/boom/error`)).json()) as { handledBy?: string };
     await fetch(`${url}/boom/http`);
-    if (arrangement.includes('Error')) await fetch(`${url}/boom/string`);
+    if (arrangement.includes('Error') || arrangement.includes('Object')) {
+      await fetch(`${url}/boom/string`);
+    }
 
     const recorded = collect.mock.calls
       .filter(([type]) => type === 'exception')
@@ -242,5 +250,16 @@ describe.each(['express', 'fastify'] as const)('the exception watcher on %s', (p
 
     expect(recorded).toEqual(['Error', 'NotFoundException']);
     expect(status.state).toBe('recording');
+  });
+
+  it('is starved of every Error by @Catch(Object), and says so', async () => {
+    const { recorded, status } = await measure(platform, 'useGlobalFilters Object');
+
+    // A thrown string is not an instance of Object; every Error is.
+    expect(recorded).toEqual(['NonErrorThrow:string']);
+    expect(status).toMatchObject({
+      state: 'waiting',
+      reason: expect.stringContaining('CatchObjects'),
+    });
   });
 });

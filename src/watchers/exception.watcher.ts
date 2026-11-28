@@ -78,9 +78,9 @@ export class ExceptionWatcher
    * the first whose `@Catch()` matches. Measured on Express and Fastify: a
    * catch-all passed to `app.useGlobalFilters()`, or provided as `APP_FILTER`
    * in a module imported after NestLens, took every exception and nothing was
-   * recorded, while this said `recording`. `@Catch(Error)` is a catch-all as
-   * well: Nest matches by `instanceof`, so it takes every HttpException too,
-   * and only a throw that is not an Error gets past it. Filters on a
+   * recorded, while this said `recording`. `@Catch(Error)` and `@Catch(Object)`
+   * are catch-alls as well: Nest matches by `instanceof`, so they take every
+   * HttpException too, and only a throw that is not an Error gets past them. Filters on a
    * controller or a method are not in the list, and are not counted here.
    */
   watcherStatus(): WatcherStatus {
@@ -88,7 +88,9 @@ export class ExceptionWatcher
 
     const docs = watcherDocs('watchers/exception#exception-filters-integration');
     const ahead = this.filtersAhead();
-    const catchAll = ahead.find(({ catches }) => catches.length === 0 || catches.includes(Error));
+    const catchAll = ahead.find(
+      ({ catches }) => catches.length === 0 || catches.includes(Error) || catches.includes(Object),
+    );
 
     if (catchAll) {
       return {
