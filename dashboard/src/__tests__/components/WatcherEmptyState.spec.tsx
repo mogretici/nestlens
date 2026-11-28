@@ -181,6 +181,28 @@ describe('the watcher status provider', () => {
     expect(api.getWatcherStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('asks again every 30 seconds, and stops when it is unmounted', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(api.getWatcherStatus).mockResolvedValue({ data: [] });
+
+      const { unmount } = render(<WatcherStatusProvider>{table()}</WatcherStatusProvider>);
+      expect(api.getWatcherStatus).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(api.getWatcherStatus).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(api.getWatcherStatus).toHaveBeenCalledTimes(2);
+
+      unmount();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(api.getWatcherStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('leaves the table’s own message when the API cannot answer', async () => {
     vi.mocked(api.getWatcherStatus).mockRejectedValue(new Error('API error: 403'));
 
