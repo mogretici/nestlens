@@ -2,6 +2,7 @@ import { ReactNode, useState, useCallback, useRef, useEffect } from 'react';
 import { AlertTriangle, ChevronRight, Inbox } from 'lucide-react';
 import { getBadgeColor } from './badgeColors';
 import WatcherEmptyState from './WatcherEmptyState';
+import { SECONDARY_BUTTON } from './buttonStyles';
 import { explainsEmptiness, useWatcherStatus } from '../contexts/useWatcherStatus';
 import { EntryType } from '../types';
 
@@ -91,7 +92,7 @@ function FailedState({ error, onRetry }: { error: Error; onRetry?: () => void })
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className={`mt-4 ${SECONDARY_BUTTON}`}
         >
           Try again
         </button>

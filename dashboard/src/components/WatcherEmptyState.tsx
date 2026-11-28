@@ -2,6 +2,7 @@ import { ExternalLink, Hand, PowerOff, Unplug } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { WatcherState } from '../types';
 import { UnrecordingStatus } from '../contexts/useWatcherStatus';
+import { SECONDARY_BUTTON } from './buttonStyles';
 
 interface Copy {
   title: string;
@@ -65,7 +66,7 @@ export default function WatcherEmptyState({ status }: { status: UnrecordingStatu
         href={status.docs}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
+        className={`mt-4 inline-flex items-center gap-1.5 ${SECONDARY_BUTTON}`}
       >
         {copy.link}
         <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />

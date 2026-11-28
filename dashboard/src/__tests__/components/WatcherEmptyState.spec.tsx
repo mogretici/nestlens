@@ -147,6 +147,26 @@ describe('a table whose watcher is waiting', () => {
   });
 });
 
+describe('the buttons in an empty or failed table', () => {
+  // The card is gray-800 in the dark theme; a button of the same colour
+  // showed as bare text.
+  it('stand out from the dark card, the retry button as well as the fix link', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        keyExtractor={(row) => row.id}
+        error={new Error('API error: 500')}
+        onRetry={() => undefined}
+      />,
+    );
+    const retry = screen.getByRole('button', { name: 'Try again' });
+
+    expect(retry.className).toContain('dark:bg-gray-700');
+    expect(retry.className).not.toContain('dark:bg-gray-800');
+  });
+});
+
 describe('the watcher status provider', () => {
   beforeEach(() => {
     vi.mocked(api.getWatcherStatus).mockReset();
