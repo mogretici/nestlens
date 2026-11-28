@@ -8,14 +8,27 @@ messages whether there is a release and what its version is. Nobody runs
 ## What decides the version
 
 [Conventional commits](https://www.conventionalcommits.org), read by
-`@semantic-release/commit-analyzer` with its default rules:
+`@semantic-release/commit-analyzer` with its default rules and one of ours:
 
 | Commit | Release | Example |
 | --- | --- | --- |
 | `fix:` / `perf:` | patch | 0.19.0 → 0.19.1 |
 | `feat:` | minor | 0.19.0 → 0.20.0 |
-| a `BREAKING CHANGE:` footer, or `!` after the type | major | 0.19.0 → 1.0.0 |
+| `docs(readme):` | patch | 0.19.0 → 0.19.1 |
+| a `BREAKING CHANGE:` footer | major | 0.19.0 → 1.0.0 |
 | `docs:`, `test:`, `ci:`, `build:`, `chore:`, `refactor:`, `style:` | none | |
+| `!` after the type, as in `feat!:` | none, and no changelog entry | |
+
+npm shows the README that was published with the latest version, and only
+that one. Without `docs(readme)`, a README change reached npm with whatever
+`fix:` or `feat:` happened to come next: after 0.19.0, twenty commits changed
+the README and the guides it links while npm went on showing the old page.
+So a `docs(readme):` commit releases a patch.
+
+`.releaserc.json` names no preset, so the analyzer reads headers with the
+angular one, which has no `!`. A `feat!:` commit does not parse: it releases
+nothing and is left out of the changelog, so the change it describes ships
+unannounced with the next release. Write `feat:` instead.
 
 NestLens is pre-1.0, where a minor may break things (SemVer §4), and 1.0 is a
 release to be made on purpose: a breaking change before then goes out as a

@@ -130,15 +130,16 @@ npm run build
 
 4. Commit with [conventional commit](https://www.conventionalcommits.org)
    messages. Merging to `main` releases, and the types decide the version:
-   `fix:` is a patch, `feat:` a minor, and `docs:`, `test:`, `chore:` and the
-   rest release nothing.
+   `fix:` is a patch, `feat:` a minor, `docs(readme):` a patch so the README
+   reaches npm, and `docs:`, `test:`, `chore:` and the rest release nothing.
    ```bash
    git commit -m "feat: add new watcher for X"
    ```
-   Never start a line of the body with `BREAKING CHANGE`, and never put `!`
-   after the type: either one releases 1.0.0, which is a release to be made on
-   purpose. A breaking change before 1.0 goes out as `feat:` and is written up
-   in [the upgrade guide](docs/docs/getting-started/upgrading.md).
+   Never start a line of the body with `BREAKING CHANGE`: it releases 1.0.0,
+   which is a release to be made on purpose. Never put `!` after the type
+   either: the commit does not parse, releases nothing and is left out of the
+   changelog. A breaking change before 1.0 goes out as `feat:` and is written
+   up in [the upgrade guide](docs/docs/getting-started/upgrading.md).
    [RELEASING.md](RELEASING.md) has the whole of it.
 
 5. Push and create a Pull Request

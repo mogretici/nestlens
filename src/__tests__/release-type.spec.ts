@@ -27,7 +27,29 @@ const check = (version: string, ...messages: string[]) =>
 
 describe('check-release-type', () => {
   it('reads the analyzer configuration .releaserc.json gives', () => {
-    expect(config).toEqual({});
+    expect(config).toEqual({
+      releaseRules: [{ type: 'docs', scope: 'readme', release: 'patch' }],
+    });
+  });
+
+  it('releases a README change as a patch, so npm shows it', async () => {
+    // npm keeps the README of the latest version. After 0.19.0, twenty
+    // README and guide commits went out as docs: and npm showed the old page.
+    expect(await check('0.19.0', 'docs(readme): link the plugin')).toMatchObject({
+      type: 'patch',
+      ok: true,
+    });
+  });
+
+  it('keeps every other docs commit out of a release', async () => {
+    expect(await check('0.19.0', 'docs: fix a typo', 'docs(mcp): a section')).toMatchObject({
+      type: null,
+    });
+  });
+
+  it('keeps the default rules for everything the custom one does not name', async () => {
+    expect(await check('0.19.0', 'fix: x')).toMatchObject({ type: 'patch' });
+    expect(await check('0.19.0', 'docs(readme): x', 'feat: y')).toMatchObject({ type: 'minor' });
   });
 
   it('lets a feat through as a minor', async () => {

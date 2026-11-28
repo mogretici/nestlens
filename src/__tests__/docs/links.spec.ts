@@ -131,7 +131,7 @@ describe('the issue forms', () => {
       form: parse(readFileSync(join(ISSUE_TEMPLATES, name), 'utf8')) as {
         name: string;
         description: string;
-        body: { type: string; id?: string }[];
+        body: { type: string; id?: string; validations?: { required?: boolean } }[];
       },
     }));
 
@@ -159,8 +159,23 @@ describe('the issue forms', () => {
 
     // Assert
     expect(config.blank_issues_enabled).toBe(false);
-    expect(config.contact_links.map(({ url }) => url)).toContain(
+    // GitHub lists private vulnerability reporting in the chooser on its own;
+    // a contact link to the same form showed it twice.
+    expect(config.contact_links.map(({ url }) => url)).not.toContain(
       'https://github.com/mogretici/nestlens/security/advisories/new',
     );
+  });
+
+  it('leave no dropdown answering for the reporter', () => {
+    // A required dropdown opens with its first option selected, so a Fastify
+    // user who skipped it filed the issue as Express. Optional, it opens on
+    // "None" and an unanswered one reads as "No response".
+    const required = forms.flatMap(({ name, form }) =>
+      form.body
+        .filter((field) => field.type === 'dropdown' && field.validations?.required === true)
+        .map((field) => `${name}#${field.id}`),
+    );
+
+    expect(required).toEqual([]);
   });
 });
