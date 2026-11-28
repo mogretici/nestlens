@@ -1,0 +1,137 @@
+name: Bug report
+description: NestLens does something it should not, or does not do something it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The versions and the startup line below answer most of the
+        questions a fix needs, so the fields that ask for them are required.
+
+        A suspected **security vulnerability** does not belong here — use the
+        [private reporting form](https://github.com/mogretici/nestlens/security/advisories/new).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you open it
+      options:
+        - label: I searched the [existing issues](https://github.com/mogretici/nestlens/issues?q=is%3Aissue) and found none for this.
+          required: true
+        - label: It happens on the [latest release](https://www.npmjs.com/package/nestlens) — fixes land there only.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected to see instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How to reproduce it
+      description: The smallest steps that show it. A link to a repository that reproduces it is the fastest way to a fix.
+      placeholder: |
+        1. `NestLensModule.forRoot({ ... })` in AppModule
+        2. Start the application and send `GET /users`
+        3. Open http://localhost:3000/nestlens
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Your `forRoot()` configuration
+      description: Replace secrets, tokens and connection passwords with `***`.
+      render: typescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: startup-line
+    attributes:
+      label: The `[NestLens]` line from startup
+      description: |
+        NestLens logs one line when the application starts, with what it records, where it stores it and
+        where the dashboard is. Paste it as printed. If there is no such line, say so — that is useful too.
+      placeholder: '[Nest] 12345  - LOG [NestLens] recording everything · in-memory storage · keeping 24h or 10,000 entries, pruning every 60m · dashboard mounted at /nestlens'
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: nestlens-version
+    attributes:
+      label: NestLens version
+      placeholder: '0.19.0'
+    validations:
+      required: true
+
+  - type: input
+    id: nestjs-version
+    attributes:
+      label: NestJS version
+      description: '`@nestjs/core`, from `npm ls @nestjs/core`.'
+      placeholder: '11.1.6'
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      placeholder: '22.13.0'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: HTTP adapter
+      options:
+        - Express
+        - Fastify
+    validations:
+      required: true
+
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage driver
+      options:
+        - memory (the default)
+        - sqlite
+        - redis
+    validations:
+      required: true
+
+  - type: dropdown
+    id: package-manager
+    attributes:
+      label: Package manager
+      options:
+        - npm
+        - pnpm
+        - Yarn
+        - Bun
+    validations:
+      required: true
+
+  - type: textarea
+    id: related-packages
+    attributes:
+      label: Packages involved
+      description: The versions of whatever the watcher in question observes — TypeORM, Prisma, BullMQ, `@nestjs/schedule`, `@nestjs/graphql` with Apollo or Mercurius, cache-manager, ioredis.
+      placeholder: |
+        typeorm 0.3.27
+        @nestjs/schedule 6.0.1
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors or logs
+      description: Stack traces, failed requests from the browser's network tab, anything NestLens printed. Remove anything sensitive.
+      render: shell
