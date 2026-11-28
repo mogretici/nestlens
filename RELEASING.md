@@ -104,11 +104,28 @@ mcp-publisher publish
 
 ## Credentials
 
-There are none to keep. Both npm packages are published with npm
+A release needs none. Both npm packages are published with npm
 [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm accepts the
 OIDC token of `release.yml` in this repository, and provenance is attached on
 its own. The registry accepts the same kind of token and grants it
 `io.github.mogretici/*`. The jobs ask for `id-token: write` and nothing else.
+
+The one secret the repository keeps is outside the release.
+`.github/workflows/context7.yml` asks [Context7](https://context7.com) to
+re-read the documentation when `README.md`, `context7.json` or `docs/docs/`
+changes on `main`, so an agent that looks NestLens up there gets the current
+docs. On its own, Context7 refreshes a public library on a schedule that
+follows the library's popularity, not its commits. The workflow
+needs a Context7 API key, created once in the
+[Context7 dashboard](https://context7.com/dashboard) by a member of the
+teamspace that owns `/mogretici/nestlens`:
+
+```bash
+gh secret set CONTEXT7_API_KEY -R mogretici/nestlens   # paste the key at the prompt
+```
+
+Without the secret the workflow passes with a notice and refreshes nothing.
+Actions → **Context7** → *Run workflow* refreshes on demand.
 
 ## `nestlens-mcp`
 

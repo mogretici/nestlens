@@ -1,0 +1,53 @@
+name: Context7
+
+# Asks Context7 to re-read the documentation after it changes on main, so a
+# coding agent that looks NestLens up there gets this release's docs rather
+# than whatever was indexed last. Context7's own automatic refresh covers
+# private repositories only; a public one is otherwise refreshed on a schedule
+# Context7 sets by popularity, so this asks for one through its API.
+#
+# The key is the CONTEXT7_API_KEY secret. Without it — a fork, or before a
+# maintainer has added it — the job says so and passes. RELEASING.md has the
+# one-time setup.
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - context7.json
+      - 'docs/docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One refresh at a time. A push that lands while one is running waits and
+  # refreshes again afterwards, so the newest commit is always the one read;
+  # pushes that arrive while that one waits collapse into it.
+  group: context7
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ask Context7 to re-read the documentation
+        env:
+          CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
+        # The answer is printed as Context7 sent it: a status message, or an
+        # error code and a sentence. Neither repeats the key.
+        run: |
+          if [ -z "$CONTEXT7_API_KEY" ]; then
+            echo "::notice title=Context7 not refreshed::CONTEXT7_API_KEY is not set. See RELEASING.md."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --request POST https://context7.com/api/v1/refresh \
+            --header "Authorization: Bearer $CONTEXT7_API_KEY" \
+            --header 'Content-Type: application/json' \
+            --data '{"libraryName":"/mogretici/nestlens"}' \
+            --write-out '\nHTTP %{http_code}\n'

@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
+import { parse } from 'yaml';
 import { DEFAULT_CONFIG, NESTLENS_API_PREFIX } from '../../nestlens.config';
 import { parseCliOptions } from '../../mcp/cli';
 import { JobWatcher } from '../../watchers/job.watcher';
@@ -46,8 +47,9 @@ const SCHEMA_FIELDS = [
   'public_key',
 ];
 
+const read = (path: string): string => readFileSync(join(ROOT, path), 'utf8');
 const raw = (): Record<string, unknown> =>
-  JSON.parse(readFileSync(join(ROOT, 'context7.json'), 'utf8')) as Record<string, unknown>;
+  JSON.parse(read('context7.json')) as Record<string, unknown>;
 const config = (): Context7 => raw() as unknown as Context7;
 const rules = (): string => config().rules.join('\n');
 
@@ -80,7 +82,7 @@ describe('context7.json', () => {
   });
 
   it('is not published with the package', () => {
-    const { files } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+    const { files } = JSON.parse(read('package.json')) as {
       files: string[];
     };
 
@@ -114,6 +116,48 @@ describe('context7.json', () => {
       expect(parseCliOptions([], {}).allowWrite).toBe(false);
       expect(parseCliOptions(['--allow-write'], {}).allowWrite).toBe(true);
       expect(rules()).toContain('read-only unless --allow-write is set');
+    });
+  });
+
+  describe('the workflow that refreshes it', () => {
+    interface RefreshWorkflow {
+      readonly on: { readonly push: { readonly branches: string[]; readonly paths: string[] } };
+      readonly permissions: Record<string, string>;
+      readonly jobs: { readonly refresh: { readonly steps: { readonly run?: string }[] } };
+    }
+
+    const workflow = (): RefreshWorkflow =>
+      parse(read('.github/workflows/context7.yml')) as RefreshWorkflow;
+    const script = (): string =>
+      workflow()
+        .jobs.refresh.steps.map((step) => step.run ?? '')
+        .join('\n');
+
+    it('runs when what Context7 indexes changes on main', () => {
+      const { push } = workflow().on;
+
+      expect(push.branches).toEqual(['main']);
+      expect(push.paths).toEqual(
+        expect.arrayContaining([
+          'README.md',
+          'context7.json',
+          ...config().folders.map((f) => `${f}/**`),
+        ]),
+      );
+    });
+
+    it('refreshes this repository, by its GitHub path', () => {
+      const { repository } = JSON.parse(read('package.json')) as { repository: { url: string } };
+      const path = /github\.com\/([^/]+\/[^/.]+)/.exec(repository.url)?.[1];
+
+      expect(path).toBeDefined();
+      expect(script()).toContain(`"libraryName":"/${path}"`);
+    });
+
+    it('only reads the repository, and passes without a key', () => {
+      expect(workflow().permissions).toEqual({ contents: 'read' });
+      expect(script()).toMatch(/if \[ -z "\$CONTEXT7_API_KEY" \]; then[\s\S]*?exit 0/);
+      expect(script()).toContain('--fail-with-body');
     });
   });
 
