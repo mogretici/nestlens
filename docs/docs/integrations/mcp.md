@@ -233,6 +233,25 @@ Every client asks for the same three things. Give it:
 
 or, for a client that takes a URL, the address of a [remote server](#a-nestlens-on-a-server) and its bearer token.
 
+### Docker
+
+The repository's `Dockerfile` builds the server from source, with the versions
+`package-lock.json` pins, and runs it on stdio. Inside a container `localhost`
+is the container itself, so point it at the application on the host with
+`host.docker.internal`:
+
+```bash
+docker build -t nestlens-mcp https://github.com/mogretici/nestlens.git
+docker run --rm -i -e NESTLENS_URL=http://host.docker.internal:3000/nestlens nestlens-mcp
+```
+
+Docker Desktop (macOS, Windows) defines `host.docker.internal`. On Linux, add
+`--add-host=host.docker.internal:host-gateway` to `docker run`; the application
+then has to listen on an address the container can reach, not only on
+`127.0.0.1`. Credentials and write access go in the same variables as above:
+`-e NESTLENS_HEADERS='{"Authorization":"Bearer ..."}'`,
+`-e NESTLENS_MCP_ALLOW_WRITE=true`.
+
 ## What the agent sees
 
 The server exposes two tools, whatever NestLens can do:
