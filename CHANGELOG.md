@@ -1,3 +1,29 @@
+# [0.20.0](https://github.com/mogretici/nestlens/compare/v0.19.1...v0.20.0) (2026-11-28)
+
+
+### Bug Fixes
+
+* **dashboard:** the retry button stands out from the dark card ([a894019](https://github.com/mogretici/nestlens/commit/a8940196f00fffe974f9520e7e4100258af84b41))
+* **exception:** @Catch(Error) counts as a catch-all, and a filter added after the routes does not ([971a349](https://github.com/mogretici/nestlens/commit/971a349d2adcb6b20af7a14591a1954deb7faf81))
+* **exception:** @Catch(Object) counts as a catch-all too ([dc13727](https://github.com/mogretici/nestlens/commit/dc1372797c19482076eeaa85d183ebb6245bf9c6))
+* **exception:** say that @Catch(Object) takes thrown objects too ([838ad9c](https://github.com/mogretici/nestlens/commit/838ad9cc20e10502d73b637531869afbe5debb7f))
+* **exception:** say when an application's own filter takes every exception first ([ae7ece9](https://github.com/mogretici/nestlens/commit/ae7ece975a8c19a68b0e3d6db5b139c361e26dbc))
+* **graphql:** a plugin counts as registered when a server takes it, and the manual snippets compile ([e5b18c6](https://github.com/mogretici/nestlens/commit/e5b18c66c41b3cb1c957d314595ec1cc67be1bde))
+* **graphql:** look for a server once, and build nothing after destroy ([3e80cf7](https://github.com/mogretici/nestlens/commit/3e80cf7f7483c3702ec377c41003b46ec0fc2dc2))
+* **graphql:** the Apollo plugin registers whichever module's hooks run first ([6a5f4bf](https://github.com/mogretici/nestlens/commit/6a5f4bfc86e40b57403b4bc6e4b3617914452827))
+* **query:** an application waiting for a held DataSource or client takes it over when the holder closes ([0a1e145](https://github.com/mogretici/nestlens/commit/0a1e1455411b7e8f5f343ace89ef02f3ecf69470))
+* **query:** an older copy's mark, and a client held by another application, are read correctly ([e4a5cea](https://github.com/mogretici/nestlens/commit/e4a5ceab13292f4d556de72af5062f24d01a603b))
+* **query:** give DataSources and Prisma clients back when the application closes ([efb7b10](https://github.com/mogretici/nestlens/commit/efb7b10deec001c1ee3d49cfe634a67711171726))
+* **query:** hand-over waits once, survives a failing waiter, and says what it took ([f4e1260](https://github.com/mogretici/nestlens/commit/f4e1260ef362ad17723244e9c9c31d168d59ae16))
+* **query:** say when a DataSource or client was found and could not be attached to ([57beb30](https://github.com/mogretici/nestlens/commit/57beb302852dab39a90873c5b74b0a8ba5a4b78a))
+* **watchers:** messages point at what is needed, and getPlugin() counts as wiring ([ed7c452](https://github.com/mogretici/nestlens/commit/ed7c452cc263189a75e1f67b700cfc986b50ca24))
+
+
+### Features
+
+* **dashboard:** an empty page says when its watcher cannot record, and why ([cfdacab](https://github.com/mogretici/nestlens/commit/cfdacabffaa63dc6e85ed90efd69cf05b84c1a9b))
+* **watchers:** every watcher says whether it can record, and a startup warning names the ones that cannot ([e3ae200](https://github.com/mogretici/nestlens/commit/e3ae200efa355069a199a263c7734e57b2d918dd))
+
 ## [0.19.1](https://github.com/mogretici/nestlens/compare/v0.19.0...v0.19.1) (2026-11-28)
 
 # [0.19.0](https://github.com/mogretici/nestlens/compare/v0.18.1...v0.19.0) (2026-11-27)
