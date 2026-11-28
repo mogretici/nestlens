@@ -15,6 +15,7 @@ import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { NestLensModule } from '../../nestlens.module';
 import { CollectorService } from '../../core/collector.service';
+import { WatcherStatusService } from '../../watchers/watcher-status.service';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -48,8 +49,8 @@ class PrismaClient {
   }
 }
 
-const boot = async (provider: Provider): Promise<INestApplication> => {
-  @Module({ imports: [NestLensModule.forRoot({})], providers: [provider] })
+const boot = async (...provided: Provider[]): Promise<INestApplication> => {
+  @Module({ imports: [NestLensModule.forRoot({})], providers: provided })
   class AppModule {}
 
   const app = await NestFactory.create(AppModule, new ExpressAdapter(), {
@@ -85,6 +86,17 @@ describe('the query watcher across applications', () => {
     await second.close();
   });
 
+  it('leaves alone a logger someone else put on the DataSource after it', async () => {
+    const dataSource = new DataSource();
+    const app = await boot({ provide: 'DATA_SOURCE', useValue: dataSource });
+    const theirs = { logQuery: (): void => undefined };
+    dataSource.logger = theirs;
+
+    await app.close();
+
+    expect(dataSource.logger).toBe(theirs);
+  });
+
   it('gives a DataSource back as it found it', async () => {
     const dataSource = new DataSource();
     const logger = dataSource.logger;
@@ -114,5 +126,45 @@ describe('the query watcher across applications', () => {
     // Prisma has no way to remove a listener, so the one installed is reused.
     expect(prisma.listenerCount).toBe(1);
     await second.close();
+  });
+
+  it('attaches to a client an older NestLens copy marked, and to every client after it', async () => {
+    // The mark is a registry symbol, shared by every copy of the library; an
+    // older copy left `true` there, and assigning to it threw in strict mode,
+    // which skipped the rest of the clients without a word.
+    const marked = new PrismaClient();
+    (marked as unknown as Record<symbol, unknown>)[
+      Symbol.for('nestlens:prisma-query-watcher-attached')
+    ] = true;
+    const unmarked = new PrismaClient();
+
+    const app = await boot(
+      { provide: 'MARKED', useValue: marked },
+      { provide: 'UNMARKED', useValue: unmarked },
+    );
+    const collected = queriesCollectedBy(app);
+    marked.run('SELECT marked');
+    unmarked.run('SELECT unmarked');
+
+    expect(collected()).toEqual(['SELECT marked', 'SELECT unmarked']);
+    await app.close();
+  });
+
+  it('says a client is recorded by another live application, not that none was found', async () => {
+    const prisma = new PrismaClient();
+    const first = await boot({ provide: 'PRISMA', useValue: prisma });
+    const second = await boot({ provide: 'PRISMA', useValue: prisma });
+
+    const status = second
+      .get(WatcherStatusService)
+      .statuses()
+      .find((report) => report.type === 'query');
+
+    expect(status).toMatchObject({
+      state: 'waiting',
+      reason: expect.stringContaining('another application'),
+    });
+    await second.close();
+    await first.close();
   });
 });

@@ -47,6 +47,12 @@ const parseQueryParams = (params: string | undefined): unknown[] | undefined => 
   }
 };
 
+/*
+ * Registry symbols, so every copy of the library sees the same marks. A copy
+ * from before 0.20 marked with `true`, never cleared it, and held no listener
+ * it could hand over: that mark is read as nobody's, and the object is
+ * attached to again — beside an older copy that is still running, both record.
+ */
 const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
 const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
 
@@ -70,14 +76,24 @@ interface PrismaAttachment {
   owner?: QueryWatcher;
 }
 
-type MarkedPrismaClient = PrismaClient & { [PRISMA_ATTACHED]?: PrismaAttachment };
+type MarkedPrismaClient = PrismaClient & { [PRISMA_ATTACHED]?: PrismaAttachment | true };
+
+type MarkedDataSource = TypeORMDataSourceLike & { [TYPEORM_ATTACHED]?: object | true };
+
+/** How attaching to one object went. */
+type Attached = 'attached' | 'held-elsewhere' | 'none';
 
 @Injectable()
 export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(QueryWatcher.name);
   private readonly config: QueryWatcherConfig;
   /** What `onApplicationBootstrap` attached to, which is what the status reports. */
-  private readonly attached = { dataSources: 0, prismaClients: 0, unloggedPrismaClients: 0 };
+  private readonly attached = {
+    dataSources: 0,
+    prismaClients: 0,
+    unloggedPrismaClients: 0,
+    heldElsewhere: 0,
+  };
   /** It attaches during bootstrap, so the startup report waits for it. */
   private readonly releaseStartupReport: () => void;
   private readonly attachedDataSources: AttachedDataSource[] = [];
@@ -98,7 +114,7 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
   watcherStatus(): WatcherStatus {
     if (!this.config.enabled) return switchedOff(watcherDocs('watchers/query'));
 
-    const { dataSources, prismaClients, unloggedPrismaClients } = this.attached;
+    const { dataSources, prismaClients, unloggedPrismaClients, heldElsewhere } = this.attached;
 
     if (dataSources + prismaClients > 0) {
       const found = [
@@ -109,6 +125,14 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       return {
         state: 'recording',
         reason: `Recording the queries of ${found.filter(Boolean).join(' and ')}.`,
+        docs: watcherDocs('watchers/query#usage-example'),
+      };
+    }
+
+    if (heldElsewhere > 0) {
+      return {
+        state: 'waiting',
+        reason: `${heldElsewhere} DataSource(s) or Prisma client(s) are recorded by another application's NestLens in this process, so this one records none of them.`,
         docs: watcherDocs('watchers/query#usage-example'),
       };
     }
@@ -157,7 +181,8 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
         }
       }
 
-      delete (dataSource as unknown as Record<symbol, unknown>)[TYPEORM_ATTACHED];
+      const marked = dataSource as MarkedDataSource;
+      if (marked[TYPEORM_ATTACHED] === this) delete marked[TYPEORM_ATTACHED];
     }
     this.attachedDataSources.length = 0;
 
@@ -189,9 +214,9 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       const dataSources = this.discoverTypeORMDataSources();
       let attached = 0;
       for (const ds of dataSources) {
-        if (this.attachToDataSource(ds)) {
-          attached++;
-        }
+        const outcome = this.attachToDataSource(ds);
+        if (outcome === 'attached') attached++;
+        if (outcome === 'held-elsewhere') this.attached.heldElsewhere++;
       }
       this.attached.dataSources += attached;
       if (attached > 0) {
@@ -220,10 +245,12 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
     return out;
   }
 
-  private attachToDataSource(ds: TypeORMDataSourceLike): boolean {
-    const marked = ds as unknown as Record<symbol, boolean | undefined>;
-    if (marked[TYPEORM_ATTACHED]) return false;
-    marked[TYPEORM_ATTACHED] = true;
+  private attachToDataSource(ds: TypeORMDataSourceLike): Attached {
+    const marked = ds as MarkedDataSource;
+    const holder = marked[TYPEORM_ATTACHED];
+    if (holder === this) return 'none';
+    if (typeof holder === 'object') return 'held-elsewhere';
+    marked[TYPEORM_ATTACHED] = this;
 
     const connectionName = ds.options?.name ?? 'default';
 
@@ -249,7 +276,7 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
     }
 
     this.attachedDataSources.push({ dataSource: ds, subscriber, wrapped, original });
-    return true;
+    return 'attached';
   }
 
   /**
@@ -276,7 +303,8 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
 
       for (const client of clients) {
         const outcome = this.attachPrismaClient(client);
-        if (outcome === 'none') continue;
+        if (outcome === 'held-elsewhere') this.attached.heldElsewhere += 1;
+        if (outcome === 'none' || outcome === 'held-elsewhere') continue;
         attached += 1;
         if (outcome === 'events-unlogged') unlogged += 1;
       }
@@ -335,28 +363,37 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
    */
   private attachPrismaClient(
     client: PrismaClient,
-  ): 'middleware' | 'events' | 'events-unlogged' | 'none' {
+  ): 'middleware' | 'events' | 'events-unlogged' | 'held-elsewhere' | 'none' {
     // One client can be injected into many providers, and the global may be
     // the same object again.
     const marked = client as MarkedPrismaClient;
     if (!client.$use && !client.$on) return 'none';
 
-    const existing = marked[PRISMA_ATTACHED];
-    if (existing?.owner) return 'none';
+    const mark = marked[PRISMA_ATTACHED];
+    const existing = typeof mark === 'object' ? mark : undefined;
+    if (existing?.owner === this) return 'none';
+    if (existing?.owner) return 'held-elsewhere';
 
     const attachment = existing ?? {};
     attachment.owner = this;
     this.ownedPrismaClients.push(attachment);
 
     if (!existing) {
-      Object.defineProperty(marked, PRISMA_ATTACHED, { value: attachment, configurable: true });
+      Object.defineProperty(marked, PRISMA_ATTACHED, {
+        value: attachment,
+        configurable: true,
+        writable: true,
+      });
       this.installPrismaRecording(client, attachment);
     }
 
     if (client.$use) return 'middleware';
 
-    // An engine configuration it cannot read is not evidence of anything, so
-    // only one that says query logging is off is reported.
+    // A client emits `query` events only when `logQueries` is `true`, which
+    // it is when it was built with a query log option. Measured on
+    // @prisma/client 6.19.3 and 7.10.1: `undefined` with no `log` option,
+    // `false` with other levels, no event either way. An engine configuration
+    // that is not an object is not evidence of anything, so it is not reported.
     const engineConfig = (client as { _engineConfig?: unknown })._engineConfig;
     const unlogged =
       typeof engineConfig === 'object' &&
