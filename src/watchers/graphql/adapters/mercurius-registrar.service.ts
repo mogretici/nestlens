@@ -112,7 +112,7 @@ export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
       this.logger.warn(
         'Could not access Fastify instance. ' +
           'Mercurius auto-registration requires Fastify adapter. ' +
-          'See: https://github.com/mogretici/nestlens#graphql-manual-setup',
+          'See: https://nestlens-docs.vercel.app/docs/watchers/graphql#manual-wiring',
       );
       return;
     }
@@ -133,7 +133,7 @@ export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
       this.logger.warn(
         'Mercurius GraphQL not found on Fastify instance. ' +
           'Ensure Mercurius is properly configured. ' +
-          'See: https://github.com/mogretici/nestlens#graphql-manual-setup',
+          'See: https://nestlens-docs.vercel.app/docs/watchers/graphql#manual-wiring',
       );
       return;
     }

@@ -232,6 +232,42 @@ export class AppModule {}
 
 No manual `fastify.register(mercurius, { hooks: ... })` wiring is required.
 
+### Manual Wiring
+
+Only for a server NestLens cannot reach on its own: an `ApolloServer` built by
+hand rather than through `GraphQLModule`, or Mercurius on a Fastify instance the
+application's HTTP adapter does not expose. `GraphQLWatcher.getPlugin()` hands
+out the plugin for whichever server was detected, and from then on the watcher
+reports itself `recording` (see [Is a watcher recording?](./overview.md#is-a-watcher-recording)).
+
+Apollo takes it as a plugin:
+
+```typescript
+import { ApolloServer, ApolloServerPlugin } from '@apollo/server';
+import { GraphQLWatcher } from 'nestlens';
+
+const graphqlWatcher = app.get(GraphQLWatcher);
+
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  plugins: [graphqlWatcher.getPlugin() as ApolloServerPlugin],
+});
+```
+
+Mercurius takes it as a set of hooks, each registered by name:
+
+```typescript
+const hooks = app.get(GraphQLWatcher).getPlugin() as Record<string, (...args: unknown[]) => Promise<void>>;
+
+for (const [name, hook] of Object.entries(hooks)) {
+  fastify.graphql.addHook(name, hook);
+}
+```
+
+Leave it out where NestLens registers the plugin itself: a second registration
+is ignored rather than recorded twice, so it adds nothing.
+
 ## N+1 Query Detection
 
 The GraphQL Watcher automatically detects potential N+1 query issues by tracking resolver call patterns:

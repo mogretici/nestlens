@@ -91,10 +91,8 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatch
 
     // Check if event emitter was provided
     if (!this.eventEmitter) {
-      this.logger.debug(
-        'EventWatcher: No event emitter found. ' +
-          'To enable event tracking, install and configure @nestjs/event-emitter.',
-      );
+      // The status's sentence, so the two never disagree about what is needed.
+      this.logger.debug(`EventWatcher: ${this.watcherStatus().reason}`);
       return;
     }
 

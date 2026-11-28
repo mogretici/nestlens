@@ -104,6 +104,56 @@ describe('the fix links', () => {
   });
 });
 
+describe('every NestLens link in a message the library prints', () => {
+  const SRC = join(ROOT, 'src');
+  const README_SLUGS = new Set(
+    [...readFileSync(join(ROOT, 'README.md'), 'utf8').matchAll(/^#{1,6} (.+)$/gm)].map(([, h]) =>
+      h
+        .replace(/`/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
+        .replace(/ /g, '-'),
+    ),
+  );
+
+  /** Library sources, not the specs, which name made-up links on purpose. */
+  const library = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.name === '__tests__'
+        ? []
+        : entry.isDirectory()
+          ? library(join(dir, entry.name))
+          : entry.name.endsWith('.ts')
+            ? [readFileSync(join(dir, entry.name), 'utf8')]
+            : [],
+    );
+
+  const links = library(SRC).flatMap((source) =>
+    [
+      ...source.matchAll(
+        /https:\/\/(?:nestlens-docs\.vercel\.app\/docs\/[\w/-]+(?:#[\w-]+)?|github\.com\/mogretici\/nestlens#[\w-]+)/g,
+      ),
+    ].map(([url]) => url),
+  );
+
+  it('finds the links it checks', () => {
+    expect(links.length).toBeGreaterThan(0);
+  });
+
+  it.each(links.map((url) => [url]))('%s lands on a heading that exists', (url) => {
+    const readme = /^https:\/\/github\.com\/mogretici\/nestlens#(.+)$/.exec(url);
+    if (readme) {
+      expect([...README_SLUGS]).toContain(readme[1]);
+      return;
+    }
+
+    const [page, anchor] = url.replace('https://nestlens-docs.vercel.app/docs/', '').split('#');
+    expect(existsSync(join(DOCS, `${page}.md`))).toBe(true);
+    if (anchor !== undefined) expect([...anchorsOf(page)]).toContain(anchor);
+  });
+});
+
 describe('a host watcher status', () => {
   const facts = {
     enabled: true,

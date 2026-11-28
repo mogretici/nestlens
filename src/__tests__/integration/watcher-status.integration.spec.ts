@@ -24,6 +24,7 @@ import {
   NESTLENS_REDIS_CLIENT,
   NestLensLogger,
   GateWatcher,
+  GraphQLWatcher,
   JobWatcher,
 } from '../../index';
 import { WatcherStatusReport, WatcherStatusService } from '../../watchers/watcher-status.service';
@@ -171,12 +172,37 @@ describe('a watcher with nothing handed over', () => {
     });
   });
 
+  it('reports a GraphQL plugin wired by hand through getPlugin() as recording', async () => {
+    // Mercurius on Express: nothing registers the hooks automatically, so the
+    // application wires them itself, as the manual setup section shows.
+    const booted = await boot({ watchers: { graphql: { server: 'mercurius' } } });
+    expect(booted.status('graphql').state).toBe('waiting');
+
+    booted.app.get(GraphQLWatcher).getPlugin();
+
+    expect(booted.status('graphql').state).toBe('recording');
+  });
+
   it('reports a watcher that is switched off as off', async () => {
     const booted = await boot({ watchers: { request: false, redis: false, graphql: false } });
 
     expect(booted.status('request').state).toBe('off');
     expect(booted.status('redis').state).toBe('off');
     expect(booted.status('graphql').state).toBe('off');
+  });
+});
+
+describe('the debug line of a watcher with nothing handed over', () => {
+  it('names what the event watcher actually reads, as its status does', async () => {
+    // It said "install and configure @nestjs/event-emitter", which does not
+    // hand the watcher anything: only NESTLENS_EVENT_EMITTER does.
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    const booted = await boot({ watchers: { event: true } });
+
+    const lines = debug.mock.calls.map(([message]) => String(message));
+    const line = lines.find((message) => message.startsWith('EventWatcher:'));
+    expect(line).toBe(`EventWatcher: ${booted.status('event').reason}`);
   });
 });
 

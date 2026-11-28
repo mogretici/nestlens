@@ -119,7 +119,7 @@ export class GraphQLWatcher
     if (this.registrationMode === 'pending') {
       return {
         state: 'waiting',
-        reason: `The ${server} adapter is ready, and its plugin has not been registered with the server.`,
+        reason: `The ${server} adapter is ready, and its plugin has not been registered with the server, automatically or through getPlugin().`,
         docs,
       };
     }
@@ -396,12 +396,11 @@ export class GraphQLWatcher
    * });
    * ```
    *
-   * For Mercurius:
-   * ```typescript
-   * fastify.register(mercurius, {
-   *   hooks: graphqlWatcher.getPlugin(),
-   * });
-   * ```
+   * For Mercurius, each hook it returns goes to `fastify.graphql.addHook`.
+   *
+   * Handing the plugin out marks the watcher as wired by hand. Nothing called
+   * `markManuallyRegistered`, so an application doing exactly this was
+   * reported as never having registered the plugin.
    */
   getPlugin(): unknown {
     // Lazy initialization - ensure adapter is created when plugin is requested
@@ -414,6 +413,7 @@ export class GraphQLWatcher
       return {};
     }
 
+    this.markManuallyRegistered();
     return this.adapter.getPlugin();
   }
 
