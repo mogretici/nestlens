@@ -392,4 +392,58 @@ describe('the query watcher across applications', () => {
       await second.close();
     },
   );
+
+  it('says it could not attach when its own take-over fails, not that nothing was found', async () => {
+    // Arrange: B waits; then the DataSource stops accepting subscribers.
+    const dataSource = new DataSource();
+    const first = await boot({ provide: 'DATA_SOURCE', useValue: dataSource });
+    const second = await boot({ provide: 'DATA_SOURCE', useValue: dataSource });
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    dataSource.subscribers = Object.freeze([]) as unknown as typeof dataSource.subscribers;
+
+    // Act
+    await first.close();
+
+    // Assert
+    expect(queryStatus(second)).toMatchObject({
+      state: 'waiting',
+      reason: expect.stringMatching(
+        /found 1 DataSource\(s\) or Prisma client\(s\) and could not attach.*not extensible/,
+      ),
+    });
+    await second.close();
+  });
+
+  it.each([
+    [
+      'a DataSource that refuses subscribers',
+      (): Provider => {
+        const dataSource = new DataSource();
+        Object.freeze(dataSource.subscribers);
+        return { provide: 'DATA_SOURCE', useValue: dataSource };
+      },
+      /not extensible/,
+    ],
+    [
+      'a Prisma client whose $on throws',
+      (): Provider => {
+        const prisma = new PrismaClient();
+        prisma.$on = () => {
+          throw new Error('no listeners here');
+        };
+        return { provide: 'PRISMA', useValue: prisma };
+      },
+      /no listeners here/,
+    ],
+  ] as const)('says it could not attach at bootstrap to %s', async (_kind, provide, message) => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    const app = await boot(provide());
+
+    const status = queryStatus(app);
+    expect(status.state).toBe('waiting');
+    expect(status.reason).toContain('could not attach');
+    expect(status.reason).toMatch(message);
+    await app.close();
+  });
 });

@@ -58,6 +58,10 @@ const parseQueryParams = (params: string | undefined): unknown[] | undefined => 
 const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
 const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
 
+/** What an attach failure is reported by: its message, never the object it concerned. */
+const messageOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /** A watcher of another application that found an object held, and takes it when it is let go. */
 interface Waiter {
   watcher: QueryWatcher;
@@ -112,7 +116,11 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
     prismaClients: 0,
     unloggedPrismaClients: 0,
     heldElsewhere: 0,
+    /** DataSources and clients found and not attached to, at bootstrap or at a take-over. */
+    failed: 0,
   };
+  /** The last of those failures' messages: only the message, never the object it was about. */
+  private lastAttachError?: string;
   /** It attaches during bootstrap, so the startup report waits for it. */
   private readonly releaseStartupReport: () => void;
   private readonly attachedDataSources: AttachedDataSource[] = [];
@@ -146,6 +154,14 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       return {
         state: 'recording',
         reason: `Recording the queries of ${found.filter(Boolean).join(' and ')}.`,
+        docs: watcherDocs('watchers/query#usage-example'),
+      };
+    }
+
+    if (this.attached.failed > 0) {
+      return {
+        state: 'waiting',
+        reason: `NestLens found ${this.attached.failed} DataSource(s) or Prisma client(s) and could not attach to them: ${this.lastAttachError ?? 'unknown error'}.`,
         docs: watcherDocs('watchers/query#usage-example'),
       };
     }
@@ -237,7 +253,7 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       } catch (error) {
         holding.owner = undefined;
         this.logger.warn(
-          `An application waiting to record queries could not take them over: ${String(error)}`,
+          `An application waiting to record queries could not take them over: ${messageOf(error)}`,
         );
         continue;
       }
@@ -246,6 +262,11 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
     }
 
     return false;
+  }
+
+  private countAttachFailure(error: unknown): void {
+    this.attached.failed += 1;
+    this.lastAttachError = messageOf(error);
   }
 
   /** Queues on a holding, once, to take the object over when its holder lets go. */
@@ -259,7 +280,13 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       takeOver: () => {
         this.attached.heldElsewhere -= 1;
         this.waitingOn.splice(this.waitingOn.indexOf(holding), 1);
-        takeOver();
+        try {
+          takeOver();
+        } catch (error) {
+          // Counted here, where the status is read; the holder says it in its warning.
+          this.countAttachFailure(error);
+          throw error;
+        }
       },
     });
   }
@@ -286,7 +313,12 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       const dataSources = this.discoverTypeORMDataSources();
       let attached = 0;
       for (const ds of dataSources) {
-        if (this.attachToDataSource(ds) === 'attached') attached++;
+        try {
+          if (this.attachToDataSource(ds) === 'attached') attached++;
+        } catch (error) {
+          this.countAttachFailure(error);
+          this.logger.warn(`Could not attach to a TypeORM DataSource: ${messageOf(error)}`);
+        }
       }
       this.attached.dataSources += attached;
       if (attached > 0) {
@@ -387,7 +419,14 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       }
 
       for (const client of clients) {
-        const outcome = this.attachPrismaClient(client);
+        let outcome: ReturnType<QueryWatcher['attachPrismaClient']>;
+        try {
+          outcome = this.attachPrismaClient(client);
+        } catch (error) {
+          this.countAttachFailure(error);
+          this.logger.warn(`Could not attach to a Prisma client: ${messageOf(error)}`);
+          continue;
+        }
         if (outcome === 'none' || outcome === 'held-elsewhere') continue;
         attached += 1;
         if (outcome === 'events-unlogged') unlogged += 1;
