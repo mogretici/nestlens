@@ -67,6 +67,8 @@ export class GraphQLWatcher
   private subscriptionTracker?: SubscriptionTracker;
   private initialized = false;
   private registrationMode: RegistrationMode = 'pending';
+  /** Set by the first `ensureAdapter`, and left set by `destroy`. */
+  private adapterAttempted = false;
   /** Puts the schema's subscription fields back. */
   private restoreSubscriptions?: () => void;
   /** Puts the schema's field resolvers back. */
@@ -140,13 +142,7 @@ export class GraphQLWatcher
       return;
     }
 
-    try {
-      this.initialize();
-    } catch (error) {
-      // A watcher that cannot start must not stop the application.
-      this.logger.error('Failed to initialize GraphQL watcher', error);
-    }
-
+    this.ensureAdapter();
     this.warnIfNothingWillBeRecorded();
   }
 
@@ -415,7 +411,11 @@ export class GraphQLWatcher
    * stop the server asking.
    */
   ensureAdapter(): BaseGraphQLAdapter | undefined {
-    if (!this.adapter && this.config.enabled) {
+    if (!this.adapter && this.config.enabled && !this.adapterAttempted) {
+      // Once: asked from every request, a detection that found nothing
+      // searched for the packages and warned on each, and after `destroy` it
+      // built an adapter nothing would ever clean up.
+      this.adapterAttempted = true;
       try {
         this.initialize();
       } catch (error) {

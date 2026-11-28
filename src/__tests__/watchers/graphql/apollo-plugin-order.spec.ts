@@ -11,7 +11,8 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { ApolloServer, ApolloServerPlugin } from '@apollo/server';
 import { ModuleRef } from '@nestjs/core';
 import { GraphQLWatcher } from '../../../watchers/graphql';
@@ -47,5 +48,47 @@ describe('the Apollo @Plugin() provider', () => {
       (call) => (call as unknown[])[0],
     );
     expect(types).toContain('graphql');
+  });
+
+  const build = (
+    config: NestLensConfig,
+  ): { watcher: GraphQLWatcher; provider: NestLensApolloPlugin } => {
+    const collector = {
+      collect: vi.fn(async () => undefined),
+      collectImmediate: vi.fn(async () => null),
+    } as unknown as CollectorService;
+    const watcher = new GraphQLWatcher(collector, config, {} as ModuleRef);
+    return { watcher, provider: new NestLensApolloPlugin(watcher) };
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('looks for a server once, however many requests arrive, when none is found', async () => {
+    // Arrange: detection that finds nothing, asked from every request.
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(GraphQLWatcher.prototype, 'detectServer').mockReturnValue('none');
+    const { watcher, provider } = build({ watchers: { graphql: true } });
+
+    // Act
+    for (let request = 0; request < 5; request += 1) await provider.requestDidStart({});
+
+    // Assert
+    const detections = warn.mock.calls.filter(([message]) =>
+      String(message).includes('No GraphQL server detected'),
+    );
+    expect(detections).toHaveLength(1);
+    expect(watcher.getAdapter()).toBeUndefined();
+  });
+
+  it('builds nothing again once the watcher has been destroyed', async () => {
+    const { watcher } = build({ watchers: { graphql: true } });
+    expect(watcher.ensureAdapter()).toBeDefined();
+
+    watcher.destroy();
+
+    expect(watcher.ensureAdapter()).toBeUndefined();
+    expect(watcher.getSubscriptionTracker()).toBeUndefined();
   });
 });
