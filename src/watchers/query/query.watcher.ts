@@ -56,29 +56,46 @@ const parseQueryParams = (params: string | undefined): unknown[] | undefined => 
 const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
 const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
 
+/** A watcher of another application that found an object held, and takes it when it is let go. */
+interface Waiter {
+  watcher: QueryWatcher;
+  takeOver: () => void;
+}
+
+/**
+ * Who records a DataSource or a Prisma client, and who is waiting to, kept on
+ * the object.
+ *
+ * One watcher records an object at a time. Another application's watcher that
+ * finds it held queues; when the holder closes, the first in the queue takes
+ * it over. Counting it as held at bootstrap and leaving it there went stale
+ * the moment the holder closed: the status said another application recorded
+ * it while nothing did.
+ */
+interface Holding {
+  owner?: QueryWatcher;
+  waiting: Waiter[];
+}
+
 /** What was put on a DataSource, so it can be taken off again. */
 interface AttachedDataSource {
   dataSource: TypeORMDataSourceLike;
+  holding: Holding;
   subscriber: NestLensQuerySubscriber;
   wrapped: NestLensTypeOrmLogger;
   original: TypeORMLoggerLike | undefined;
 }
 
 /**
- * Who records a Prisma client's queries now, kept on the client.
- *
- * Prisma can add a middleware or a `query` listener and cannot remove either,
- * so the one installed stays for the life of the client and forwards to the
- * watcher that owns it. Closing hands the client back; the next application's
- * watcher takes it over rather than installing a second listener.
+ * A Prisma client's holding. Prisma can add a middleware or a `query` listener
+ * and cannot remove either, so the one installed stays for the life of the
+ * client and forwards to whichever watcher owns it.
  */
-interface PrismaAttachment {
-  owner?: QueryWatcher;
-}
+type PrismaAttachment = Holding;
 
 type MarkedPrismaClient = PrismaClient & { [PRISMA_ATTACHED]?: PrismaAttachment | true };
 
-type MarkedDataSource = TypeORMDataSourceLike & { [TYPEORM_ATTACHED]?: object | true };
+type MarkedDataSource = TypeORMDataSourceLike & { [TYPEORM_ATTACHED]?: Holding | true };
 
 /** How attaching to one object went. */
 type Attached = 'attached' | 'held-elsewhere' | 'none';
@@ -98,6 +115,8 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
   private readonly releaseStartupReport: () => void;
   private readonly attachedDataSources: AttachedDataSource[] = [];
   private readonly ownedPrismaClients: PrismaAttachment[] = [];
+  /** Holdings this watcher queues on, so closing first leaves the queue. */
+  private readonly waitingOn: Holding[] = [];
 
   constructor(
     private readonly collector: CollectorService,
@@ -169,7 +188,12 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
    * nothing, while the closed application's collector went on being called.
    */
   onModuleDestroy(): void {
-    for (const { dataSource, subscriber, wrapped, original } of this.attachedDataSources) {
+    for (const holding of this.waitingOn) {
+      holding.waiting = holding.waiting.filter((waiter) => waiter.watcher !== this);
+    }
+    this.waitingOn.length = 0;
+
+    for (const { dataSource, holding, subscriber, wrapped, original } of this.attachedDataSources) {
       const index = dataSource.subscribers?.indexOf(subscriber) ?? -1;
       if (index >= 0) dataSource.subscribers?.splice(index, 1);
 
@@ -181,15 +205,35 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
         }
       }
 
-      const marked = dataSource as MarkedDataSource;
-      if (marked[TYPEORM_ATTACHED] === this) delete marked[TYPEORM_ATTACHED];
+      if (holding.owner !== this) continue;
+      holding.owner = undefined;
+
+      const next = holding.waiting.shift();
+      if (next) next.takeOver();
+      else delete (dataSource as MarkedDataSource)[TYPEORM_ATTACHED];
     }
     this.attachedDataSources.length = 0;
 
     for (const attachment of this.ownedPrismaClients) {
-      if (attachment.owner === this) attachment.owner = undefined;
+      if (attachment.owner !== this) continue;
+      attachment.owner = undefined;
+      attachment.waiting.shift()?.takeOver();
     }
     this.ownedPrismaClients.length = 0;
+  }
+
+  /** Queues on a holding, to take the object over when its holder lets go. */
+  private wait(holding: Holding, takeOver: () => void): void {
+    this.attached.heldElsewhere += 1;
+    this.waitingOn.push(holding);
+    holding.waiting.push({
+      watcher: this,
+      takeOver: () => {
+        this.attached.heldElsewhere -= 1;
+        this.waitingOn.splice(this.waitingOn.indexOf(holding), 1);
+        takeOver();
+      },
+    });
   }
 
   private attach(): void {
@@ -214,9 +258,7 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       const dataSources = this.discoverTypeORMDataSources();
       let attached = 0;
       for (const ds of dataSources) {
-        const outcome = this.attachToDataSource(ds);
-        if (outcome === 'attached') attached++;
-        if (outcome === 'held-elsewhere') this.attached.heldElsewhere++;
+        if (this.attachToDataSource(ds) === 'attached') attached++;
       }
       this.attached.dataSources += attached;
       if (attached > 0) {
@@ -247,10 +289,18 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
 
   private attachToDataSource(ds: TypeORMDataSourceLike): Attached {
     const marked = ds as MarkedDataSource;
-    const holder = marked[TYPEORM_ATTACHED];
-    if (holder === this) return 'none';
-    if (typeof holder === 'object') return 'held-elsewhere';
-    marked[TYPEORM_ATTACHED] = this;
+    const mark = marked[TYPEORM_ATTACHED];
+    const holding: Holding = typeof mark === 'object' ? mark : { waiting: [] };
+    if (holding.owner === this) return 'none';
+    if (holding.owner) {
+      this.wait(holding, () => {
+        if (this.attachToDataSource(ds) === 'attached') this.attached.dataSources += 1;
+      });
+      return 'held-elsewhere';
+    }
+
+    holding.owner = this;
+    marked[TYPEORM_ATTACHED] = holding;
 
     const connectionName = ds.options?.name ?? 'default';
 
@@ -275,7 +325,7 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       // Subscriber alone still covers the success path in that case.
     }
 
-    this.attachedDataSources.push({ dataSource: ds, subscriber, wrapped, original });
+    this.attachedDataSources.push({ dataSource: ds, holding, subscriber, wrapped, original });
     return 'attached';
   }
 
@@ -303,14 +353,12 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
 
       for (const client of clients) {
         const outcome = this.attachPrismaClient(client);
-        if (outcome === 'held-elsewhere') this.attached.heldElsewhere += 1;
         if (outcome === 'none' || outcome === 'held-elsewhere') continue;
         attached += 1;
         if (outcome === 'events-unlogged') unlogged += 1;
+        this.countPrismaClient(outcome);
       }
 
-      this.attached.prismaClients += attached - unlogged;
-      this.attached.unloggedPrismaClients += unlogged;
       if (attached > 0) {
         this.logger.log(`Prisma query watcher attached to ${attached} client(s)`);
       }
@@ -372,9 +420,12 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
     const mark = marked[PRISMA_ATTACHED];
     const existing = typeof mark === 'object' ? mark : undefined;
     if (existing?.owner === this) return 'none';
-    if (existing?.owner) return 'held-elsewhere';
+    if (existing?.owner) {
+      this.wait(existing, () => this.countPrismaClient(this.attachPrismaClient(client)));
+      return 'held-elsewhere';
+    }
 
-    const attachment = existing ?? {};
+    const attachment: PrismaAttachment = existing ?? { waiting: [] };
     attachment.owner = this;
     this.ownedPrismaClients.push(attachment);
 
@@ -400,6 +451,13 @@ export class QueryWatcher implements OnApplicationBootstrap, OnModuleDestroy, Re
       engineConfig !== null &&
       (engineConfig as { logQueries?: unknown }).logQueries !== true;
     return unlogged ? 'events-unlogged' : 'events';
+  }
+
+  private countPrismaClient(
+    outcome: 'middleware' | 'events' | 'events-unlogged' | 'held-elsewhere' | 'none',
+  ): void {
+    if (outcome === 'events-unlogged') this.attached.unloggedPrismaClients += 1;
+    else if (outcome === 'middleware' || outcome === 'events') this.attached.prismaClients += 1;
   }
 
   /** Installed once per client; records through whichever watcher owns it at the time. */

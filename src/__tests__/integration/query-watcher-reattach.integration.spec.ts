@@ -167,4 +167,44 @@ describe('the query watcher across applications', () => {
     await second.close();
     await first.close();
   });
+
+  it.each([
+    ['DataSource', () => new DataSource()],
+    ['Prisma client', () => new PrismaClient()],
+  ] as const)(
+    'hands a %s to the application waiting for it when the one holding it closes',
+    async (_kind, create) => {
+      // Arrange: A holds it, B waits for it.
+      const shared = create();
+      const first = await boot({ provide: 'SHARED', useValue: shared });
+      const second = await boot({ provide: 'SHARED', useValue: shared });
+      const query = (): string | undefined =>
+        second
+          .get(WatcherStatusService)
+          .statuses()
+          .find((report) => report.type === 'query')?.state;
+      expect(query()).toBe('waiting');
+
+      // Act
+      await first.close();
+      const collected = queriesCollectedBy(second);
+      shared.run('SELECT handed over');
+
+      // Assert: what it says and what it does agree.
+      expect(query()).toBe('recording');
+      expect(collected()).toEqual(['SELECT handed over']);
+      await second.close();
+    },
+  );
+
+  it('does not hand a DataSource to a waiting application that has closed', async () => {
+    const dataSource = new DataSource();
+    const first = await boot({ provide: 'DATA_SOURCE', useValue: dataSource });
+    const second = await boot({ provide: 'DATA_SOURCE', useValue: dataSource });
+
+    await second.close();
+    await first.close();
+
+    expect(dataSource.subscribers).toEqual([]);
+  });
 });
