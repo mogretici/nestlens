@@ -97,6 +97,7 @@ const config: Config = {
         ignoreFiles: ['api-reference/**'],
         includeOrder: [
           'intro.md',
+          'laravel-telescope.md',
           'getting-started/**',
           'configuration/**',
           'watchers/**',
