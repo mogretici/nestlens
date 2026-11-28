@@ -273,6 +273,7 @@ An agent starts with `nestlens_list_tools`, then calls what it needs. Today the 
 | `get_grouped_entries` | Find the noisy ones: the same query on every request, the same exception hundreds of times. |
 | `get_exceptions`, `get_logs`, `get_queries`, `get_requests` | Quick lists of one kind. |
 | `get_recording_status` | Tell "nothing happened" from "nothing was recorded". |
+| `get_watcher_status` | Find out why a type has no entries: which watchers are `recording`, `waiting` with nothing to observe, `manual` or `off`, each with the fix. |
 | `get_all_tags`, `get_entries_by_tags` | Work by tag. |
 
 **The list is not written into the MCP server.** It is read from your application — `GET /nestlens/__nestlens__/api/tools` — each time it is asked for, and that endpoint is built from the API controllers themselves. When NestLens gains an endpoint, an agent can use it straight away, and `nestlens-mcp` does not need an update.

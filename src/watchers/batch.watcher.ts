@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { BatchWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { BatchEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
@@ -25,7 +26,7 @@ export const NESTLENS_BATCH_PROCESSOR = Symbol('NESTLENS_BATCH_PROCESSOR');
  * duration, memory usage, and status.
  */
 @Injectable()
-export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
+export class BatchWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(BatchWatcher.name);
   private readonly config: BatchWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -33,6 +34,8 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   /** Gives back the hosts this watcher took; nothing, if it took none. */
   private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
+  /** Set by the first call to the manual API, which is then known to be in use. */
+  private manuallyTracked = false;
 
   constructor(
     private readonly collector: CollectorService,
@@ -75,6 +78,29 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/batch',
+      section: 'provide-batch-processor',
+      recording: this.isRecording()
+        ? 'Recording the object provided under NESTLENS_BATCH_PROCESSOR.'
+        : this.manuallyTracked
+          ? 'Recording what trackBatch() is called with.'
+          : undefined,
+      unusable: this.batchProcessor
+        ? 'The object provided under NESTLENS_BATCH_PROCESSOR has none of process, processBatch, bulk or bulkProcess, so it records only what trackBatch() is called with.'
+        : undefined,
+      missing:
+        'Nothing is provided under NESTLENS_BATCH_PROCESSOR, so it records only what trackBatch() is called with, and nothing has been yet.',
+      whenMissing: 'manual',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (this.wrapped?.size ?? 0) > 0 || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   private setupInterceptors(): void {
@@ -169,6 +195,8 @@ export class BatchWatcher implements OnModuleInit, OnModuleDestroy {
   ): void {
     // Off means off for the manual API too: it is injectable either way.
     if (!this.config.enabled) return;
+
+    this.manuallyTracked = true;
 
     const status: 'completed' | 'partial' | 'failed' =
       failedItems === 0 ? 'completed' : processedItems > 0 ? 'partial' : 'failed';

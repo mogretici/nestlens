@@ -8,7 +8,8 @@
  * fire — and three of the four are visible here the moment the process starts.
  */
 import { describe, it, expect } from 'vitest';
-import { startupSummary } from '../startup-summary';
+import { startupSummary, waitingWatchersWarning } from '../startup-summary';
+import { WatcherStatusReport } from '../watchers/watcher-status.service';
 import { NestLensConfig } from '../nestlens.config';
 
 describe('the startup summary', () => {
@@ -100,5 +101,37 @@ describe('the startup summary', () => {
 
     expect(line.split('\n')).toHaveLength(1);
     expect(line).toContain('·');
+  });
+});
+
+describe('the warning for watchers recording nothing', () => {
+  const redis: WatcherStatusReport = {
+    type: 'redis',
+    option: 'watchers.redis',
+    state: 'waiting',
+    reason: 'No Redis client is provided under NESTLENS_REDIS_CLIENT.',
+    docs: 'https://nestlens-docs.vercel.app/docs/watchers/redis#provide-redis-client-to-nestlens',
+  };
+
+  it('puts each watcher on a line of its own, with its reason and its fix', () => {
+    const lines = waitingWatchersWarning([redis], {}).split('\n');
+
+    expect(lines[0]).toBe('1 enabled watcher is recording nothing, so its tab stays empty:');
+    expect(lines[1]).toBe(`  watchers.redis: ${redis.reason} Fix: ${redis.docs}`);
+  });
+
+  it('counts in the plural', () => {
+    const line = waitingWatchersWarning([redis, { ...redis, option: 'watchers.log' }], {});
+
+    expect(line).toMatch(/^2 enabled watchers are recording nothing, so their tabs stay empty:/);
+  });
+
+  it('names the route under the configured mount point, the root included', () => {
+    expect(waitingWatchersWarning([redis], { path: '/debug' })).toContain(
+      'GET /debug/__nestlens__/api/watchers',
+    );
+    expect(waitingWatchersWarning([redis], { path: '/' })).toContain(
+      'GET /__nestlens__/api/watchers',
+    );
   });
 });

@@ -1,10 +1,11 @@
-import { ConsoleLogger, Inject, Injectable } from '@nestjs/common';
+import { ConsoleLogger, Inject, Injectable, Logger } from '@nestjs/common';
 import { inspect } from 'node:util';
 import { CollectorService } from '../core/collector.service';
 import { LogWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { LogEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { capturePayload } from './capture-payload';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from './watcher-status';
 
 /** The same bound an event payload has. */
 const METADATA_MAX_BYTES = 64 * 1024;
@@ -24,10 +25,24 @@ const LOG_LEVEL_PRIORITY: Record<string, number> = {
   error: 4,
 };
 
+/**
+ * Reads which logger the application's `Logger` calls reach.
+ *
+ * `app.useLogger()` hands its logger to `Logger.overrideLogger`, which keeps
+ * exactly one, so a logger that is not that one hears nothing from Nest or
+ * from any `new Logger(context)` in the application. `localInstance` is the
+ * public getter that answers which one it is — the same object every `Logger`
+ * method calls — and it has the same shape from NestJS 9 to 12, where the
+ * static field behind it is protected.
+ */
+const APPLICATION_LOGGER = new Logger();
+
 @Injectable()
-export class NestLensLogger extends ConsoleLogger {
+export class NestLensLogger extends ConsoleLogger implements ReportsWatcherStatus {
   private readonly config: LogWatcherConfig;
   private readonly minLevelPriority: number;
+  /** Set by the first call of any kind, so a logger taken by injection is seen in use. */
+  private called = false;
 
   constructor(
     private readonly collector: CollectorService,
@@ -39,6 +54,32 @@ export class NestLensLogger extends ConsoleLogger {
     this.config = resolveWatcherConfig(watcherConfig, { minLevel: 'log' });
 
     this.minLevelPriority = LOG_LEVEL_PRIORITY[this.config.minLevel ?? 'log'];
+  }
+
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/log'));
+
+    const docs = watcherDocs('watchers/log#using-nestlens-logger');
+
+    if (APPLICATION_LOGGER.localInstance === this) {
+      return { state: 'recording', reason: 'Installed as the application logger.', docs };
+    }
+
+    if (this.called) {
+      return {
+        state: 'recording',
+        reason:
+          "Recording the calls made to it directly. It is not the application logger, so Nest's own logs and every new Logger() do not reach it.",
+        docs,
+      };
+    }
+
+    return {
+      state: 'waiting',
+      reason:
+        'NestLensLogger is not the application logger and nothing has called it: app.useLogger(app.get(NestLensLogger)) installs it.',
+      docs,
+    };
   }
 
   verbose(message: string, context?: string): void;
@@ -86,6 +127,7 @@ export class NestLensLogger extends ConsoleLogger {
     context?: string,
     stack?: string,
   ): void {
+    this.called = true;
     if (!this.config.enabled) return;
 
     // Check minimum level

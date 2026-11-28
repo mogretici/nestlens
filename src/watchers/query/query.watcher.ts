@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../../core/collector.service';
 import { NestLensConfig, NESTLENS_CONFIG, QueryWatcherConfig } from '../../nestlens.config';
@@ -15,6 +15,8 @@ import {
 import { NestLensQuerySubscriber } from './typeorm-subscriber';
 import { NestLensTypeOrmLogger } from './typeorm-logger';
 import { resolveWatcherConfig } from '../watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from '../watcher-status';
+import { WatcherStatusService } from '../watcher-status.service';
 
 export interface QueryData {
   query: string;
@@ -42,21 +44,68 @@ const TYPEORM_ATTACHED = Symbol.for('nestlens:typeorm-query-watcher-attached');
 const PRISMA_ATTACHED = Symbol.for('nestlens:prisma-query-watcher-attached');
 
 @Injectable()
-export class QueryWatcher implements OnApplicationBootstrap {
+export class QueryWatcher implements OnApplicationBootstrap, ReportsWatcherStatus {
   private readonly logger = new Logger(QueryWatcher.name);
   private readonly config: QueryWatcherConfig;
+  /** What `onApplicationBootstrap` attached to, which is what the status reports. */
+  private readonly attached = { dataSources: 0, prismaClients: 0, unloggedPrismaClients: 0 };
+  /** It attaches during bootstrap, so the startup report waits for it. */
+  private readonly releaseStartupReport: () => void;
 
   constructor(
     private readonly collector: CollectorService,
     private readonly discoveryService: DiscoveryService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
+    @Optional() statusService?: WatcherStatusService,
   ) {
     const watcherConfig = nestlensConfig.watchers?.query;
     this.config = resolveWatcherConfig(watcherConfig, { slowThreshold: 100 });
+    this.releaseStartupReport = statusService?.holdStartupReport() ?? (() => undefined);
+  }
+
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/query'));
+
+    const { dataSources, prismaClients, unloggedPrismaClients } = this.attached;
+
+    if (dataSources + prismaClients > 0) {
+      const found = [
+        dataSources > 0 ? `${dataSources} TypeORM DataSource${dataSources === 1 ? '' : 's'}` : '',
+        prismaClients > 0 ? `${prismaClients} Prisma client${prismaClients === 1 ? '' : 's'}` : '',
+      ];
+
+      return {
+        state: 'recording',
+        reason: `Recording the queries of ${found.filter(Boolean).join(' and ')}.`,
+        docs: watcherDocs('watchers/query#usage-example'),
+      };
+    }
+
+    if (unloggedPrismaClients > 0) {
+      return {
+        state: 'waiting',
+        reason: `${unloggedPrismaClients} Prisma client(s) were built without query logging, so they report no queries.`,
+        docs: watcherDocs('integrations/prisma#prisma-614-and-later-one-constructor-option'),
+      };
+    }
+
+    return {
+      state: 'waiting',
+      reason: "No TypeORM DataSource or Prisma client was found among the application's providers.",
+      docs: watcherDocs('watchers/query#usage-example'),
+    };
   }
 
   onApplicationBootstrap(): void {
+    try {
+      this.attach();
+    } finally {
+      this.releaseStartupReport();
+    }
+  }
+
+  private attach(): void {
     if (!this.config.enabled) {
       return;
     }
@@ -82,6 +131,7 @@ export class QueryWatcher implements OnApplicationBootstrap {
           attached++;
         }
       }
+      this.attached.dataSources += attached;
       if (attached > 0) {
         this.logger.log(`TypeORM query watcher attached to ${attached} DataSource(s)`);
       }
@@ -168,6 +218,8 @@ export class QueryWatcher implements OnApplicationBootstrap {
         if (outcome === 'events-unlogged') unlogged += 1;
       }
 
+      this.attached.prismaClients += attached - unlogged;
+      this.attached.unloggedPrismaClients += unlogged;
       if (attached > 0) {
         this.logger.log(`Prisma query watcher attached to ${attached} client(s)`);
       }

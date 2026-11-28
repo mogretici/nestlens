@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { ViewWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ViewEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 import { capturePayload } from './capture-payload';
 import { serializePayload } from '../core/storage/serialize-payload';
@@ -37,7 +38,7 @@ export const NESTLENS_VIEW_ENGINE = Symbol('NESTLENS_VIEW_ENGINE');
  * cache hits, and output size metrics for various template formats.
  */
 @Injectable()
-export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
+export class ViewWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(ViewWatcher.name);
   private readonly config: ViewWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -87,6 +88,25 @@ export class ViewWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/view',
+      section: 'usage-example',
+      recording: this.isRecording()
+        ? 'Recording the render() of the view engine provided under NESTLENS_VIEW_ENGINE.'
+        : undefined,
+      unusable: this.viewEngine
+        ? 'The object provided under NESTLENS_VIEW_ENGINE has no render() to record.'
+        : undefined,
+      missing: 'No view engine is provided under NESTLENS_VIEW_ENGINE.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (this.wrapped?.size ?? 0) > 0 || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   private setupInterceptors(): void {

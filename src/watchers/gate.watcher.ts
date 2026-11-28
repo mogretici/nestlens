@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { GateWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { GateEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
@@ -54,7 +55,7 @@ const readGateArguments = (method: string, args: unknown[]): GateArguments => {
  * capturing gate name, action, subject, allowed/denied status, and user information.
  */
 @Injectable()
-export class GateWatcher implements OnModuleInit, OnModuleDestroy {
+export class GateWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(GateWatcher.name);
   private readonly config: GateWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -62,6 +63,8 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
   /** Gives back the hosts this watcher took; nothing, if it took none. */
   private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
+  /** Set by the first call to the manual API, which is then known to be in use. */
+  private manuallyTracked = false;
 
   constructor(
     private readonly collector: CollectorService,
@@ -104,6 +107,29 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/gate',
+      section: 'provide-gate-service',
+      recording: this.isRecording()
+        ? 'Recording the object provided under NESTLENS_GATE_SERVICE.'
+        : this.manuallyTracked
+          ? 'Recording what trackCheck() is called with.'
+          : undefined,
+      unusable: this.gateService
+        ? 'The object provided under NESTLENS_GATE_SERVICE has none of check, allows, denies, authorize or can, so it records only what trackCheck() is called with.'
+        : undefined,
+      missing:
+        'Nothing is provided under NESTLENS_GATE_SERVICE, so it records only what trackCheck() is called with, and nothing has been yet.',
+      whenMissing: 'manual',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (this.wrapped?.size ?? 0) > 0 || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   private setupInterceptors(): void {
@@ -168,6 +194,8 @@ export class GateWatcher implements OnModuleInit, OnModuleDestroy {
   ): void {
     // Off means off for the manual API too: it is injectable either way.
     if (!this.config.enabled) return;
+
+    this.manuallyTracked = true;
 
     this.collectEntry(gate, action, subject, allowed, user, reason, 0);
   }

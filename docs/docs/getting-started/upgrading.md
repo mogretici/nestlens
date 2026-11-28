@@ -29,6 +29,33 @@ removed configuration key is a TypeScript error. At runtime a removed key is
 ignored, so a configuration written in JavaScript has to be checked against the
 sections below.
 
+## 0.19.x → 0.20.0
+
+Nothing to edit. A watcher that is switched on and records nothing now says so
+at warning level.
+
+### A startup warning for watchers with nothing to observe
+
+Each watcher that needs something handed over — the Redis client under
+`NESTLENS_REDIS_CLIENT`, an axios instance under `NESTLENS_HTTP_CLIENT`, a
+queue through `setupQueue()`, `NestLensLogger` installed as the application
+logger — used to say it had none at debug level, and its tab stayed empty. When
+bootstrap ends, one warning now lists every such watcher with the reason and the
+page that shows the fix:
+
+```text
+WARN [NestLens] 1 enabled watcher is recording nothing, so its tab stays empty:
+  watchers.log: NestLensLogger is not the application logger and nothing has called it: app.useLogger(app.get(NestLensLogger)) installs it. Fix: https://nestlens-docs.vercel.app/docs/watchers/log#using-nestlens-logger
+Switch off one you do not use with `watchers.<name>: false`. GET /nestlens/__nestlens__/api/watchers reports every watcher as it is now.
+```
+
+`log` and `query` are on by default, so an application that never installed
+`NestLensLogger`, or has no TypeORM `DataSource` or Prisma client, sees the
+warning on its first start after upgrading. Either fix what it names or switch
+the watcher off — `watchers: { log: false }` — and it is not printed again.
+`GET /nestlens/__nestlens__/api/watchers` and the dashboard report the same
+states; see [Is a watcher recording?](../watchers/overview.md#is-a-watcher-recording)
+
 ## 0.18.x → 0.19.0
 
 Nothing to edit in the application. The MCP server moves to a package of its

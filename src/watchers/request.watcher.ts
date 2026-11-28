@@ -11,6 +11,7 @@ import { AddressableRequest, resolveClientIp } from '../core/client-ip';
 import { currentRequestId } from '../core/request-context';
 import { NestLensRequest, RequestEntry, RequestUser } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from './watcher-status';
 import { describeThrown } from './thrown-value';
 import { assignKey } from '../core/safe-assign';
 import { capturePayload } from './capture-payload';
@@ -18,7 +19,7 @@ import { capturePayload } from './capture-payload';
 export const REQUEST_ID_HEADER = 'x-nestlens-request-id';
 
 @Injectable()
-export class RequestWatcher implements NestInterceptor {
+export class RequestWatcher implements NestInterceptor, ReportsWatcherStatus {
   private readonly config: RequestWatcherConfig;
 
   constructor(
@@ -30,6 +31,16 @@ export class RequestWatcher implements NestInterceptor {
   ) {
     const watcherConfig = nestlensConfig.watchers?.request;
     this.config = resolveWatcherConfig(watcherConfig);
+  }
+
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/request'));
+
+    return {
+      state: 'recording',
+      reason: 'Installed as a global interceptor on every HTTP route.',
+      docs: watcherDocs('watchers/request'),
+    };
   }
 
   private getRequestPath(request: NestLensRequest): string {

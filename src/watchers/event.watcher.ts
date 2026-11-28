@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { EventWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { EventEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { capturePayload } from './capture-payload';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
@@ -48,7 +49,7 @@ interface Emission {
 export const NESTLENS_EVENT_EMITTER = Symbol('NESTLENS_EVENT_EMITTER');
 
 @Injectable()
-export class EventWatcher implements OnModuleInit, OnModuleDestroy {
+export class EventWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(EventWatcher.name);
   private readonly config: EventWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -98,6 +99,25 @@ export class EventWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/event',
+      section: 'provide-the-emitter-to-nestlens',
+      recording: this.isRecording()
+        ? 'Recording the event emitter provided under NESTLENS_EVENT_EMITTER.'
+        : undefined,
+      unusable: this.eventEmitter
+        ? 'The object provided under NESTLENS_EVENT_EMITTER has no emit() or emitAsync() to record.'
+        : undefined,
+      missing: 'No event emitter is provided under NESTLENS_EVENT_EMITTER.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (this.wrapped?.size ?? 0) > 0 || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   /**

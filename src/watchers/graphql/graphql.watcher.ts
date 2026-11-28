@@ -25,6 +25,7 @@ import { createMercuriusAdapter } from './adapters/mercurius.adapter';
 import { instrumentSubscriptions } from './subscription/schema-instrumentation';
 import { instrumentFieldResolvers } from './field-instrumentation';
 import { MercuriusAdapter } from './adapters/mercurius.adapter';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from '../watcher-status';
 import {
   SubscriptionTracker,
   createSubscriptionTracker,
@@ -57,7 +58,9 @@ export const GRAPHQL_WATCHER = Symbol('GRAPHQL_WATCHER');
 export type RegistrationMode = 'pending' | 'auto' | 'manual';
 
 @Injectable()
-export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
+export class GraphQLWatcher
+  implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, ReportsWatcherStatus
+{
   private readonly logger = new Logger(GraphQLWatcher.name);
   private config!: ResolvedGraphQLConfig;
   private adapter?: BaseGraphQLAdapter;
@@ -84,6 +87,56 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
       resolveSensitiveParams(nestlensConfig.security?.dataMasking?.sensitiveParams),
       nestlensConfig.trustProxy,
     );
+  }
+
+  /**
+   * Which server was found, and whether the plugin reached it.
+   *
+   * Detection is by package, so an application that has `@apollo/server`
+   * installed for something else gets an adapter and an `@Plugin()` offered to
+   * a server that does not exist. The schema is what proves one does:
+   * `GraphQLModule` builds it in its own `onModuleInit`, before anything asks.
+   */
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/graphql'));
+
+    const adapter = this.adapter;
+    if (!adapter) {
+      return {
+        state: 'waiting',
+        reason:
+          'No GraphQL server was detected: neither @apollo/server nor mercurius is installed.',
+        docs: watcherDocs('watchers/graphql#supported-graphql-servers'),
+      };
+    }
+
+    const server = adapter.type === 'apollo' ? 'Apollo' : 'Mercurius';
+    const docs =
+      adapter.type === 'apollo'
+        ? watcherDocs('watchers/graphql#apollo-server-integration')
+        : watcherDocs('watchers/graphql#mercurius-integration');
+
+    if (this.registrationMode === 'pending') {
+      return {
+        state: 'waiting',
+        reason: `The ${server} adapter is ready, and its plugin has not been registered with the server.`,
+        docs,
+      };
+    }
+
+    if (this.registrationMode === 'auto' && adapter.type === 'apollo' && !this.findSchema()) {
+      return {
+        state: 'waiting',
+        reason: 'No GraphQL schema was found: GraphQLModule from @nestjs/graphql is not imported.',
+        docs,
+      };
+    }
+
+    return {
+      state: 'recording',
+      reason: `Recording operations through the ${server} plugin.`,
+      docs,
+    };
   }
 
   /**

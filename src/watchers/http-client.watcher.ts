@@ -14,6 +14,7 @@ import { HttpClientWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nes
 import { HttpClientEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { capturePayload } from './capture-payload';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 
 /**
  * The axios surface this watcher touches.
@@ -94,7 +95,7 @@ function hasInterceptors(value: unknown): value is AxiosLike {
 export const NESTLENS_HTTP_CLIENT = Symbol('NESTLENS_HTTP_CLIENT');
 
 @Injectable()
-export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
+export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(HttpClientWatcher.name);
   private readonly config: HttpClientWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -151,6 +152,26 @@ export class HttpClientWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors(this.axiosInstance);
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/http-client',
+      section: 'provide-an-http-client-to-nestlens',
+      recording: this.isRecording()
+        ? 'Recording the outgoing requests of the axios instance it was handed.'
+        : undefined,
+      unusable: this.axiosInstance
+        ? 'The object provided under NESTLENS_HTTP_CLIENT is neither an axios instance nor an HttpService.'
+        : undefined,
+      missing:
+        'No axios instance or HttpService is provided under NESTLENS_HTTP_CLIENT, and setupInterceptors() has not been called.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return this.installed.length > 0 || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   /**

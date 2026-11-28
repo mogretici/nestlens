@@ -13,6 +13,7 @@
 import { Injectable, OnApplicationBootstrap, Logger, Optional } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { GraphQLWatcher } from '../graphql.watcher';
+import { WatcherStatusService } from '../../watcher-status.service';
 
 /**
  * Mercurius hook types that can be registered.
@@ -63,17 +64,30 @@ interface FastifyWithGraphQL {
 @Injectable()
 export class MercuriusAutoRegistrar implements OnApplicationBootstrap {
   private readonly logger = new Logger(MercuriusAutoRegistrar.name);
+  /** The GraphQL watcher's status depends on this registration, so the startup report waits. */
+  private readonly releaseStartupReport: () => void;
 
   constructor(
     @Optional() private readonly httpAdapterHost?: HttpAdapterHost,
     @Optional() private readonly graphqlWatcher?: GraphQLWatcher,
-  ) {}
+    @Optional() statusService?: WatcherStatusService,
+  ) {
+    this.releaseStartupReport = statusService?.holdStartupReport() ?? (() => undefined);
+  }
 
   /**
    * Called after all modules are initialized.
    * Registers Mercurius hooks if the adapter type is 'mercurius'.
    */
   async onApplicationBootstrap(): Promise<void> {
+    try {
+      await this.register();
+    } finally {
+      this.releaseStartupReport();
+    }
+  }
+
+  private async register(): Promise<void> {
     // Skip if GraphQLWatcher is not available
     if (!this.graphqlWatcher) {
       this.logger.debug('GraphQLWatcher not available - skipping auto-registration');

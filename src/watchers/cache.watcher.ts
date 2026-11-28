@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { CacheWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CacheEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { capturePayload } from './capture-payload';
 import { MethodOutcome, wrapMethodPreservingShape } from './wrap-method';
 
@@ -39,7 +40,7 @@ try {
 }
 
 @Injectable()
-export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
+export class CacheWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(CacheWatcher.name);
   private readonly config: CacheWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -90,6 +91,27 @@ export class CacheWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/cache',
+      section: 'setup-cache-module',
+      recording: this.isRecording()
+        ? 'Recording the cache manager provided under CACHE_MANAGER.'
+        : undefined,
+      unusable: this.cacheManager
+        ? 'The object provided under CACHE_MANAGER has none of get, set, del, reset or clear.'
+        : undefined,
+      missing:
+        'No cache manager is provided under CACHE_MANAGER: CacheModule from @nestjs/cache-manager is not imported.',
+    });
+  }
+
+  private isRecording(): boolean {
+    const wrapped = Object.values(this.originalMethods ?? {}).some(Boolean);
+    return wrapped || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   /**

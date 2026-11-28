@@ -22,6 +22,8 @@ import { NestLensApiController } from './api.controller';
 import { DashboardController } from './dashboard.controller';
 import { NestLensStreamController } from './stream.controller';
 import { TagController } from './tag.controller';
+import { WatcherStatusController } from './watcher-status.controller';
+import { WatcherStatusService } from '../watchers/watcher-status.service';
 import { NestLensGuard } from './api.guard';
 import { SpaRouteRegistrar } from './spa-wildcard';
 import { toBaseHref } from './route-path';
@@ -132,6 +134,7 @@ export class NestLensDashboardModule {
       controllers: [
         NestLensApiController,
         TagController,
+        WatcherStatusController,
         NestLensStreamController,
         DashboardController,
       ],
@@ -199,6 +202,13 @@ export class NestLensDashboardServer implements OnApplicationBootstrap, OnModule
   private readonly logger = new Logger('NestLens');
   private application?: INestApplication;
   private bound?: AddressInfo;
+  /**
+   * The application's logger is switched off while the listener starts.
+   * Inside that window the startup report would print nowhere and read the
+   * logger as replaced, so it waits for this hook whatever order Nest runs
+   * the hooks in.
+   */
+  private readonly releaseStartupReport: () => void;
 
   constructor(
     @Inject(NESTLENS_SERVER_CONFIG)
@@ -207,7 +217,10 @@ export class NestLensDashboardServer implements OnApplicationBootstrap, OnModule
     private readonly config: NestLensConfig,
     private readonly moduleRef: ModuleRef,
     @Optional() private readonly adapterHost?: HttpAdapterHost,
-  ) {}
+    @Optional() statusService?: WatcherStatusService,
+  ) {
+    this.releaseStartupReport = statusService?.holdStartupReport() ?? (() => undefined);
+  }
 
   /**
    * Where the listener actually ended up, once it is listening.
@@ -225,6 +238,14 @@ export class NestLensDashboardServer implements OnApplicationBootstrap, OnModule
    * reachable before the thing it reports on is ready.
    */
   async onApplicationBootstrap(): Promise<void> {
+    try {
+      await this.listen();
+    } finally {
+      this.releaseStartupReport();
+    }
+  }
+
+  private async listen(): Promise<void> {
     // Its own bootstrap log — route mappings for controllers the application
     // already described — would read as a second application starting up. The
     // silence is scoped to that: whatever the host was logging with is taken
@@ -332,6 +353,10 @@ export class NestLensDashboardServer implements OnApplicationBootstrap, OnModule
       {
         provide: TagService,
         useValue: borrow(this.moduleRef.get(TagService, { strict: false })),
+      },
+      {
+        provide: WatcherStatusService,
+        useValue: borrow(this.moduleRef.get(WatcherStatusService, { strict: false })),
       },
     ];
   }

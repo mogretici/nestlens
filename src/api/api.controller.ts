@@ -41,6 +41,7 @@ import { NestLensApiResponseInterceptor } from '@/api/interceptors';
 import { NestLensApiException } from '@/api/exceptions';
 import { NestLensTool, NestLensToolManifest, buildToolManifest } from './tools';
 import { TagController } from './tag.controller';
+import { WatcherStatusController } from './watcher-status.controller';
 
 /**
  * Every handler here takes an unused `@Res() _res` parameter. It is not a
@@ -77,7 +78,9 @@ export class NestLensApiController {
    */
   @Get('tools')
   async getTools(@Res() _res?: unknown): Promise<{ data: NestLensToolManifest }> {
-    return { data: buildToolManifest([NestLensApiController, TagController]) };
+    return {
+      data: buildToolManifest([NestLensApiController, TagController, WatcherStatusController]),
+    };
   }
 
   @NestLensTool({

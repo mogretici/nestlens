@@ -410,7 +410,16 @@ Not directly, but you can:
 
 ### Entries not appearing in dashboard
 
-**Check these in order**:
+**First, ask NestLens.** A watcher that is switched on and has nothing to
+observe — no Redis client handed over, no queue registered, `NestLensLogger`
+never installed — records nothing, and its tab looks like a quiet system.
+Every such watcher is named in a warning at startup, and
+`GET /nestlens/__nestlens__/api/watchers` reports each one as `off`,
+`recording`, `waiting` or `manual`, with the reason and the page that shows the
+fix. The page of a `waiting` watcher in the dashboard says the same. See
+[Is a watcher recording?](./watchers/overview.md#is-a-watcher-recording)
+
+**Then check these in order**:
 
 1. **Is NestLens enabled?**
    ```typescript
@@ -666,6 +675,9 @@ GET /nestlens/__nestlens__/api/stats
 
 # Get tags
 GET /nestlens/__nestlens__/api/tags
+
+# Which watchers are recording, and why the others are not
+GET /nestlens/__nestlens__/api/watchers
 ```
 
 There is also a Server-Sent Events endpoint that pushes entries as they are

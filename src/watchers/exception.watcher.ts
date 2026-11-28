@@ -12,6 +12,7 @@ import { CollectorService } from '../core/collector.service';
 import { ExceptionWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ExceptionEntry, NestLensRequest } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from './watcher-status';
 import { describeThrown } from './thrown-value';
 
 /**
@@ -40,7 +41,10 @@ import { describeThrown } from './thrown-value';
  */
 @Catch()
 @Injectable()
-export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFilter {
+export class ExceptionWatcher
+  extends BaseExceptionFilter
+  implements ExceptionFilter, ReportsWatcherStatus
+{
   private readonly config: ExceptionWatcherConfig;
 
   constructor(
@@ -53,6 +57,16 @@ export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFi
     super(httpAdapterHost.httpAdapter);
     const watcherConfig = nestlensConfig.watchers?.exception;
     this.config = resolveWatcherConfig(watcherConfig);
+  }
+
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/exception'));
+
+    return {
+      state: 'recording',
+      reason: 'Installed as a global exception filter for HTTP handlers.',
+      docs: watcherDocs('watchers/exception'),
+    };
   }
 
   /**

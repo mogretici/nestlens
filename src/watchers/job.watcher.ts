@@ -3,6 +3,7 @@ import { CollectorService } from '../core/collector.service';
 import { JobWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { JobEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from './watcher-status';
 import { capturePayload } from './capture-payload';
 
 /**
@@ -60,7 +61,7 @@ function isQueueEvents(value: unknown): value is BullQueueEventsLike {
 // Token for injecting Bull queues
 
 @Injectable()
-export class JobWatcher implements OnModuleInit, OnModuleDestroy {
+export class JobWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(JobWatcher.name);
   private readonly config: JobWatcherConfig;
   /**
@@ -75,6 +76,8 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
   private readonly jobTracking = new Map<string, { startedAt: number; name: string }>();
   private static readonly MAX_TRACKED_JOBS = 10_000;
   private readonly managedQueueEvents: BullQueueEventsLike[] = []; // QueueEvents created by setupBullMQQueue
+  /** `setupBullMQQueue()` calls still waiting for the queue's connection. */
+  private connecting = 0;
   /** Every listener installed, so `onModuleDestroy` can remove it. */
   private readonly listeners: {
     emitter: EmittingQueue;
@@ -99,6 +102,31 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
     this.logger.debug(
       'JobWatcher: To enable job tracking, call setupQueue() manually with your Bull/BullMQ queue instances.',
     );
+  }
+
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/job'));
+
+    const docs = watcherDocs('watchers/job#register-queue-with-nestlens');
+
+    if (this.listeners.length > 0) {
+      return { state: 'recording', reason: 'Recording the queues it was handed.', docs };
+    }
+
+    if (this.connecting > 0) {
+      return {
+        state: 'waiting',
+        reason: 'A queue handed to setupBullMQQueue() is still waiting for its Redis connection.',
+        docs,
+      };
+    }
+
+    return {
+      state: 'waiting',
+      reason:
+        'No queue has been registered: setupQueue(), setupBullMQQueue() or setupQueueWithEvents() has not been called.',
+      docs,
+    };
   }
 
   /**
@@ -145,6 +173,7 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    this.connecting += 1;
     try {
       const name = queueName || queue.name || 'unknown';
 
@@ -164,6 +193,8 @@ export class JobWatcher implements OnModuleInit, OnModuleDestroy {
       this.setupQueueWithEvents(queue, queueEvents, name);
     } catch (error) {
       this.logger.error(`Failed to setup BullMQ queue: ${error}`);
+    } finally {
+      this.connecting -= 1;
     }
   }
 

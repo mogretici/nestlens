@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { CommandWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { CommandEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { capturePayload } from './capture-payload';
 
 /** The @nestjs/cqrs CommandBus surface this watcher touches. */
@@ -30,7 +31,7 @@ export const NESTLENS_COMMAND_BUS = Symbol('NESTLENS_COMMAND_BUS');
  * capturing name, handler, status, duration, and results.
  */
 @Injectable()
-export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
+export class CommandWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(CommandWatcher.name);
   private readonly config: CommandWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -88,6 +89,27 @@ export class CommandWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/command',
+      section: 'provide-commandbus-to-nestlens',
+      recording: this.isRecording()
+        ? 'Recording the CommandBus provided under NESTLENS_COMMAND_BUS.'
+        : undefined,
+      unusable: this.commandBus
+        ? 'The object provided under NESTLENS_COMMAND_BUS has no execute() to record.'
+        : undefined,
+      missing: 'No CommandBus is provided under NESTLENS_COMMAND_BUS.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (
+      this.originalExecute !== undefined || this.siblings.some((sibling) => sibling.isRecording())
+    );
   }
 
   private setupInterceptors(): void {

@@ -1,5 +1,6 @@
-import { NestLensConfig } from './nestlens.config';
+import { NestLensConfig, NESTLENS_API_PREFIX } from './nestlens.config';
 import { toBaseHref } from './api/route-path';
+import type { WatcherStatusReport } from './watchers/watcher-status.service';
 
 /**
  * What NestLens is actually doing, in one line, at startup.
@@ -99,4 +100,29 @@ const where = (config: NestLensConfig): string => {
   return config.server
     ? `dashboard on ${config.server.host}:${config.server.port}${path}, not mounted on the application`
     : `dashboard mounted at ${path}`;
+};
+
+/**
+ * The watchers that are switched on and recording nothing, said once at startup.
+ *
+ * Each of them used to say so at debug level, which nobody runs in production,
+ * and its tab then looked like a quiet system: an application had its Redis
+ * and HTTP client tabs empty for months, and its Logs tab with them. A warning
+ * is the level that is read. Each line names the option, the reason and the
+ * page with the fix.
+ */
+export const waitingWatchersWarning = (
+  waiting: readonly WatcherStatusReport[],
+  config: NestLensConfig,
+): string => {
+  const count = waiting.length;
+  const route = `${toBaseHref(config.path)}/${NESTLENS_API_PREFIX}/api/watchers`;
+
+  return [
+    `${count} enabled watcher${count === 1 ? ' is' : 's are'} recording nothing, so ` +
+      `${count === 1 ? 'its tab stays' : 'their tabs stay'} empty:`,
+    ...waiting.map((status) => `  ${status.option}: ${status.reason} Fix: ${status.docs}`),
+    `Switch off one you do not use with \`watchers.<name>: false\`. GET ${route} reports ` +
+      'every watcher as it is now.',
+  ].join('\n');
 };
