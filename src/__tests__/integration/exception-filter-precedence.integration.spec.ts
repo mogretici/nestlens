@@ -97,6 +97,11 @@ class BoomController {
   text(): never {
     throw 'not an Error';
   }
+
+  @Get('object')
+  object(): never {
+    throw { code: 1 };
+  }
 }
 
 type Arrangement =
@@ -163,6 +168,7 @@ const measure = async (
     await fetch(`${url}/boom/http`);
     if (arrangement.includes('Error') || arrangement.includes('Object')) {
       await fetch(`${url}/boom/string`);
+      await fetch(`${url}/boom/object`);
     }
 
     const recorded = collect.mock.calls
@@ -234,8 +240,8 @@ describe.each(['express', 'fastify'] as const)('the exception watcher on %s', (p
     async (arrangement) => {
       const { recorded, status } = await measure(platform, arrangement);
 
-      // Only a throw that is not an Error gets past it.
-      expect(recorded).toEqual(['NonErrorThrow:string']);
+      // Only a throw that is not an Error gets past it: a string, a plain object.
+      expect(recorded).toEqual(['NonErrorThrow:string', 'UnknownError']);
       expect(status).toMatchObject({
         state: 'waiting',
         reason: expect.stringContaining('CatchErrors'),
@@ -255,11 +261,12 @@ describe.each(['express', 'fastify'] as const)('the exception watcher on %s', (p
   it('is starved of every Error by @Catch(Object), and says so', async () => {
     const { recorded, status } = await measure(platform, 'useGlobalFilters Object');
 
-    // A thrown string is not an instance of Object; every Error is.
+    // Every Error and every plain object is an instance of Object; a thrown
+    // string, a primitive, is not.
     expect(recorded).toEqual(['NonErrorThrow:string']);
     expect(status).toMatchObject({
       state: 'waiting',
-      reason: expect.stringContaining('CatchObjects'),
+      reason: expect.stringMatching(/CatchObjects .*every object.*primitive/),
     });
   });
 });

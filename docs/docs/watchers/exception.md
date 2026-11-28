@@ -288,7 +288,8 @@ too. Measured on Express and Fastify:
 | `@Catch()`, with `app.useGlobalFilters()` | Nothing |
 | `@Catch()`, as `APP_FILTER` in a module imported after `NestLensModule` | Nothing |
 | `@Catch()`, as `APP_FILTER` in `AppModule` itself | Every exception: it is registered before NestLens's filter |
-| `@Catch(Error)` or `@Catch(Object)`, with `app.useGlobalFilters()` or as `APP_FILTER` after `NestLensModule` | Only a throw that is not an `Error`, such as `throw 'text'` |
+| `@Catch(Error)`, with `app.useGlobalFilters()` or as `APP_FILTER` after `NestLensModule` | Only a throw that is not an `Error`, such as `throw 'text'` or `throw { code: 1 }` |
+| `@Catch(Object)`, with `app.useGlobalFilters()` | Only a thrown primitive, such as `throw 'text'`: every `Error` and every object is an `Object` |
 | `@Catch(HttpException)`, with `app.useGlobalFilters()` | Every exception that is not an `HttpException` |
 | `@Catch()`, with `app.useGlobalFilters()` after `app.listen()` | Every exception: the routes already have their filters |
 

@@ -44,6 +44,19 @@ import { describeThrown } from './thrown-value';
 /** A class named in `@Catch()`. */
 type ExceptionType = abstract new (...args: never[]) => unknown;
 
+/** What reaches NestLens past a filter that takes everything of its kind, by `instanceof`. */
+const catchAllReason = ({ name, catches }: { name: string; catches: ExceptionType[] }): string => {
+  const before = "is tried before NestLens's filter";
+
+  if (catches.length === 0)
+    return `${name} catches every exception and ${before}, so none reaches it.`;
+  if (catches.includes(Object)) {
+    return `${name} catches every Error and every object thrown, and ${before}, so only a thrown primitive (a string, a number, null) reaches it.`;
+  }
+
+  return `${name} catches every Error and ${before}, so only a throw that is not an Error reaches it.`;
+};
+
 @Catch()
 @Injectable()
 export class ExceptionWatcher
@@ -95,10 +108,7 @@ export class ExceptionWatcher
     if (catchAll) {
       return {
         state: 'waiting',
-        reason:
-          catchAll.catches.length === 0
-            ? `${catchAll.name} catches every exception and is tried before NestLens's filter, so none reaches it.`
-            : `${catchAll.name} catches every Error and is tried before NestLens's filter, so only a throw that is not an Error reaches it.`,
+        reason: catchAllReason(catchAll),
         docs,
       };
     }
