@@ -19,6 +19,7 @@
   <a href="https://www.npmjs.com/package/nestlens"><img src="https://img.shields.io/npm/dm/nestlens.svg?style=flat-square&color=8b5cf6" alt="npm downloads" /></a>
   <a href="https://github.com/mogretici/nestlens/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-10b981.svg?style=flat-square" alt="license" /></a>
   <a href="https://github.com/mogretici/nestlens"><img src="https://img.shields.io/github/stars/mogretici/nestlens?style=flat-square&color=f59e0b" alt="stars" /></a>
+  <a href="https://glama.ai/mcp/servers/mogretici/nestlens"><img src="https://glama.ai/mcp/servers/mogretici/nestlens/badges/score.svg" alt="mogretici/nestlens MCP server" /></a>
 </p>
 
 <p align="center">
@@ -29,15 +30,8 @@
 </p>
 
 <p align="center">
-  <a href="https://lutfuogretici.medium.com/nestlens-laravel-telescope-finally-comes-to-nestjs-93f5a2c1f521">
-    <img src="https://img.shields.io/badge/Read_the_Story_on_Medium-000000?style=for-the-badge&logo=medium" alt="Medium Article" />
-  </a>
-  <a href="https://dev.to/mogretici/nestlens-laravel-telescope-finally-comes-to-nestjs-3f3o">
-    <img src="https://img.shields.io/badge/Read_on_DEV-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white" alt="Read on DEV" />
-  </a>
-  <a href="https://glama.ai/mcp/servers/mogretici/nestlens">
-    <img src="https://glama.ai/mcp/servers/mogretici/nestlens/badges/score.svg" alt="mogretici/nestlens MCP server" height="28" />
-  </a>
+  <a href="https://lutfuogretici.medium.com/nestlens-laravel-telescope-finally-comes-to-nestjs-93f5a2c1f521"><img src="https://img.shields.io/badge/Read_the_Story_on_Medium-000000?style=for-the-badge&logo=medium" alt="Medium Article" /></a>
+  <a href="https://dev.to/mogretici/nestlens-laravel-telescope-finally-comes-to-nestjs-3f3o"><img src="https://img.shields.io/badge/Read_on_DEV-0A0A0A?style=for-the-badge&logo=devdotto&logoColor=white" alt="Read on DEV" /></a>
 </p>
 
 <p align="center">
@@ -116,8 +110,16 @@ Visit **http://localhost:3000/nestlens** and start debugging.
 `nestlens-mcp` is an [MCP](https://modelcontextprotocol.io) server over a running NestLens, published as its own package with the MCP SDK included. It is a hub of two tools — one lists everything NestLens can do, the other runs it — read from your application each time, so a new endpoint is available to an agent without a new release. It is read-only unless you pass `--allow-write`.
 
 ```bash
+# Claude Code
 claude mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
+
+# Codex
+codex mcp add nestlens -- npx -y nestlens-mcp --url http://localhost:3000/nestlens
 ```
+
+<p>
+  <a href="https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522nestlens%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522nestlens-mcp%2522%252C%2522--url%2522%252C%2522http%253A%252F%252Flocalhost%253A3000%252Fnestlens%2522%255D%257D"><img src="https://img.shields.io/badge/Install_in_VS_Code-0098FF?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Install in VS Code" /></a>
+</p>
 
 It is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.mogretici/nestlens`, so clients that browse the registry can install it from there.
 
