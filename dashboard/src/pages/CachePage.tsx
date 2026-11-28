@@ -162,6 +162,7 @@ export default function CachePage() {
           onRowClick={(entry) => navigate(`/cache/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No cache operations recorded yet"
+          watcher="cache"
           error={error}
           onRetry={refresh}
           emptyIcon={<HardDrive className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

@@ -11,7 +11,7 @@ import {
   Provider,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
-import { PATH_METADATA, VERSION_METADATA } from '@nestjs/common/constants';
+import { PATH_METADATA_KEY, VERSION_METADATA_KEY } from './core/nest-metadata-keys';
 import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, ModuleRef } from '@nestjs/core';
 import { applyPreset } from './presets';
 import { startupSummary } from './startup-summary';
@@ -40,6 +40,7 @@ import {
   NESTLENS_SERVER_CONFIG,
   SpaRouteRegistrar,
   TagController,
+  WatcherStatusController,
 } from './api';
 import {
   RequestWatcher,
@@ -67,6 +68,8 @@ import {
   MercuriusAutoRegistrar,
   isPackageAvailable,
 } from './watchers/graphql/adapters';
+import { WATCHER_STATUS_SOURCES, WatcherStatusService } from './watchers/watcher-status.service';
+import { WATCHER_STATUS_REGISTRY } from './watchers/watcher-status.registry';
 
 /**
  * Internal module for core services
@@ -103,6 +106,10 @@ class NestLensCoreModule {
       FamilyHashService,
       CollectorService,
       PruningService,
+      // Here rather than beside the watchers: the ones that attach during
+      // bootstrap live in modules of their own, and hold its startup report.
+      { provide: WATCHER_STATUS_SOURCES, useValue: WATCHER_STATUS_REGISTRY },
+      WatcherStatusService,
     ];
 
     const exports: (
@@ -113,6 +120,7 @@ class NestLensCoreModule {
       | typeof FamilyHashService
       | typeof CollectorService
       | typeof PruningService
+      | typeof WatcherStatusService
       | typeof GraphQLWatcher
     )[] = [
       NESTLENS_CONFIG,
@@ -122,6 +130,7 @@ class NestLensCoreModule {
       FamilyHashService,
       CollectorService,
       PruningService,
+      WatcherStatusService,
     ];
 
     // Add GraphQL Watcher to core module (global) so it's accessible from other modules
@@ -349,7 +358,13 @@ export class NestLensModule implements NestModule, OnModuleInit {
     // API controllers must be registered before Dashboard to prevent catch-all from overriding API routes
     const controllers = ownServer
       ? []
-      : [NestLensApiController, TagController, NestLensStreamController, DashboardController];
+      : [
+          NestLensApiController,
+          TagController,
+          WatcherStatusController,
+          NestLensStreamController,
+          DashboardController,
+        ];
 
     // Applied either way: the dashboard application reads the same metadata, so
     // `path` places the dashboard identically on both arrangements.
@@ -475,15 +490,16 @@ export class NestLensModule implements NestModule, OnModuleInit {
       [DashboardController, withPrefix('')],
       [NestLensApiController, withPrefix(`${NESTLENS_API_PREFIX}/api`)],
       [TagController, withPrefix(`${NESTLENS_API_PREFIX}/api/tags`)],
+      [WatcherStatusController, withPrefix(`${NESTLENS_API_PREFIX}/api/watchers`)],
       [NestLensStreamController, withPrefix(`${NESTLENS_API_PREFIX}/stream`)],
     ];
 
     for (const [controller, routePath] of mounts) {
-      Reflect.defineMetadata(PATH_METADATA, routePath, controller);
+      Reflect.defineMetadata(PATH_METADATA_KEY, routePath, controller);
       // NestLens is a debugging surface, not part of the host's public API. Without
       // this, `app.enableVersioning()` would drag the dashboard to /v1/nestlens and
       // move it again on every version bump.
-      Reflect.defineMetadata(VERSION_METADATA, VERSION_NEUTRAL, controller);
+      Reflect.defineMetadata(VERSION_METADATA_KEY, VERSION_NEUTRAL, controller);
     }
   }
 

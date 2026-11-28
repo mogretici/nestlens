@@ -14,11 +14,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import 'reflect-metadata';
-import { METHOD_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
+import { METHOD_METADATA, PATH_METADATA, ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { RouteParamtypes } from '@nestjs/common/enums/route-paramtypes.enum';
-import { NestLensApiController } from '../../api/api.controller';
-import { TagController } from '../../api/tag.controller';
-import { DashboardController } from '../../api/dashboard.controller';
+import * as api from '../../api';
 
 type Constructor = new (...args: never[]) => object;
 
@@ -47,11 +45,26 @@ const declaresResponse = (controller: Constructor, handler: string): boolean => 
 // NestLensStreamController is deliberately absent: it is an `@Sse()` route and
 // does not use NestLensApiResponseInterceptor, so Nest owns that response and
 // must be left to write it. Adding the interceptor there would break the stream.
-describe.each<[string, Constructor]>([
-  ['NestLensApiController', NestLensApiController],
-  ['TagController', TagController],
-  ['DashboardController', DashboardController],
-])('%s', (_name, controller) => {
+//
+// The rest are every controller `src/api` exports, so a new one is checked
+// without being added here: a list kept by hand had already missed one.
+const CONTROLLERS = Object.entries(api).filter(
+  (entry): entry is [string, Constructor] =>
+    typeof entry[1] === 'function' &&
+    Reflect.hasMetadata(PATH_METADATA, entry[1]) &&
+    entry[0] !== 'NestLensStreamController',
+);
+
+it('checks every controller it should', () => {
+  expect(CONTROLLERS.map(([name]) => name).sort()).toEqual([
+    'DashboardController',
+    'NestLensApiController',
+    'TagController',
+    'WatcherStatusController',
+  ]);
+});
+
+describe.each<[string, Constructor]>(CONTROLLERS)('%s', (_name, controller) => {
   const handlers = routeHandlers(controller);
 
   it('exposes at least one route', () => {

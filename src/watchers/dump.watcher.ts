@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { DumpWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { DumpEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
@@ -25,7 +26,7 @@ export const NESTLENS_DUMP_SERVICE = Symbol('NESTLENS_DUMP_SERVICE');
  * record counts, file sizes, compression, and encryption status.
  */
 @Injectable()
-export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
+export class DumpWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(DumpWatcher.name);
   private readonly config: DumpWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -33,6 +34,8 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   /** Gives back the hosts this watcher took; nothing, if it took none. */
   private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
+  /** Set by the first call to the manual API, which is then known to be in use. */
+  private manuallyTracked = false;
 
   constructor(
     private readonly collector: CollectorService,
@@ -75,6 +78,29 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/dump',
+      section: 'automatic-tracking',
+      recording: this.isRecording()
+        ? 'Recording the object provided under NESTLENS_DUMP_SERVICE.'
+        : this.manuallyTracked
+          ? 'Recording what trackDump() is called with.'
+          : undefined,
+      unusable: this.dumpService
+        ? 'The object provided under NESTLENS_DUMP_SERVICE has none of export, import, backup, restore, migrate or dump, so it records only what trackDump() is called with.'
+        : undefined,
+      missing:
+        'Nothing is provided under NESTLENS_DUMP_SERVICE, so it records only what trackDump() is called with, and nothing has been yet.',
+      whenMissing: 'manual',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (this.wrapped?.size ?? 0) > 0 || this.siblings.some((sibling) => sibling.isRecording());
   }
 
   private setupInterceptors(): void {
@@ -170,6 +196,8 @@ export class DumpWatcher implements OnModuleInit, OnModuleDestroy {
   ): void {
     // Off means off for the manual API too: it is injectable either way.
     if (!this.config.enabled) return;
+
+    this.manuallyTracked = true;
 
     this.collectEntry(
       operation,

@@ -279,6 +279,28 @@ globally, or on the handler, reached that filter alone. Exceptions no filter of
 yours catches are still recorded. To keep both, catch only the types your filter
 has to answer differently.
 
+Among global filters, Nest tries the one registered **last** first, and matches
+`@Catch()` types by `instanceof`, so `@Catch(Error)` takes every `HttpException`
+too. Measured on Express and Fastify:
+
+| Your filter, and where it is registered | What NestLens records |
+| --- | --- |
+| `@Catch()`, with `app.useGlobalFilters()` | Nothing |
+| `@Catch()`, as `APP_FILTER` in a module imported after `NestLensModule` | Nothing |
+| `@Catch()`, as `APP_FILTER` in `AppModule` itself | Every exception: it is registered before NestLens's filter |
+| `@Catch(Error)`, with `app.useGlobalFilters()` or as `APP_FILTER` after `NestLensModule` | Only a throw that is not an `Error`, such as `throw 'text'` or `throw { code: 1 }` |
+| `@Catch(Object)`, with `app.useGlobalFilters()` | Only a thrown primitive, such as `throw 'text'`: every `Error` and every object is an `Object` |
+| `@Catch(HttpException)`, with `app.useGlobalFilters()` | Every exception that is not an `HttpException` |
+| `@Catch()`, with `app.useGlobalFilters()` after `app.listen()` | Every exception: the routes already have their filters |
+
+The exception watcher reads the same list, as the routes were built with it.
+With a `@Catch()`, `@Catch(Error)` or `@Catch(Object)` filter ahead of it, it reports itself
+`waiting`, naming the filter, and the startup warning lists it;
+with a filter of narrower types ahead of it, it reports `recording` and names
+the types that go to your filter instead. A filter on a controller or a method
+is not in that list and is not reported. See
+[Is a watcher recording?](./overview.md#is-a-watcher-recording)
+
 ## Error Monitoring Alerts
 
 To be told about exceptions as they happen, send them to a webhook: see

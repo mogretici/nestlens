@@ -5,6 +5,7 @@ import {
   HttpException,
   Inject,
   Injectable,
+  OnModuleInit,
 } from '@nestjs/common';
 import { ApplicationConfig, BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import { isNestLensRequest } from '../api/route-path';
@@ -12,6 +13,8 @@ import { CollectorService } from '../core/collector.service';
 import { ExceptionWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ExceptionEntry, NestLensRequest } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { FILTER_CATCH_EXCEPTIONS_KEY } from '../core/nest-metadata-keys';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from './watcher-status';
 import { describeThrown } from './thrown-value';
 
 /**
@@ -38,10 +41,36 @@ import { describeThrown } from './thrown-value';
  * So the response is Nest's own, by inheritance rather than by imitation: the
  * next thing Nest changes about it changes here too.
  */
+/** A class named in `@Catch()`. */
+type ExceptionType = abstract new (...args: never[]) => unknown;
+
+/** What reaches NestLens past a filter that takes everything of its kind, by `instanceof`. */
+const catchAllReason = ({ name, catches }: { name: string; catches: ExceptionType[] }): string => {
+  const before = "is tried before NestLens's filter";
+
+  if (catches.length === 0)
+    return `${name} catches every exception and ${before}, so none reaches it.`;
+  if (catches.includes(Object)) {
+    return `${name} catches every Error and every object thrown, and ${before}, so only a thrown primitive (a string, a number, null) reaches it.`;
+  }
+
+  return `${name} catches every Error and ${before}, so only a throw that is not an Error reaches it.`;
+};
+
 @Catch()
 @Injectable()
-export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFilter {
+export class ExceptionWatcher
+  extends BaseExceptionFilter
+  implements ExceptionFilter, OnModuleInit, ReportsWatcherStatus
+{
   private readonly config: ExceptionWatcherConfig;
+  /**
+   * The global filters the routes were built with. Nest hands each route its
+   * filters when it registers the routes, ahead of `onModuleInit`; one added
+   * with `useGlobalFilters()` after that is in the live list and handles
+   * nothing — measured on Express and Fastify.
+   */
+  private routedFilters?: readonly ExceptionFilter[];
 
   constructor(
     private readonly collector: CollectorService,
@@ -53,6 +82,75 @@ export class ExceptionWatcher extends BaseExceptionFilter implements ExceptionFi
     super(httpAdapterHost.httpAdapter);
     const watcherConfig = nestlensConfig.watchers?.exception;
     this.config = resolveWatcherConfig(watcherConfig);
+  }
+
+  /**
+   * Which exceptions reach this filter, read from Nest's own list.
+   *
+   * Nest tries global filters last-registered first and gives an exception to
+   * the first whose `@Catch()` matches. Measured on Express and Fastify: a
+   * catch-all passed to `app.useGlobalFilters()`, or provided as `APP_FILTER`
+   * in a module imported after NestLens, took every exception and nothing was
+   * recorded, while this said `recording`. `@Catch(Error)` and `@Catch(Object)`
+   * are catch-alls as well: Nest matches by `instanceof`, so they take every
+   * HttpException too, and only a throw that is not an Error gets past them. Filters on a
+   * controller or a method are not in the list, and are not counted here.
+   */
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/exception'));
+
+    const docs = watcherDocs('watchers/exception#exception-filters-integration');
+    const ahead = this.filtersAhead();
+    const catchAll = ahead.find(
+      ({ catches }) => catches.length === 0 || catches.includes(Error) || catches.includes(Object),
+    );
+
+    if (catchAll) {
+      return {
+        state: 'waiting',
+        reason: catchAllReason(catchAll),
+        docs,
+      };
+    }
+
+    if (ahead.length > 0) {
+      const taken = ahead.map(
+        ({ name, catches }) => `${catches.map((type) => type.name).join(', ')} (${name})`,
+      );
+      return {
+        state: 'recording',
+        reason: `Installed as a global exception filter for HTTP handlers, except for ${taken.join('; ')}, handled first by the application's filter.`,
+        docs,
+      };
+    }
+
+    return {
+      state: 'recording',
+      reason: 'Installed as a global exception filter for HTTP handlers.',
+      docs,
+    };
+  }
+
+  onModuleInit(): void {
+    this.routedFilters = [...this.applicationConfig.getGlobalFilters()];
+  }
+
+  /** The global filters Nest tries before this one, nearest first. */
+  private filtersAhead(): { name: string; catches: ExceptionType[] }[] {
+    const globals = this.routedFilters ?? this.applicationConfig.getGlobalFilters();
+    const own = globals.findIndex((filter) => filter instanceof ExceptionWatcher);
+    if (own < 0) return [];
+
+    return globals
+      .slice(own + 1)
+      .reverse()
+      .map((filter) => {
+        const catches =
+          (Reflect.getMetadata(FILTER_CATCH_EXCEPTIONS_KEY, filter.constructor) as
+            ExceptionType[] | undefined) ?? [];
+
+        return { name: filter.constructor.name, catches };
+      });
   }
 
   /**

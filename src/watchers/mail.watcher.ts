@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { MailWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { MailEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { WrappedMethods, wrapMethodPreservingShape } from './wrap-method';
 
 /**
@@ -48,7 +49,7 @@ function isMailer(value: unknown): value is MailerLike {
 export const NESTLENS_MAILER_SERVICE = Symbol('NESTLENS_MAILER_SERVICE');
 
 @Injectable()
-export class MailWatcher implements OnModuleInit, OnModuleDestroy {
+export class MailWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(MailWatcher.name);
   private readonly config: MailWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -124,6 +125,30 @@ export class MailWatcher implements OnModuleInit, OnModuleDestroy {
       wrapped.restore();
     }
     this.manuallyWrapped.length = 0;
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/mail',
+      section: 'provide-mailer-service-to-nestlens',
+      recording: this.isRecording()
+        ? 'Recording the sendMail() of the mailer it was handed.'
+        : undefined,
+      unusable: this.mailerService
+        ? 'The object provided under NESTLENS_MAILER_SERVICE has no sendMail() to record.'
+        : undefined,
+      missing:
+        'No mailer service is provided under NESTLENS_MAILER_SERVICE, and setupMailer() has not been called.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (
+      (this.wrapped?.size ?? 0) > 0 ||
+      this.manuallyWrapped.length > 0 ||
+      this.siblings.some((sibling) => sibling.isRecording())
+    );
   }
 
   private setupInterceptors(): void {

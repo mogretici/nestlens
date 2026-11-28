@@ -134,6 +134,11 @@ export class WrappedMethods {
 
   constructor(private readonly target: Record<string, unknown> | undefined) {}
 
+  /** How many methods are replaced right now. */
+  get size(): number {
+    return this.originals.size;
+  }
+
   /** Replaces `name` if the target has it as a function. Says whether it did. */
   replace(name: string, build: (original: AnyMethod) => AnyMethod): boolean {
     if (!this.target) return false;

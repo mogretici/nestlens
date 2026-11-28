@@ -5,6 +5,7 @@ import {
   OnApplicationBootstrap,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 import { CollectorService } from '../core/collector.service';
@@ -13,6 +14,8 @@ import { ScheduleEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { WrappedMethods } from './wrap-method';
 import { isThenable } from '../core/thenable';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from './watcher-status';
+import { WatcherStatusService } from './watcher-status.service';
 
 /** One scheduled callback, as `@nestjs/schedule`'s orchestrator stores it. */
 interface ScheduledTarget {
@@ -70,7 +73,9 @@ function toIsoString(value: unknown): string | undefined {
 }
 
 @Injectable()
-export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
+export class ScheduleWatcher
+  implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, ReportsWatcherStatus
+{
   private readonly logger = new Logger(ScheduleWatcher.name);
   private readonly config: ScheduleWatcherConfig;
   private readonly wrappedJobs = new Set<string>(); // Track which jobs we've already wrapped
@@ -83,18 +88,51 @@ export class ScheduleWatcher implements OnModuleInit, OnApplicationBootstrap, On
   private readonly wrappedErrorHandlers = new Map<CronJobLike, unknown>();
   /** Every cron job whose tick was replaced, so it can be put back. */
   private readonly wrappedTicks = new Map<CronJobLike, () => unknown>();
+  /** The registry is found during bootstrap, so the startup report waits for it. */
+  private readonly releaseStartupReport: () => void;
 
   constructor(
     private readonly collector: CollectorService,
     private readonly discoveryService: DiscoveryService,
     @Inject(NESTLENS_CONFIG)
     private readonly nestlensConfig: NestLensConfig,
+    @Optional() statusService?: WatcherStatusService,
   ) {
     const watcherConfig = nestlensConfig.watchers?.schedule;
     this.config = resolveWatcherConfig(watcherConfig);
+    this.releaseStartupReport = statusService?.holdStartupReport() ?? (() => undefined);
+  }
+
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/schedule'));
+
+    const docs = watcherDocs('watchers/schedule#requirements');
+
+    if (this.schedulerRegistry || this.wrappedOrchestrator) {
+      return {
+        state: 'recording',
+        reason: "Recording what @nestjs/schedule's ScheduleModule runs.",
+        docs,
+      };
+    }
+
+    return {
+      state: 'waiting',
+      reason:
+        'ScheduleModule.forRoot() from @nestjs/schedule is not imported, so nothing is scheduled to record.',
+      docs,
+    };
   }
 
   onApplicationBootstrap(): void {
+    try {
+      this.attachToRegistry();
+    } finally {
+      this.releaseStartupReport();
+    }
+  }
+
+  private attachToRegistry(): void {
     if (!this.config.enabled) {
       return;
     }

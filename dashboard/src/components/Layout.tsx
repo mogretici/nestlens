@@ -43,6 +43,8 @@ import {
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useStats } from '../contexts/useStats';
+import { useWatcherStatus } from '../contexts/useWatcherStatus';
+import { EntryType } from '../types';
 
 // Minimal Recording Toggle Component
 function RecordingToggle() {
@@ -99,6 +101,25 @@ function RecordingToggle() {
     >
       {status.isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
     </button>
+  );
+}
+
+/**
+ * Marks a watcher that is switched on and recording nothing, so a reader sees
+ * it before opening an empty page and taking it for a quiet application.
+ */
+function WaitingMark({ type }: { type: EntryType | 'dashboard' }) {
+  const status = useWatcherStatus(type === 'dashboard' ? undefined : type);
+  if (status?.state !== 'waiting') return null;
+
+  return (
+    <span
+      className="relative inline-block h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400"
+      title="Recording nothing: open the page to see why"
+      data-testid={`waiting-${type}`}
+    >
+      <span className="sr-only">(recording nothing)</span>
+    </span>
   );
 }
 
@@ -401,6 +422,7 @@ export default function Layout() {
                                 className={`h-4 w-4 ${iconColors[item.colorKey] || 'text-gray-400'}`}
                               />
                               <span className="text-sm">{item.name}</span>
+                              <WaitingMark type={item.colorKey} />
                             </div>
                             {badgeCount > 0 && (
                               <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 rounded-full">
@@ -515,6 +537,7 @@ export default function Layout() {
                                 className={`h-[18px] w-[18px] ${iconColors[item.colorKey] || 'text-gray-400'}`}
                               />
                               <span className="text-sm">{item.name}</span>
+                              <WaitingMark type={item.colorKey} />
                             </div>
                             {badgeCount > 0 && (
                               <span

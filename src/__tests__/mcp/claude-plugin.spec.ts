@@ -11,12 +11,10 @@
  *
  * Following AAA (Arrange-Act-Assert).
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { NestLensApiController } from '../../api/api.controller';
-import { TagController } from '../../api/tag.controller';
-import { buildToolManifest } from '../../api/tools';
 import { parseCliOptions } from '../../mcp/cli';
 
 const ROOT = resolve(__dirname, '..', '..', '..');
@@ -70,9 +68,13 @@ describe('the Claude Code plugin', () => {
   });
 
   describe('its skill', () => {
-    const offered = buildToolManifest([NestLensApiController, TagController]).tools.map(
-      (tool) => tool.name,
-    );
+    // Read from the endpoint the MCP server lists, not from a list of
+    // controllers kept here: that copy missed the watcher status controller.
+    let offered: string[] = [];
+    beforeAll(async () => {
+      const api = Object.create(NestLensApiController.prototype) as NestLensApiController;
+      offered = (await api.getTools()).data.tools.map((tool) => tool.name);
+    });
     /** Every `snake_case` name in backticks that reads as an operation. */
     const named = (): string[] => [
       ...new Set(

@@ -12,6 +12,7 @@ import { attachHosts } from './host-token';
 import { ModelWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { ModelEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { WrappedMethods } from './wrap-method';
 import { capturePayload } from './capture-payload';
 
@@ -111,7 +112,7 @@ const MAX_ENTITY_SIZE = 64 * 1024;
  * masking sensitive fields.
  */
 @Injectable()
-export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
+export class ModelWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(ModelWatcher.name);
   private readonly config: ModelWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -119,6 +120,8 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
   /** Gives back the hosts this watcher took; nothing, if it took none. */
   private releaseHosts: () => void = () => undefined;
   private wrapped?: WrappedMethods;
+  /** Prisma clients `setupPrismaClient()` installed on. */
+  private prismaClients = 0;
   /**
    * When each operation in flight began, oldest first, per entity and action.
    *
@@ -222,6 +225,30 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
     this.setupTypeOrmInterceptors();
   }
 
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/model',
+      section: 'usage-example',
+      recording: this.isRecording()
+        ? 'Recording the TypeORM entity subscriber or Prisma client it was handed.'
+        : undefined,
+      unusable: this.entitySubscriber
+        ? 'The object provided under NESTLENS_MODEL_SUBSCRIBER has none of the entity subscriber hooks (afterLoad, beforeInsert, afterInsert, …).'
+        : undefined,
+      missing:
+        'No TypeORM entity subscriber is provided under NESTLENS_MODEL_SUBSCRIBER, and setupPrismaClient() has not been called.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (
+      (this.wrapped?.size ?? 0) > 0 ||
+      this.prismaClients > 0 ||
+      this.siblings.some((sibling) => sibling.isRecording())
+    );
+  }
+
   /**
    * Setup TypeORM entity subscriber hooks
    */
@@ -313,6 +340,7 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
         ),
       );
 
+      this.prismaClients += 1;
       this.logger.log('Model interceptors installed for Prisma (middleware)');
 
       return prismaClient;
@@ -331,6 +359,7 @@ export class ModelWatcher implements OnModuleInit, OnModuleDestroy {
         },
       }) as T;
 
+      this.prismaClients += 1;
       this.logger.log('Model interceptors installed for Prisma (client extension)');
 
       return extended;

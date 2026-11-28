@@ -147,6 +147,12 @@ export class MyService {
 Those five are the whole set — the levels Nest's own logger uses. There is no
 `info`; `log` is its equivalent.
 
+It records only once it is the application logger, or once something calls it:
+without the `useLogger` line the log watcher reports itself `waiting` and the
+startup warning names it. `useLogger` replaces the logger the application had,
+so it does not run beside winston or pino — see
+[Integration with External Loggers](/docs/watchers/log#integration-with-external-loggers).
+
 ### StorageInterface
 
 Implement a storage backend of your own and register it under the `STORAGE`

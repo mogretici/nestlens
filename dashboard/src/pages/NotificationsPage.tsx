@@ -174,6 +174,7 @@ export default function NotificationsPage() {
           onRowClick={(entry) => navigate(`/notifications/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No notifications recorded yet"
+          watcher="notification"
           error={error}
           onRetry={refresh}
           emptyIcon={<Bell className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

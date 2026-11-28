@@ -253,6 +253,7 @@ export default function GraphQLPage() {
           onRowClick={(entry) => navigate(`/graphql/${entry.id}`)}
           rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No GraphQL operations recorded yet"
+          watcher="graphql"
           error={error}
           onRetry={refresh}
           emptyIcon={<Hexagon className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

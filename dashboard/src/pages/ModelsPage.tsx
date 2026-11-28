@@ -178,6 +178,7 @@ export default function ModelsPage() {
           onRowClick={(entry) => navigate(`/models/${entry.id}`)}
           rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No model events recorded yet"
+          watcher="model"
           error={error}
           onRetry={refresh}
           emptyIcon={<Box className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

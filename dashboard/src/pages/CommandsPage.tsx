@@ -165,6 +165,7 @@ export default function CommandsPage() {
           onRowClick={(entry) => navigate(`/commands/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No commands recorded yet"
+          watcher="command"
           error={error}
           onRetry={refresh}
           emptyIcon={<Terminal className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

@@ -172,6 +172,7 @@ export default function ViewsPage() {
           onRowClick={(entry) => navigate(`/views/${entry.id}`)}
           rowClassName={(entry) => (isHighlighted(entry.id) ? 'highlight-new' : '')}
           emptyMessage="No view renders recorded yet"
+          watcher="view"
           error={error}
           onRetry={refresh}
           emptyIcon={<Eye className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

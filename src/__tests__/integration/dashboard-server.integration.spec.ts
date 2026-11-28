@@ -124,6 +124,17 @@ describe('Dashboard on a listener of its own', () => {
       expect(response.status).toBe(200);
     });
 
+    it("serves the watchers' status there, read from the application's watchers", async () => {
+      const response = await request(urlFor('127.0.0.1', dashboard.port)).get(
+        '/nestlens/__nestlens__/api/watchers',
+      );
+
+      expect(response.status).toBe(200);
+      expect((response.body as { data: { type: string; state: string }[] }).data).toContainEqual(
+        expect.objectContaining({ type: 'request', state: 'recording' }),
+      );
+    });
+
     it('does not serve the dashboard on the application', async () => {
       const dashboardRoute = await request(app.getHttpServer()).get('/nestlens');
       const spaRoute = await request(app.getHttpServer()).get('/nestlens/requests');

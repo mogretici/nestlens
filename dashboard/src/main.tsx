@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StatsProvider } from './contexts/StatsContext';
+import { WatcherStatusProvider } from './contexts/WatcherStatusContext';
 import { getBasePath } from './basePath';
 import './index.css';
 
@@ -19,7 +20,9 @@ ReactDOM.createRoot(container).render(
     <ErrorBoundary>
       <BrowserRouter basename={getBasePath()}>
         <StatsProvider>
-          <App />
+          <WatcherStatusProvider>
+            <App />
+          </WatcherStatusProvider>
           <Toaster
             position="bottom-right"
             toastOptions={{

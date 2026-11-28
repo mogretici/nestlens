@@ -14,6 +14,7 @@ import { RedisWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens
 import { RedisEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
 import { capturePayload } from './capture-payload';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 
 type RedisCommand = (...args: unknown[]) => unknown;
 
@@ -40,7 +41,7 @@ const SENSITIVE_KEY_PATTERNS = [
  * performance metrics, and results while masking sensitive data.
  */
 @Injectable()
-export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
+export class RedisWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(RedisWatcher.name);
   private readonly config: RedisWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -90,6 +91,28 @@ export class RedisWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/redis',
+      section: 'provide-redis-client-to-nestlens',
+      recording: this.isRecording()
+        ? 'Recording the Redis client provided under NESTLENS_REDIS_CLIENT.'
+        : undefined,
+      unusable: this.redisClient
+        ? 'The object provided under NESTLENS_REDIS_CLIENT has none of the commands this watcher records (get, set, del, hget, …).'
+        : undefined,
+      missing: 'No Redis client is provided under NESTLENS_REDIS_CLIENT.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (
+      (this.originalMethods?.size ?? 0) > 0 ||
+      this.siblings.some((sibling) => sibling.isRecording())
+    );
   }
 
   private setupInterceptors(): void {

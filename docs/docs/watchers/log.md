@@ -55,7 +55,9 @@ interface LogEntry {
 
 ### Using NestLens Logger
 
-Replace NestJS's default logger with NestLens logger:
+Make NestLens logger the application's logger. Nothing else records a log
+entry: with the watcher on and this line missing, the Logs tab stays empty and
+the log watcher reports itself `waiting`.
 
 ```typescript
 // main.ts
@@ -65,16 +67,19 @@ import { NestLensLogger } from 'nestlens';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    logger: false, // Disable default logger
+    bufferLogs: true, // held until the logger below is installed, then recorded
   });
 
-  // Use NestLens logger
   app.useLogger(app.get(NestLensLogger));
 
   await app.listen(3000);
 }
 bootstrap();
 ```
+
+Call `useLogger` before `app.listen()` or `app.init()`: the startup warning reads
+which logger is installed when bootstrap ends. It replaces any logger the
+application had; see [Integration with External Loggers](#integration-with-external-loggers).
 
 ### Logging in Services
 
@@ -312,20 +317,40 @@ try {
 
 ## Integration with External Loggers
 
-NestLens logger extends NestJS's ConsoleLogger, so it works with all existing logging code:
+`NestLensLogger` records what reaches it, and what reaches it is decided by
+`app.useLogger()`. Nest keeps one application logger: `useLogger()` hands its
+argument to `Logger.overrideLogger`, which replaces the logger before it. Nest's
+own logs and every `new Logger(context)` in the application go to that one, and
+to nothing else.
+
+So a second logger is not added — it replaces the first:
 
 ```typescript
-// winston, pino, or any other logger
 import { WinstonModule } from 'nest-winston';
 
-// You can use both!
 const app = await NestFactory.create(AppModule, {
   logger: WinstonModule.createLogger(winstonConfig),
 });
 
-// And also use NestLens for centralized dashboard viewing
+// winston receives nothing from here on: NestLensLogger is now the
+// application logger, and it prints to the console as ConsoleLogger does.
 app.useLogger(app.get(NestLensLogger));
 ```
+
+An application on pino, winston or any other logger therefore has to choose
+today:
+
+- **Install `NestLensLogger`**, and the Logs tab records every line — printed by
+  the console logger it extends, not by yours.
+- **Keep your logger**, and the Logs tab stays empty. The log watcher then
+  reports itself `waiting`, and the [startup warning](./overview.md#is-a-watcher-recording)
+  names it; switch it off with `watchers: { log: false }` to say that is
+  intended.
+
+`app.useLogger(['log', 'warn', 'error'])` — an array — sets the log levels and
+installs nothing, so it is the second case.
+
+A bridge that keeps your logger and records into NestLens as well is planned.
 
 ## Related Watchers
 

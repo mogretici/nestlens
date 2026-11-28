@@ -13,6 +13,7 @@ import { wrapMethodPreservingShape } from './wrap-method';
 import { NotificationWatcherConfig, NestLensConfig, NESTLENS_CONFIG } from '../nestlens.config';
 import { NotificationEntry } from '../types';
 import { resolveWatcherConfig } from './watcher-config';
+import { ReportsWatcherStatus, WatcherStatus, hostWatcherStatus } from './watcher-status';
 import { capturePayload } from './capture-payload';
 
 type NotificationMethod = (...args: unknown[]) => unknown;
@@ -27,7 +28,7 @@ export const NESTLENS_NOTIFICATION_SERVICE = Symbol('NESTLENS_NOTIFICATION_SERVI
  * (email, sms, push, socket, webhook) while masking sensitive recipient information.
  */
 @Injectable()
-export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
+export class NotificationWatcher implements OnModuleInit, OnModuleDestroy, ReportsWatcherStatus {
   private readonly logger = new Logger(NotificationWatcher.name);
   private readonly config: NotificationWatcherConfig;
   /** A watcher for each further host provided under the same token. */
@@ -78,6 +79,28 @@ export class NotificationWatcher implements OnModuleInit, OnModuleDestroy {
     }
 
     this.setupInterceptors();
+  }
+
+  watcherStatus(): WatcherStatus {
+    return hostWatcherStatus({
+      enabled: this.config.enabled === true,
+      page: 'watchers/notification',
+      section: 'provide-notification-service',
+      recording: this.isRecording()
+        ? 'Recording the notification service provided under NESTLENS_NOTIFICATION_SERVICE.'
+        : undefined,
+      unusable: this.notificationService
+        ? 'The object provided under NESTLENS_NOTIFICATION_SERVICE has none of send, sendEmail, sendSms, sendPush, sendSocket or sendWebhook.'
+        : undefined,
+      missing: 'No notification service is provided under NESTLENS_NOTIFICATION_SERVICE.',
+    });
+  }
+
+  private isRecording(): boolean {
+    return (
+      (this.originalMethods?.size ?? 0) > 0 ||
+      this.siblings.some((sibling) => sibling.isRecording())
+    );
   }
 
   private setupInterceptors(): void {

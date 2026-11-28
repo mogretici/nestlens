@@ -25,6 +25,7 @@ import { createMercuriusAdapter } from './adapters/mercurius.adapter';
 import { instrumentSubscriptions } from './subscription/schema-instrumentation';
 import { instrumentFieldResolvers } from './field-instrumentation';
 import { MercuriusAdapter } from './adapters/mercurius.adapter';
+import { ReportsWatcherStatus, WatcherStatus, switchedOff, watcherDocs } from '../watcher-status';
 import {
   SubscriptionTracker,
   createSubscriptionTracker,
@@ -57,13 +58,17 @@ export const GRAPHQL_WATCHER = Symbol('GRAPHQL_WATCHER');
 export type RegistrationMode = 'pending' | 'auto' | 'manual';
 
 @Injectable()
-export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
+export class GraphQLWatcher
+  implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, ReportsWatcherStatus
+{
   private readonly logger = new Logger(GraphQLWatcher.name);
   private config!: ResolvedGraphQLConfig;
   private adapter?: BaseGraphQLAdapter;
   private subscriptionTracker?: SubscriptionTracker;
   private initialized = false;
   private registrationMode: RegistrationMode = 'pending';
+  /** Set by the first `ensureAdapter`, and left set by `destroy`. */
+  private adapterAttempted = false;
   /** Puts the schema's subscription fields back. */
   private restoreSubscriptions?: () => void;
   /** Puts the schema's field resolvers back. */
@@ -87,6 +92,48 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
   }
 
   /**
+   * Which server was found, and whether the plugin reached it.
+   *
+   * Detection is by package, so an installed `@apollo/server` gives an adapter
+   * whether or not a server exists. Registration is what says one does: Apollo
+   * starting with the `@Plugin()` provider, Mercurius accepting the hooks, or
+   * the application taking the plugin from `getPlugin()` to wire it by hand.
+   */
+  watcherStatus(): WatcherStatus {
+    if (!this.config.enabled) return switchedOff(watcherDocs('watchers/graphql'));
+
+    const adapter = this.adapter;
+    if (!adapter) {
+      return {
+        state: 'waiting',
+        reason:
+          'No GraphQL server was detected: neither @apollo/server nor mercurius is installed.',
+        docs: watcherDocs('watchers/graphql#supported-graphql-servers'),
+      };
+    }
+
+    const server = adapter.type === 'apollo' ? 'Apollo' : 'Mercurius';
+    const docs =
+      adapter.type === 'apollo'
+        ? watcherDocs('watchers/graphql#apollo-server-integration')
+        : watcherDocs('watchers/graphql#mercurius-integration');
+
+    if (this.registrationMode === 'pending') {
+      return {
+        state: 'waiting',
+        reason: `The ${server} adapter is ready, and its plugin has not been registered with the server, automatically or through getPlugin().`,
+        docs,
+      };
+    }
+
+    return {
+      state: 'recording',
+      reason: `Recording operations through the ${server} plugin.`,
+      docs,
+    };
+  }
+
+  /**
    * Initialize the watcher on module init
    */
   onModuleInit(): void {
@@ -95,13 +142,7 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
       return;
     }
 
-    try {
-      this.initialize();
-    } catch (error) {
-      // A watcher that cannot start must not stop the application.
-      this.logger.error('Failed to initialize GraphQL watcher', error);
-    }
-
+    this.ensureAdapter();
     this.warnIfNothingWillBeRecorded();
   }
 
@@ -343,25 +384,46 @@ export class GraphQLWatcher implements OnModuleInit, OnApplicationBootstrap, OnM
    * });
    * ```
    *
-   * For Mercurius:
-   * ```typescript
-   * fastify.register(mercurius, {
-   *   hooks: graphqlWatcher.getPlugin(),
-   * });
-   * ```
+   * For Mercurius, each hook it returns goes to `fastify.graphql.addHook`.
+   *
+   * Handing the plugin out marks the watcher as wired by hand. Nothing called
+   * `markManuallyRegistered`, so an application doing exactly this was
+   * reported as never having registered the plugin.
    */
   getPlugin(): unknown {
-    // Lazy initialization - ensure adapter is created when plugin is requested
-    if (!this.adapter && this.config.enabled) {
-      this.initialize();
-    }
-
-    if (!this.adapter) {
+    const adapter = this.ensureAdapter();
+    if (!adapter) {
       this.logger.warn('GraphQL adapter not initialized');
       return {};
     }
 
-    return this.adapter.getPlugin();
+    this.markManuallyRegistered();
+    return adapter.getPlugin();
+  }
+
+  /**
+   * The adapter, created now if the watcher is on and nothing has created it.
+   *
+   * A server can ask for the plugin before this watcher's `onModuleInit` has
+   * run: Apollo starts inside `GraphQLModule`'s, and on NestJS 10 nothing puts
+   * NestLens's modules first. `initialize` is idempotent, so the hook that runs
+   * later finds it done. Never throws: a watcher that cannot start must not
+   * stop the server asking.
+   */
+  ensureAdapter(): BaseGraphQLAdapter | undefined {
+    if (!this.adapter && this.config.enabled && !this.adapterAttempted) {
+      // Once: asked from every request, a detection that found nothing
+      // searched for the packages and warned on each, and after `destroy` it
+      // built an adapter nothing would ever clean up.
+      this.adapterAttempted = true;
+      try {
+        this.initialize();
+      } catch (error) {
+        this.logger.error('Failed to initialize GraphQL watcher', error);
+      }
+    }
+
+    return this.adapter;
   }
 
   /**

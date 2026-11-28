@@ -213,8 +213,8 @@ describe('QueryWatcher', () => {
       const first = (watcher as any).attachToDataSource(fakeDataSource);
       const second = (watcher as any).attachToDataSource(fakeDataSource);
 
-      expect(first).toBe(true);
-      expect(second).toBe(false);
+      expect(first).toBe('attached');
+      expect(second).toBe('none');
       const subs = fakeDataSource.subscribers as unknown[];
       expect(subs).toHaveLength(1);
       expect(subs[0]).toBeInstanceOf(NestLensQuerySubscriber);

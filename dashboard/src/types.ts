@@ -20,6 +20,24 @@ export type EntryType =
   | 'graphql';
 
 /**
+ * Whether a watcher can record anything, as `GET …/api/watchers` reports it.
+ * `waiting` is switched on with nothing attached, so its tab stays empty
+ * whatever the application does; `manual` records what the application's code
+ * hands its manual API.
+ */
+export type WatcherState = 'off' | 'recording' | 'waiting' | 'manual';
+
+export interface WatcherStatusReport {
+  type: EntryType;
+  /** The option that switches it, `watchers.httpClient`. */
+  option: string;
+  state: WatcherState;
+  reason: string;
+  /** The documentation page with the fix. */
+  docs: string;
+}
+
+/**
  * JSON-serializable value type.
  * Used instead of `unknown` to avoid TypeScript 5 + React 18 JSX compatibility issues.
  * @see https://github.com/microsoft/TypeScript/issues/48796

@@ -116,6 +116,93 @@ NestLensModule.forRoot({
 })
 ```
 
+## Is a Watcher Recording?
+
+A watcher that is switched on records only what it can see. The Redis watcher
+needs your Redis client, the log watcher needs to be the application's logger,
+the job watcher needs your queues. Without them it records nothing, and its tab
+looks exactly like a quiet system — a production application had its Redis,
+HTTP client and Logs tabs empty for months for this reason.
+
+So every watcher reports one state:
+
+| State | What it means | What to do |
+| --- | --- | --- |
+| `off` | Switched off in the configuration. | Nothing, or switch it on. |
+| `recording` | Attached: what it watches is recorded. | Nothing. An empty tab now means nothing happened. |
+| `waiting` | Switched on, with nothing attached: no client handed over, no setup call made, no logger installed. It records nothing. | Follow the fix link, or switch it off with `watchers.<name>: false`. |
+| `manual` | Nothing is attached automatically, and it records what your code hands its manual API (`trackCheck`, `trackBatch`, `trackDump`). It turns `recording` at the first call. | Nothing, if your code calls the manual API. |
+
+A state says what is attached, not whether anything has happened: a `recording`
+Redis watcher in an application that has sent no command yet still has an empty
+tab. It describes the watcher alone, so entries your code records through
+[`CollectorService`](../integrations/custom-integrations.md) are listed whatever
+the state.
+
+There are three places to read it:
+
+- **At startup**, one warning lists every `waiting` watcher with its reason and
+  the page that shows the fix:
+
+  ```text
+  WARN [NestLens] 2 enabled watchers are recording nothing, so their tabs stay empty:
+    watchers.log: NestLensLogger is not the application logger and nothing has called it: app.useLogger(app.get(NestLensLogger)) installs it. Fix: https://nestlens-docs.vercel.app/docs/watchers/log#using-nestlens-logger
+    watchers.redis: No Redis client is provided under NESTLENS_REDIS_CLIENT. Fix: https://nestlens-docs.vercel.app/docs/watchers/redis#provide-redis-client-to-nestlens
+  Switch off one you do not use with `watchers.<name>: false`. GET /nestlens/__nestlens__/api/watchers reports every watcher as it is now.
+  ```
+
+  It is printed once, when bootstrap is over: after every `onModuleInit`, and
+  after the parts of NestLens that attach during `onApplicationBootstrap` — the
+  query, schedule and Mercurius integrations — have. A setup call your code
+  makes during `onApplicationBootstrap`, such as a queue registered there, may
+  not be in it: Nest does not promise an order between modules' bootstrap
+  hooks. A call made later is not. With `enabled: false` nothing is printed.
+- **`GET /nestlens/__nestlens__/api/watchers`** answers every watcher as it is
+  now, behind the same access control as the rest of the API, and AI agents
+  reach it through the [MCP server](../integrations/mcp.md) as
+  `get_watcher_status`:
+
+  ```json
+  {
+    "type": "redis",
+    "option": "watchers.redis",
+    "state": "waiting",
+    "reason": "No Redis client is provided under NESTLENS_REDIS_CLIENT.",
+    "docs": "https://nestlens-docs.vercel.app/docs/watchers/redis#provide-redis-client-to-nestlens"
+  }
+  ```
+
+- **In the dashboard**, the page of a watcher that is `waiting`, `off` or
+  `manual` says so, with the reason and the page to read, where its table would
+  be empty, and the sidebar marks the ones that are `waiting`.
+
+Reading a state costs a field or two, and only when something asks; nothing is
+added to the request path.
+
+### What each watcher checks
+
+| Watcher | `recording` when | Otherwise |
+| --- | --- | --- |
+| Request | It is switched on: it is a global interceptor. | — |
+| Exception | No global filter of the application's that takes every exception is tried before it. | `waiting`: a `@Catch()`, `@Catch(Error)` or `@Catch(Object)` filter registered after it — `app.useGlobalFilters()` before the application starts, or `APP_FILTER` in a module imported after `NestLensModule` — takes them first. |
+| Query | A TypeORM `DataSource` or a Prisma client was among the providers at bootstrap: a client of Prisma 6.13 or earlier through its `$use` middleware, with or without logging; from 6.14 on, one built with a query log option. | `waiting`: none was; every Prisma client from 6.14 on was built without query logging; or each is recorded by another application in the same process, until that application closes and this one takes it over. A client made with `$extends` is not found: it has neither `$on` nor `$use`. |
+| Log | `NestLensLogger` is the application logger (`app.useLogger(app.get(NestLensLogger))`), or something has called it. | `waiting` |
+| Cache | A cache manager under `CACHE_MANAGER` was wrapped. | `waiting` |
+| Event | An emitter under `NESTLENS_EVENT_EMITTER` was wrapped. | `waiting` |
+| Job | `setupQueue()`, `setupBullMQQueue()` or `setupQueueWithEvents()` has registered a queue. | `waiting`, also while `setupBullMQQueue()` waits for its Redis connection. |
+| Schedule | `ScheduleModule.forRoot()` from `@nestjs/schedule` is imported. | `waiting` |
+| Mail | A mailer under `NESTLENS_MAILER_SERVICE` was wrapped, or `setupMailer()` was called. | `waiting` |
+| HTTP Client | An axios instance or `HttpService` under `NESTLENS_HTTP_CLIENT` was wrapped, or `setupInterceptors()` was called. | `waiting` |
+| Redis | A client under `NESTLENS_REDIS_CLIENT` had a command it records. | `waiting` |
+| Model | An entity subscriber under `NESTLENS_MODEL_SUBSCRIBER` was wrapped, or `setupPrismaClient()` was called. | `waiting` |
+| Notification | A service under `NESTLENS_NOTIFICATION_SERVICE` had a send method. | `waiting` |
+| View | An engine under `NESTLENS_VIEW_ENGINE` had `render()`. | `waiting` |
+| Command | A `CommandBus` under `NESTLENS_COMMAND_BUS` had `execute()`. | `waiting` |
+| Gate | A service under `NESTLENS_GATE_SERVICE` was wrapped, or `trackCheck()` was called. | `manual`; `waiting` if what was handed over has nothing to wrap. |
+| Batch | A processor under `NESTLENS_BATCH_PROCESSOR` was wrapped, or `trackBatch()` was called. | `manual`; `waiting` if what was handed over has nothing to wrap. |
+| Dump | A service under `NESTLENS_DUMP_SERVICE` was wrapped, or `trackDump()` was called. | `manual`; `waiting` if what was handed over has nothing to wrap. |
+| GraphQL | Its plugin is registered: an Apollo server started with it, Mercurius accepted its hooks, or `getPlugin()` handed it out to be [wired by hand](./graphql.md#manual-wiring). | `waiting`: no server package, or a plugin no server has taken. |
+
 ## Watcher Configuration Patterns
 
 All watchers follow consistent configuration patterns:

@@ -232,6 +232,61 @@ export class AppModule {}
 
 No manual `fastify.register(mercurius, { hooks: ... })` wiring is required.
 
+### Manual Wiring
+
+Only for a server NestLens cannot reach on its own: an `ApolloServer` built by
+hand rather than through `GraphQLModule`, or Mercurius on a Fastify instance the
+application's HTTP adapter does not expose. `GraphQLWatcher.getPlugin()` hands
+out the plugin for whichever server was detected, and from then on the watcher
+reports itself `recording` (see [Is a watcher recording?](./overview.md#is-a-watcher-recording)).
+
+Apollo takes it as a plugin:
+
+```typescript
+import { ApolloServer, ApolloServerPlugin } from '@apollo/server';
+import { GraphQLWatcher } from 'nestlens';
+
+const graphqlWatcher = app.get(GraphQLWatcher);
+
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  plugins: [graphqlWatcher.getPlugin() as ApolloServerPlugin],
+});
+```
+
+Mercurius takes it as a set of hooks. Its `addHook` is typed one hook name at
+a time, so each is registered under its own name:
+
+```typescript
+import { GraphQLWatcher } from 'nestlens';
+
+type Hook = (...args: unknown[]) => Promise<void>;
+type HookName =
+  | 'preParsing'
+  | 'preValidation'
+  | 'preExecution'
+  | 'onResolution'
+  | 'preSubscriptionParsing'
+  | 'preSubscriptionExecution'
+  | 'onSubscriptionResolution'
+  | 'onSubscriptionEnd';
+
+const hooks = app.get(GraphQLWatcher).getPlugin() as Record<HookName, Hook>;
+
+fastify.graphql.addHook('preParsing', hooks.preParsing);
+fastify.graphql.addHook('preValidation', hooks.preValidation);
+fastify.graphql.addHook('preExecution', hooks.preExecution);
+fastify.graphql.addHook('onResolution', hooks.onResolution);
+fastify.graphql.addHook('preSubscriptionParsing', hooks.preSubscriptionParsing);
+fastify.graphql.addHook('preSubscriptionExecution', hooks.preSubscriptionExecution);
+fastify.graphql.addHook('onSubscriptionResolution', hooks.onSubscriptionResolution);
+fastify.graphql.addHook('onSubscriptionEnd', hooks.onSubscriptionEnd);
+```
+
+Leave it out where NestLens registers the plugin itself: a second registration
+is ignored rather than recorded twice, so it adds nothing.
+
 ## N+1 Query Detection
 
 The GraphQL Watcher automatically detects potential N+1 query issues by tracking resolver call patterns:

@@ -185,6 +185,7 @@ export default function RequestsPage() {
           keyExtractor={(entry) => entry.id}
           onRowClick={(entry) => navigate(`/requests/${entry.id}`)}
           emptyMessage="No requests recorded yet"
+          watcher="request"
           error={error}
           onRetry={refresh}
           emptyIcon={<Globe className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

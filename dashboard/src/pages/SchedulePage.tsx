@@ -208,6 +208,7 @@ export default function SchedulePage() {
           onRowClick={(entry) => navigate(`/schedule/${entry.id}`)}
           rowClassName={(entry) => isHighlighted(entry.id) ? 'highlight-new' : ''}
           emptyMessage="No scheduled tasks recorded yet"
+          watcher="schedule"
           error={error}
           onRetry={refresh}
           emptyIcon={<Clock className="h-8 w-8 text-gray-400 dark:text-gray-500" />}

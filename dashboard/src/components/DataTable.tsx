@@ -1,6 +1,10 @@
 import { ReactNode, useState, useCallback, useRef, useEffect } from 'react';
 import { AlertTriangle, ChevronRight, Inbox } from 'lucide-react';
 import { getBadgeColor } from './badgeColors';
+import WatcherEmptyState from './WatcherEmptyState';
+import { SECONDARY_BUTTON } from './buttonStyles';
+import { explainsEmptiness, useWatcherStatus } from '../contexts/useWatcherStatus';
+import { EntryType } from '../types';
 
 // Column definition
 export interface Column<T> {
@@ -23,6 +27,12 @@ interface DataTableProps<T> {
   loading?: boolean;
   emptyMessage?: string;
   emptyIcon?: ReactNode;
+  /**
+   * The entry type the table lists. When its watcher is `waiting`, `off` or
+   * `manual`, the empty table says that, and how to fix it, instead of
+   * `emptyMessage`.
+   */
+  watcher?: EntryType;
   /** Set when the last request failed; shown instead of the empty state. */
   error?: Error | null;
   /** Offered beside the failure, when the caller can ask again. */
@@ -82,7 +92,7 @@ function FailedState({ error, onRetry }: { error: Error; onRetry?: () => void })
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          className={`mt-4 ${SECONDARY_BUTTON}`}
         >
           Try again
         </button>
@@ -112,6 +122,7 @@ export default function DataTable<T>({
   loading = false,
   emptyMessage = 'No data available',
   emptyIcon,
+  watcher,
   error,
   onRetry,
   showChevron = true,
@@ -126,6 +137,7 @@ export default function DataTable<T>({
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1);
   const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
   const tableRef = useRef<HTMLTableElement>(null);
+  const watcherStatus = useWatcherStatus(watcher);
 
   // Calculate total columns including chevron
   const totalColumns = columns.length + (showChevron && onRowClick ? 1 : 0);
@@ -261,7 +273,11 @@ export default function DataTable<T>({
             ) : data.length === 0 ? (
               <tr>
                 <td colSpan={totalColumns}>
-                  <EmptyState message={emptyMessage} icon={emptyIcon} />
+                  {explainsEmptiness(watcherStatus) ? (
+                    <WatcherEmptyState status={watcherStatus} />
+                  ) : (
+                    <EmptyState message={emptyMessage} icon={emptyIcon} />
+                  )}
                 </td>
               </tr>
             ) : (

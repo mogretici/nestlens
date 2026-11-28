@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PATH_METADATA } from '@nestjs/common/constants';
+import { PATH_METADATA_KEY } from '../core/nest-metadata-keys';
 import { HttpAdapterHost } from '@nestjs/core';
 import { dirname } from 'path';
 import { DashboardController } from './dashboard.controller';
@@ -123,7 +123,7 @@ export class SpaRouteRegistrar {
     }
 
     Reflect.defineMetadata(
-      PATH_METADATA,
+      PATH_METADATA_KEY,
       toSpaWildcard(adapterType, adapterType === 'express' ? readExpressMajor() : undefined),
       handler,
     );

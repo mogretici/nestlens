@@ -43,6 +43,7 @@ Leave an argument out rather than passing `null` or an empty string.
 | --- | --- |
 | What has been recorded at all? | `get_stats` |
 | Nothing shows up | `get_recording_status`: paused, sampled out or filtered |
+| One type stays empty | `get_watcher_status`: a `waiting` watcher has nothing to observe, and says how to fix it |
 | Why did this request fail or take long? | find it with `get_requests` or `get_entries_with_cursor` (`type: "request"`, `paths`, `statuses`, `minDuration`), then `get_entry` with its `id` |
 | What is throwing? | `get_exceptions`, or `get_entries_with_cursor` with `type: "exception"` and `resolved: false` |
 | Which queries are slow? | `get_queries` with `slow: true` |
