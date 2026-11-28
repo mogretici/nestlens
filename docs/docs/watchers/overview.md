@@ -154,9 +154,9 @@ There are three places to read it:
   It is printed once, when bootstrap is over: after every `onModuleInit`, and
   after the parts of NestLens that attach during `onApplicationBootstrap` — the
   query, schedule and Mercurius integrations — have. A setup call your code
-  makes later than that, such as a queue registered from your own
-  `onApplicationBootstrap`, is not in it. With `enabled: false` nothing is
-  printed.
+  makes during `onApplicationBootstrap`, such as a queue registered there, may
+  not be in it: Nest does not promise an order between modules' bootstrap
+  hooks. A call made later is not. With `enabled: false` nothing is printed.
 - **`GET /nestlens/__nestlens__/api/watchers`** answers every watcher as it is
   now, behind the same access control as the rest of the API, and AI agents
   reach it through the [MCP server](../integrations/mcp.md) as
@@ -172,9 +172,9 @@ There are three places to read it:
   }
   ```
 
-- **In the dashboard**, the page of a watcher that is `waiting` or `off` says so,
-  with the fix, where its table would be empty, and the sidebar marks the ones
-  that are `waiting`.
+- **In the dashboard**, the page of a watcher that is `waiting`, `off` or
+  `manual` says so, with the reason and the page to read, where its table would
+  be empty, and the sidebar marks the ones that are `waiting`.
 
 Reading a state costs a field or two, and only when something asks; nothing is
 added to the request path.
@@ -184,8 +184,8 @@ added to the request path.
 | Watcher | `recording` when | Otherwise |
 | --- | --- | --- |
 | Request | It is switched on: it is a global interceptor. | — |
-| Exception | No global filter of the application's that catches everything is tried before it. | `waiting`: a `@Catch()` filter registered after it — `app.useGlobalFilters()`, or `APP_FILTER` in a module imported after `NestLensModule` — takes every exception first. |
-| Query | A TypeORM `DataSource`, or a Prisma client built with query logging, was among the providers at bootstrap. | `waiting`: none was, or every Prisma client was built without query logging. |
+| Exception | No global filter of the application's that takes every exception is tried before it. | `waiting`: a `@Catch()` or `@Catch(Error)` filter registered after it — `app.useGlobalFilters()` before the application starts, or `APP_FILTER` in a module imported after `NestLensModule` — takes them first. |
+| Query | A TypeORM `DataSource` or a Prisma client was among the providers at bootstrap: a client of Prisma 6.13 or earlier through its `$use` middleware, with or without logging; from 6.14 on, one built with a query log option. | `waiting`: none was; every Prisma client from 6.14 on was built without query logging; or each is recorded by another application in the same process. A client made with `$extends` is not found: it has neither `$on` nor `$use`. |
 | Log | `NestLensLogger` is the application logger (`app.useLogger(app.get(NestLensLogger))`), or something has called it. | `waiting` |
 | Cache | A cache manager under `CACHE_MANAGER` was wrapped. | `waiting` |
 | Event | An emitter under `NESTLENS_EVENT_EMITTER` was wrapped. | `waiting` |
@@ -201,7 +201,7 @@ added to the request path.
 | Gate | A service under `NESTLENS_GATE_SERVICE` was wrapped, or `trackCheck()` was called. | `manual`; `waiting` if what was handed over has nothing to wrap. |
 | Batch | A processor under `NESTLENS_BATCH_PROCESSOR` was wrapped, or `trackBatch()` was called. | `manual`; `waiting` if what was handed over has nothing to wrap. |
 | Dump | A service under `NESTLENS_DUMP_SERVICE` was wrapped, or `trackDump()` was called. | `manual`; `waiting` if what was handed over has nothing to wrap. |
-| GraphQL | Its plugin is registered with Apollo or Mercurius, and for Apollo a schema was built by `GraphQLModule`. | `waiting`: no server package, a plugin never registered, or no schema. |
+| GraphQL | Its plugin is registered: an Apollo server started with it, Mercurius accepted its hooks, or `getPlugin()` handed it out to be [wired by hand](./graphql.md#manual-wiring). | `waiting`: no server package, or a plugin no server has taken. |
 
 ## Watcher Configuration Patterns
 

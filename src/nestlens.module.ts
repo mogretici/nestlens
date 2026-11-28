@@ -11,7 +11,7 @@ import {
   Provider,
   VERSION_NEUTRAL,
 } from '@nestjs/common';
-import { PATH_METADATA, VERSION_METADATA } from '@nestjs/common/constants';
+import { PATH_METADATA_KEY, VERSION_METADATA_KEY } from './core/nest-metadata-keys';
 import { APP_FILTER, APP_INTERCEPTOR, DiscoveryModule, ModuleRef } from '@nestjs/core';
 import { applyPreset } from './presets';
 import { startupSummary } from './startup-summary';
@@ -495,11 +495,11 @@ export class NestLensModule implements NestModule, OnModuleInit {
     ];
 
     for (const [controller, routePath] of mounts) {
-      Reflect.defineMetadata(PATH_METADATA, routePath, controller);
+      Reflect.defineMetadata(PATH_METADATA_KEY, routePath, controller);
       // NestLens is a debugging surface, not part of the host's public API. Without
       // this, `app.enableVersioning()` would drag the dashboard to /v1/nestlens and
       // move it again on every version bump.
-      Reflect.defineMetadata(VERSION_METADATA, VERSION_NEUTRAL, controller);
+      Reflect.defineMetadata(VERSION_METADATA_KEY, VERSION_NEUTRAL, controller);
     }
   }
 

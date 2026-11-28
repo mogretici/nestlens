@@ -279,17 +279,22 @@ globally, or on the handler, reached that filter alone. Exceptions no filter of
 yours catches are still recorded. To keep both, catch only the types your filter
 has to answer differently.
 
-Among global filters, Nest tries the one registered **last** first. Measured on
-Express and Fastify with a `@Catch()` filter that catches everything:
+Among global filters, Nest tries the one registered **last** first, and matches
+`@Catch()` types by `instanceof`, so `@Catch(Error)` takes every `HttpException`
+too. Measured on Express and Fastify:
 
-| Where your catch-all filter is registered | What NestLens records |
+| Your filter, and where it is registered | What NestLens records |
 | --- | --- |
-| `app.useGlobalFilters(new CatchAllFilter())` | Nothing |
-| `{ provide: APP_FILTER, useClass: CatchAllFilter }` in a module imported after `NestLensModule` | Nothing |
-| `{ provide: APP_FILTER, useClass: CatchAllFilter }` in `AppModule` itself | Every exception: it is registered before NestLens's filter |
+| `@Catch()`, with `app.useGlobalFilters()` | Nothing |
+| `@Catch()`, as `APP_FILTER` in a module imported after `NestLensModule` | Nothing |
+| `@Catch()`, as `APP_FILTER` in `AppModule` itself | Every exception: it is registered before NestLens's filter |
+| `@Catch(Error)`, with `app.useGlobalFilters()` or as `APP_FILTER` after `NestLensModule` | Only a throw that is not an `Error`, such as `throw 'text'` |
+| `@Catch(HttpException)`, with `app.useGlobalFilters()` | Every exception that is not an `HttpException` |
+| `@Catch()`, with `app.useGlobalFilters()` after `app.listen()` | Every exception: the routes already have their filters |
 
-The exception watcher reads the same list. With a catch-all ahead of it, it
-reports itself `waiting`, naming the filter, and the startup warning lists it;
+The exception watcher reads the same list, as the routes were built with it.
+With a `@Catch()` or `@Catch(Error)` filter ahead of it, it reports itself
+`waiting`, naming the filter, and the startup warning lists it;
 with a filter of narrower types ahead of it, it reports `recording` and names
 the types that go to your filter instead. A filter on a controller or a method
 is not in that list and is not reported. See

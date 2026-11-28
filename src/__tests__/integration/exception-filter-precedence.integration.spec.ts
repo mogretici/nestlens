@@ -54,6 +54,10 @@ class CatchEverything implements ExceptionFilter {
 @Catch(HttpException)
 class CatchHttpExceptions extends CatchEverything {}
 
+/** Nest matches by `instanceof`, so this takes every Error, HttpException included. */
+@Catch(Error)
+class CatchErrors extends CatchEverything {}
+
 /** Two catch-alls, each answering with its own name. */
 @Catch()
 class RegisteredFirst implements ExceptionFilter {
@@ -84,6 +88,11 @@ class BoomController {
   http(): never {
     throw new NotFoundException('missing');
   }
+
+  @Get('string')
+  text(): never {
+    throw 'not an Error';
+  }
 }
 
 type Arrangement =
@@ -92,7 +101,10 @@ type Arrangement =
   | 'useGlobalFilters HttpException'
   | 'APP_FILTER in AppModule'
   | 'APP_FILTER after NestLens'
-  | 'two catch-alls';
+  | 'two catch-alls'
+  | 'useGlobalFilters Error'
+  | 'APP_FILTER Error after NestLens'
+  | 'useGlobalFilters catch-all after listen';
 
 const measure = async (
   platform: 'express' | 'fastify',
@@ -106,10 +118,14 @@ const measure = async (
   @Module({ providers: [{ provide: APP_FILTER, useClass: CatchEverything }] })
   class FilterModule {}
 
+  @Module({ providers: [{ provide: APP_FILTER, useClass: CatchErrors }] })
+  class ErrorFilterModule {}
+
   @Module({
     imports: [
       NestLensModule.forRoot({}),
       ...(arrangement === 'APP_FILTER after NestLens' ? [FilterModule] : []),
+      ...(arrangement === 'APP_FILTER Error after NestLens' ? [ErrorFilterModule] : []),
     ],
     controllers: [BoomController],
     providers,
@@ -125,16 +141,21 @@ const measure = async (
   if (arrangement === 'useGlobalFilters HttpException') {
     app.useGlobalFilters(new CatchHttpExceptions());
   }
+  if (arrangement === 'useGlobalFilters Error') app.useGlobalFilters(new CatchErrors());
   if (arrangement === 'two catch-alls') {
     app.useGlobalFilters(new RegisteredFirst(), new RegisteredSecond());
   }
   await app.listen(0, '127.0.0.1');
+  if (arrangement === 'useGlobalFilters catch-all after listen') {
+    app.useGlobalFilters(new CatchEverything());
+  }
 
   try {
     const collect = vi.spyOn(app.get(CollectorService), 'collectImmediate');
     const url = await app.getUrl();
     const answer = (await (await fetch(`${url}/boom/error`)).json()) as { handledBy?: string };
     await fetch(`${url}/boom/http`);
+    if (arrangement.includes('Error')) await fetch(`${url}/boom/string`);
 
     const recorded = collect.mock.calls
       .filter(([type]) => type === 'exception')
@@ -198,5 +219,28 @@ describe.each(['express', 'fastify'] as const)('the exception watcher on %s', (p
 
     expect(handledBy).toBe('RegisteredSecond');
     expect(status.reason).toContain('RegisteredSecond');
+  });
+
+  it.each(['useGlobalFilters Error', 'APP_FILTER Error after NestLens'] as const)(
+    'is starved of every Error by @Catch(Error) through %s, and says so',
+    async (arrangement) => {
+      const { recorded, status } = await measure(platform, arrangement);
+
+      // Only a throw that is not an Error gets past it.
+      expect(recorded).toEqual(['NonErrorThrow:string']);
+      expect(status).toMatchObject({
+        state: 'waiting',
+        reason: expect.stringContaining('CatchErrors'),
+      });
+    },
+  );
+
+  it('is not starved by a catch-all added after the routes were built, and does not say so', async () => {
+    // The routes take their filters when they are registered, during init;
+    // a filter added afterwards is in the list and handles nothing.
+    const { recorded, status } = await measure(platform, 'useGlobalFilters catch-all after listen');
+
+    expect(recorded).toEqual(['Error', 'NotFoundException']);
+    expect(status.state).toBe('recording');
   });
 });
