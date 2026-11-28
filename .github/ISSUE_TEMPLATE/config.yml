@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mogretici/nestlens/security/advisories/new
+    about: Privately, so the details stay out of public view until a fix is released.
+  - name: Documentation
+    url: https://nestlens-docs.vercel.app/docs/getting-started/installation
+    about: Installation, configuration, every watcher, and upgrading between releases.
+  - name: Frequently asked questions
+    url: https://nestlens-docs.vercel.app/docs/faq
+    about: Entries not appearing, "Access Denied", setGlobalPrefix, production use, and more.
+  - name: Connect an AI agent (MCP)
+    url: https://nestlens-docs.vercel.app/docs/integrations/mcp
+    about: Claude Code, Codex, VS Code, Cursor and Claude Desktop setup for nestlens-mcp.

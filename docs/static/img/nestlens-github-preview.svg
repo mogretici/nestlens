@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 640" width="1280" height="640" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <clipPath id="window">
+      <rect x="640" y="118" width="720" height="420" rx="14"/>
+    </clipPath>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#020617" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="1180" cy="40" r="220" fill="#0ea5e9" opacity="0.08"/>
+  <circle cx="60" cy="620" r="170" fill="#0ea5e9" opacity="0.08"/>
+
+  <!-- Logo -->
+  <g transform="translate(88, 128) scale(0.92)">
+    <circle cx="50" cy="50" r="45" stroke="#0ea5e9" stroke-width="6"/>
+    <circle cx="50" cy="50" r="20" fill="#0ea5e9"/>
+    <circle cx="50" cy="50" r="8" fill="#1e293b"/>
+    <line x1="50" y1="5" x2="50" y2="20" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50" y1="80" x2="50" y2="95" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="5" y1="50" x2="20" y2="50" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+    <line x1="80" y1="50" x2="95" y2="50" stroke="#0ea5e9" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <g font-family="Inter, system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <text x="88" y="300" font-size="76" font-weight="800" fill="#ffffff" letter-spacing="-1.5">NestLens</text>
+    <text x="90" y="352" font-size="27" fill="#94a3b8">Laravel Telescope-like debugging</text>
+    <text x="90" y="388" font-size="27" fill="#94a3b8">and monitoring for NestJS</text>
+
+    <g font-size="19" font-weight="600" fill="#38bdf8">
+      <rect x="88" y="428" width="132" height="38" rx="19" fill="#0ea5e9" fill-opacity="0.12" stroke="#0ea5e9" stroke-opacity="0.35"/>
+      <text x="154" y="453" text-anchor="middle">19 watchers</text>
+      <rect x="232" y="428" width="196" height="38" rx="19" fill="#0ea5e9" fill-opacity="0.12" stroke="#0ea5e9" stroke-opacity="0.35"/>
+      <text x="330" y="453" text-anchor="middle">Real-time dashboard</text>
+      <rect x="88" y="478" width="252" height="38" rx="19" fill="#0ea5e9" fill-opacity="0.12" stroke="#0ea5e9" stroke-opacity="0.35"/>
+      <text x="214" y="503" text-anchor="middle">MCP server for AI agents</text>
+    </g>
+
+    <text x="90" y="572" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="#64748b">$ npm install nestlens</text>
+  </g>
+
+  <!-- Dashboard window, bleeding off the right edge -->
+  <g filter="url(#shadow)">
+    <rect x="640" y="118" width="720" height="420" rx="14" fill="#0b1220" stroke="#334155"/>
+  </g>
+  <g clip-path="url(#window)">
+    <rect x="640" y="118" width="720" height="34" fill="#1e293b"/>
+    <circle cx="664" cy="135" r="6" fill="#ef4444" opacity="0.85"/>
+    <circle cx="684" cy="135" r="6" fill="#f59e0b" opacity="0.85"/>
+    <circle cx="704" cy="135" r="6" fill="#10b981" opacity="0.85"/>
+    <!-- The screenshot without its sidebar: 2800×1550 of 3360×1856, from x=560 -->
+    <svg x="640" y="152" width="720" height="398.6" viewBox="560 0 2800 1550" preserveAspectRatio="xMinYMin slice">
+      <image href="screenshots/darkMode_dashboard.png" xlink:href="screenshots/darkMode_dashboard.png" width="3360" height="1856"/>
+    </svg>
+  </g>
+  <rect x="640" y="118" width="720" height="420" rx="14" stroke="#334155"/>
+</svg>

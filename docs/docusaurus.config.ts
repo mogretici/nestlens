@@ -224,8 +224,8 @@ const config: Config = {
           title: 'Community',
           items: [
             {
-              label: 'GitHub Discussions',
-              href: 'https://github.com/mogretici/nestlens/discussions',
+              label: 'Contributing',
+              href: 'https://github.com/mogretici/nestlens/blob/main/CONTRIBUTING.md',
             },
             {
               label: 'Issues',

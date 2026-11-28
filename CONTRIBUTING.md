@@ -4,7 +4,8 @@ Thank you for your interest in contributing to NestLens! This document provides 
 
 ## Code of Conduct
 
-Please be respectful and constructive in all interactions.
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By
+taking part, you agree to uphold it.
 
 ## Getting Started
 
@@ -127,10 +128,18 @@ npm run build
    cd dashboard && npm test
    ```
 
-4. Commit with descriptive messages:
+4. Commit with [conventional commit](https://www.conventionalcommits.org)
+   messages. Merging to `main` releases, and the types decide the version:
+   `fix:` is a patch, `feat:` a minor, and `docs:`, `test:`, `chore:` and the
+   rest release nothing.
    ```bash
    git commit -m "feat: add new watcher for X"
    ```
+   Never start a line of the body with `BREAKING CHANGE`, and never put `!`
+   after the type: either one releases 1.0.0, which is a release to be made on
+   purpose. A breaking change before 1.0 goes out as `feat:` and is written up
+   in [the upgrade guide](docs/docs/getting-started/upgrading.md).
+   [RELEASING.md](RELEASING.md) has the whole of it.
 
 5. Push and create a Pull Request
 
@@ -174,11 +183,10 @@ controller under `__nestlens__/api` also has to be added to the list in
 
 ## Reporting Issues
 
-When reporting issues, please include:
-- NestJS version
-- Node.js version
-- Steps to reproduce
-- Expected vs actual behavior
+Open an issue from [the issue forms](https://github.com/mogretici/nestlens/issues/new/choose):
+the bug report asks for the versions, the configuration and the startup line a
+fix needs. A suspected security vulnerability goes through
+[SECURITY.md](SECURITY.md) instead.
 
 ## License
 

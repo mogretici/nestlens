@@ -1,0 +1,46 @@
+name: Feature request
+description: Something NestLens could record, show or do that it does not today.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to see or do, and what gets in the way today. A problem described well is worth more than a solution.
+      placeholder: When a BullMQ job retries, I cannot tell which attempt failed and why…
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How you picture it working — a watcher, a dashboard view, a configuration option, an MCP tool.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - A watcher (what gets recorded)
+        - Dashboard
+        - Storage
+        - Configuration or security
+        - MCP server and AI agents
+        - Documentation
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: Workarounds, or how another tool — Laravel Telescope, a log, an APM — handles it.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to open a pull request for this.
