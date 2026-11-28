@@ -50,6 +50,21 @@ describe('registry-wait', () => {
     ]);
   });
 
+  it('escapes a scoped name the way the registry expects', async () => {
+    // Arrange
+    const { fetchImpl, requests } = registry([{ '@scope/pkg': ['1.0.0'] }]);
+
+    // Act
+    const ready = await installable('@scope/pkg', '1.0.0', {
+      fetchImpl,
+      registry: 'https://registry.example.test',
+    });
+
+    // Assert
+    expect(ready).toBe(true);
+    expect(requests[0]?.url).toBe('https://registry.example.test/@scope%2fpkg');
+  });
+
   it('waits for every package the install needs, not only the one it names', async () => {
     // Arrange: the wrapper appears first, the library it pins one round later.
     const { fetchImpl, next } = registry([

@@ -13,7 +13,7 @@ const INSTALL_METADATA = 'application/vnd.npm.install-v1+json';
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 
 const registryUrl = (registry, name) =>
-  new URL(name.replace('/', '%2f'), registry.endsWith('/') ? registry : `${registry}/`);
+  new URL(name.replaceAll('/', '%2f'), registry.endsWith('/') ? registry : `${registry}/`);
 
 /** Whether the abbreviated packument for `name` lists `version`. */
 export async function installable(
