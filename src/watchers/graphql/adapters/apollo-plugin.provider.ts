@@ -93,25 +93,31 @@ export class NestLensApolloPlugin implements OnModuleInit {
 
   constructor(@Optional() private readonly graphqlWatcher?: GraphQLWatcher) {}
 
-  /**
-   * Initialize the plugin delegation on module init.
-   * This happens before Apollo Server starts, so the plugin is ready.
-   */
   onModuleInit(): void {
-    if (!this.graphqlWatcher) {
-      return;
-    }
+    this.ensurePlugin();
+  }
 
-    const adapter = this.graphqlWatcher.getAdapter();
-    if (adapter?.type !== 'apollo') {
-      return;
-    }
+  /**
+   * The adapter's plugin, set up by whichever hook arrives first.
+   *
+   * This assumed its own `onModuleInit` ran before Apollo started. Apollo
+   * starts inside `GraphQLModule`'s `onModuleInit`; on NestJS 11 and 12 global
+   * modules run their hooks first, on 10.4 they do not, and with GraphQLModule
+   * imported ahead of NestLensModule `serverWillStart` found no plugin, marked
+   * nothing, and the watcher said `waiting` while it recorded. Measured on
+   * @nestjs/core 10.4.22.
+   */
+  private ensurePlugin(): typeof this.plugin {
+    if (this.plugin || !this.graphqlWatcher) return this.plugin;
 
-    // Get the actual plugin from the adapter
+    const adapter = this.graphqlWatcher.ensureAdapter();
+    if (adapter?.type !== 'apollo') return null;
+
     this.plugin = adapter.getPlugin() as {
       requestDidStart?: (requestContext: unknown) => Promise<unknown>;
     };
     this.initialized = true;
+    return this.plugin;
   }
 
   /**
@@ -124,7 +130,7 @@ export class NestLensApolloPlugin implements OnModuleInit {
    * by `getPlugin()` look like this one.
    */
   async serverWillStart(): Promise<void> {
-    if (!this.plugin) return;
+    if (!this.ensurePlugin()) return;
 
     this.graphqlWatcher?.markAutoRegistered();
     this.logger.log('Apollo plugin registered: Apollo Server started with it');
@@ -137,11 +143,12 @@ export class NestLensApolloPlugin implements OnModuleInit {
    * This method is called by Apollo Server for each GraphQL request.
    */
   async requestDidStart(requestContext: unknown): Promise<unknown> {
-    if (!this.plugin?.requestDidStart) {
+    const plugin = this.ensurePlugin();
+    if (!plugin?.requestDidStart) {
       return undefined;
     }
 
-    return this.plugin.requestDidStart(requestContext);
+    return plugin.requestDidStart(requestContext);
   }
 
   /**

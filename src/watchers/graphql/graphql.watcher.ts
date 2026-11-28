@@ -395,18 +395,35 @@ export class GraphQLWatcher
    * reported as never having registered the plugin.
    */
   getPlugin(): unknown {
-    // Lazy initialization - ensure adapter is created when plugin is requested
-    if (!this.adapter && this.config.enabled) {
-      this.initialize();
-    }
-
-    if (!this.adapter) {
+    const adapter = this.ensureAdapter();
+    if (!adapter) {
       this.logger.warn('GraphQL adapter not initialized');
       return {};
     }
 
     this.markManuallyRegistered();
-    return this.adapter.getPlugin();
+    return adapter.getPlugin();
+  }
+
+  /**
+   * The adapter, created now if the watcher is on and nothing has created it.
+   *
+   * A server can ask for the plugin before this watcher's `onModuleInit` has
+   * run: Apollo starts inside `GraphQLModule`'s, and on NestJS 10 nothing puts
+   * NestLens's modules first. `initialize` is idempotent, so the hook that runs
+   * later finds it done. Never throws: a watcher that cannot start must not
+   * stop the server asking.
+   */
+  ensureAdapter(): BaseGraphQLAdapter | undefined {
+    if (!this.adapter && this.config.enabled) {
+      try {
+        this.initialize();
+      } catch (error) {
+        this.logger.error('Failed to initialize GraphQL watcher', error);
+      }
+    }
+
+    return this.adapter;
   }
 
   /**
