@@ -11,7 +11,7 @@
  * page says comes from the reader's application — the Nest application, the
  * schema, a Fastify instance with Mercurius registered — is declared for it.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import * as ts from 'typescript';
@@ -46,8 +46,15 @@ const snippetsOf = (page: string, heading: string): string[] => {
   return [...section.matchAll(/```(?:typescript|ts)\n([\s\S]*?)```/g)].map(([, code]) => code);
 };
 
-const compile = (code: string): string[] => {
-  const file = join(ROOT, 'src', '__docs_snippet__.ts');
+/**
+ * Every snippet as a file of its own in one program, so the library's sources
+ * and the dependencies' types are read once for all of them.
+ */
+const compileAll = (snippets: readonly string[]): string[][] => {
+  const files = snippets.map((_code, index) => join(ROOT, 'src', `__docs_snippet_${index}__.ts`));
+  const sources = new Map(
+    files.map((file, index) => [file, `${snippets[index]}\n${READER_SUPPLIES}`]),
+  );
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,
@@ -64,37 +71,41 @@ const compile = (code: string): string[] => {
   };
 
   const host = ts.createCompilerHost(options);
-  const source = `${code}\n${READER_SUPPLIES}`;
   const getSourceFile = host.getSourceFile.bind(host);
-  host.getSourceFile = (name, languageVersion, ...rest) =>
-    name === file
-      ? ts.createSourceFile(name, source, languageVersion)
-      : getSourceFile(name, languageVersion, ...rest);
+  host.getSourceFile = (name, languageVersion, ...rest) => {
+    const source = sources.get(name);
+    return source === undefined
+      ? getSourceFile(name, languageVersion, ...rest)
+      : ts.createSourceFile(name, source, languageVersion);
+  };
   const fileExists = host.fileExists.bind(host);
-  host.fileExists = (name) => name === file || fileExists(name);
+  host.fileExists = (name) => sources.has(name) || fileExists(name);
 
-  const program = ts.createProgram([file], options, host);
+  const program = ts.createProgram(files, options, host);
 
-  return ts
-    .getPreEmitDiagnostics(program, program.getSourceFile(file))
-    .map(
-      (diagnostic) =>
-        `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`,
-    );
+  return files.map((file) =>
+    ts
+      .getPreEmitDiagnostics(program, program.getSourceFile(file))
+      .map(
+        (diagnostic) =>
+          `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`,
+      ),
+  );
 };
 
 describe.each(SECTIONS)('the snippets of %s, %s', (page, heading) => {
   const snippets = snippetsOf(page, heading);
+  let diagnostics: string[][] = [];
+
+  beforeAll(() => {
+    diagnostics = compileAll(snippets);
+  }, 60_000);
 
   it('are found', () => {
     expect(snippets.length).toBeGreaterThan(0);
   });
 
-  it.each(snippets.map((code, index) => [index + 1, code]))(
-    'snippet %i compiles',
-    (_index, code) => {
-      expect(compile(code)).toEqual([]);
-    },
-    60_000,
-  );
+  it.each(snippets.map((_code, index) => [index + 1]))('snippet %i compiles', (number) => {
+    expect(diagnostics[number - 1]).toEqual([]);
+  });
 });
