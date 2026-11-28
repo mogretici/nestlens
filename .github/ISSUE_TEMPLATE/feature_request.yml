@@ -29,8 +29,6 @@ body:
         - MCP server and AI agents
         - Documentation
         - Something else
-    validations:
-      required: true
 
   - type: textarea
     id: alternatives

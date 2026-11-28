@@ -94,8 +94,6 @@ body:
       options:
         - Express
         - Fastify
-    validations:
-      required: true
 
   - type: dropdown
     id: storage
@@ -105,8 +103,6 @@ body:
         - memory (the default)
         - sqlite
         - redis
-    validations:
-      required: true
 
   - type: dropdown
     id: package-manager
@@ -117,8 +113,6 @@ body:
         - pnpm
         - Yarn
         - Bun
-    validations:
-      required: true
 
   - type: textarea
     id: related-packages
