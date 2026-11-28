@@ -1,0 +1,15 @@
+{
+  "name": "nestlens",
+  "description": "NestLens for Claude Code: the nestlens-mcp server and a skill for debugging NestJS applications with it.",
+  "owner": {
+    "name": "mogretici",
+    "url": "https://github.com/mogretici"
+  },
+  "plugins": [
+    {
+      "name": "nestlens",
+      "source": "./plugins/nestlens",
+      "description": "Read what NestLens recorded in a NestJS application (requests, queries, exceptions, logs) and debug from it."
+    }
+  ]
+}

@@ -103,6 +103,32 @@ claude mcp list        # nestlens: ✔ Connected
 
 or type `/mcp` inside Claude Code. Remove it with `claude mcp remove nestlens`.
 
+### Claude Code plugin
+
+The repository is also a Claude Code [plugin marketplace](https://code.claude.com/docs/en/plugins/create-marketplace). Its `nestlens` plugin adds the same local server, read-only, and a `debug` skill that tells the agent how to work with it: check that the application calls `NestLensModule.forRoot()`, list the tools before calling one, and follow a request through its `requestId`.
+
+Inside Claude Code:
+
+```text
+/plugin marketplace add mogretici/nestlens
+/plugin install nestlens@nestlens
+```
+
+or from your shell:
+
+```bash
+claude plugin marketplace add mogretici/nestlens
+claude plugin install nestlens@nestlens
+```
+
+The plugin has one option, **NestLens URL**, which defaults to `http://localhost:3000/nestlens`. Change it in `/config`, or set it when installing:
+
+```bash
+claude plugin install nestlens@nestlens --config url=http://localhost:4000/nestlens
+```
+
+The skill runs when you ask about a slow or failing request, an exception or a query, or as `/nestlens:debug`. The plugin's server is named `plugin:nestlens:nestlens` in `/mcp`, so it sits beside one added with `claude mcp add` rather than replacing it. Remove one of the two if you have both. Remove the plugin with `claude plugin uninstall nestlens@nestlens`.
+
 ### Codex
 
 **Local** — written to `~/.codex/config.toml`, which the Codex CLI and IDE extension share:
