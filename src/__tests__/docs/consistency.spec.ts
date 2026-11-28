@@ -61,6 +61,24 @@ describe('Documentation consistency with code', () => {
     });
   });
 
+  describe('the Laravel Telescope comparison', () => {
+    const page = () => readDoc('laravel-telescope.md');
+
+    it('maps every watcher the code has', () => {
+      const missing = watcherKeys.filter((key) => !page().includes(`[\`${key}\`]`));
+
+      expect(missing).toEqual([]);
+    });
+
+    it('counts the watchers that are off by default the way the code does', () => {
+      const defaults = (DEFAULT_CONFIG.watchers ?? {}) as Record<string, unknown>;
+      const off = watcherKeys.filter((key) => defaults[key] === false);
+      const words = ['eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen'];
+
+      expect(page()).toContain(`The other ${words[off.length - 11]}`);
+    });
+  });
+
   describe('default storage driver is documented correctly', () => {
     it("the code default is 'memory'", () => {
       expect(DEFAULT_CONFIG.storage?.driver).toBe('memory');
