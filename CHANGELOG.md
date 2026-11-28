@@ -1,3 +1,5 @@
+## [0.19.1](https://github.com/mogretici/nestlens/compare/v0.19.0...v0.19.1) (2026-11-28)
+
 # [0.19.0](https://github.com/mogretici/nestlens/compare/v0.18.1...v0.19.0) (2026-11-27)
 
 
